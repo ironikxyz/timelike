@@ -883,3 +883,12 @@ ABSENT: no other spec line changed: FR-9 and SC-5 name the exit-code vocabulary,
 ABSENT: no contract, code or test change — the contract already says the same; the two observations in impact-analysis § Cycle 7 (rule 8 stated only in output-contract.md; nothing forbids `mutating` with `grant_envelope`) are noted for the mentor, not built
 Verification: the annotation's sentence equals the send's (`bridge/sends/01-rev10-20261003-003933.md`, rule 9) after whitespace normalisation (VERBATIM)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T080: provenance — audited_against += 10 (full), audit-log row (cycle 7)
+**Started:** 2026-10-03T00:45:49+00:00 | **Completed:** 2026-10-03T00:46:08+00:00
+
+INHERITED: T079's annotation; the criteria diff (identical to rev 9's, 13 criteria) (confidence: high)
+ASSUMED: computed with the installed `audit-append` block (2.26.1, byte-identical to 2.27.0's), inputs PROMPT_REV=2, AUDITED=[2..9], N=10, MODE=full, OUT_OF_SCOPE and UNVERIFIED empty, REMOVALS_VISIBLE=yes; it returned MODE_USED=full, APPENDED=10, NEW_AUDITED=[2, 3, 4, 5, 6, 7, 8, 9, 10], no note (confidence: high)
+FLAGGED: 10 is appended in this cycle rather than deferred to a lane addendum, against this instance's usual convention (append only after the Docker lane re-establishes) — chose to append now because the send instructs it for a `.specswarm/`-only cycle and names the lane to cite (`f73ac79`); the tree outside `.specswarm/` is unchanged from master (confidence: high)
+ABSENT: `prompt_revision`, `discovery_revision`, `source_prompt` and `source_send` untouched; no spec body change in this task
+Verification: `git diff` touches only spec.md's `audited_against` line and one appended audit-log row
