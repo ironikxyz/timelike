@@ -29,6 +29,24 @@ This is the **implementation** instance of the Timelike mentored project. It use
    project's `unknown` quality score (specswarm's 2.21.0 note, relayed by the mentor 2026-10-01).
 3. **Never modify `../bridge/` or `../plan/`.** Only write to `./` (this directory).
 4. **Report implementation learnings** to the mentor (return to root, run `/mentor:feedback`).
+5. **Publishing: this repository is public** (`ironikxyz/timelike`). `master` tracks `public/main`
+   (send `bridge/sends/maint-publish-cutover-20261003-003150.md`). The rule:
+   - Push **only `master`**, to `public/main`, and only after the mentor has **discharged** the work on
+     evidence **and** the operator has said to push.
+   - Before every push, check two things:
+     - the publish deny-list reports `pass` **with the list read**. Run
+       `git archive HEAD | python3 -I scan/denylist.py --list ../bridge/publish-denylist.txt --expect-files $(git ls-tree -r HEAD --name-only | wc -l)`.
+       `unknown` is not a pass.
+     - every commit is under the `ironik.xyz` identity:
+       `git log public/main..master --format='%an %ae %cn %ce'` shows only it.
+   - **Never write a deny-list pattern or matched string** into a tracked file, a commit message or a
+     test. Refer to entries by id (P1–P7).
+   - Feature and maintenance branches stay local unless the operator decides otherwise.
+   - **Never force-push, and never push to `history`** (`ironikxyz/timelike-history`, the closed private
+     archive, which is fetch-only here). `archive/pre-publish` keeps the pre-publication lineage, and
+     every hash cited in `bridge/` is reachable there.
+   - The token is read only through a throwaway `GIT_ASKPASS` script with `-c credential.helper=`, and
+     the script is deleted afterwards. Never put it in a URL, an argument, printed output or a file here.
 
 ## Workflow
 

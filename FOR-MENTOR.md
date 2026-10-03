@@ -671,3 +671,66 @@ gitleaks:
 **Also, a correction to 004's ship section**, which the mentor's discharge noted: *"8 beside 8
 unscored"* was 003's 2.22.0 ship, not 001's cycle 6, which was already `0/8`. 004's cycle report is
 append-only, so the correction is recorded here and in this cycle's report.
+
+## Item 16 — Publish cutover (maintenance send `maint-publish-cutover-20261003-003150`): the first public commit, by id only
+
+**Status:** open, raised 2026-10-03 on `master` (the new lineage), for the mentor's independent check of
+the remote. These bookkeeping commits are **not pushed**: they wait for the mentor's discharge and the
+operator's OK. The cycle report is `.specswarm/maintenance/publish-cutover/cycle-report.md`.
+
+**Before starting:** `master` was at `7e050fd` with a clean tree, there were no remotes, and the
+deny-list over HEAD, with the list read, was **PASS** (7 entries, 246 files, every id 0/0). The public
+repository had no refs (`git ls-remote public` printed nothing).
+
+**The root:**
+- `$ROOT` = **`466206080bba42f532d4d0ddd273fdb32cadd371`**
+- its tree = **`f1de497a1dea93b4227a13ca329935f64acfe8e6`**
+- `7e050fd`'s tree = **`f1de497a1dea93b4227a13ca329935f64acfe8e6`**: equal (the same `f1de497…` as the mentor's scratch build)
+- `git rev-list --count $ROOT` = **1**, with no parents
+- author and committer: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>` (this repository's
+  `user.name` and `user.email`, set locally)
+- `archive/pre-publish` = `7e050fd` keeps the old lineage
+
+**The deny-list over every pushed object** (`git rev-list --objects $ROOT`, each object through
+`git cat-file -p`: 279 objects, 222 blobs, 56 trees and 1 commit, plus 278 path names; GNU `grep -E -i`,
+**the list read**, 7 ids):
+
+| id | objects | path names |
+|---|---|---|
+| P1 | 0 | 0 |
+| P2 | 0 | 0 |
+| P3 | 0 | 0 |
+| P4 | 0 | 0 |
+| P5 | 0 | 0 |
+| P6 | 0 | 0 |
+| P7 | 0 | 0 |
+
+**The control:** the same script over the old lineage from `3c10d11` (2,409 objects) finds P1 in 293
+objects, P2 in 35, P6 in 24 and P7 in 293. So a zero is a result, not a matcher that sees nothing. One
+fault of my own on the way: the first version of the script stopped silently under `pipefail` when grep
+found nothing. It printed no per-id line, not a pass. It was fixed and re-run, and now ends by listing
+the ids it checked.
+
+**The push** (one ref, no force; the token through a throwaway `GIT_ASKPASS` that read the `.env` file,
+with `-c credential.helper=`; the script was deleted afterwards; the token appeared in no output, which
+was checked before printing):
+```
+$ git -c credential.helper= push public $ROOT:refs/heads/main      (exit 0)
+To https://github.com/ironikxyz/timelike.git
+ * [new branch]      466206080bba42f532d4d0ddd273fdb32cadd371 -> main
+```
+
+**`git remote -v`:**
+```
+history	https://github.com/ironikxyz/timelike-history.git (fetch)
+history	no-push (push)
+public	https://github.com/ironikxyz/timelike.git (fetch)
+public	https://github.com/ironikxyz/timelike.git (push)
+```
+
+**`master`'s new upstream:** `public/main`, with `push.default` = `upstream`.
+`master` = `public/main` = `466206080bba` after `git fetch public`. `git checkout -B master $ROOT`
+changed no file: the tree equals `archive/pre-publish`'s.
+
+**The push rule** is now rule 5 in `CLAUDE.md`. The old local branches are unchanged, and the tag
+`feature-001-complete` stays local, both archived in `timelike-history`.
