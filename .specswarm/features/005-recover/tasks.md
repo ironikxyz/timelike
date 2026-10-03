@@ -30,7 +30,7 @@ working on their own files. The tools are written here.
 
 ## Phase 2: Tests first (from `contracts/recover-cli.md`; delegated)
 
-- [ ] T003 [P] [US1] E2E `tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats` (SC-1):
+- [X] T003 [P] [US1] E2E `tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats` (SC-1):
   in the fixture repository, `snapshot` exits 0. Its verdict names `snapshot 1`, a file count equal to
   `find` of the regular files outside any `.git`, and a size. After deleting one tracked, one untracked
   and one ignored file, `undo 1 --yes` brings each back byte-identical (`sha256sum`). `bash -c` and
