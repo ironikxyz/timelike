@@ -103,7 +103,7 @@ working on their own files. The tools are written here.
 
 ## Phase 5: Polish
 
-- [ ] T014 [P] `README.md`: a "Snapshots and undo" section next to `run` and Adele: the two commands,
+- [X] T014 [P] `README.md`: a "Snapshots and undo" section next to `run` and Adele: the two commands,
   `undo --yes` as the one undo command, the workspace rule, the caps and their variables, what survives
   a restart (P3).
 - [ ] T015 Host lane: ruff, mypy, shellcheck, `make test-host`, coverage for the two tools. The cycle

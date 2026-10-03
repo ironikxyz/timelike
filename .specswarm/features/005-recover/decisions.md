@@ -139,3 +139,13 @@ FLAGGED: COLUMNS=1000 in the stand-in — chose it over leaving the six FR-2 cel
 ABSENT: nothing here is image evidence: no /etc/gitconfig layer, no hook dispatcher, host git 2.43 and Python 3.12; the stand-in is not committed (it lives in the scratchpad)
 Verification: 44 tests: 40 ok; the 4 not-ok are the type -a cells, which pin /opt/timelike/bin; two test bugs found and fixed (T004, T006)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T014: README — "snapshot and undo — wrong turns are recoverable"
+**Started:** 2026-10-03T02:25+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: the contract as amended (default target, outcomes) (confidence: high)
+ASSUMED: the README is where this project announces tools (003's decision, kept); timelike's tool list lists both automatically (confidence: high)
+FLAGGED: none
+ABSENT: no harness context file inside the image announces them (003's precedent: none exists yet)
+Verification: the section's statements checked against the tool (defaults, variables, the default target, where snapshots live)
+SCOPE: in (1 changed files)
