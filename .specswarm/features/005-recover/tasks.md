@@ -97,7 +97,7 @@ working on their own files. The tools are written here.
 - [X] T012 Run the units (T008) against T009–T011, and fix the tools until they pass. Review the
   delegates' tests against the contract: a test that disagrees with the contract is fixed in the test,
   and a contract gap is fixed in the contract and recorded.
-- [ ] T013 Run each e2e fixture and each bats file's container commands on the host, sandboxed
+- [X] T013 Run each e2e fixture and each bats file's container commands on the host, sandboxed
   (`setsid --wait timeout`), with `HOME` pointed at a temporary home and the tools on `PATH`, to catch
   what the image would.
 

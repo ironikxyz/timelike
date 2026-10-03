@@ -129,3 +129,13 @@ ASSUMED: the tool's store-refusal remedy changed to the contract's exact words (
 ABSENT: no change to any criterion text; spec D-1 to D-10 unchanged
 Verification: 72 units pass; host stand-in 40/44 (the 4 being the image-only type -a cells)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T013: e2e on the host through a docker stand-in (advisory)
+**Started:** 2026-10-03T02:35+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T001, T003–T007 and the tools (confidence: high)
+ASSUMED: a scratchpad stand-in for docker (exec runs the command here with the test's -e variables, a stand-in HOME and the two tools on PATH; inspect answers stamp_check; run serves pyq with the host python) plus bats-core v1.14.0 (the pinned version) is a fair advisory check of the bats logic, not of the image (confidence: high)
+FLAGGED: COLUMNS=1000 in the stand-in — chose it over leaving the six FR-2 cells failing because the host's scratchpad home path is long enough that the remedy line was cut at 200 columns; the image's /home/agent is not (confidence: medium)
+ABSENT: nothing here is image evidence: no /etc/gitconfig layer, no hook dispatcher, host git 2.43 and Python 3.12; the stand-in is not committed (it lives in the scratchpad)
+Verification: 44 tests: 40 ok; the 4 not-ok are the type -a cells, which pin /opt/timelike/bin; two test bugs found and fixed (T004, T006)
+SCOPE: none — no files outside the feature's artifacts changed
