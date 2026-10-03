@@ -115,7 +115,7 @@ INHERITED: the two tool files (T009–T011) and the six e2e files (T001, T003–
 ASSUMED: committed after the files exist, so no list names a missing file at any commit (confidence: high)
 FLAGGED: none
 ABSENT: no other Makefile change: e2e discovery is by directory, so make test runs the new bats files without being told
-Verification: ruff check and ruff format --check clean over tools tests scan bench (54 files); mypy 2.3.1 strict "no issues found in 19 source files"; shellcheck 0.11.0 clean over the extended SHELLCHECK_FILES
+Verification: ruff check and ruff format --check clean over tools tests scan bench (54 files); mypy 2.4.0 strict "no issues found in 19 source files" (corrected in T015: first written as 2.3.1, the version an earlier venv had); shellcheck 0.11.0 clean over the extended SHELLCHECK_FILES
 SCOPE: in (2 changed files)
 
 ### T012: reconcile the delegates' tests and the tools against the contract
@@ -149,3 +149,14 @@ FLAGGED: none
 ABSENT: no harness context file inside the image announces them (003's precedent: none exists yet)
 Verification: the section's statements checked against the tool (defaults, variables, the default target, where snapshots live)
 SCOPE: in (1 changed files)
+
+### T015: host lane, coverage, implement step 10, cycle report § Cycle 1, metrics entry
+**Started:** 2026-10-03T02:40+00:00 | **Completed:** 2026-10-03T02:16:55+00:00
+
+INHERITED: T001–T014 and their verification (confidence: high)
+ASSUMED: every criterion is unconfirmed until the Docker lane runs on this branch; the host lane and the host stand-in are advisory (as in 001 and 003) (confidence: high)
+FLAGGED: none
+ASSUMED: corrected two of my own records in place, each saying so: T002's mypy version (2.3.1 → 2.4.0, the venv's) and the recorded run_coverage exit (rc 0 → 1, re-measured) (confidence: high)
+ABSENT: no Docker lane (R10); no ship or merge (they wait for the mentor's sign-off, and ship's D85 is its own field run); no demo_points_reached; no Group A (no marker on this path)
+Verification: make test-host 889 passed, 60/60, 29/29; coverage 93% for the two tools; ruff, mypy, shellcheck clean; implement step 10 run from the installed 2.27.0 blocks (unknown, warned); all five criterion citations match one send line each
+SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)

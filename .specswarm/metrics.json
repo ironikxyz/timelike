@@ -323,5 +323,50 @@
       "note": "nothing outside .specswarm/ changed in this cycle, so no host lane, lint or coverage run; the send cites the mentor's Docker lane at f73ac79",
       "lane_cited": "f73ac79 (2026-10-02, mentor): make test e2e 239/239 with 001's files at TAP 1-167, Python units passing, Go pass; make scan PASS x4, deny-list PASS"
     }
+  },
+  "005": {
+    "recorded_at": "2026-10-03T02:15:49+00:00",
+    "git_sha": "40aa2c87804952931e711ff996c4b41ec6327b63",
+    "plugin": "specswarm 4.0.1-botbaubble.2.27.0 (session-loaded), /specswarm:implement step 10 (not dispatch)",
+    "send": "bridge/sends/07-rev1-20261003-013915.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; warned, not halted"
+    },
+    "plugin_tooling": {
+      "lib/quality-gates.sh": "absent from this install (2.27.0); step 10e unavailable"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures (scratch venv), recorded beside the plugin's result, never fed into it",
+      "units": "make test-host: 889 passed (174 s); env layer 60/60; hook logic 29/29",
+      "units_this_feature": "72 passed (tests/unit/test_snapshot.py, test_undo.py)",
+      "coverage_this_feature": "tools/bin/snapshot 93%, tools/bin/undo 88% (20 statements), together 93% (line+branch, coverage.py, subprocesses included)",
+      "lint": "ruff 0.16.7 clean, 54 files formatted; mypy 2.4.0 strict no issues in 19 files; shellcheck 0.11.0 clean over SHELLCHECK_FILES",
+      "e2e_host_standin": "44 bats tests through a scratchpad docker stand-in and bats 1.14.0: 40 ok, the 4 not-ok are the image-only type -a cells (advisory, not image evidence)",
+      "e2e": "not run in the image here (no Docker, R10); the Docker lane decides"
+    }
   }
 }
