@@ -1862,3 +1862,14 @@ records the same, with `lib/quality-gates.sh`'s absence under `plugin_tooling`.
 **Host lane:** not run. Nothing outside `.specswarm/` changed (no code, test, lint target or image
 input). The publish deny-list over the tree read `pass` with the list read before every commit
 (7 entries, 247 files, P1–P7 0/0).
+
+**Implement step 9b: decision log** (plugin `scope-tally` and `decision-tally` over the whole of 001's `tasks.md` and `decisions.md`, all cycles, after T081):
+
+```
+scope: planned=81 recorded=74 unplanned=0 unrecorded=7 in=55 out=12 none=15 unknown=0 flagged=49 flagged_out=8 other=33 other_out=4
+decisions: sections=85 flagged_sections=49 non_flagged_sections=36 sections_without_absent=8 flagged=86 assumed=110 deferred=6 absent=98 inherited=87 low_confidence=0 flagged_low_confidence=0
+```
+
+Cycle 7 alone (T079–T081): 3 sections, 3 FLAGGED entries (T080's in-cycle append; T081's version and
+reworded-reasons calls), 0 low-confidence. `SCOPE:` none 2 (T079, T080: `.specswarm/features/001-…`
+only), in 1 (T081: `.specswarm/metrics.json`).
