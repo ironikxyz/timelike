@@ -89,7 +89,7 @@ working on their own files. The tools are written here.
 - [X] T010 [US2][US3] `tools/bin/snapshot`, continued: the planner, the apply (removals deepest first,
   directories, files and links by temp and rename with `O_NOFOLLOW`, every parent checked with `lstat`,
   `.git` refused by the helpers themselves), and the verify (re-walk, re-plan).
-- [ ] T011 [US2] `tools/bin/undo`: loads `snapshot` from its own real directory (R8); `undo [ID]`,
+- [X] T011 [US2] `tools/bin/undo`: loads `snapshot` from its own real directory (R8); `undo [ID]`,
   `--dry-run`, the envelope (bounded plan), `--yes` with the safety snapshot, apply, verify, and `Cut`.
 
 ## Phase 4: Make the tests pass

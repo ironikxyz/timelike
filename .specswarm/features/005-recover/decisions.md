@@ -97,3 +97,13 @@ ASSUMED: dir modes are set after everything inside them is written, deepest firs
 ABSENT: no restore of file times or owners (spec assumption 3); no fsync (a crash mid-restore is covered by the safety snapshot, not by durability); a directory whose mode forbids writing at restore time (changed after the snapshot) can still fail the restore, naming the path and the safety snapshot
 Verification: ruff, ruff format, mypy strict clean; timelike-conform passes on both tools from a project directory and from the home directory; smoke and edge runs on the host (planted symlink at a parent path, planted .git, type changes, FIFO, unreadable file, size cap largest-first, per-file limit, entry cap, bad env value, unknown id); 72 units pass
 SCOPE: in (1 changed files)
+
+### T011: tools/bin/undo — loads snapshot from its own real directory and runs the undo command
+**Started:** 2026-10-03T02:20+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T009–T010's UNDO_TOOL, undo_main and undo_configure (confidence: high)
+ASSUMED: SourceFileLoader on the realpath of __file__, registered in sys.modules before exec (research R8) (confidence: high)
+FLAGGED: none
+ABSENT: no second copy of any logic in undo; nothing undo does is reachable except through snapshot's code
+Verification: conform passes with both installed together (unit and host); a first conform attempt failed because the shebang rewrite kept -I (my install's error, not the tool's), recorded in the cycle report
+SCOPE: in (1 changed files)
