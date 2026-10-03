@@ -296,3 +296,29 @@ behaviour changes.
 ## Contract changes
 
 None. The contract was amended by 003 (`58b7d11`). The spec now quotes the same scope.
+
+---
+
+# Cycle 7: rule 9's clarification recorded (send `bridge/sends/01-rev10-20261003-003933.md`)
+
+## Modification summary
+
+**What:** record discovery revision 10 against 001's spec. No criterion changes, and no behaviour
+changes.
+
+**Why:** revision 10 (plan's ruling on FOR-MENTOR Item 13, `bridge/feedback/12-20261002-054636-grant-envelope.md`)
+clarified rule 9: exit 4 carries a confirmation envelope or a grant envelope. 004's T018 amended 001's
+contract at `b7a6ea6`; this cycle is where 001's own record catches up (`impact-analysis.md` § Cycle 7).
+
+## Proposed changes
+
+- **F001 · Rule 9's clarification in the spec.**
+  - **Current:** spec rule 9 states the confirmation envelope only.
+  - **Proposed:** revision 10's clarification is appended in place, declared, as revision 9's was to
+    rule 5 (T074).
+  - **Breaking:** no.
+
+## Contract changes
+
+None. The contract was amended by 004 (`b7a6ea6`), and it already agrees with revision 10 clause by
+clause (`impact-analysis.md` § Cycle 7). The spec now quotes the same rule.

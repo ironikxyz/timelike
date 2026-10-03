@@ -1649,3 +1649,227 @@ NOTE: .specswarm/features/001-agent-shell-baseline/quality-report.json reports o
 `git checkout master && git merge --no-ff modify/001-rev9-scope-and-t4`. The merge commit is reported to
 the mentor. Its tree is checked to equal `f2eaf82`'s plus only this cycle's bookkeeping and ship files:
 this report, `audit-log.md`, `spec.md`'s `audited_against`, `quality-report.json`, and `FOR-MENTOR.md`.
+
+## Cycle 7 — bridge/sends/01-rev10-20261003-003933.md
+
+**Written:** 2026-10-03. Not in dispatch mode. Built with `/specswarm:modify --from-send`, then
+`/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`, on `modify/001-rev10-rule9-grant-envelope`
+from `master` at `36a5be1` (the public lineage). **Pushed nothing; not merged** (CLAUDE.md rule 5: the
+merge and any push wait for the mentor's discharge and the operator's OK).
+
+**specswarm version (lore Q002):** this session loaded **4.0.1-botbaubble.2.26.1**, which the expanded
+commands name (`PLUGIN_DIR=…/4.0.1-botbaubble.2.26.1`), not the 2.27.0 the send asked for (installed
+2026-10-02T18:33Z, `713ec86`; the session started before it). Checked before going on:
+`diff -rq` of the two cache directories shows **only `commands/ship.md` and `plugin.json` differ**.
+`modify.md`, `plan.md`, `tasks.md`, `implement.md` and every `lib/` file are byte-identical, so every
+command this cycle ran is 2.27.0's code. Ship (D85's first field run) is not part of this cycle; it
+needs a session that has loaded 2.27.0.
+
+**Status in one line:** no behaviour change, `.specswarm/` only. Spec rule 9 carries revision 10's
+sentence, declared; 001's contract already agreed with it clause by clause; `audited_against` gains 10.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/01-rev10-20261003-003933.md |
+| source_prompt | plan/.discover/prompts/01-agent-shell-baseline.md |
+| prompt_revision | 10 |
+| discovery_revision | 10 |
+| slice | 1 |
+
+### Group C — written by the code instance
+
+**delegations:** one.
+- A general-purpose subagent, read-only (no edits, no commits, nothing under `../bridge`, `../plan` or
+  `.specswarm/` written): read 001's contract files against revision 10's sentence, clause by clause,
+  and reported each file's statement with line numbers. It found no disagreement. Its key citations
+  were re-read here before use (`output-contract.md:33` and `:112–125`, `conformance.md:34` and `:53`,
+  both schemas' properties, `b7a6ea6` as T018's commit). Its table is condensed into
+  `impact-analysis.md` § Cycle 7.
+
+**criteria_reestablished**
+
+No criterion changed at revision 10 (the Acceptance Criteria of `01-rev9-20261001-191224.md` and this
+send are byte-identical). This cycle changed only files under `.specswarm/`, so, as the send directs, the
+11 automated criteria are cited from **an earlier lane on an identical non-bookkeeping tree**: the
+mentor's Docker lane at `f73ac79` (2026-10-02, 20:01Z; `make test` e2e 239/239 with 001's files at TAP
+1–167 and units passing; `make scan` PASS on four images, deny-list PASS). Outside `.specswarm/`, this
+branch equals `master` (`git diff master HEAD -- . ':!.specswarm'` is empty), and `master` differs from
+`f73ac79` only in `CLAUDE.md` (rule 5), `FOR-MENTOR.md` and `reboot.md`. No lane ran for this cycle.
+
+- `01 · "each exit within 20 seconds without opening a pager or editor"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "the environment's pager, editor, prompt and colour defaults are all in effect, verified by one test per invocation style"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "fails fast with a non-zero exit instead of prompting"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "a commit a pre-commit hook rejects fails with the hook's output, as it would without timelike"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "is killed and the git command exits non-zero within the limit plus a few seconds, with a verdict naming the hook"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "cannot run any command as root, cannot change firewall rules, and cannot read files owned by Adele"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `` 01 · "fails when any tool lacks `--help` within 40 lines" `` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "each write to their own scratch space, and neither's output files or event log entries appear in the other's"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "are derived from the container's CPU limit rather than the host's CPU count"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "are absent from the agent's environment unless explicitly allow-listed"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "The timezone defaults to UTC and interactive language REPLs default to their basic, scriptable prompt mode"` — **executed [`make test` at `f73ac79`, mentor's lane: 001's e2e files]** (cited, not re-run; tree identical outside `.specswarm/` and bookkeeping)
+- `01 · "each returns within seconds instead of waiting on an editor, pager or prompt"` — **unconfirmed**.
+  Manual (D1); unchanged by this cycle.
+- `01 · "can predict, for a tool they have not seen, what its first line, last line and exit codes will be"` —
+  **unconfirmed**. Manual (SC-11); unchanged by this cycle. Rule 9's new sentence is part of what such a
+  reader predicts from.
+
+Each citation was checked to match exactly one line of the send (`grep -cF` = 1 for all 13).
+
+**reconcile_mode:** `full`. Revision 10 is appended: `audited_against` is now `[2, 3, 4, 5, 6, 7, 8, 9, 10]`
+(T080, computed by the installed `audit-append` block: `MODE_USED=full`, `APPENDED=10`, no note).
+- Revision 10 changed no criterion. The criteria diff against the rev-9 send is empty (sha256
+  `7d42021a…` for both sections), so removals and rewordings are visible, and none occurred.
+- Revision 10's one change, rule 9's clarification, needs no body change. Spec line 181 is the body's
+  only statement about exit 4's envelope, and it stays true: revision 10 adds a second envelope and
+  contradicts nothing. The spec never mentioned the confirm envelope's `grant` field that T018 removed.
+  **Not SUPERSEDED; not regenerated.**
+- Appended in this cycle rather than deferred to a lane addendum (this instance's usual convention),
+  because the send directs it for a `.specswarm/`-only cycle and names the lane to cite. Recorded as a
+  FLAGGED decision in T080.
+
+**The send's items:**
+1. **Rule 9's clarification recorded** (T079, `1f7a563`). The annotation's sentence equals the send's
+   rule-9 clarification after whitespace normalisation, with a provenance note in the shape of rule 5's
+   (T074).
+2. **001's contract checked against it (lore P004: what was compared).** Each file read, and what it
+   says:
+   - `contracts/output-contract.md:33`: exit 4 "carries one envelope, told apart by `status`:
+     `confirmation_required` … or `grant_required`". **Agrees.**
+   - `contracts/output-contract.md:112–125` (§ Confirmation): the confirmation envelope, then "A missing
+     grant is the other exit-4 envelope": the grant, `limit {name, allowed, needed}`, `extend`,
+     `extend_by: "operator"`, `performed: false`; the operator's command "never in `confirm`"; not
+     `--yes`-confirmed, "the grant is the confirmation"; "Rule 8 still binds it". **Agrees, every clause.**
+   - `contracts/grant-envelope.schema.json`: requires `grant`, `limit`, `extend`, `extend_by` (const
+     `operator`), `performed` (const `false`), `status` const `grant_required`; its description says it
+     has no `confirm` key, checked by C9 and the agentio units. **Agrees.**
+   - `contracts/confirm-envelope.schema.json`: properties `tool, target, scope, status, plan, confirm`,
+     `status` const `confirmation_required`, **no `grant`**. **Agrees**; silent on an operator command in
+     `confirm` (no `additionalProperties: false`), which C9 enforces.
+   - `tools/agentio/agentio.py` `grant_required()` (:276–312): only for `Tool(grant_envelope=True)`; emits
+     the grant envelope with `extend_by="operator"`, `performed=False`, exit 4. `confirm_required()`
+     builds `confirm` from the tool's own argv plus `--yes`. **Agrees.**
+   - Conformance C9 (`contracts/conformance.md:34`; `tools/bin/timelike-conform` `check_envelope`):
+     every exit 4 prints one envelope of a declared `status`; a grant envelope has `limit`,
+     `extend_by: "operator"`, `performed: false` and no `confirm`; no `confirm` names a command outside
+     the tool's own. **Agrees.**
+
+   **Disagreements: none.** All six files were last changed by 004's T018 (`b7a6ea6`, on
+   `archive/pre-publish`), and `git diff archive/pre-publish HEAD` is empty for them.
+3. **No Docker lane:** only `.specswarm/` changed, so the `f73ac79` lane is cited (above).
+
+**not_verified**
+- **No test ran in this cycle**, on the host or in the image. The 11 automated criteria are cited from
+  the `f73ac79` lane, not re-executed. The citation holds because the tree outside `.specswarm/` is
+  unchanged apart from bookkeeping; it would not survive a change to code, tests or the image.
+- **Two observations from the contract read, not acted on** (for the mentor):
+  - Revision 10's "rule 8 still applies" is stated only in `output-contract.md:123–124`. The schemas,
+    C9 and agentio say nothing about it. agentio ties `--dry-run` to `destructive` for every tool, which
+    is rule 8 itself, so nothing is missing; but nothing checks a grant client specifically.
+  - Nothing forbids declaring a tool both `mutating=True` and `grant_envelope=True`, which would give a
+    grant client `--yes`, against revision 10. No tool does (`adele` leaves `mutating` False). In that
+    combination `Tool.codes()` would describe exit 4 as confirmation only. A guard belongs to the cycle
+    that adds a second grant client.
+- The two Manual criteria (D1, SC-11) stay `unconfirmed`.
+
+**changed_other_features:** none. Nothing outside 001's own feature directory and `.specswarm/metrics.json`
+changed.
+
+**process_failures_recorded**
+1. **The session's plugin version.** The send asked for a session that had loaded 2.27.0; this one had
+   loaded 2.26.1. Found from the first expanded command, checked by `diff -rq` (above), and carried on
+   because the commands this cycle runs are identical. Ship needs a fresh session.
+2. **Step-10 reasons reworded once.** The first run of the `quality-scale` block named unit tests and
+   coverage as `unavailable: run_tests returned 2 …` and `… printed unknown`, which carry neither of the
+   plugin's attribution literals, so "Why there is no score" put them in the unattributed bucket. They
+   were re-run as "could not be run on this machine", which is the same fact in the plugin's own words
+   (`reboot.md` already said so). The second run is recorded below; no score changed (unknown both times).
+3. **Plugin observations, for the mentor to relay** (first `modify` under 2.26.0+, as the send asked):
+   - `lib/features-location.sh` wrote **nothing to stderr** in modify, plan, tasks or implement.
+     `fnum_resolve` resolved `modify/001-rev10-…` to 001 with no fallback, so 2.24.0's fix holds in the field.
+   - **modify's helpers (D81, named variables) needed no workaround.** `provenance-row` and
+     `audit-append` ran as installed, and gave row 7 and `full`/`10`. The expansion still substitutes `$1`
+     inside a **comment** of both blocks (the D76 comment now reads "`bridge/sends/01-rev10-…` stops
+     meaning …"); cosmetic, no code affected.
+   - `modify.md` Step 2 tells the reader to "read the provenance frontmatter" but ships no block that
+     extracts `source_prompt`, `prompt_revision`, `audited_against` or the prompt's `N`, so
+     `provenance-row`'s inputs are read by hand. Worked, but it is the one unmechanised step left in the row.
+   - **`lib/quality-gates.sh` is absent** from both 2.26.1 and 2.27.0. Implement step 10e sources it
+     (`detect_browser_test_framework`), behind a guard that says "record it as unmeasured". This
+     instance's script skipped the guard and got `No such file or directory`. Browser applicability came
+     from the `quality-components` block (`not-applicable: no web project detected`), so the score is
+     unaffected. Not reported before (no hit in `.specswarm/`, FOR-MENTOR or `bridge/history.md`).
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.26.1 blocks, identical in 2.27.0), as the library reported it
+
+```
+🧪 Running Quality Validation
+=============================
+== b detect
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+rc=0
+PRIMARY=pytest
+== c run_tests
+rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+== parse
+total=unknown passed=unknown failed=unknown skipped=unknown
+== d coverage
+rc=0
+rc=1 out=unknown
+== e browser
+<scratchpad>/step10.sh: line 9: <plugin cache>/4.0.1-botbaubble.2.26.1/lib/quality-gates.sh: No such file or directory
+rc=1
+- components (second run; see process failure 2):
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit_tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration_tests — not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser_tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle_size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual_alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**, and with `block_merge_on_failure: false` (and `min_quality_score: 0`) it warns
+and does not halt. No component was filled in by hand. The output is verbatim except two absolute paths
+in the `quality-gates.sh` error line, replaced by `<scratchpad>` and `<plugin cache>` (no local paths in
+tracked files). `.specswarm/metrics.json` → `001-cycle-7`
+records the same, with `lib/quality-gates.sh`'s absence under `plugin_tooling`.
+
+**Host lane:** not run. Nothing outside `.specswarm/` changed (no code, test, lint target or image
+input). The publish deny-list over the tree read `pass` with the list read before every commit
+(7 entries, 247 files, P1–P7 0/0).
+
+**Implement step 9b: decision log** (plugin `scope-tally` and `decision-tally` over the whole of 001's `tasks.md` and `decisions.md`, all cycles, after T081):
+
+```
+scope: planned=81 recorded=74 unplanned=0 unrecorded=7 in=55 out=12 none=15 unknown=0 flagged=49 flagged_out=8 other=33 other_out=4
+decisions: sections=85 flagged_sections=49 non_flagged_sections=36 sections_without_absent=8 flagged=86 assumed=110 deferred=6 absent=98 inherited=87 low_confidence=0 flagged_low_confidence=0
+```
+
+Cycle 7 alone (T079–T081): 3 sections, 3 FLAGGED entries (T080's in-cycle append; T081's version and
+reworded-reasons calls), 0 low-confidence. `SCOPE:` none 2 (T079, T080: `.specswarm/features/001-…`
+only), in 1 (T081: `.specswarm/metrics.json`).
