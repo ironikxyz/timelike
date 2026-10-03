@@ -893,3 +893,14 @@ FLAGGED: 10 is appended in this cycle rather than deferred to a lane addendum, a
 ABSENT: `prompt_revision`, `discovery_revision`, `source_prompt` and `source_send` untouched; no spec body change in this task
 Verification: `git diff` touches only spec.md's `audited_against` line and one appended audit-log row
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T081: implement step 10, Cycle 7 report, metrics entry (cycle 7)
+**Started:** 2026-10-03T00:46:28+00:00 | **Completed:** 2026-10-03T00:48:18+00:00
+
+INHERITED: T079 and T080; the send's cycle-report block; the f73ac79 lane as the send states it (confidence: high)
+ASSUMED: the 11 automated criteria are `executed` by citation of the f73ac79 lane, as the send directs, because nothing outside `.specswarm/` changed (verified: `git diff master HEAD -- . ':!.specswarm'` empty) (confidence: high)
+FLAGGED: carried on under the session's 2.26.1 rather than stopping for a 2.27.0 session — chose to proceed because `diff -rq` shows only ship.md and plugin.json differ, so every command this cycle ran is 2.27.0's code; recorded as process failure 1 so the mentor can disagree (confidence: high)
+FLAGGED: step-10 unit-test and coverage reasons re-run in the plugin's "on this machine" wording after the first run left them unattributed — same fact, same unknown score; both runs disclosed (confidence: high)
+ABSENT: no host lane, lint or coverage (nothing outside `.specswarm/` changed); no Docker lane (send § 2); no demo_points_reached; no Group A fields (no marker on this path); no ship or merge (they wait for sign-off, and ship for a 2.27.0 session)
+ABSENT: the two contract observations (rule 8 unchecked for grant clients; `mutating` with `grant_envelope` not forbidden) are reported, not built
+Verification: all 13 citations in § Cycle 7 match exactly one line of the send (`grep -cF` = 1); no local path in the added text; deny-list pass before commit
