@@ -1,0 +1,14 @@
+.git/
+.local/
+.specswarm/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/out/
+scan/out/
+*.log
+.env*
+# Adele (feature 004): the operator's grant file never enters a build context (FR-18).
+adele/grants.conf

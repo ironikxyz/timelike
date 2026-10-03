@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timelike/agentio/v1/event.schema.json",
+  "title": "Session event — one line of <scratch>/events.jsonl per tool invocation (contract rule 16)",
+  "type": "object",
+  "required": ["v", "tool", "args", "cwd", "exit", "duration_ms", "session"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1, "description": "Event format version" },
+    "tool": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "args": { "type": "array", "items": { "type": "string" }, "description": "argv[1:], with redacted values as [REDACTED:<type>]" },
+    "cwd": { "type": "string" },
+    "exit": { "type": "integer", "minimum": 0, "maximum": 255, "description": "The real exit code (rule 16): one of 0, 1, 2, 3, 4, 124 for a tool's own outcomes, or any value 0-255 from a tool that declares passes_exit, which returns the command's exit (discovery revision 9). C7 checks it equals the observed exit" },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "session": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$" },
+    "ts": { "type": "string", "format": "date-time", "description": "Wall-clock time. Written to the log always: rule 11 governs tool OUTPUT, not the event log" },
+    "pid": { "type": "integer" }
+  }
+}

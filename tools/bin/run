@@ -1,0 +1,466 @@
+#!/opt/timelike/python/bin/python3 -I
+"""run — run a command so that the call always concludes (feature 003, P2: every call concludes).
+
+`run [--timeout SECONDS] COMMAND [ARGS...]` runs COMMAND with its output going to a log file, never a
+pipe, so a backgrounded child that keeps stdout open cannot hold the call. It waits on the process,
+not on end-of-file. It prints a verdict (exit, cause, duration, lines, log), then the output, and exits
+with the command's own code: what `$?` would have been without `run` (discovery revision 9). 124 means
+run's own limit fired.
+
+Design: .specswarm/features/003-concluding-run/ (spec, research R1–R14, contracts/run-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import contextlib
+import ctypes
+import errno
+import os
+import shlex
+import signal
+import subprocess
+import time
+from collections.abc import Iterable
+from pathlib import Path
+
+import agentio
+
+DEFAULT_TIMEOUT_S = 100.0  # below Claude Code's 120 s call limit, with room to stop and report (R10)
+TIMEOUT_ENV = "TIMELIKE_RUN_TIMEOUT"
+PR_SET_CHILD_SUBREAPER = 36  # <linux/prctl.h>
+# Lines that "look like an error" (R9): fixed, case-sensitive substrings, so an agent can predict what
+# is flagged (rule 11). Listed in --agent-info. Misses and false hits are accepted in slice 0.
+ERROR_PATTERNS = (
+    "error", "Error", "ERROR", "FAIL", "Failed", "failed", "fatal", "Fatal", "FATAL",
+    "Traceback", "panic:", "Exception", "not found", "No such file", "denied",
+    "undefined reference", "cannot", "Segmentation fault", "Killed", "Aborted",
+)  # fmt: skip
+VERDICT_DETACHED_MAX = 5
+TERM_GRACE_S = 2.0  # SIGTERM, then this long for the tree to end by itself (R4)
+KILL_WINDOW_S = 3.0  # freeze, SIGKILL, re-scan: at most this long before reporting survivors (R4)
+FREEZE_ROUNDS = 50
+POLL_S = 0.05
+SETTLE_S = 0.1  # after the command exits, let what it backgrounded finish forking before looking (R5)
+
+TOOL = agentio.Tool(
+    name="run",
+    target="command",
+    summary="run a command; the call always ends with a verdict, and $? is the command's own exit",
+    usage=[
+        "run [--timeout SECONDS] [--] COMMAND [ARGS...]",
+        "run make test            # verdict, then the output; $? is make's",
+        "run sh -c 'a | b'        # shell syntax goes through a shell",
+        "long output: head, first error lines (error, FAIL, Traceback, … see --agent-info), tail",
+    ],
+    probe=("true",),
+    passes_exit=True,
+    exit_codes={
+        agentio.EXIT_OK: "ok",
+        agentio.EXIT_FAILURE: "run itself failed",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_TIMEOUT: "timeout: run's own limit fired, and the command's whole tree was stopped",
+    },
+    manifest_extra=lambda: {
+        "default_timeout_s": DEFAULT_TIMEOUT_S,
+        "timeout_env": TIMEOUT_ENV,
+        "error_patterns": list(ERROR_PATTERNS),
+    },
+)
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--timeout",
+        type=_positive_seconds,
+        default=None,
+        metavar="SECONDS",
+        help=f"stop the whole tree after SECONDS (default {DEFAULT_TIMEOUT_S:g}, or ${TIMEOUT_ENV})",
+    )
+
+
+class Outcome:
+    """What decided the call: the command's own exit, run's limit, or run itself (data-model.md)."""
+
+    __slots__ = ("cause", "command_exit", "detached", "exit", "not_stopped", "words")
+
+    def __init__(self, cause: str, exit: int, command_exit: int | None, words: str) -> None:
+        self.cause = cause
+        self.exit = exit
+        self.command_exit = command_exit
+        self.words = words
+        self.detached: list[tuple[int, str]] = []  # still running after the command exited (FR-9)
+        self.not_stopped: list[tuple[int, str]] = []  # alive after the stop sequence; expected empty
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    command: list[str] = args.command
+    if not command:
+        raise agentio.UsageError("no command given", "write the command after run, e.g. run make test")
+    limit, source = resolve_timeout(args.timeout)
+    log = open_log(ctx)
+    set_subreaper()
+
+    started = time.monotonic()
+    outcome = execute(command, log, limit, source)
+    duration = time.monotonic() - started
+
+    count, lines, cut = display(log, ctx.limit)
+    verdict = f"exit {outcome.exit} ({outcome.words}) · {duration:.1f} s · {count} lines · log {log}"
+    if outcome.detached:
+        # contracts/run-cli.md: a plain, comma-separated list. At most VERDICT_DETACHED_MAX names, so
+        # the verdict line stays under the contract's COLUMNS cut; JSON `detached` carries every one.
+        shown = outcome.detached[:VERDICT_DETACHED_MAX]
+        named = ", ".join(f"{pid} {name}" for pid, name in shown)
+        more = len(outcome.detached) - len(shown)
+        verdict += f" · detached: {named}" + (f" (+{more} more)" if more else "")
+    if outcome.not_stopped:  # never claim a clean stop that was not observed (H3)
+        verdict += " · not stopped: " + ", ".join(f"{pid} {name}" for pid, name in outcome.not_stopped)
+    return agentio.Result(
+        target=shlex.join(command),
+        scope="run",
+        verdict=verdict,
+        lines=lines,
+        cut=cut,
+        exit=outcome.exit,
+        cause=outcome.cause,
+        command_exit=outcome.command_exit,
+        data={
+            "duration_s": round(duration, 1),
+            "line_count": count,
+            "log": str(log),
+            "timeout_s": limit,
+            "detached": [{"pid": pid, "name": name} for pid, name in outcome.detached],
+            "not_stopped": [{"pid": pid, "name": name} for pid, name in outcome.not_stopped],
+        },
+    )
+
+
+# ── the time limit (R10) ───────────────────────────────────────────────────────────────────────
+
+
+def _positive_seconds(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of seconds") from None
+    if not value > 0 or value == float("inf"):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a positive number of seconds")
+    return value
+
+
+def resolve_timeout(flag: float | None) -> tuple[float, str]:
+    """--timeout beats $TIMELIKE_RUN_TIMEOUT beats the default. A bad variable is a usage error."""
+    if flag is not None:
+        return flag, "--timeout"
+    raw = os.environ.get(TIMEOUT_ENV)
+    if raw is None or raw == "":
+        return DEFAULT_TIMEOUT_S, "default"
+    try:
+        return _positive_seconds(raw), TIMEOUT_ENV
+    except argparse.ArgumentTypeError as e:
+        raise agentio.UsageError(
+            f"{TIMEOUT_ENV}: {e}", f"set {TIMEOUT_ENV} to seconds, e.g. 300, or unset it"
+        ) from None
+
+
+# ── the log (R12) ──────────────────────────────────────────────────────────────────────────────
+
+
+def open_log(ctx: agentio.Context) -> Path:
+    """Create this call's log before anything runs. If it cannot be kept, nothing runs (R12)."""
+    try:
+        d = ctx.scratch() / "run"
+        d.mkdir(mode=0o700, exist_ok=True)
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        path = d / f"{stamp}-{os.getpid()}.log"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)
+        os.close(fd)
+        return path
+    except OSError as e:
+        where = e.filename or str(ctx.scratch_root)
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"cannot create the log under {where}: {e.strerror or e}",
+            "free or fix the scratch space (TIMELIKE_SCRATCH_ROOT); the command was not run",
+        ) from None
+
+
+# ── what is shown (R8, R9, R14) ────────────────────────────────────────────────────────────────
+
+
+def looks_like_error(line: str) -> bool:
+    return any(p in line for p in ERROR_PATTERNS)
+
+
+def display(log: Path, limit: int) -> tuple[int, list[str], agentio.Cut | None]:
+    """One pass over the log: the line count, and either every line or run's own cut of them.
+
+    Within a cap L: the head is L/4 lines, then up to L/10 lines from the gap that look like errors,
+    each with its line number in the log, then the tail of L/2 lines. Memory is bounded by the cap,
+    not by the log. A final line with no newline is a line; CR before LF is dropped (R14).
+    """
+    head_n = max(1, limit // 4)
+    errors_n = limit // 10
+    tail_n = max(1, limit // 2)
+    head: list[str] = []
+    tail: collections.deque[tuple[int, str]] = collections.deque(maxlen=tail_n)
+    found: list[tuple[int, str]] = []
+    whole: list[str] | None = []  # every line, while that is still what will be shown
+    n = 0
+    with log.open("rb") as f:
+        for raw in f:
+            n += 1
+            line = raw.rstrip(b"\n").rstrip(b"\r").decode("utf-8", errors="replace")
+            if whole is not None:
+                whole.append(line)
+                if limit and n > limit:
+                    whole = None  # it will be cut, by run (never by agentio, whose "more" re-runs)
+            if n <= head_n:
+                head.append(line)
+            elif len(found) < errors_n and looks_like_error(line):
+                found.append((n, line))
+            tail.append((n, line))
+    if whole is not None:
+        return n, whole, None
+
+    # Over the cap, the gap is never empty: a cap below head + tail (--limit 1) shortens the tail.
+    tail_lines = list(tail)[len(tail) - min(tail_n, n - head_n - 1) :] if n - head_n - 1 > 0 else []
+    gap_first, gap_last = head_n + 1, n - len(tail_lines)  # the lines neither head nor tail shows
+    errors = [(i, x) for i, x in found if i <= gap_last]  # later matches are in the tail anyway
+    sections: list[tuple[str, list[str]]] = [(f"lines 1–{head_n} of {n}", head)]
+    if errors:
+        sections.append((f"first errors (lines {gap_first}–{gap_last})", [f"L{i}: {x}" for i, x in errors]))
+    if tail_lines:
+        sections.append((f"lines {gap_last + 1}–{n} of {n}", [x for _, x in tail_lines]))
+    shown = {i for i, _ in errors}
+    omitted_bytes = 0
+    with log.open("rb") as f:
+        for i, raw in enumerate(f, 1):
+            if gap_first <= i <= gap_last and i not in shown:
+                omitted_bytes += len(raw)
+            elif i > gap_last:
+                break
+    # One range over the whole gap. It also re-prints the few error lines already shown, which keeps
+    # it one short command that the COLUMNS cut cannot break (R8). It reads the log; it never runs the
+    # command again, which agentio's generic "re-run with --limit 0" would do.
+    more = shlex.join(["sed", "-n", f"{gap_first},{gap_last}p", str(log)])
+    omitted = gap_last - gap_first + 1 - len(errors)
+    return n, [], agentio.Cut(sections, omitted, omitted_bytes, str(log), more)
+
+
+# ── running and concluding (R1–R5) ─────────────────────────────────────────────────────────────
+
+
+def set_subreaper() -> None:
+    """Orphans from the command's tree are re-parented to run, so the tree stays visible (R3)."""
+    with contextlib.suppress(OSError, AttributeError):
+        ctypes.CDLL(None, use_errno=True).prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
+
+
+def execute(command: list[str], log: Path, limit: float, source: str) -> Outcome:
+    fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CLOEXEC)
+    try:
+        proc = subprocess.Popen(  # running the agent's command is the tool's purpose
+            command,
+            stdin=subprocess.DEVNULL,  # a prompt gets end-of-file, never a wait (R13)
+            stdout=fd,
+            stderr=fd,  # one descriptor: one log, in write order (R2)
+            start_new_session=True,
+        )
+    except OSError as e:
+        return exec_failure(command[0], e)
+    finally:
+        os.close(fd)
+    try:
+        rc = proc.wait(timeout=limit)
+    except subprocess.TimeoutExpired:
+        outcome = Outcome(
+            "timeout",
+            agentio.EXIT_TIMEOUT,
+            None,
+            f"timeout after {limit:g} s ({source}); raise with --timeout or {TIMEOUT_ENV}",
+        )
+        outcome.not_stopped = stop_tree(proc, log)
+        return outcome
+    outcome = command_outcome(rc)
+    outcome.detached = find_detached(log)
+    return outcome
+
+
+def exec_failure(name: str, e: OSError) -> Outcome:
+    """The shell's codes for a command that never started: 127 not found, 126 cannot execute (R1)."""
+    if isinstance(e, FileNotFoundError) or e.errno == errno.ENOENT:
+        return Outcome("command", 127, 127, f"command not found: {name}")
+    if e.errno in (errno.EACCES, errno.EPERM, errno.EISDIR, errno.ENOEXEC, errno.ENOTDIR):
+        return Outcome("command", 126, 126, f"command not executable: {name} ({e.strerror})")
+    raise agentio.ToolError(
+        agentio.EXIT_FAILURE, f"cannot start {name}: {e.strerror or e}", "check the command and its path"
+    )
+
+
+def command_outcome(rc: int) -> Outcome:
+    if rc < 0:
+        n = -rc
+        try:
+            sig = signal.Signals(n).name
+        except ValueError:
+            sig = f"signal {n}"
+        return Outcome("command", 128 + n, 128 + n, f"command killed by signal {n} ({sig})")
+    return Outcome("command", rc, rc, f"command exited {rc}")
+
+
+# ── the process tree, read from /proc (R3, R5) ─────────────────────────────────────────────────
+
+
+def parse_stat(raw: str) -> tuple[int, str, str] | None:
+    """(ppid, state, comm) from a /proc/<pid>/stat line. comm may hold spaces and parentheses."""
+    left, right = raw.find("("), raw.rfind(")")
+    if left < 0 or right < left:
+        return None
+    fields = raw[right + 2 :].split()
+    try:
+        return int(fields[1]), fields[0], raw[left + 1 : right]
+    except (IndexError, ValueError):
+        return None
+
+
+def proc_table() -> dict[int, tuple[int, str, str]]:
+    table: dict[int, tuple[int, str, str]] = {}
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/stat", "rb") as f:
+                parsed = parse_stat(f.read().decode("utf-8", errors="replace"))
+        except OSError:
+            continue  # it exited while we looked
+        if parsed is not None:
+            table[int(name)] = parsed
+    return table
+
+
+def descendants(root: int, table: dict[int, tuple[int, str, str]]) -> set[int]:
+    """Every process whose parent chain reaches root. With run as a subreaper, orphans count (R3)."""
+    children: dict[int, list[int]] = {}
+    for pid, (ppid, _, _) in table.items():
+        children.setdefault(ppid, []).append(pid)
+    found: set[int] = set()
+    frontier = [root]
+    while frontier:
+        for child in children.get(frontier.pop(), []):
+            if child not in found:
+                found.add(child)
+                frontier.append(child)
+    return found
+
+
+def log_writers(log: Path) -> set[int]:
+    """Processes holding the log open for writing: the command's output, wherever its parent went (R5).
+
+    Readers do not count: an agent may be tailing an older log at the same time.
+    """
+    try:
+        st = log.stat()
+    except OSError:
+        return set()
+    target = (st.st_dev, st.st_ino)
+    found: set[int] = set()
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            fds = os.listdir(f"/proc/{name}/fd")
+        except OSError:
+            continue  # not ours to read, or gone
+        for fd in fds:
+            try:
+                s = os.stat(f"/proc/{name}/fd/{fd}")
+                if (s.st_dev, s.st_ino) != target:
+                    continue
+                with open(f"/proc/{name}/fdinfo/{fd}") as f:
+                    flags = next((int(x.split()[1], 8) for x in f if x.startswith("flags:")), 0)
+            except (OSError, ValueError):
+                continue
+            if flags & os.O_ACCMODE in (os.O_WRONLY, os.O_RDWR):
+                found.add(int(name))
+                break
+    return found
+
+
+def reap() -> None:
+    """Collect orphans that died while re-parented to run, so none is listed as running."""
+    with contextlib.suppress(ChildProcessError):
+        while os.waitpid(-1, os.WNOHANG) != (0, 0):
+            pass
+
+
+def members(log: Path) -> dict[int, str]:
+    """The command's live tree, plus whatever holds its log for writing: everything a stop must reach."""
+    table = proc_table()
+    me = os.getpid()
+    pids = (descendants(me, table) | log_writers(log)) - {me}
+    return {p: table[p][2] for p in pids if p in table and table[p][1] != "Z"}
+
+
+def signal_all(pids: Iterable[int], sig: signal.Signals) -> None:
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(pid, sig)
+
+
+def stop_tree(proc: subprocess.Popen[bytes], log: Path) -> list[tuple[int, str]]:
+    """Stop every process of the command's tree; return any still alive at the end (R4).
+
+    SIGTERM first, and a grace period. Then freeze: SIGSTOP everything, re-scan, and SIGSTOP newcomers
+    until a scan finds none, so a forking process cannot outrun the sweep. Then SIGKILL, and SIGCONT
+    so a stopped process can take it. Finally re-scan until the tree is empty or the window closes.
+    """
+
+    def settle() -> dict[int, str]:
+        proc.poll()  # reap the command itself first, so Popen keeps its own status
+        reap()
+        return members(log)
+
+    signal_all(members(log), signal.SIGTERM)
+    deadline = time.monotonic() + TERM_GRACE_S
+    while time.monotonic() < deadline:
+        if not settle():
+            return []
+        time.sleep(POLL_S)
+
+    frozen: set[int] = set()
+    for _ in range(FREEZE_ROUNDS):
+        new = set(members(log)) - frozen
+        if not new:
+            break
+        signal_all(new, signal.SIGSTOP)
+        frozen |= new
+    signal_all(frozen, signal.SIGKILL)
+    signal_all(frozen, signal.SIGCONT)
+
+    deadline = time.monotonic() + KILL_WINDOW_S
+    left = settle()
+    while left and time.monotonic() < deadline:
+        signal_all(left, signal.SIGKILL)
+        signal_all(left, signal.SIGCONT)
+        time.sleep(POLL_S)
+        left = settle()
+    return sorted(left.items())
+
+
+def find_detached(log: Path) -> list[tuple[int, str]]:
+    """What the command left running. A child it forked exists before the command exits, so one scan
+    decides whether anything is left; only then is there a short settle, so a child caught between
+    fork and exec is named by the program it became (R5). The usual call pays no settle at all."""
+    reap()
+    if not members(log):
+        return []
+    time.sleep(SETTLE_S)
+    reap()
+    return sorted(members(log).items())
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

@@ -1,0 +1,289 @@
+#!/opt/timelike/python/bin/python3 -I
+"""adele — ask Adele, the authority for reaching actions, to act within the operator's grant (P4).
+
+The agent never holds a credential. `adele request` sends a request to Adele's request interface;
+she checks it against the grant the operator wrote, performs it with a credential the agent never
+sees, and records it in her ledger. Beyond the grant, nothing is performed and the call exits 4 with
+the grant envelope on stdout: the grant, the limit and the operator's command to extend it (T1;
+grant-envelope.schema.json, discovery revision 10). That command is the operator's: the agent cannot
+run it, and it is never offered where the agent's habit runs commands (`confirm`).
+
+`mutating: false`: the grant is the confirmation (P4), so the agent's `--yes` would confirm nothing.
+Rule 8 still binds: slice 0 exposes no destructive request, so there is no `--dry-run` yet.
+
+Design: .specswarm/features/004-adele-grants/ (spec, research R6-R8, contracts/adele-cli.md and
+adele-http.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import re
+from typing import Any
+
+import agentio
+
+DEFAULT_URL = "http://adele:8480"
+URL_ENV = "TIMELIKE_ADELE_URL"
+DEFAULT_TIMEOUT_S = 30.0
+STATUS_TIMEOUT_S = 3.0  # the conformance probe must conclude well inside conform's 10 s (R8)
+VANTAGE = "from the agent container"  # H3: a reachability claim names where it was made
+UNBLOCK = "the operator starts her: make up (docker compose up -d) on the host"
+_TTL_RE = re.compile(r"^([0-9]+h)?([0-9]+m)?$")
+
+TOOL = agentio.Tool(
+    name="adele",
+    target="adele",
+    summary="ask Adele to perform a reaching action within the operator's grant; never see a credential",
+    usage=[
+        "adele status                  # is Adele reachable from here; her build revision",
+        "adele grants                  # the grants she applies: limits, spent, live",
+        "adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]",
+        "exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)",
+    ],
+    probe=("status",),
+    grant_envelope=True,  # exit 4 is the grant envelope; not --yes-confirmed (discovery revision 10)
+    exit_codes={
+        agentio.EXIT_OK: "ok",
+        agentio.EXIT_FAILURE: "unreachable, or the capability failed",
+        agentio.EXIT_USAGE: "usage; or name one with --grant",
+        agentio.EXIT_NOT_FOUND: "no grant by that name",
+        agentio.EXIT_CONFIRM: "beyond the grant, nothing performed",
+        agentio.EXIT_TIMEOUT: "own limit fired",
+    },
+    manifest_extra=lambda: {
+        "url_env": URL_ENV,
+        "default_url": DEFAULT_URL,
+        "default_timeout_s": DEFAULT_TIMEOUT_S,
+        "capabilities": ["standin.box"],
+    },
+)
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    # Optional to argparse, required by main(): a required positional would make argparse refuse
+    # --help and --agent-info before agentio handles them.
+    p.add_argument("verb", nargs="?", choices=("status", "grants", "request"), metavar="VERB")
+    p.add_argument("capability", nargs="?", metavar="CAPABILITY")
+    p.add_argument("action", nargs="?", metavar="ACTION")
+    p.add_argument("--name", metavar="NAME", help="the resource's name")
+    p.add_argument("--ttl", metavar="D", help="its lifetime, e.g. 30m or 1h (default: the grant's ttl)")
+    p.add_argument("--port", type=int, action="append", default=[], metavar="P", help="a port it exposes")
+    p.add_argument("--grant", metavar="G", help="the grant to use (default: the one that allows it)")
+    p.add_argument(
+        "--timeout", type=float, default=DEFAULT_TIMEOUT_S, metavar="S", help="give up after S seconds"
+    )
+
+
+class Reply:
+    """One HTTP exchange with Adele: a status and a JSON body, or the reason there was none."""
+
+    __slots__ = ("body", "reason", "status", "timed_out")
+
+    def __init__(self, status: int, body: dict[str, Any], reason: str = "", timed_out: bool = False) -> None:
+        self.status = status
+        self.body = body
+        self.reason = reason
+        self.timed_out = timed_out
+
+
+def base_url() -> str:
+    return os.environ.get(URL_ENV, DEFAULT_URL).rstrip("/")
+
+
+def call(method: str, path: str, timeout: float, payload: dict[str, Any] | None = None) -> Reply:
+    """status 0 means no HTTP answer at all; `reason` then says why (urllib is imported here, R6)."""
+    # Imported here, not at the top: keeps --help and --agent-info on agentio's start-up path (R6).
+    import urllib.error
+    import urllib.request
+
+    data = None if payload is None else json.dumps(payload).encode()
+    req = urllib.request.Request(  # noqa: S310 — the URL is Adele's, from the image's environment
+        base_url() + path, data=data, method=method, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            return Reply(resp.status, _json(resp.read()))
+    except urllib.error.HTTPError as e:
+        return Reply(e.code, _json(e.read()))
+    except TimeoutError:
+        return Reply(0, {}, f"no answer within {timeout:g} s", timed_out=True)
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            return Reply(0, {}, f"no answer within {timeout:g} s", timed_out=True)
+        return Reply(0, {}, str(e.reason))
+    except OSError as e:
+        return Reply(0, {}, e.strerror or str(e))
+
+
+def _json(raw: bytes) -> dict[str, Any]:
+    try:
+        doc = json.loads(raw or b"{}")
+    except ValueError:
+        return {"error": "Adele answered with something that is not JSON"}
+    return doc if isinstance(doc, dict) else {"error": "Adele answered with JSON that is not an object"}
+
+
+def unreachable(reply: Reply, timeout: float) -> agentio.ToolError:
+    if reply.timed_out:
+        return agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"Adele at {base_url()} gave no answer within {timeout:g} s ({VANTAGE})",
+            "raise the limit with --timeout, or ask the operator whether Adele is running",
+        )
+    return agentio.ToolError(
+        agentio.EXIT_FAILURE, f"cannot reach Adele at {base_url()} ({VANTAGE}): {reply.reason}", UNBLOCK
+    )
+
+
+def status(ctx: agentio.Context) -> agentio.Result:
+    """Always a Result, never a ToolError, so the header is printed either way (conform C3/C4, R8)."""
+    reply = call("GET", "/v1/health", STATUS_TIMEOUT_S)
+    if reply.status == 200:
+        rev = str(reply.body.get("revision", "unknown"))
+        grants = [str(g) for g in reply.body.get("grants", [])]
+        verdict = f"Adele reachable at {base_url()} {VANTAGE} · revision {rev}"
+        data = {"reachable": True, "url": base_url(), "revision": rev, "grants": grants}
+        return agentio.Result("adele", "status", verdict, data=data)
+    if reply.status == 0:
+        why = reply.reason
+        verdict = f"unreachable: {base_url()} {VANTAGE} ({why}) — {UNBLOCK}"
+    else:  # she answered, but not well: reached, and not "unreachable"
+        why = f"HTTP {reply.status}: {reply.body.get('error', 'no error text')}"
+        verdict = f"Adele at {base_url()} answered {VANTAGE} but not healthy ({why}) — {UNBLOCK}"
+    data = {"reachable": reply.status != 0, "url": base_url(), "reason": why}
+    return agentio.Result("adele", "status", verdict, data=data, exit=agentio.EXIT_FAILURE)
+
+
+def grants(timeout: float) -> agentio.Result:
+    reply = call("GET", "/v1/grants", timeout)
+    if reply.status == 0:
+        raise unreachable(reply, timeout)
+    if reply.status != 200:
+        raise answered_error(reply)
+    items = reply.body.get("grants", [])
+    lines = [
+        f"{g.get('name')}: {', '.join(g.get('capabilities', []))} · budget {_usd(g.get('budget_cents'))}"
+        f" (spent {_usd(g.get('spent_cents'))}) · ttl {g.get('ttl')} · instances {g.get('live')}/"
+        f"{g.get('instances')} · ports {g.get('ports')}"
+        for g in items
+    ]
+    verdict = f"{len(items)} grant{'s' if len(items) != 1 else ''}"
+    return agentio.Result(
+        "adele", "grants", verdict, lines=lines, data={"grants": items, "count": len(items)}
+    )
+
+
+def _usd(cents: Any) -> str:
+    return f"{int(cents or 0) / 100:.2f} USD"
+
+
+def request(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    payload = build_request(args)
+    target = f"{args.capability}"
+    reply = call("POST", "/v1/requests", args.timeout, payload)
+    if reply.status == 0:
+        raise unreachable(reply, args.timeout)
+    body = reply.body
+    if reply.status == 200:
+        verdict = (
+            f"performed under grant {body.get('grant')} · box {body.get('resource')}"
+            f" · {_usd(body.get('cost_cents'))} · expires {body.get('expires_at')}"
+        )
+        return agentio.Result(target, args.action, verdict, data=_performed(body))
+    if reply.status == 403:
+        return refused(ctx, args, payload, body)
+    raise answered_error(reply)
+
+
+def build_request(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.capability or not args.action:
+        raise agentio.UsageError(
+            "request needs a capability and an action", "e.g. adele request standin.box create --name tl-1"
+        )
+    if not args.name:
+        raise agentio.UsageError("request needs --name", "name the resource, e.g. --name tl-1")
+    if args.ttl is not None and not (_TTL_RE.match(args.ttl) and args.ttl):
+        raise agentio.UsageError(f"--ttl {args.ttl!r} is not a duration like 30m or 1h", "use h and m")
+    return {
+        "session": agentio.session_id(),
+        "grant": args.grant,
+        "capability": args.capability,
+        "action": args.action,
+        "params": {"name": args.name, "ttl": args.ttl, "ports": list(args.port)},
+    }
+
+
+def _performed(body: dict[str, Any]) -> dict[str, Any]:
+    keys = ("outcome", "grant", "resource", "cost_cents", "expires_at", "ledger_id", "undo")
+    return {k: body.get(k) for k in keys}
+
+
+def refused(
+    ctx: agentio.Context, args: argparse.Namespace, payload: dict[str, Any], body: dict[str, Any]
+) -> agentio.Result:
+    """Exit 4 with the grant envelope (FOR-MENTOR Item 13, discovery revision 10; T018). Adele's 403
+    says what was refused; a 403 that cannot fill the envelope is her failure, never a guessed one."""
+    limit = body.get("limit")
+    extend = body.get("extend")
+    grant = body.get("grant")
+    if (
+        body.get("performed") is not False
+        or not isinstance(limit, dict)
+        or not {"name", "allowed", "needed"} <= set(limit)
+        or not isinstance(extend, str)
+        or not extend
+        or not isinstance(grant, str)
+        or not grant
+    ):
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            "Adele refused the request, but her answer does not name the grant, the limit and the"
+            " operator's extend command",
+            "nothing was performed, as far as she said; ask the operator to check her ledger",
+        )
+    ledger_id = body.get("ledger_id")
+    return agentio.grant_required(
+        ctx,
+        target=str(args.capability),
+        scope=str(args.action),
+        grant=grant,
+        limit={k: str(limit[k]) for k in ("name", "allowed", "needed")},
+        extend=extend,
+        request=payload,
+        ledger_id=ledger_id if isinstance(ledger_id, int) and not isinstance(ledger_id, bool) else None,
+    )
+
+
+def answered_error(reply: Reply) -> agentio.ToolError:
+    what = str(reply.body.get("error", f"Adele answered HTTP {reply.status}"))
+    remedy = str(reply.body.get("remediation", ""))
+    names = reply.body.get("grants")
+    if names:
+        remedy = (remedy + "; " if remedy else "") + "grants: " + ", ".join(str(n) for n in names)
+    if reply.status == 404:
+        return agentio.ToolError(agentio.EXIT_NOT_FOUND, what, remedy or "list them with adele grants")
+    if reply.status == 400:
+        return agentio.UsageError(what, remedy or "see adele --help")
+    return agentio.ToolError(
+        agentio.EXIT_FAILURE, what, remedy or "nothing was performed; retry, or ask the operator"
+    )
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        raise agentio.UsageError("--timeout must be more than 0", "e.g. --timeout 30")
+    if args.verb is None:
+        raise agentio.UsageError("no verb given", "use one of: adele status, adele grants, adele request …")
+    if args.verb == "status":
+        return status(ctx)
+    if args.verb == "grants":
+        return grants(args.timeout)
+    return request(args, ctx)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

@@ -1,0 +1,146 @@
+# timelike — the agent environment (feature 001) and Adele, the authority for reaching actions
+# (feature 004, slice 0; .specswarm/features/004-adele-grants/ research R3).
+#
+# Pins come from pins.env, exported by the Makefile (`include pins.env` + `export`). Run compose through
+# make, or export pins.env yourself (`set -a; . ./pins.env; set +a`). Every reference uses ${VAR:-}
+# rather than ${VAR:?}: compose interpolates the whole file for every command (exec, down, ...), so a
+# strict check would break `docker compose exec` whenever pins.env is not exported (lore
+# docker-compose Q002). The Dockerfile refuses empty values itself, GIT_SHA included (H8).
+# No literal `$` appears in any value (lore docker-compose Q005).
+name: timelike
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: image/Dockerfile
+      args:
+        DEBIAN_IMAGE: ${DEBIAN_IMAGE:-}
+        UV_IMAGE: ${UV_IMAGE:-}
+        PYTHON_VERSION: ${PYTHON_VERSION:-}
+        GIT_SHA: ${GIT_SHA:-}
+    image: timelike-agent:local
+    container_name: timelike-agent
+    # Privilege boundary (research R7): no capabilities, setuid bits ignored, Docker's default seccomp
+    # profile (deliberately not overridden).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    read_only: false
+    command: ["sleep", "infinity"]
+    # Deliberately no volumes, no ports and no Docker socket (constitution H1: only Adele holds it).
+    # The agent reaches Adele only through her request interface, on `adele-request` (spec FR-2). It
+    # keeps the default network, with egress, until slice 2's allowlist (spec D-2).
+    networks: [default, adele-request]
+    environment:
+      TIMELIKE_ADELE_URL: http://adele:8480
+
+  # Adele: holds the credential, enforces the operator's grants, records the ledger (P4). FROM scratch,
+  # uid 10001. Nothing of hers is mounted into the agent: her state volume, her grant file (read-only)
+  # and the canary are hers alone (spec FR-4; stack rule 1).
+  adele:
+    build:
+      context: adele
+      dockerfile: Dockerfile
+      target: adele
+      args:
+        GO_IMAGE: ${GO_IMAGE:-}
+        GIT_SHA: ${GIT_SHA:-}
+    image: timelike-adele:local
+    container_name: timelike-adele
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks: [adele-request, adele-standin]
+    volumes:
+      - adele-state:/var/lib/adele
+      - adele-secret:/run/adele-secret:ro
+      - ${ADELE_GRANTS:-./adele/grants.conf}:/etc/adele/grants.conf:ro
+    environment:
+      ADELE_CANARY_FILE: /run/adele-secret/canary
+    depends_on:
+      adele-secret:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/adeled", "health"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 2s
+
+  # The STAND-IN capability: test and demo only, plainly not a provider (spec FR-19). Profile-gated, so
+  # `docker compose up` without --profile standin never starts it. Only Adele can reach it.
+  adele-standin:
+    profiles: [standin]
+    build:
+      context: adele
+      dockerfile: Dockerfile
+      target: standin
+      args:
+        GO_IMAGE: ${GO_IMAGE:-}
+        GIT_SHA: ${GIT_SHA:-}
+    image: timelike-adele-standin:local
+    container_name: timelike-adele-standin
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    networks: [adele-standin]
+    volumes:
+      - standin-state:/var/lib/standin
+      - adele-secret:/run/adele-secret:ro
+    environment:
+      ADELE_CANARY_FILE: /run/adele-secret/canary
+    depends_on:
+      adele-secret:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/adele-standin", "health"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # One-shot: generates the canary (a synthetic credential, never a real secret; spec D-8) into a
+  # volume, if absent, root-owned and readable by group 10001 only (lore docker-compose Q007: the
+  # process reads its credential and cannot replace it). It never touches the host's disk.
+  adele-secret:
+    image: ${DEBIAN_IMAGE:-}
+    user: "0:0"
+    network_mode: none
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - adele-secret:/secret
+    command:
+      - sh
+      - -c
+      - >-
+        test -s /secret/canary ||
+        { umask 0337 &&
+        printf 'tlcanary-%s\n' "$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" > /secret/.canary &&
+        chown 0:10001 /secret/.canary && chmod 0440 /secret/.canary &&
+        mv /secret/.canary /secret/canary; }
+
+networks:
+  # Both internal: no route out. Adele has no outside reach in slice 0 (spec D-2).
+  adele-request:
+    internal: true
+  adele-standin:
+    internal: true
+
+volumes:
+  adele-state:
+  standin-state:
+  adele-secret:

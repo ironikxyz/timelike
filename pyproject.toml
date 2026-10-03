@@ -1,0 +1,28 @@
+# Lint and type-check configuration only. timelike's tools are single files copied into the image;
+# nothing here is packaged or installed (constitution H5).
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+extend-include = ["tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "bench/bin/timelike-bench", "tests/fixtures/bad-tool/timelike-bad", "tests/fixtures/bad-tool/timelike-hang"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+  "S603",  # subprocess without shell: the conformance check runs tools by design
+  "S607",  # partial executable paths: tools are resolved on PATH by design (P3)
+  "RUF001", "RUF002", "RUF003",  # "…" and "—" are required by the output contract (rules 2, 13, 14)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108"]  # asserts and /tmp paths are what tests are made of
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["tools/agentio/agentio.py", "tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "scan/evaluate.py", "scan/denylist.py", "bench/benchlib", "bench/bin/timelike-bench"]
+mypy_path = "tools/agentio:bench"
+scripts_are_modules = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]

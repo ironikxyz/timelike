@@ -1,0 +1,57 @@
+#!/opt/timelike/python/bin/python3 -I
+"""A deliberately NON-conforming tool, for the negative conformance test (SC-5; contracts/conformance.md).
+
+It never ships on PATH. It hand-rolls its output instead of using agentio, and breaks exactly three
+checks, so timelike-conform must name all three:
+  C1  --help prints 45 lines (the contract allows 40)
+  C5  an unknown flag exits 1 instead of 2
+  C7  it writes no session event
+Everything else (manifest, JSON and text probes, exit vocabulary, no ANSI) conforms, so the check's
+findings can be matched exactly.
+"""
+
+import json
+import sys
+
+NAME = "timelike-bad"
+args = sys.argv[1:]
+
+if "--help" in args:
+    print(f"{NAME}: fixture [help]")
+    for i in range(44):
+        print(f"  padding line {i} — this help is deliberately too long")
+    sys.exit(0)
+
+if "--agent-info" in args:
+    print(
+        json.dumps(
+            {
+                "tool": NAME,
+                "target": "manifest",
+                "scope": "agent-info",
+                "contract": 1,
+                "summary": "deliberately non-conforming fixture",
+                "usage": f"{NAME} [--json|--text]",
+                "flags": ["--agent-info", "--help", "--json", "--limit", "--text", "--verbose"],
+                "exit_codes": {"0": "ok", "1": "failure", "2": "usage"},
+                "mutating": False,
+                "destructive": False,
+                "reads_stdin": False,
+                "probe": [],
+            }
+        )
+    )
+    sys.exit(0)
+
+known = {"--json", "--text", "--limit", "--verbose"}
+unknown = [a for a in args if a.startswith("--") and a not in known]
+if unknown:
+    print(f"error: unknown flag {unknown[0]} (code 1) — see {NAME} --help", file=sys.stderr)
+    sys.exit(1)
+
+if "--text" in args:
+    print(f"{NAME}: fixture [probe]")
+    print("verdict: ok")
+else:
+    print(json.dumps({"tool": NAME, "target": "fixture", "scope": "probe", "verdict": "ok"}))
+sys.exit(0)

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timelike/agentio/v1/agent-info.schema.json",
+  "title": "Tool manifest printed by --agent-info (contract rule 6)",
+  "type": "object",
+  "required": ["tool", "target", "scope", "contract", "summary", "usage", "flags", "exit_codes", "mutating", "destructive", "reads_stdin", "probe"],
+  "properties": {
+    "tool": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "target": { "const": "manifest" },
+    "scope": { "const": "agent-info" },
+    "contract": { "const": 1 },
+    "summary": { "type": "string", "maxLength": 200 },
+    "usage": { "type": "string" },
+    "flags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^--[a-z][a-z0-9-]*$" },
+      "description": "Must include --help, --json, --text, --agent-info, --limit, --verbose; plus --dry-run if destructive and --yes if mutating"
+    },
+    "exit_codes": {
+      "type": "object",
+      "propertyNames": { "enum": ["0", "1", "2", "3", "4", "124"] },
+      "additionalProperties": { "type": "string" },
+      "description": "Codes this tool can return as its OWN outcomes, each with its meaning. Any key outside the vocabulary fails conformance. A pass-through tool lists only its own outcomes here; the command's codes are declared by passes_exit"
+    },
+    "mutating": { "type": "boolean" },
+    "destructive": { "type": "boolean" },
+    "reads_stdin": { "type": "boolean" },
+    "probe": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Arguments for a safe, read-only, fast invocation that the conformance check runs with --json and --text"
+    },
+    "passes_exit": { "type": "boolean", "description": "true when the tool runs a command the agent named and returns that command's exit (discovery revision 9). Conformance then also runs it wrapping `sh -c 'exit 42'` (C6). Absent means false" },
+    "envelopes": {
+      "type": "array",
+      "items": { "enum": ["confirmation_required", "grant_required"] },
+      "description": "The exit-4 envelopes this tool can print, by status (discovery revision 10). confirmation_required exactly when mutating; grant_required for a client whose requests an authority brokers (Adele). Conformance C9 checks every exit-4 output against the envelope its status names, and that the status is declared here. Absent means: confirmation_required if mutating, else none"
+    },
+    "revision": { "type": "string", "minLength": 1, "description": "Build revision (constitution H8). REQUIRED for the timelike tool itself, where an empty value is a failure" }
+  }
+}

@@ -1,0 +1,10 @@
+#!/opt/timelike/no-such-interpreter/bin/python3 -I
+"""A timelike tool whose interpreter path does not exist (SC-5 e2e fixture; T053 product gap).
+
+Common failure (slice 1): a tool installed with a stale or mistyped absolute shebang, e.g. from an
+image built before an interpreter move. exec fails with ENOENT before any tool code runs, so this
+body never executes. timelike-conform must still name the tool and a rule, and report the others.
+Copied into a per-test directory; never shipped on PATH.
+"""
+
+print("never runs")

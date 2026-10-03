@@ -1,0 +1,109 @@
+# timelike — build, test, lint and scan. Everything that needs Docker runs in pinned containers;
+# nothing is installed on the host. Two verification lanes (research.md R10):
+#   make test       Docker lane — authoritative for the acceptance criteria
+#   make test-host  host lane — advisory: agentio/conform units and the env-layer files
+
+include pins.env
+export
+
+SHELL := /bin/bash
+GIT_SHA := $(shell git rev-parse HEAD 2>/dev/null)
+DIRTY := $(shell git status --porcelain 2>/dev/null | grep -v '^?? tests/out/' | head -1)
+PYTHON ?= python3
+COMPOSE := docker compose
+
+.PHONY: build up down test test-host lint lint-host scan demo docker-check stamp-check bench bench-images grants
+
+docker-check:
+	@docker info >/dev/null 2>&1 || { \
+	  echo "error: no Docker daemon reachable (code 1) — run this on a host with Docker, mount the host socket, or set DOCKER_HOST; see .specswarm/features/001-agent-shell-baseline/research.md R10" >&2; \
+	  exit 1; }
+
+# H8 / lore cross-stack P003: the image carries the revision it was built from. An empty stamp is a
+# failure, and a dirty tree would stamp a revision the image does not match.
+stamp-check:
+	@test -n "$(GIT_SHA)" || { echo "error: no git revision to stamp (code 1) — build from a git checkout" >&2; exit 1; }
+	@if [ -n "$(DIRTY)" ] && [ -z "$(ALLOW_DIRTY)" ]; then \
+	  echo "error: working tree is dirty, the stamp $(GIT_SHA) would not describe the image (code 1) — commit first, or set ALLOW_DIRTY=1" >&2; exit 1; fi
+
+# Adele (feature 004, research R3). The operator's grant file is local and git-ignored; this never
+# overwrites one that exists. (The canary is generated inside Docker, into a volume, by the compose
+# service adele-secret — it never touches the host's disk; spec D-8.)
+grants:
+	@test -e adele/grants.conf || { cp adele/grants.example.conf adele/grants.conf; echo "wrote adele/grants.conf from adele/grants.example.conf — edit it to change the grants"; }
+
+build: docker-check stamp-check grants
+	$(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA)
+
+# The stand-in's profile is on: it is what the D8 demo requests (feature 004). Without it, Adele has no
+# capability to broker. `docker compose up` without the profile starts the agent and Adele only.
+up: build
+	$(COMPOSE) --profile standin up -d --force-recreate
+
+down:
+	$(COMPOSE) --profile standin down --remove-orphans
+
+test: docker-check stamp-check
+	tests/run.sh
+
+test-host:
+	PYTHON="$(PYTHON)" tests/host/run.sh
+
+# Linters run in pinned containers. The uv image is distroless (no shell; research R6), so ruff and
+# mypy run through the uv inside the built agent image, on the image's own interpreter.
+SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh tests/host/run.sh \
+  tests/host/test_env_layer.sh tests/e2e/helpers.bash scan/scan.sh scripts/demo.sh \
+  image/rootfs/etc/profile.d/10-timelike-shell-env.sh image/rootfs/etc/timelike/shell-env.bash \
+  tests/host/test_shell_env_hook.sh tests/e2e/container-derived-defaults.bats \
+  tests/e2e/hooks-a-repository-configures-run.bats tests/e2e/hook-past-its-time-limit-is-killed.bats \
+  tests/e2e/hooks-under-env-i-default-bounded-local-unbounded.bats \
+  tests/e2e/adele-starts-with-agent-reached-only-through-request-interface.bats \
+  tests/e2e/adele-rejects-malformed-grant-with-line-at-fault.bats \
+  tests/e2e/request-within-grant-performed-beyond-exits-4-nothing-performed.bats \
+  tests/e2e/no-credential-held-by-adele-appears-in-agent.bats \
+  tests/e2e/every-performed-request-recorded-in-ledger.bats \
+  tests/e2e/adele-isolation-grant-file-and-extend-unreachable-from-agent.bats \
+  bench/run.sh
+PY_IN_IMAGE := docker run --rm -v "$(CURDIR)":/src:ro -w /src -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv \
+  -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint bash timelike-agent:local -c
+
+lint: docker-check
+	@docker image inspect timelike-agent:local >/dev/null 2>&1 || $(MAKE) build
+	docker run --rm -v "$(CURDIR)":/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) $(SHELLCHECK_FILES)
+	$(PY_IN_IMAGE) 'set -e; P=/opt/timelike/python/bin/python3; \
+	  uv tool run --python $$P ruff@$(RUFF_VERSION) check --no-cache tools tests scan bench; \
+	  uv tool run --python $$P ruff@$(RUFF_VERSION) format --no-cache --check tools tests scan bench; \
+	  uv tool run --python $$P mypy@$(MYPY_VERSION) --cache-dir /tmp/mypy'
+	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/adele":/src:ro -w /src -e HOME=/tmp \
+	  -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod -e GOFLAGS=-mod=readonly -e GOTOOLCHAIN=local \
+	  -e CGO_ENABLED=0 $(GO_IMAGE) bash -c 'set -e; f=$$(gofmt -l .); test -z "$$f" || { echo "gofmt: $$f"; exit 1; }; \
+	  go vet ./...; go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...'
+
+# Fallback when no daemon is reachable: whatever of ruff/mypy/shellcheck the host has. Advisory.
+lint-host:
+	@command -v ruff >/dev/null && ruff check tools tests scan bench && ruff format --check tools tests scan bench || echo "lint-host: ruff not available"
+	@$(PYTHON) -m mypy --version >/dev/null 2>&1 && $(PYTHON) -m mypy || echo "lint-host: mypy not available"
+	@command -v shellcheck >/dev/null && shellcheck $(SHELLCHECK_FILES) || echo "lint-host: shellcheck not available"
+	@command -v go >/dev/null && (cd adele && test -z "$$(gofmt -l .)" && go vet ./...) || echo "lint-host: go not available (or gofmt/vet failed)"
+
+scan: docker-check
+	scan/scan.sh
+
+demo: up
+	scripts/demo.sh
+
+# Speedup bench (feature 002). Three images, all from the pinned base and stamped with the checkout's
+# revision: the agent (make build), the vanilla baseline and the bench driver. The driver refuses any
+# image whose revision label differs from GIT_SHA (research RB8), so a stale image is never measured.
+#   make bench                              all catalog tasks
+#   make bench TASKS=git-rebase-continue    one task (space-separated for several)
+bench-images: build
+	docker build -f bench/vanilla/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
+	  --build-arg GIT_SHA=$(GIT_SHA) -t timelike-vanilla:local .
+	docker build -f bench/driver/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
+	  --build-arg UV_IMAGE=$(UV_IMAGE) --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  --build-arg DOCKER_CLI_IMAGE=$(DOCKER_CLI_IMAGE) --build-arg GIT_SHA=$(GIT_SHA) \
+	  -t timelike-bench-driver:local .
+
+bench: bench-images
+	bench/run.sh $(foreach t,$(TASKS),--task $(t))

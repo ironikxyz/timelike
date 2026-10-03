@@ -1,0 +1,287 @@
+{
+  "001": {
+    "recorded_at": "2026-09-28T07:33:08+00:00",
+    "git_sha": "faca171def4275ab65b42b044196107d44a7b3f0",
+    "lane": "host (advisory) — Docker lane not run: no daemon in this environment (research R10)",
+    "unit_tests": {
+      "passed": 150,
+      "failed": 0,
+      "skipped": 1,
+      "runner": "pytest 8.4.2, host Python 3.12.3",
+      "score": 25,
+      "image_lane": "151 passed on /opt/timelike/python/bin/python3 -I (Docker lane)"
+    },
+    "coverage": {
+      "percent": 94,
+      "kind": "line+branch, coverage.py, subprocesses included",
+      "per_file": {
+        "tools/agentio/agentio.py": 92,
+        "tools/bin/timelike": 96,
+        "tools/bin/timelike-conform": 93,
+        "scan/evaluate.py": 96
+      },
+      "target": 90,
+      "score": 25
+    },
+    "integration_tests": {
+      "status": "passed",
+      "detail": "118/118 bats e2e in the Docker lane (2026-09-28T12:08Z, b235f39)",
+      "score": 15
+    },
+    "browser_tests": {
+      "status": "not applicable (no GUI)",
+      "score": 0
+    },
+    "bundle_size": {
+      "status": "not applicable (enforce_budgets: false; no JS bundles)",
+      "score": 0
+    },
+    "visual_alignment": {
+      "status": "not implemented by the plugin",
+      "score": 0
+    },
+    "raw_score": 65,
+    "raw_max": 115,
+    "scaled_score": 57,
+    "gate": {
+      "min_quality_score": 90,
+      "result": "FAIL",
+      "block_merge_on_failure": true,
+      "reason": "browser, bundle and visual (50 pts) not applicable to a CLI/infra project; all measured components full marks (FOR-MENTOR Item 6)"
+    },
+    "plugin_tooling": {
+      "lib/test-framework-detector.sh": "not installed in specswarm 2.11.0 — detection and run_tests unavailable; tests run and parsed by hand"
+    },
+    "startup_p95_ms": {
+      "value": 56.7,
+      "where": "host venv Python 3.12.3 (advisory; in-image measurement pending T042)",
+      "image": "< 100 asserted and passed in the image; figure not printed"
+    },
+    "env_layer_host_check": "32/32 (advisory: files, not the image)",
+    "supply_chain_gate": {
+      "result": "FAIL",
+      "blocking": 81,
+      "unfixable": 80,
+      "distinct_cves": 38,
+      "base_layer": 49,
+      "added_layer": 32,
+      "fixable": "CVE-2026-82049 python 3.12.14 -> 3.14.0b1",
+      "decision": "FOR-MENTOR Item 7"
+    }
+  },
+  "002": {
+    "recorded_at": "2026-09-29T00:46:04+00:00",
+    "git_sha": "d2571ede0135b1691262e3a30b785bdbf970caae",
+    "lane": "host (advisory) — Docker lane not run: no daemon in this environment (001 research R10)",
+    "unit_tests": {
+      "passed": 565,
+      "failed": 0,
+      "skipped": 1,
+      "runner": "pytest 8.4.2, host Python 3.12.3 (scratch venv)",
+      "score": 25
+    },
+    "coverage": {
+      "percent": 97,
+      "kind": "line+branch, coverage.py, subprocesses included",
+      "per_file": {
+        "bench/benchlib/executor.py": 96,
+        "bench/bin/timelike-bench": 98,
+        "bench/benchlib/trace.py": 100,
+        "bench/benchlib/runner.py": 100,
+        "bench/benchlib/report.py": 100,
+        "bench/benchlib/docker.py": 100,
+        "bench/benchlib/fakeagent.py": 100,
+        "bench/benchlib/catalog.py": 100,
+        "bench/benchlib/keys.py": 100,
+        "tools/agentio/agentio.py": 92,
+        "tools/bin/timelike-conform": 93,
+        "scan/evaluate.py": 99
+      },
+      "target": 90,
+      "score": 25
+    },
+    "integration_tests": {
+      "state": "unavailable: the Docker lane (bats e2e, incl. tests/e2e/speedup-bench.bats) cannot run here"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh not in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: not implemented"
+    },
+    "raw_score": 50,
+    "raw_max": 50,
+    "scaled_score": 100,
+    "score_note": "implement's own score (lib/quality-scale.sh), over the measured components only; NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "enforce_gates": false,
+      "result": "informational",
+      "merge_bar": "quality-standards § Quality Gates: needs the Docker lane, the scan (two bench baselines pending a person's review) and D2 observed"
+    }
+  },
+  "003": {
+    "recorded_at": "2026-10-01T05:19:12+00:00",
+    "git_sha": "8d8a78d0b1b0ced606b8552a8b62d66b39c6d55f",
+    "plugin": "specswarm 4.0.1-botbaubble.2.21.0, /specswarm:implement step 10 (not dispatch)",
+    "unit_tests": {
+      "state": "unavailable: run_tests returned 2 — 'pytest is declared by this project but not installed here' (/usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: run_coverage printed 'unknown' (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled (no component scored by hand). NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; warned, not halted"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures (scratch venv), recorded beside the plugin's result, never fed into its score",
+      "unit_tests": "675 passed, 1 skipped — pytest 8.4.2, host Python 3.12.3, coverage-traced run",
+      "coverage": {
+        "percent": 97,
+        "kind": "line+branch, coverage.py, subprocesses included",
+        "per_file": {
+          "tools/bin/run": 96,
+          "tools/agentio/agentio.py": 94,
+          "tools/bin/timelike-conform": 92,
+          "tools/bin/timelike": 96,
+          "bench/bin/timelike-bench": 98,
+          "scan/evaluate.py": 99
+        },
+        "target": 90
+      },
+      "make_test_host": "passed (units 676 passed; host hook logic 29 of 29)",
+      "lint": "ruff 0.16.7 check+format clean; mypy --strict clean (15 files); shellcheck 0.11.0 clean"
+    },
+    "lane": "host (advisory) — the Docker lane is the merge bar and has not run (no daemon here, 001 research R10)"
+  },
+  "001-cycle-6": {
+    "recorded_at": "2026-10-01T19:27:06+00:00",
+    "git_sha": "3ce71b7309be3feb49511dec8dd3e3eafce9d8ac",
+    "plugin": "specswarm 4.0.1-botbaubble.2.22.0, /specswarm:implement step 10 (not dispatch)",
+    "send": "bridge/sends/01-rev9-20261001-191224.md",
+    "unit_tests": {
+      "state": "unavailable: run_tests returned 2 — 'pytest is declared by this project but not installed here' (/usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: run_coverage printed 'unknown' (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; warned, not halted"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures (scratch venv), recorded beside the plugin's result, never fed into it",
+      "units": "676 passed (make test-host, second run; the first run failed one 002 bench unit, flaky: 21/21 three times in isolation)",
+      "lint": "ruff 0.16.7 clean; mypy 2.3.1 no issues in 15 files; shellcheck 0.11.0 clean over 28 files",
+      "coverage": "not re-measured: no Python changed in this cycle",
+      "e2e": "not run here (no Docker, R10); the Docker lane decides"
+    }
+  },
+  "004": {
+    "recorded_at": "2026-10-02T05:16:06+00:00",
+    "git_sha": "a135f91225d4cb34394f56aca6cfcd8a62c8e9fa",
+    "plugin": "specswarm 4.0.1-botbaubble.2.24.0, /specswarm:implement step 10 (not dispatch)",
+    "unit_tests": {
+      "state": "unavailable: pytest is declared but could not be run on this machine (run_tests returned 2: /usr/bin/python3 has no pytest); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: coverage could not be run on this machine (run_coverage printed unknown, rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin (e2e bats run in the Docker lane)"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled (no component scored by hand). NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; warned, not halted"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures (scratch venv, scratch Go 1.27.1), recorded beside the plugin's result, never fed into its score",
+      "unit_tests": "744 passed, 2 failed, 1 skipped (coverage-traced run, 347 s, under load: both failures test_bench_cli 'setup failed: hung', 002's known load-dependent watch item; test_bench_cli.py alone then passed 24/24 three times; this branch changes no bench or agentio file)",
+      "coverage": {
+        "percent": 97,
+        "kind": "line+branch, coverage.py, subprocesses included",
+        "per_file": {
+          "tools/bin/adele": 97,
+          "tools/agentio/agentio.py": 94,
+          "tools/bin/run": 96,
+          "tools/bin/timelike-conform": 92,
+          "tools/bin/timelike": 96,
+          "bench/bin/timelike-bench": 98,
+          "scan/evaluate.py": 99
+        },
+        "target": 90
+      },
+      "go_tests": "go test -count=1 -coverprofile ./... (Go 1.27.1, CGO_ENABLED=0): 6 packages ok",
+      "go_coverage": {
+        "percent": 95.8,
+        "kind": "statements, go test -coverprofile, total",
+        "per_package": {
+          "cmd/adele-standin": 94.7,
+          "cmd/adeled": 94.1,
+          "internal/broker": 99.0,
+          "internal/grants": 98.1,
+          "internal/ledger": 93.0,
+          "internal/standin": 93.9
+        },
+        "target": 90
+      },
+      "lint": "ruff 0.16.7 check+format clean (48 files); mypy --strict clean (16 files); shellcheck 0.11.0 clean (34 files); gofmt clean; go vet clean; staticcheck 2026.2.1 clean",
+      "govulncheck": "v1.8.0 over adele/: No vulnerabilities found",
+      "host_integration": "adeled + adele-standin built with the Dockerfile's flags, on loopback, driven by the real tools/bin/adele: performed, refused (ports, ttl, instances), the printed extend command, retry performed; 7 ledger rows; stand-in 401 without the canary; canary in no client output or event log",
+      "conform": "timelike-conform passes on adele with Adele reachable and unreachable (tests/unit/test_adele_cli.py)"
+    },
+    "lane": "host (advisory) — the Docker lane is the merge bar and has not run (no daemon here, 001 research R10)"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timelike/agentio/v1/grant-envelope.schema.json",
+  "title": "Exit-4 envelope: a reaching request beyond its grant (discovery revision 10; Escalation paths, T1). Printed on stdout; nothing was performed. Told apart from the confirmation envelope by status. Its command is the OPERATOR's, never the agent's",
+  "type": "object",
+  "required": ["tool", "target", "scope", "status", "grant", "limit", "extend", "extend_by", "performed", "request"],
+  "properties": {
+    "tool": { "type": "string" },
+    "target": { "type": "string" },
+    "scope": { "type": "string" },
+    "status": { "const": "grant_required" },
+    "grant": { "type": "string", "minLength": 1, "description": "The grant the request was checked against" },
+    "limit": {
+      "type": "object",
+      "required": ["name", "allowed", "needed"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The limit exceeded, e.g. ttl, ports, instances, budget, capabilities" },
+        "allowed": { "type": "string", "description": "What the grant allows" },
+        "needed": { "type": "string", "description": "What this request needed" }
+      }
+    },
+    "extend": { "type": "string", "minLength": 1, "description": "The operator's exact command that makes this request allowed. The agent cannot run it" },
+    "extend_by": { "const": "operator" },
+    "performed": { "const": false },
+    "request": { "type": "object", "description": "The refused request, as the tool sent it" },
+    "ledger_id": { "type": "integer", "minimum": 1, "description": "Where the authority recorded the refusal, when it records one" }
+  },
+  "description": "No `confirm` key: an operator's command never appears in a field the agent's habit runs (discovery revision 10). Checked by timelike-conform C9 and the agentio units, since the project's schema subset has no `not`"
+}

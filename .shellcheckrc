@@ -1,0 +1,3 @@
+# bats files use bash; helpers are sourced
+shell=bash
+external-sources=true

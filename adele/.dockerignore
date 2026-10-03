@@ -1,0 +1,5 @@
+# Build context adele/: only go.mod, go.sum, cmd/ and internal/ are copied. The operator's grant file
+# must never enter any image or build context (spec FR-18).
+grants.conf
+grants.example.conf
+**/*_test.go

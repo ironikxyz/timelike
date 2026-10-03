@@ -1,0 +1,18 @@
+# /etc/gitconfig — timelike fallback layer (research R2–R4).
+# The primary layer is the image's ENV (GIT_EDITOR, GIT_PAGER, GIT_CONFIG_* for hooksPath). These
+# settings hold if the agent unsets one of those variables. Explicit choices still win: `git -c`,
+# a command-line editor or pager, or a repository's own config (except hooksPath, pinned by ENV, R3).
+# hooksPath points at the dispatchers that run a repository's own hooks under a time limit (research
+# R11, discovery revision 7). If the agent unsets GIT_CONFIG_*, a repository's local core.hooksPath
+# wins over this file and its hooks run unbounded, exactly as without timelike.
+[core]
+	editor = true
+	pager = cat
+	hooksPath = /opt/timelike/git-hooks
+[sequence]
+	editor = true
+[color]
+	ui = never
+[credential]
+	# Empty value resets the helper list: no credential helper runs, so nothing can prompt.
+	helper =

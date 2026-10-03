@@ -1,0 +1,470 @@
+#!/opt/timelike/python/bin/python3 -I
+"""timelike-conform — checks every timelike tool on PATH against the output contract (SC-5).
+
+Specified in .specswarm/features/001-agent-shell-baseline/contracts/conformance.md (checks C1–C9).
+It is itself a timelike tool, bound by the contract, and it checks itself.
+
+Every probe runs with stdin at /dev/null, in a new session with no controlling terminal, with a
+fresh session id under a private scratch root, and under a time limit: a tool that does not conclude
+is a failure ("did not conclude"), and costs one limit, not the rest of the run (P2).
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import json
+import os
+import re
+import shlex
+import shutil
+import signal
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import agentio
+
+PROBE_LIMIT_S = 10.0
+HEADER_RE = re.compile(r"^[a-z][a-z0-9-]*: .+ \[[^]]+\]$")
+TEXT_ERROR_RE = re.compile(r"^error: .+ \(code (\d+)\) — .+$")
+UNKNOWN_FLAG = "--no-such-flag-conform"
+PASS_THROUGH_EXIT = 42  # outside the vocabulary on purpose (C6, discovery revision 9)
+PASS_THROUGH_COMMAND = ["sh", "-c", f"exit {PASS_THROUGH_EXIT}"]
+REQUIRED_FLAGS = {"--help", "--json", "--text", "--agent-info", "--limit", "--verbose"}
+MANIFEST_KEYS = {
+    "tool", "target", "scope", "contract", "summary", "usage", "flags", "exit_codes",
+    "mutating", "destructive", "reads_stdin", "probe",
+}  # fmt: skip
+EVENT_KEYS = {"v", "tool", "args", "cwd", "exit", "duration_ms", "session"}
+RULES = {
+    "C0": "P2, P3",
+    "C1": "6, 12",
+    "C2": "5, 6",
+    "C3": "1, 12",
+    "C4": "1, 12",
+    "C5": "5, 14",
+    "C6": "5",
+    "C7": "16",
+    "C8": "13",
+    "C9": "9",
+}
+NAMES = {
+    "C0": "found",
+    "C1": "help",
+    "C2": "agent-info",
+    "C3": "json",
+    "C4": "text",
+    "C5": "usage",
+    "C6": "exit vocabulary",
+    "C7": "events",
+    "C8": "no ANSI",
+    "C9": "envelopes",
+}
+ENVELOPE_STATUSES = {agentio.CONFIRMATION_REQUIRED, agentio.GRANT_REQUIRED}
+# The required keys of each exit-4 envelope, by status (confirm- and grant-envelope.schema.json)
+ENVELOPE_KEYS = {
+    agentio.CONFIRMATION_REQUIRED: ("tool", "target", "scope", "status", "plan", "confirm"),
+    agentio.GRANT_REQUIRED: (
+        "tool", "target", "scope", "status", "grant", "limit", "extend", "extend_by", "performed", "request",
+    ),
+}  # fmt: skip
+
+
+class Probe:
+    __slots__ = ("args", "concluded", "err", "out", "rc")
+
+    def __init__(self, args: list[str], rc: int, out: str, err: str, concluded: bool) -> None:
+        self.args = args
+        self.rc = rc
+        self.out = out
+        self.err = err
+        self.concluded = concluded
+
+
+class Findings:
+    def __init__(self) -> None:
+        self.items: list[dict[str, str]] = []
+
+    def add(self, tool: str, check: str, detail: str) -> None:
+        self.items.append({"tool": tool, "check": check, "rule": RULES[check], "detail": detail})
+
+    def sorted(self) -> list[dict[str, str]]:
+        return sorted(self.items, key=lambda f: (f["tool"], f["check"], f["detail"]))
+
+
+def bin_dirs() -> list[str]:
+    return [d for d in os.environ.get("TIMELIKE_BIN_DIRS", "/opt/timelike/bin").split(":") if d]
+
+
+def probe_limit() -> float:
+    try:
+        value = float(os.environ.get("TIMELIKE_CONFORM_TIMEOUT", PROBE_LIMIT_S))
+    except ValueError:
+        return PROBE_LIMIT_S
+    return value if value > 0 else PROBE_LIMIT_S
+
+
+def discover(findings: Findings) -> list[Path]:
+    """Tools in TIMELIKE_BIN_DIRS whose directory is on PATH. A directory off PATH is a finding (P3)."""
+    path_dirs = {os.path.realpath(p) for p in os.environ.get("PATH", "").split(":") if p}
+    tools: dict[str, Path] = {}
+    for d in bin_dirs():
+        if not os.path.isdir(d):
+            findings.add("-", "C0", f"{d} (in TIMELIKE_BIN_DIRS) does not exist")
+            continue
+        if os.path.realpath(d) not in path_dirs:
+            findings.add("-", "C0", f"{d} (in TIMELIKE_BIN_DIRS) is not on PATH: its tools cannot be found")
+            continue
+        for entry in sorted(os.scandir(d), key=lambda e: e.name):
+            if entry.is_file() and os.access(entry.path, os.X_OK):
+                tools.setdefault(entry.name, Path(entry.path))
+    return [tools[name] for name in sorted(tools)]
+
+
+def run_probe(tool: Path, args: list[str], session: str, root: Path, limit: float) -> Probe:
+    env = dict(os.environ, TIMELIKE_SESSION=session, TIMELIKE_SCRATCH_ROOT=str(root))
+    try:
+        proc = subprocess.Popen(
+            [str(tool), *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            start_new_session=True,  # no controlling terminal; the whole group can be killed
+            text=True,
+            errors="replace",
+        )
+    except OSError as exc:
+        # The tool could not be executed at all, e.g. its shebang names a missing interpreter (ENOENT)
+        # or it is not executable (EACCES). That is this tool's failure, judged by the rules like any
+        # other result, never a crash that loses every other tool's verdict (slice 1, T059). The codes
+        # are the shell's: 127 not found, 126 found but not executable.
+        rc = 127 if isinstance(exc, FileNotFoundError) else 126
+        return Probe(args, rc, "", f"cannot execute {tool}: {exc.strerror or exc}\n", True)
+    try:
+        out, err = proc.communicate(timeout=limit)
+        return Probe(args, proc.returncode, out, err, True)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        out, err = proc.communicate()
+        return Probe(args, 124, out, err, False)
+
+
+def read_events(root: Path, session: str) -> list[dict[str, Any]]:
+    path = root / session / "events.jsonl"
+    try:
+        text = path.read_text()
+    except OSError:
+        return []
+    events: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            events.append({"_invalid": line[:80]})
+    return events
+
+
+def first_line(text: str) -> str:
+    return text.splitlines()[0] if text.strip() else ""
+
+
+def check_tool(tool: Path, root: Path, limit: float, f: Findings) -> None:
+    name = tool.name
+    session = f"conform-{name}"[:64]
+    probes: list[Probe] = []
+
+    def probe(args: list[str]) -> Probe | None:
+        before = len(read_events(root, session))
+        p = run_probe(tool, args, session, root, limit)
+        probes.append(p)
+        if not p.concluded:
+            f.add(name, "C0", f"did not conclude within {limit:g} s: {name} {' '.join(args)}".rstrip())
+            return None
+        new = read_events(root, session)[before:]
+        valid = [e for e in new if set(e) >= EVENT_KEYS and e.get("tool") == name and e.get("exit") == p.rc]
+        if len(new) != 1 or len(valid) != 1:
+            f.add(name, "C7", f"{' '.join(args) or '(no args)'} appended {len(new)} events, expected 1 valid")
+        return p
+
+    # C1 help
+    p = probe(["--help"])
+    if p is None:
+        return
+    lines = p.out.splitlines()
+    if p.rc != 0 or not lines or len(lines) > agentio.HELP_MAX_LINES or not HEADER_RE.match(lines[0]):
+        f.add(name, "C1", f"--help: exit {p.rc}, {len(lines)} lines, first line {first_line(p.out)!r}")
+
+    # C2 agent-info
+    p = probe(["--agent-info"])
+    if p is None:
+        return
+    manifest: dict[str, Any] = {}
+    try:
+        manifest = json.loads(p.out)
+        problems = check_manifest(name, manifest)
+    except ValueError:
+        problems = ["stdout is not JSON"]
+    if p.rc != 0 or problems:
+        f.add(name, "C2", f"--agent-info: exit {p.rc}; " + "; ".join(problems or ["non-zero exit"]))
+    probe_args = (
+        [a for a in manifest.get("probe", []) if isinstance(a, str)] if isinstance(manifest, dict) else []
+    )
+
+    # C3 json
+    p = probe(["--json", *probe_args])
+    if p is None:
+        return
+    try:
+        doc = json.loads(p.out)
+        keys = list(doc)[:3] if isinstance(doc, dict) else []
+        if keys != ["tool", "target", "scope"] or doc.get("tool") != name:
+            f.add(name, "C3", f"--json: first keys {keys}, tool {doc.get('tool')!r}")
+    except (ValueError, AttributeError):
+        f.add(name, "C3", "--json: stdout is not one JSON object")
+
+    # C4 text
+    p = probe(["--text", *probe_args])
+    if p is None:
+        return
+    if not HEADER_RE.match(first_line(p.out)) or not first_line(p.out).startswith(f"{name}: "):
+        f.add(name, "C4", f"--text: first line {first_line(p.out)!r} is not '{name}: <target> [<scope>]'")
+
+    # C5 usage, both error forms
+    p = probe([UNKNOWN_FLAG])
+    if p is None:
+        return
+    m = TEXT_ERROR_RE.match(p.err.strip())
+    if p.rc != 2 or not m or m.group(1) != "2" or len(p.err.strip().splitlines()) != 1:
+        f.add(name, "C5", f"unknown flag: exit {p.rc} (want 2), stderr {first_line(p.err)!r}")
+    p = probe(["--json", UNKNOWN_FLAG])
+    if p is None:
+        return
+    try:
+        err = json.loads(p.err)
+        if p.rc != 2 or not {"tool", "error", "code", "remediation"} <= set(err) or err.get("code") != 2:
+            f.add(name, "C5", f"unknown flag with --json: exit {p.rc}, stderr keys {sorted(err)}")
+    except (ValueError, TypeError):
+        f.add(name, "C5", "unknown flag with --json: stderr is not one JSON object")
+
+    # C6 pass-through (discovery revision 9): a tool that declares it is run wrapping a command that
+    # exits outside the vocabulary. A probe that only ever exits 0 cannot pass a pass-through tool.
+    passed_through: Probe | None = None
+    if isinstance(manifest, dict) and manifest.get("passes_exit") is True:
+        passed_through = probe(["--json", *PASS_THROUGH_COMMAND])
+        if passed_through is None:
+            return
+        check_pass_through(name, passed_through, f)
+
+    # C9 envelopes (discovery revision 10) — every exit 4 observed, against the envelope its status names
+    declared = declared_envelopes(manifest)
+    for q in probes:
+        if q.rc == agentio.EXIT_CONFIRM:
+            for problem in check_envelope(name, q.out, declared):
+                f.add(name, "C9", f"{' '.join(q.args)} exited 4: {problem}")
+
+    # C6 exit vocabulary, C8 no ANSI — over everything observed
+    for q in probes:
+        if q.rc not in agentio.EXIT_CODES and q is not passed_through:
+            f.add(name, "C6", f"{' '.join(q.args)} exited {q.rc}, outside the vocabulary")
+        if "\x1b" in q.out or "\x1b" in q.err:
+            f.add(name, "C8", f"{' '.join(q.args)} printed an ANSI escape")
+
+
+def check_pass_through(name: str, p: Probe, f: Findings) -> None:
+    problems: list[str] = []
+    if p.rc != PASS_THROUGH_EXIT:
+        problems.append(f"exited {p.rc}")
+    try:
+        doc = json.loads(p.out)
+    except ValueError:
+        doc = None
+    if not isinstance(doc, dict):
+        problems.append("stdout is not one JSON object")
+    else:
+        if doc.get("command_exit") != PASS_THROUGH_EXIT:
+            problems.append(f"command_exit {doc.get('command_exit')!r}")
+        if doc.get("cause") != "command":
+            problems.append(f"cause {doc.get('cause')!r}")
+        if str(PASS_THROUGH_EXIT) not in str(doc.get("verdict", "")):
+            problems.append(f"verdict {doc.get('verdict')!r} does not name {PASS_THROUGH_EXIT}")
+    if problems:
+        f.add(
+            name,
+            "C6",
+            f"declares passes_exit, but wrapping {shlex.join(PASS_THROUGH_COMMAND)}"
+            f" (exit {PASS_THROUGH_EXIT}): " + "; ".join(problems),
+        )
+
+
+def declared_envelopes(m: Any) -> set[str]:
+    """The manifest's `envelopes`; absent means confirmation_required if mutating, else none."""
+    if not isinstance(m, dict):
+        return set()
+    listed = m.get("envelopes")
+    if isinstance(listed, list):
+        return {e for e in listed if isinstance(e, str)}
+    return {agentio.CONFIRMATION_REQUIRED} if m.get("mutating") else set()
+
+
+SHELL_OPS = {";", "&", "&&", "|", "||", "(", ")", "<", ">", ">>", "<<", ";;", "|&", "&>"}
+
+
+def shell_words(command: str) -> list[str]:
+    """The words sh would see, with control operators split out: `adele x; rm y` names a second command."""
+    lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    try:
+        return list(lex)
+    except ValueError:
+        return []
+
+
+def check_envelope(name: str, out: str, declared: set[str]) -> list[str]:
+    """C9: an exit-4 stdout is one envelope, of a status the manifest declares, with that status's keys.
+
+    The negative rule is the point (discovery revision 10): an operator's command never appears in a
+    field the agent's habit runs. So a `confirm` must start with the tool's own name, and a grant
+    envelope carries no `confirm` at all; its command is `extend`, `extend_by: operator`.
+    """
+    try:
+        env = json.loads(out)
+    except ValueError:
+        return ["stdout is not one JSON envelope"]
+    if not isinstance(env, dict):
+        return ["stdout is not one JSON envelope"]
+    status = env.get("status")
+    if status not in ENVELOPE_STATUSES:
+        return [f"status {status!r} names no envelope (want one of {sorted(ENVELOPE_STATUSES)})"]
+    problems: list[str] = []
+    if status not in declared:
+        problems.append(f"{status} envelope, but the manifest declares envelopes {sorted(declared)}")
+    missing = [k for k in ENVELOPE_KEYS[status] if k not in env]
+    if missing:
+        problems.append(f"{status} envelope lacks {missing}")
+    if list(env)[:3] != ["tool", "target", "scope"] or env.get("tool") != name:
+        problems.append(f"first keys {list(env)[:3]}, tool {env.get('tool')!r}")
+    if "confirm" in env:
+        words = shell_words(str(env["confirm"]))
+        if status == agentio.GRANT_REQUIRED:
+            problems.append(
+                f"a grant envelope carries confirm {env['confirm']!r}; its command is not the agent's"
+            )
+        elif not words or os.path.basename(words[0]) != name or any(w in SHELL_OPS for w in words):
+            problems.append(f"confirm {env['confirm']!r} names a command outside {name}")
+    if status == agentio.GRANT_REQUIRED:
+        limit = env.get("limit")
+        if not isinstance(limit, dict) or not {"name", "allowed", "needed"} <= set(limit):
+            problems.append(f"limit {limit!r} is not {{name, allowed, needed}}")
+        if env.get("extend_by") != "operator":
+            problems.append(f"extend_by {env.get('extend_by')!r}, not 'operator'")
+        if env.get("performed") is not False:
+            problems.append(f"performed {env.get('performed')!r}, not false")
+        if not isinstance(env.get("extend"), str) or not env.get("extend"):
+            problems.append("extend is not the operator's command")
+        if "request" in env and not isinstance(env["request"], dict):
+            problems.append("request is not an object")
+    return problems
+
+
+def check_manifest(name: str, m: Any) -> list[str]:
+    if not isinstance(m, dict):
+        return ["manifest is not an object"]
+    problems: list[str] = []
+    missing = MANIFEST_KEYS - set(m)
+    if missing:
+        problems.append(f"missing {sorted(missing)}")
+    if list(m)[:3] != ["tool", "target", "scope"]:
+        problems.append("first keys are not tool, target, scope")
+    if m.get("tool") != name:
+        problems.append(f"tool is {m.get('tool')!r}, not {name!r}")
+    if m.get("contract") != agentio.CONTRACT:
+        problems.append(f"contract is {m.get('contract')!r}, not {agentio.CONTRACT}")
+    codes = m.get("exit_codes", {})
+    if not isinstance(codes, dict) or not {int(k) for k in codes if str(k).isdigit()} <= set(
+        agentio.EXIT_CODES
+    ):
+        problems.append(f"exit_codes {codes!r} outside the vocabulary")
+    flags = set(m.get("flags", []))
+    need = set(REQUIRED_FLAGS)
+    if m.get("mutating"):
+        need.add("--yes")
+    if m.get("destructive"):
+        need.add("--dry-run")
+    if need - flags:
+        problems.append(f"flags lack {sorted(need - flags)}")
+    envelopes = m.get("envelopes", [])
+    if not isinstance(envelopes, list) or not set(envelopes) <= ENVELOPE_STATUSES:
+        problems.append(f"envelopes {envelopes!r} outside {sorted(ENVELOPE_STATUSES)}")
+    elif "envelopes" in m and bool(m.get("mutating")) != (agentio.CONFIRMATION_REQUIRED in envelopes):
+        problems.append("envelopes lists confirmation_required exactly when mutating")
+    if "passes_exit" in m and not isinstance(m["passes_exit"], bool):
+        problems.append(f"passes_exit is {m['passes_exit']!r}, not a boolean")
+    probe = m.get("probe")
+    if not isinstance(probe, list) or not all(isinstance(a, str) for a in probe):
+        problems.append("probe is not a list of strings")
+    return problems
+
+
+TOOL = agentio.Tool(
+    name="timelike-conform",
+    target="timelike tools on PATH",
+    summary="Check every timelike tool on PATH against the output contract (C1-C9)",
+    usage=[
+        "timelike-conform [--json|--text]   check every tool in TIMELIKE_BIN_DIRS that is on PATH",
+        "timelike-conform --list            list the tools it would check, without running them",
+    ],
+    probe=["--list"],
+    exit_codes={0: "every tool conforms", 1: "a tool fails a check, or none was found", 2: "usage"},
+)
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--list", action="store_true", help="list the tools to check; run nothing")
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    findings = Findings()
+    tools = discover(findings)
+    target = ":".join(bin_dirs())
+    names = [t.name for t in tools]
+    if args.list:
+        return agentio.Result(
+            target,
+            "list",
+            f"{len(tools)} tools",
+            [str(t) for t in tools],
+            data={"tools": names, "count": len(tools)},
+        )
+
+    limit = probe_limit()
+    root = Path(tempfile.mkdtemp(prefix="conform-", dir=ctx.scratch()))
+    try:
+        for tool in tools:
+            check_tool(tool, root, limit, findings)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    failures = findings.sorted()
+    failing_tools = sorted({x["tool"] for x in failures if x["tool"] != "-"})
+    ok = not failures and bool(tools)
+    if ok:
+        summary = f"{len(tools)} tools conform"
+    elif not tools:
+        summary = "no timelike tools found on PATH"
+    else:
+        summary = f"{len(failures)} findings in {len(failing_tools)} of {len(tools)} tools"
+    lines = [summary]
+    lines += [f"FAIL {x['tool']} {x['check']} {NAMES[x['check']]}: {x['detail']}" for x in failures]
+    lines += [f"ok   {n}" for n in names if n not in failing_tools]
+    data = {"summary": summary, "checked": len(tools), "tools": names, "failures": failures}
+    return agentio.Result(
+        target, "conformance", "pass" if ok else "fail", lines, data=data, exit=0 if ok else 1
+    )
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

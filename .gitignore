@@ -1,0 +1,15 @@
+.local/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+scan/out/
+tests/out/*
+!tests/out/.gitkeep
+.coverage
+.coverage.*
+bench/out/
+
+# Adele (feature 004): the operator's grant file is local, never committed.
+adele/grants.conf

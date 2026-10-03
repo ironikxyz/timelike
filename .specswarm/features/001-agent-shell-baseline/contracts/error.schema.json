@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timelike/agentio/v1/error.schema.json",
+  "title": "Structured error on stderr with --json (contract rule 14). Text form: error: <what> (code N) — <remediation>",
+  "type": "object",
+  "required": ["tool", "error", "code", "remediation"],
+  "properties": {
+    "tool": { "type": "string" },
+    "error": { "type": "string", "description": "What went wrong" },
+    "code": { "enum": [1, 2, 3, 4, 124] },
+    "remediation": { "type": "string", "description": "The exact next step, preferably a command" }
+  }
+}

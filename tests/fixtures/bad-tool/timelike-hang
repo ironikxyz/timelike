@@ -1,0 +1,13 @@
+#!/opt/timelike/python/bin/python3 -I
+"""A fixture that never concludes on --help, to prove timelike-conform's per-probe time limit (P2).
+
+It never ships on PATH. Every other probe answers at once, so the only failure is the hang.
+"""
+
+import sys
+import time
+
+if "--help" in sys.argv[1:]:
+    time.sleep(60)
+print('{"tool": "timelike-hang", "target": "fixture", "scope": "probe"}')
+sys.exit(0)

@@ -1,0 +1,503 @@
+{
+  "redaction": "Redacted for publication, 2026-10-02 (`bridge/sends/maint-publish-redaction-20261002-183624.md`): internal host names, absolute paths and a personal name replaced. No other change.",
+  "about": "Proposed by scan/scan.sh at code/ 8ce6173 (feature 002, T017) for image timelike-vanilla; reasons written by the mentor instance from the operator's review.",
+  "image": "timelike-vanilla",
+  "base_digest": "sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a",
+  "reviewed": "2026-10-01",
+  "review_by": "2026-12-27",
+  "reviewed_by": "ironik.xyz",
+  "review_notes": [
+    "Reviewed 2026-09-29 by interview with the mentor instance (2026-09-29T02:42:14Z). Every finding (identifier, package, severity) is already in the reviewed agent baseline scan/baseline/timelike-agent.json; none has a stable fix. Highs accepted on their origin reasons without individual review. review_by aligned with the agent baseline.",
+    "The 8 Critical findings (libcurl, via git) were accepted with the agent baseline's per-CVE reasons, strengthened by --network none. CVE-2026-11856, CVE-2026-19931 and CVE-2026-8926 (credential class) and the rest: re-review if a bench task container is given a network or credentials, and at feature 12.",
+    "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T05:52:09Z), FOR-MENTOR Item 11: CVE-2026-72897, CVE-2026-84782 and CVE-2026-84784 (OpenSSL 3.5.7, High, no stable fix) accepted into all three baselines on the reason that timelike's images are TLS clients and run no TLS server, DTLS or QUIC service. review_by stays 2026-12-27, aligned across the three baselines. Revisit when Debian ships a fix. Entries applied by the code instance on that instruction, from scan/out baseline.proposed.json.",
+    "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T21:05:37Z and 21:09:43Z), FOR-MENTOR Item 12. CVE-2026-102010 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator: a narrow trigger (a specific libstdc++ API under attacker control), base layer, and timelike ships no C++ that uses it. The Item 11 OpenSSL entries (CVE-2026-72897, -84782, -84784) are removed: Debian fixed them in 3.5.7-1~deb13u3, which every image now carries (the agent through its apt install, vanilla and bench-driver through a targeted --only-upgrade, operator's option (b′)), so they match nothing. review_by stays 2026-12-27. Applied by the code instance on that instruction."
+  ],
+  "origins": {
+    "base layer": "Essential packages of the pinned Debian trixie-slim base (glibc, util-linux, ncurses, acl, zlib, perl-base), identical to the agent image's base-layer group in scan/baseline/timelike-agent.json, whose reasoning applies. Debian publishes no fixed package in trixie or trixie-security (Grype: wont-fix or not-fixed), so no fix is available. Unlike the agent image, the vanilla image keeps Debian's 11 setuid/setgid binaries (mount, umount, su, passwd, chfn, chsh, gpasswd, newgrp, chage, expiry, unix_chkpwd), deliberately: it is the unmodified baseline timelike is compared against. The local privilege-escalation findings therefore rely on no-new-privileges, not on the binaries' absence: In the bench, every task container runs as uid 1000 with --network none, --cap-drop ALL and no-new-privileges (bench/benchlib/docker.py), and bench/run.sh refuses a run with any key-shaped variable in the driver, either image's ENV or a task container. The rest are memory or resource bugs in library calls the bench's tasks do not reach with hostile input.",
+    "git": "Pulled in by git (libcurl3t64-gnutls, libexpat1, perl, libperl5.40, perl-modules-5.40), identical to the agent image's git group, whose reasoning applies. The vanilla image's purpose is 'Debian + git'. No fixed package in trixie or trixie-security. In the bench, task containers have no network at all (--network none), so no libcurl transfer happens, and they hold no credentials. In the bench, every task container runs as uid 1000 with --network none, --cap-drop ALL and no-new-privileges (bench/benchlib/docker.py), and bench/run.sh refuses a run with any key-shaped variable in the driver, either image's ENV or a task container."
+  },
+  "findings": [
+    {
+      "id": "CVE-2026-76642",
+      "package": "bsdutils",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "bsdutils",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "bsdutils",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "bsdutils",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-54369",
+      "package": "libacl1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-54370",
+      "package": "libacl1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "libblkid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "libblkid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "libblkid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "libblkid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-19499",
+      "package": "libc-bin",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-5435",
+      "package": "libc-bin",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-19499",
+      "package": "libc6",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-5435",
+      "package": "libc6",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-10536",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Use-after-free that needs CURLOPT_STREAM_DEPENDS followed by curl_easy_reset. git's http transport never sets HTTP/2 stream dependencies. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-11856",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Digest Authorization header carried to a second origin on a reused handle. The agent holds no credentials in slice 0 (P4): no credential helper, GIT_TERMINAL_PROMPT=0, empty askpass, so no Authorization header exists to leak. Re-review when Adele (feature 12) brokers credentials. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-12064",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-13608",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-18924",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Use-after-free in HTTP/2 server push with shared connections. Server push needs a push callback (CURLMOPT_PUSHFUNCTION), which git's http transport does not set. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-19931",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Negotiate (SPNEGO) connection reuse after an empty-credential request. The image has no Kerberos credentials and sets no http.emptyAuth, and the agent holds no credentials at all (P4), so there is no authenticated connection for another request to ride on. Re-review when Adele (feature 12) brokers credentials. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-80229",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-80230",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-80255",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-82209",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-8286",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-8924",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Cookie Public Suffix List bypass. git reads and sends cookies only when http.cookieFile is set, and nothing in the image sets it. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-8926",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Wrong .netrc password for a URL with a username. The image ships no .netrc and the agent holds no credentials to put in one (P4). Re-review when Adele (feature 12) brokers credentials. Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-8927",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Proxy Digest state kept across environment-variable proxies. The image sets no proxy variables and no proxy credentials. Re-review if an egress proxy is introduced (Adele, feature 12). Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-8932",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-9079",
+      "package": "libcurl3t64-gnutls",
+      "severity": "critical",
+      "origin": "git",
+      "reason": "Proxy credentials not cleared between transfers. The image configures no proxy and no proxy credentials, and the agent holds none (P4). Re-review if an egress proxy is introduced (Adele, feature 12). Bench context: vanilla task containers run with --network none and hold no credentials, so no transfer occurs. Re-review if a bench task container is ever given a network or credentials (for example live runs), and at feature 12."
+    },
+    {
+      "id": "CVE-2026-9080",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-9545",
+      "package": "libcurl3t64-gnutls",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-66046",
+      "package": "libexpat1",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-76956",
+      "package": "libexpat1",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-76957",
+      "package": "libexpat1",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-93990",
+      "package": "libexpat1",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "liblastlog2-2",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "liblastlog2-2",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "liblastlog2-2",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "liblastlog2-2",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "libmount1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "libmount1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "libmount1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "libmount1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-82560",
+      "package": "libperl5.40",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "package": "libperl5.40",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "libsmartcols1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "libsmartcols1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "libsmartcols1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "libsmartcols1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2025-69720",
+      "package": "libtinfo6",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "libuuid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "libuuid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "libuuid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "libuuid1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "login",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "login",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "login",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "login",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "mount",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "mount",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "mount",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "mount",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2025-69720",
+      "package": "ncurses-base",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2025-69720",
+      "package": "ncurses-bin",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-82560",
+      "package": "perl",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "package": "perl",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-82560",
+      "package": "perl-base",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "package": "perl-base",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-82560",
+      "package": "perl-modules-5.40",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "package": "perl-modules-5.40",
+      "severity": "high",
+      "origin": "git"
+    },
+    {
+      "id": "CVE-2026-76642",
+      "package": "util-linux",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78408",
+      "package": "util-linux",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78409",
+      "package": "util-linux",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-78410",
+      "package": "util-linux",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-85091",
+      "package": "zlib1g",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-102010",
+      "package": "gcc-14-base",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-102010",
+      "package": "libgcc-s1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-102010",
+      "package": "libstdc++6",
+      "severity": "high",
+      "origin": "base layer"
+    }
+  ]
+}

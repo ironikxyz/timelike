@@ -1,0 +1,117 @@
+#!/bin/sh
+# timelike git-hook dispatcher (feature 001, modify at discovery revision 7; tension T4).
+#
+# The image points git at this directory through GIT_CONFIG_* (command scope, which beats a
+# repository's local core.hooksPath, research R3), so every hook git would run comes here first. Each
+# hook name is a link to this file. It runs the hook the repository itself configures, exactly as git
+# would without timelike, but under a time limit, so a hook that never finishes ends in a verdict
+# instead of a hang (P2), and a hook is never silently removed (P1, T4).
+#
+#   the repository's hook   the last core.hooksPath from any scope except "command" (local, worktree,
+#                           global, system), else git's default: <git-common-dir>/hooks, which is right
+#                           in linked worktrees too. NOT `git rev-parse --git-path hooks`: that honours
+#                           core.hooksPath, which is this directory, and made the dispatcher call itself
+#                           (a runaway chain in a host experiment, because each nested timeout leads its
+#                           own process group). A directory that resolves to this one is never a
+#                           repository's hook directory.
+#   the limit               TIMELIKE_HOOK_TIMEOUT (seconds) in the environment, else
+#                           `git config timelike.hookTimeout`, else 60. Kept below the 120 s default
+#                           call timeout of the harnesses we support, so git's verdict arrives first
+#
+# Arguments, stdin and environment pass through unchanged: git gives a hook its input on stdin (pre-push,
+# post-rewrite, reference-transaction...) and /dev/null otherwise, never a terminal. A hook past its
+# limit is stopped with its whole process group (GNU timeout), and the verdict names the hook, the
+# limit and how to raise it. It never suggests skipping the hook: skipping stays the agent's own,
+# visible choice (T4).
+name=${0##*/}
+self_dir= # this directory, resolved only when needed (/opt/timelike/git-hooks in the image)
+default_limit=60
+
+# Every hook git runs comes through here, about eight per commit, so the no-hook path is kept to one
+# git process and no other fork: a shell loop, not awk (profiled on the host: about 5.8 ms per dispatch
+# with awk and an eager self-path lookup; the line printed by `git config` is "<scope><TAB><value>").
+hooks=
+tab='	' # a literal tab: $(printf) would cost a fork on every dispatch
+while IFS="$tab" read -r scope value; do
+  [ "$scope" = command ] || hooks=$value
+done <<EOF_SCOPES
+$(git config --show-scope --get-all core.hooksPath 2>/dev/null)
+EOF_SCOPES
+# shellcheck disable=SC2088 # a literal "~/" from config: git expands it against HOME, and so do we
+case "$hooks" in
+  "~/"*) hooks="$HOME/${hooks#"~/"}" ;;
+esac
+# is_self DIR — true when DIR is this directory (the image's /etc/gitconfig fallback points here too).
+is_self() {
+  [ -d "$1" ] || return 1
+  [ -n "$self_dir" ] || self_dir=$(cd "$(dirname "$0")" && pwd -P)
+  [ "$(cd "$1" && pwd -P)" = "$self_dir" ]
+}
+if [ -n "$hooks" ] && is_self "$hooks"; then hooks=; fi
+if [ -z "$hooks" ]; then
+  # Fast path: git runs a hook from the top of the worktree, so an ordinary repository has .git right
+  # here. Anything else (a linked worktree, a bare repository, GIT_DIR) asks git. One process saved
+  # per hook name matters: a commit fires about seven of them (measured on the host).
+  if [ -z "${GIT_DIR:-}" ] && [ -d .git ]; then
+    common=.git
+  else
+    common=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0 # not in a repository: nothing to run
+  fi
+  hooks="$common/hooks"
+fi
+if is_self "$hooks"; then
+  printf 'timelike: %s resolves to the dispatcher itself; no repository hook was run\n' "$hooks" >&2
+  exit 0
+fi
+hook="$hooks/$name"
+
+# No hook of this name, or one git would ignore: exit 0 at once, as git does with none. Never read
+# stdin here: git does not always hand a hook /dev/null (post-index-change inherits the caller's
+# stdin), so draining it can block, which a host experiment showed. A hook that exits without reading
+# its input is ordinary, and git tolerates it.
+[ -f "$hook" ] || exit 0
+if [ ! -x "$hook" ]; then
+  printf "hint: The '%s' hook was ignored because it's not set as executable.\n" "$hook" >&2
+  exit 0
+fi
+
+limit=${TIMELIKE_HOOK_TIMEOUT:-}
+source=TIMELIKE_HOOK_TIMEOUT
+if [ -z "$limit" ]; then
+  limit=$(git config --get timelike.hookTimeout 2>/dev/null) || limit=
+  source="git config timelike.hookTimeout"
+fi
+if [ -z "$limit" ]; then
+  limit=$default_limit
+  source="the default"
+fi
+case "$limit" in
+  '' | *[!0-9]* | 0)
+    printf 'timelike: hook limit %s from %s is not a positive number of seconds; using %s\n' \
+      "$limit" "$source" "$default_limit" >&2
+    limit=$default_limit
+    source="the default"
+    ;;
+esac
+
+# GNU timeout leads its own process group and signals all of it on expiry (verified on the host: a
+# hook's background child is killed with it). It runs in the background only so that its pid, which is
+# the group id, is known here for a KILL backstop after the -k grace. git's stdin reaches the hook
+# through fd 3: an asynchronous command in sh reads /dev/null unless redirected, and dash treats
+# `<&0` as no redirection (pre-push saw 0 lines instead of 1 in a host experiment). After a normal
+# exit a hook's children are left alone; they are the hook's business.
+exec 3<&0
+timeout -s TERM -k 5 "$limit" "$hook" "$@" <&3 3<&- &
+t=$!
+wait "$t"
+rc=$?
+if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+  kill -KILL -"$t" 2>/dev/null
+  printf 'error: git hook %s (%s) did not finish within %s s and was stopped (code 124) — ' \
+    "$name" "$hook" "$limit" >&2
+  printf 'the limit is %s s (%s); raise it for this shell with TIMELIKE_HOOK_TIMEOUT=<seconds>, ' \
+    "$limit" "$source" >&2
+  printf 'or for this repository with: git config timelike.hookTimeout <seconds>\n' >&2
+  exit 124
+fi
+exit "$rc"

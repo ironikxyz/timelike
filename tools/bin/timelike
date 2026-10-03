@@ -1,0 +1,87 @@
+#!/opt/timelike/python/bin/python3 -I
+"""timelike — the agent environment: its build revision, the contract version, the tools on PATH.
+
+The build revision is the environment's own proof of what it is (constitution H8; lore cross-stack
+P003): it is read from /opt/timelike/REVISION, written at build time, and an empty or missing stamp
+is a failure, never a blank.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+from typing import Any
+
+import agentio
+
+REVISION_FILE = "/opt/timelike/REVISION"
+
+
+def revision() -> str:
+    """The build revision. TIMELIKE_REVISION(_FILE) exist only so tests can stand in for the image."""
+    value = os.environ.get("TIMELIKE_REVISION")
+    if value is None:
+        path = Path(os.environ.get("TIMELIKE_REVISION_FILE") or REVISION_FILE)
+        try:
+            value = path.read_text()
+        except OSError as e:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"build revision unreadable: {path}: {e.strerror}",
+                "rebuild the image with make build, which stamps it (constitution H8)",
+            ) from None
+    value = value.strip()
+    if not value:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            "build revision is empty",
+            "rebuild the image with make build, which refuses an empty stamp (constitution H8)",
+        )
+    return value
+
+
+def bin_dirs() -> list[str]:
+    return [d for d in os.environ.get("TIMELIKE_BIN_DIRS", "/opt/timelike/bin").split(":") if d]
+
+
+def tools_on_path() -> list[str]:
+    """Executables in TIMELIKE_BIN_DIRS that the agent can actually find, i.e. whose directory is on PATH."""
+    path_dirs = {os.path.realpath(p) for p in os.environ.get("PATH", "").split(":") if p}
+    names: set[str] = set()
+    for d in bin_dirs():
+        if os.path.realpath(d) not in path_dirs or not os.path.isdir(d):
+            continue
+        for entry in os.scandir(d):
+            if entry.is_file() and os.access(entry.path, os.X_OK):
+                names.add(entry.name)
+    return sorted(names)
+
+
+TOOL = agentio.Tool(
+    name="timelike",
+    target="environment",
+    summary="The agent environment: build revision, output contract version, timelike tools on PATH",
+    usage=["timelike [--json|--text]", "timelike --agent-info    manifest, including the build revision"],
+    manifest_extra=lambda: {"revision": revision()},
+)
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    rev = revision()
+    tools = tools_on_path()
+    lines = [f"revision: {rev}", f"contract: {agentio.CONTRACT}", f"tools: {len(tools)}"]
+    lines += [f"  {t}" for t in tools]
+    data: dict[str, Any] = {
+        "revision": rev,
+        "contract": agentio.CONTRACT,
+        "tools": tools,
+        "count": len(tools),
+    }
+    return agentio.Result(
+        "environment", "summary", f"ok: {len(tools)} timelike tools on PATH", lines, data=data
+    )
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main)

@@ -1,0 +1,287 @@
+#!/opt/timelike/python/bin/python3 -I
+"""timelike-bench — the speedup bench: vanilla vs timelike, one task at a time (feature 002, slice 0).
+
+Runs in the bench driver container (bench/driver/Dockerfile), never in an environment under test; it
+holds the Docker socket, and the task containers it starts do not (H1). Bound by the output contract
+(rules 1–16) and checked by timelike-conform, like every timelike tool (FR-15).
+
+  timelike-bench run [--task ID ...] [--out DIR] [--call-limit S] [--run-limit S]
+      --out DIR writes exactly DIR/traces and DIR/report.txt (refused if DIR already holds traces);
+      without it, $BENCH_OUT/<UTC stamp>/
+  timelike-bench report DIR
+  timelike-bench catalog
+
+`run` refuses before anything else if an API-key-shaped variable is present (FR-12, exit 4): a
+fake-agent run needs no key, and a key present by accident would reach a harness process. It then
+refuses stale or unstamped images (FR-2, FR-8, exit 1), runs each task in vanilla then timelike, writes
+one trace per run and the report, and exits 0 whatever the tasks' endings: a timelike loss is data.
+
+Every report from a fake-agent run opens with the operator's statement of what it is — a demo run of the
+bench pipeline, not a test of timelike — and every header's scope says so (FR-9; send …-080659, F001).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import os
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+import agentio
+from benchlib import catalog, keys, report, runner
+from benchlib import docker as dk
+from benchlib import fakeagent as fa
+from benchlib import trace as tr
+from benchlib.executor import DockerExecutor, Executor
+
+AGENT_IMAGE = "timelike-agent:local"
+VANILLA_IMAGE = "timelike-vanilla:local"
+DRIVER_IMAGE = "timelike-bench-driver:local"
+# Follows the report's first line (send …-080659, F001), shortened to fit the rule-12 header.
+FAKE_SCOPE = "FAKE-AGENT BENCH PIPELINE DEMO RUN -- not a test of timelike"
+DEFAULT_OUT = "bench/out"
+
+TOOL = agentio.Tool(
+    name="timelike-bench",
+    target="bench",
+    summary="Speedup bench: runs catalog tasks in a vanilla and the timelike image; traces and report",
+    usage=[
+        "timelike-bench run [--task ID ...] [--out DIR] [--call-limit S] [--run-limit S]",
+        "timelike-bench report DIR      rebuild DIR/report.txt from DIR/traces alone",
+        "timelike-bench catalog         the tasks, and the capabilities not benchable on this path",
+    ],
+    probe=["catalog"],
+    exit_codes={
+        agentio.EXIT_OK: "ok (whatever the tasks' endings)",
+        agentio.EXIT_FAILURE: "failure: stale or unstamped image, docker error, invalid trace",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "not found: unknown task, or no traces in DIR",
+        agentio.EXIT_CONFIRM: "grant required: an API-key-shaped variable is present",
+    },
+)
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    # Optional to argparse, required by main: a required positional would make `--help` a usage error.
+    p.add_argument("action", nargs="?", choices=["run", "report", "catalog"], help="what to do")
+    p.add_argument("dir", nargs="?", help="report: the run directory holding traces/")
+    p.add_argument("--task", action="append", default=[], metavar="ID", help="run: this task (repeatable)")
+    p.add_argument("--out", help="run: exactly this directory (default $BENCH_OUT/<UTC stamp>)")
+    p.add_argument("--call-limit", type=int, default=runner.Limits.call_s, metavar="S", help="per call, s")
+    p.add_argument("--run-limit", type=int, default=runner.Limits.run_s, metavar="S", help="per run, s")
+
+
+# ── catalog ────────────────────────────────────────────────────────────────────────────────────
+
+
+def do_catalog() -> agentio.Result:
+    lines = [f"task {t.id} (v{t.version}): {t.capability} — {t.goal}" for t in catalog.CATALOG]
+    lines += [f"not benchable: {cap} — {why}" for cap, why in catalog.NOT_BENCHABLE]
+    data = {
+        "tasks": [{"id": t.id, "version": t.version, "capability": t.capability} for t in catalog.CATALOG],
+        "not_benchable": [{"capability": c, "reason": r} for c, r in catalog.NOT_BENCHABLE],
+    }
+    return agentio.Result("catalog", "slice 0", f"ok: {len(catalog.CATALOG)} tasks", lines, data=data)
+
+
+# ── report ─────────────────────────────────────────────────────────────────────────────────────
+
+
+def task_texts() -> dict[str, report.TaskText]:
+    """The catalog's words for the report (send …-080659, F002)."""
+    return {t.id: report.TaskText(t.goal, t.capability, t.difference, dict(t.notes)) for t in catalog.CATALOG}
+
+
+def _build_report(directory: Path, reproduce: str) -> list[str]:
+    return report.build_report(
+        directory, tasks=task_texts(), not_benchable=catalog.NOT_BENCHABLE, reproduce=reproduce
+    )
+
+
+def _scope(traces: Sequence[tr.Trace]) -> str:
+    return FAKE_SCOPE if any(t.identity.harness_name == fa.FAKE_AGENT_NAME for t in traces) else "live run"
+
+
+def do_report(directory: str | None) -> agentio.Result:
+    if not directory:
+        raise agentio.UsageError("report needs a run directory", "timelike-bench report bench/out/<run id>")
+    d = Path(directory)
+    try:
+        traces = tr.load_traces(d)
+    except tr.TraceInvalid as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), "re-run the bench; traces are never edited"
+        ) from None
+    if not traces:
+        raise agentio.ToolError(
+            agentio.EXIT_NOT_FOUND, f"no traces in {d / 'traces'}", "give the directory a bench run wrote"
+        )
+    reproduce = traces[0].identity.reproduce
+    lines = _build_report(d, reproduce)
+    return agentio.Result(
+        str(d),
+        _scope(traces),
+        f"ok: report over {len(traces)} traces",
+        [*lines, f"report: {d / 'report.txt'}"],
+        data={"report": str(d / "report.txt"), "traces": len(traces)},
+    )
+
+
+# ── run ────────────────────────────────────────────────────────────────────────────────────────
+
+
+class DockerSession:
+    """One fresh task container per run (RB5), refused if it carries a key or a TERM (RB2, RB9)."""
+
+    def __init__(self, image_id: str, run: dk.Runner, docker: str) -> None:
+        self.run = run
+        self.container_id = dk.start_container(image_id, run)
+        try:
+            dk.prepare_task_dir(self.container_id, run)
+            found = keys.key_shaped(dk.container_env(self.container_id, run))
+            if found:
+                raise agentio.ToolError(
+                    agentio.EXIT_CONFIRM,
+                    f"task container {self.container_id[:12]} carries API-key-shaped variables: "
+                    + ", ".join(found),
+                    "remove them from the image; live runs are not part of slice 0 (FR-12)",
+                )
+            term = dk.exec_term(self.container_id, run)
+            if term:
+                raise agentio.ToolError(
+                    agentio.EXIT_FAILURE,
+                    f"TERM={term} inside task container {self.container_id[:12]}",
+                    "tool calls must see no TERM (research RB2); check the image's ENV",
+                )
+        except BaseException:
+            dk.remove_container(self.container_id, run)
+            raise
+        self.executor: Executor = DockerExecutor(self.container_id, docker=docker)
+
+    def close(self) -> None:
+        dk.remove_container(self.container_id, self.run)
+
+
+def _session_factory(image_id: str, run: dk.Runner, docker: str) -> Callable[[], runner.Session]:
+    return lambda: DockerSession(image_id, run, docker)
+
+
+def _refuse_keys() -> None:
+    found = keys.key_shaped(os.environ)
+    if found:
+        raise agentio.ToolError(
+            agentio.EXIT_CONFIRM,
+            f"API-key-shaped variables present: {', '.join(found)}",
+            "unset them; a fake-agent run needs no key, and live runs are not part of slice 0 (FR-12)",
+        )
+
+
+def _tasks(ids: Sequence[str]) -> list[catalog.Task]:
+    if not ids:
+        return list(catalog.CATALOG)
+    try:
+        return [catalog.by_id(i) for i in ids]
+    except KeyError as e:
+        raise agentio.ToolError(agentio.EXIT_NOT_FOUND, str(e.args[0]), "timelike-bench catalog") from None
+
+
+def _required_env(name: str, remedy: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise agentio.ToolError(agentio.EXIT_FAILURE, f"{name} is empty", remedy)
+    return value
+
+
+def do_run(args: argparse.Namespace) -> agentio.Result:
+    _refuse_keys()
+    for name, value in (("--call-limit", args.call_limit), ("--run-limit", args.run_limit)):
+        if value <= 0:
+            raise agentio.UsageError(f"{name} must be positive, got {value}", "timelike-bench --help")
+    tasks = _tasks(args.task)
+    expected = _required_env("BENCH_GIT_SHA", "run through make bench, which passes the checkout's revision")
+    base = _required_env(
+        "BENCH_BASE_DIGEST", "run through make bench, which passes DEBIAN_IMAGE from pins.env"
+    )
+    reproduce = os.environ.get("BENCH_REPRODUCE", "").strip() or "make bench"
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    out = Path(args.out) if args.out else Path(os.environ.get("BENCH_OUT") or DEFAULT_OUT) / stamp
+
+    if args.out and any((out / "traces").glob("*.json")):
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{out / 'traces'} already holds traces",
+            "give --out an empty directory, or omit --out for $BENCH_OUT/<UTC stamp>",
+        )
+
+    docker = os.environ.get("TIMELIKE_BENCH_DOCKER") or "docker"  # a test stand-in only
+    run = dk.subprocess_runner(docker)
+    try:
+        images = [dk.image_identity(ref, run) for ref in (VANILLA_IMAGE, AGENT_IMAGE, DRIVER_IMAGE)]
+    except dk.DockerError as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), "build the images with make bench-images"
+        ) from None
+    problems = dk.check_identity(expected, images)
+    for img in images:
+        baked = keys.key_shaped(img.env)
+        if baked:
+            problems.append(f"{img.ref}: image ENV carries API-key-shaped variables: {', '.join(baked)}")
+    if problems:
+        code = agentio.EXIT_CONFIRM if all("API-key" in p for p in problems) else agentio.EXIT_FAILURE
+        raise agentio.ToolError(
+            code, "; ".join(problems), "rebuild with make bench-images from a clean checkout"
+        )
+
+    vanilla, timelike = images[0], images[1]
+    ctx = runner.RunContext(expected, base, reproduce, runner.Limits(args.call_limit, args.run_limit))
+    envs = [
+        runner.Environment(name, img.image_id, img.revision, _session_factory(img.image_id, run, docker))
+        for name, img in (("vanilla", vanilla), ("timelike", timelike))
+    ]
+    try:
+        traces = runner.run_bench(tasks, envs, ctx, out)
+    except dk.DockerError as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), f"partial traces, if any, are in {out}"
+        ) from None
+    _build_report(out, reproduce)
+
+    by_task = report.pair(traces)
+    lines = []
+    for task in tasks:
+        pair = by_task.get(task.id, {})
+        v, t = pair.get("vanilla"), pair.get("timelike")
+        lines.append(f"{task.id}: {report.verdict(v, t)} — {_brief(v)} | {_brief(t)}")
+    lines += [f"traces: {out / 'traces'}", f"report: {out / 'report.txt'}"]
+    verdicts = {}
+    for task in tasks:
+        pair = by_task.get(task.id, {})
+        verdicts[task.id] = report.verdict(pair.get("vanilla"), pair.get("timelike"))
+    data = {"out": str(out), "report": str(out / "report.txt"), "verdicts": verdicts}
+    return agentio.Result(str(out), _scope(traces), f"ok: {len(traces)} traces written", lines, data=data)
+
+
+def _brief(t: tr.Trace | None) -> str:
+    if t is None:
+        return "no trace"
+    s = t.totals
+    return (
+        f"{t.identity.environment} {t.ending.kind}, {s.turns} turns, {s.nonzero_exits} failed, {s.hangs} hung"
+    )
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.action is None:
+        raise agentio.UsageError("no action given", "timelike-bench run | report DIR | catalog")
+    if args.action == "catalog":
+        return do_catalog()
+    if args.action == "report":
+        return do_report(args.dir)
+    if args.dir:
+        raise agentio.UsageError(f"run takes no directory argument ({args.dir!r})", "use --out DIR")
+    return do_run(args)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)
