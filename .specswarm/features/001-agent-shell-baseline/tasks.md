@@ -418,3 +418,25 @@ Governance is current at `[2..9]` (`e344395`), so there is no audit task. No cri
   it.
 
 **Parallel:** T074, T075 and T076 touch different files. T077 follows T076, and T078 comes last.
+
+## Phase 16: Cycle 7 — rule 9's clarification recorded (send `bridge/sends/01-rev10-20261003-003933.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 7): PASSED — plan.md § Tech Stack Compliance Report (Cycle 7) has no
+conflict or prohibition; the task scan (lib/tech-stack-parser.sh, ts_mentions) found no technology in
+the task text below. The tasks change Markdown only -->
+
+Governance is current at `[2..10]` (`cb943d3`), so there is no audit task. No criterion changes, and
+nothing outside `.specswarm/` changes, so there is no Docker lane (send § 2).
+
+- [ ] T079 Spec contract rule 9 (`spec.md`, lines 181–182): append revision 10's clarification in place,
+  declared, as revision 9's was appended to rule 5 (T074). No other spec line states exit 4's envelope
+  (impact analysis § Cycle 7), so nothing else in the body changes.
+- [ ] T080 Provenance (modify Step 9): compute the append with the installed `audit-append` block in
+  `full` mode (revision 10's criteria byte-identical to revision 9's, so removals are visible); write
+  `audited_against` in `spec.md` frontmatter and one `full` row in `audit-log.md`. Never touch
+  `prompt_revision`, `discovery_revision` or `source_prompt`.
+- [ ] T081 Cycle report § Cycle 7 (the send's block), citing the mentor's lane at `f73ac79` for the 11
+  automated criteria; the deny-list over the tree reads `pass` with the list read. Implement step 10
+  recorded as the plugin reports it.
+
+**Parallel:** none. T080 follows T079, and T081 comes last.
