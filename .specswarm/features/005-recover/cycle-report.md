@@ -206,3 +206,16 @@ verbatim except the plugin cache path (`<plugin cache>`) and the one corrected `
 - ruff 0.16.7 clean (54 files formatted); mypy 2.4.0 strict: no issues in 19 files; shellcheck 0.11.0
   clean over `SHELLCHECK_FILES`, with the six new files added.
 - The publish deny-list read `pass` with the list read before every commit (7 entries, P1–P7 0/0).
+
+**Implement step 9b: decision log** (plugin `scope-tally` and `decision-tally` over 005's `tasks.md` and `decisions.md`, after T015):
+
+```
+scope: planned=15 recorded=14 unplanned=0 unrecorded=1 in=11 out=1 none=2 unknown=0 flagged=6 flagged_out=0 other=8 other_out=1
+decisions: sections=14 flagged_sections=6 non_flagged_sections=8 sections_without_absent=0 flagged=9 assumed=18 deferred=0 absent=14 inherited=13 low_confidence=0 flagged_low_confidence=0
+```
+
+- `unrecorded=1` is T010: it is one file with T009, written as one, committed together, and recorded in
+  T009's section.
+- `out=1` is T015's `.specswarm/metrics.json`: implement step 10 writes it, and `tasks.md` does not name it
+  (the same as 001's T078).
+- 6 FLAGGED sections and 0 low-confidence entries, so this run gives the promotion bar nothing.
