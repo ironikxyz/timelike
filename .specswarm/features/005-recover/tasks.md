@@ -45,7 +45,7 @@ working on their own files. The tools are written here.
     `sha256sum` and `stat`) identical to the one taken before the changes;
   - a second `undo --yes` changes nothing and says so;
   - `undo 2 --yes` (the safety snapshot) brings the changed state back.
-- [ ] T005 [P] [US3] E2E
+- [X] T005 [P] [US3] E2E
   `tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats` (SC-3):
   a manifest of `.git` (every path, mode and sha256, the nested repository's `.git` included) before
   `snapshot`, after it, and after `undo --yes`, all identical. `git stash list`, `git log` and

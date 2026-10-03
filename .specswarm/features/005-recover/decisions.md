@@ -45,3 +45,13 @@ FLAGGED: review change — after a restore, a bare repeated "undo --yes" must ch
 ABSENT: the verification-failure path (exit 1, "left N differences") is not reachable without a fault hook; not tested end to end
 Verification: host stand-in (T013): 10/10 after the fixes
 SCOPE: in (1 changed files)
+
+### T005: e2e SC-3 — version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats (delegate A)
+**Started:** 2026-10-03T02:00+00:00 (delegated) | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T001's fixture (commits, staged change, stash, repository hook, nested repository) (confidence: high)
+ASSUMED: the .git manifest covers every entry under every .git (path, mode, sha256) plus git log, stash list and diff --cached, read with GIT_OPTIONAL_LOCKS=0 so the reading itself cannot touch the index (confidence: high)
+FLAGGED: none
+ABSENT: on the host the image's hook dispatcher and /etc/gitconfig are absent; the hook-never-ran assertion is only meaningful in the image
+Verification: host stand-in (T013): 4/4
+SCOPE: in (1 changed files)
