@@ -117,3 +117,15 @@ FLAGGED: none
 ABSENT: no other Makefile change: e2e discovery is by directory, so make test runs the new bats files without being told
 Verification: ruff check and ruff format --check clean over tools tests scan bench (54 files); mypy 2.3.1 strict "no issues found in 19 source files"; shellcheck 0.11.0 clean over the extended SHELLCHECK_FILES
 SCOPE: in (2 changed files)
+
+### T012: reconcile the delegates' tests and the tools against the contract
+**Started:** 2026-10-03T02:30+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T003–T011 (confidence: high)
+ASSUMED: disagreements are decided by the contract; where the contract was wrong or silent, the contract is amended and the amendment is recorded in it (confidence: high)
+FLAGGED: contract amended — "Outcomes are verdicts, errors are errors" (conform's probes); both delegates were told mid-task and wrote to it (confidence: high)
+FLAGGED: spec FR-14 and contract amended — undo's default skips safety snapshots (rule 7); spec FR-7 and SC-4 amended — the entry-cap verdict names the cap, not a count, because the walk stops at the cap (confidence: high)
+ASSUMED: the tool's store-refusal remedy changed to the contract's exact words (the one unit that failed) (confidence: high)
+ABSENT: no change to any criterion text; spec D-1 to D-10 unchanged
+Verification: 72 units pass; host stand-in 40/44 (the 4 being the image-only type -a cells)
+SCOPE: none — no files outside the feature's artifacts changed

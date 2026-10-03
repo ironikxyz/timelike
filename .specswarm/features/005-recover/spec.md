@@ -112,8 +112,9 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
   - a file that cannot be read.
 
   Each exclusion carries its reason. The snapshot is then **partial**, and says so.
-- **FR-7** A workspace with more entries than the entry cap is refused with exit 1, naming the count and
-  the cap, and nothing is stored: the walk itself would cost more latency than P2 allows.
+- **FR-7** A workspace with more entries than the entry cap is refused with exit 1, naming the cap and its
+  variable, and nothing is stored: the walk itself would cost more latency than P2 allows. The walk stops
+  at the cap, so the verdict says "more than <cap>" rather than an exact count. *(Amended in implement.)*
 - **FR-8** The caps have defaults and are set by environment variables (one per cap). A cap of 0 means
   no limit for that cap.
 
@@ -135,8 +136,10 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
 
 ### Restoring
 
-- **FR-14** `undo [ID]` restores snapshot `ID`, or the newest when no `ID` is given. An unknown `ID`, or a
-  workspace with no snapshots, exits 3 and names what exists.
+- **FR-14** `undo [ID]` restores snapshot `ID`, or, when no `ID` is given, the newest snapshot that is not
+  a safety snapshot (FR-19). An unknown `ID`, or a workspace with no snapshots, exits 3 and names what
+  exists. *(Amended in implement: defaulting to the newest of all would make a second `undo --yes`
+  undo the first, so undo would not be idempotent (rule 7). Safety snapshots stay reachable by `ID`.)*
 - **FR-15** The restore plan is computed by comparing the workspace now with the snapshot:
   - **restore**: a captured file or symlink that is missing, or whose content, target or permission
     bits differ; a captured directory that is missing;
@@ -200,7 +203,7 @@ on the host (pytest).
 - **SC-4** *"A snapshot whose content would exceed the size cap is refused or partial, and the verdict
   names what was excluded and why"* — with a small cap, the snapshot is partial, names each excluded file
   and its reason, and a later `undo --yes` leaves those files in place; a workspace over the entry cap is
-  refused with the count and the cap. *(slice 0)*
+  refused, naming the cap and its variable. *(slice 0)*
 - **SC-5** *DEMO: "the Agent deletes the wrong directory and restores it with one undo command"* (D7) —
   Manual: observed by the operator in a real exchange. *(slice 0)*
 

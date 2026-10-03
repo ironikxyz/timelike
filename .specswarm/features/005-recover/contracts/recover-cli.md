@@ -10,6 +10,20 @@ Both follow 001's output contract (`.specswarm/features/001-agent-shell-baseline
 `<target>` is always the workspace's real path. When the workspace is refused, `<target>` is the
 resolved path that was refused.
 
+**Outcomes are verdicts, errors are errors** (amended in implement, T009; FLAGGED in `decisions.md`).
+A refusal, a missing snapshot, and a restore that fails verification are each a **result**:
+- the header and the verdict on stdout;
+- the first line `do instead: <remedy>`, then any detail lines;
+- JSON `data.remedy`;
+- the exit code (1 or 3).
+
+`adele status` reports an unreachable Adele the same way. This was forced by `timelike-conform`:
+its probes (`snapshot list`, `undo --dry-run`) run in conform's own working directory, which in the
+image is the home directory, and C3/C4 need a header on stdout.
+
+Usage errors (exit 2), the lock timeout and I/O failures remain structured errors on stderr
+(rule 14): `error: <what> (code N) — <remediation>`.
+
 ## Environment
 
 | Variable | Default | Meaning |
@@ -50,7 +64,7 @@ Manifest: `mutating: false`, `destructive: false`, probe `["list"]`. Exit codes:
 - JSON `data`: `snapshots`, a list of `{id, reason, label, files, bytes, partial}` plus `taken_at` only
   with `--verbose`.
 
-**Refusals** (exit 1, nothing written):
+**Refusals** (exit 1, nothing written; a verdict, scope `take` or `list`):
 - `refused: <path> is the filesystem root` / `… is your home directory` / `… is an ancestor of your home
   directory` / `… contains the snapshot store (<store>)`.
 - Each has the remediation `change into the project directory (a directory below <home>) and run snapshot again`.
@@ -58,20 +72,24 @@ Manifest: `mutating: false`, `destructive: false`, probe `["list"]`. Exit codes:
 - Over the entry cap: `refused: <path> has more than <cap> entries (TIMELIKE_SNAPSHOT_MAX_ENTRIES)`, with
   the remediation `snapshot a smaller directory, or raise TIMELIKE_SNAPSHOT_MAX_ENTRIES`.
 
-Errors are agentio `ToolError`s: `error: <what> (code 1) — <remediation>` on stderr, or the JSON form.
+The remediation is the `do instead:` line.
 
 ## `undo`
 
 ```
-undo [ID] [--dry-run] [--yes]     restore snapshot ID (default: the newest)
+undo [ID] [--dry-run] [--yes]     restore snapshot ID (default: the newest that is not a safety snapshot)
 ```
 
 Manifest: `mutating: true`, `destructive: true`, probe `["--dry-run"]`, envelopes
 `["confirmation_required"]`. Exit codes: 0, 1, 2, 3, 4.
 
 Scope: `restore <id>`.
-- **No snapshot / unknown ID:** exit 3. `error: no snapshot <ID> for <ws> (code 3) — snapshots here:
-  <ids, newest first>` or `… — take one with: snapshot`.
+
+**Default ID:** the newest snapshot whose reason is not `before undo …`, so a repeated `undo --yes` changes
+nothing (rule 7). `undo <S> --yes` restores a safety snapshot, which undoes an undo.
+- **No snapshot / unknown ID:** exit 3, a verdict (scope `restore <ID>` or `restore newest`):
+  `no snapshot <ID> for <ws>` (or `no snapshot for <ws>`), then `do instead: snapshots here: <ids,
+  newest first>` or `do instead: take one with: snapshot`. A non-numeric ID is a usage error (exit 2).
 - **`--dry-run`:** exit 0. Verdict
   `dry run: snapshot <id> — <R> to restore, <X> to remove; nothing changed`. Lines are the plan, one
   change per line: `restore file <path>`, `restore link <path>`, `restore dir <path>`, `remove file
@@ -93,8 +111,9 @@ Scope: `restore <id>`.
     `restored to snapshot <id>: <R> restored, <X> removed; verified; the state before is snapshot <S>`,
     plus `(partial)` after `<S>` if the safety snapshot was partial. Lines: the applied plan, cut over
     the limit with `more` over the artefact list, never a re-run.
-  - If not: exit 1, `error: restore of snapshot <id> left <n> differences (code 1) — the state before is
-    snapshot <S>; differences: <first few>`.
+  - If not: exit 1, a verdict `restore of snapshot <id> left <n> differences; the state before is
+    snapshot <S>`, then `do instead: undo <S> --yes returns to the state before; …`, then one line per
+    remaining difference.
   - JSON `data`: `id`, `restored`, `removed`, `verified` (true), `before` (`S`), `before_partial`.
 - **A refused workspace:** as for `snapshot`, exit 1.
 - **A write that would go through a symlink, or into `.git`:** exit 1, naming the path. Nothing further
