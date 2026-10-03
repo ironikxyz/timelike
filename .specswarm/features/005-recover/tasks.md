@@ -51,7 +51,7 @@ working on their own files. The tools are written here.
   `snapshot`, after it, and after `undo --yes`, all identical. `git stash list`, `git log` and
   `git diff --cached` are unchanged too. The repository's `pre-commit` hook writes a marker if it ever
   runs: there must be no marker.
-- [ ] T006 [P] [US4] E2E `tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`
+- [X] T006 [P] [US4] E2E `tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`
   (SC-4):
   - with `TIMELIKE_SNAPSHOT_MAX_BYTES` below the workspace's size, `snapshot` says `(partial)` and
     names each excluded file with `over the size cap`, largest first, plus the raise line;

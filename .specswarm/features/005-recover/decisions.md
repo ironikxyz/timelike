@@ -55,3 +55,13 @@ FLAGGED: none
 ABSENT: on the host the image's hook dispatcher and /etc/gitconfig are absent; the hook-never-ran assertion is only meaningful in the image
 Verification: host stand-in (T013): 4/4
 SCOPE: in (1 changed files)
+
+### T006: e2e SC-4 — snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats (delegate A)
+**Started:** 2026-10-03T02:00+00:00 (delegated) | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T001's fixture plus two large files the test writes (confidence: high)
+ASSUMED: the size-cap raise value is the total of all files (what would have captured everything); the per-file raise value is the largest file (confidence: medium)
+FLAGGED: review fix — size_matches runs its own =~, which clobbered BASH_REMATCH before the second size was read; the groups are kept in locals first (a test bug, found by the T013 host stand-in) (confidence: high)
+ABSENT: unreadable-file and special-file exclusions are covered by units only (the agent cannot make devices; a 000 file is a unit)
+Verification: host stand-in (T013): 10/10 after the fix
+SCOPE: in (1 changed files)
