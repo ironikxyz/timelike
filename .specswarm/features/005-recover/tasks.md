@@ -35,7 +35,7 @@ working on their own files. The tools are written here.
   `find` of the regular files outside any `.git`, and a size. After deleting one tracked, one untracked
   and one ignored file, `undo 1 --yes` brings each back byte-identical (`sha256sum`). `bash -c` and
   `bash -lc`, `notty`.
-- [ ] T004 [P] [US2] E2E `tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats`
+- [X] T004 [P] [US2] E2E `tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats`
   (SC-2):
   - after `rmsrc.sh` (a directory removed by a script), an edit, a `chmod`, a new file and a new
     directory, `undo --dry-run` lists exactly those changes (compared as a set with the test's own

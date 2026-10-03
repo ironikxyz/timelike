@@ -34,3 +34,14 @@ FLAGGED: none
 ABSENT: not run in the image here (no Docker, R10): the Docker lane decides; the host stand-in (T013) is advisory
 Verification: host stand-in (T013): 4/4
 SCOPE: in (1 changed files)
+
+### T004: e2e SC-2 — restore-returns-captured-content-and-removes-files-created-after.bats (delegate A)
+**Started:** 2026-10-03T02:00+00:00 (delegated) | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: T001's fixture; data-model's plan rows (confidence: high)
+ASSUMED: the dry-run plan must equal the test's own list of the five changes it made, as a sequence (sorted by path, remove before restore) (confidence: high)
+FLAGGED: review fix — check_envelope read the envelope's confirm through $JPY after a later jpy call had replaced it, so it ran "<absent>"; re-reads it first (a test bug, found by the T013 host stand-in) (confidence: high)
+FLAGGED: review change — after a restore, a bare repeated "undo --yes" must change nothing (was "undo 1 --yes"), pinning the amended default (FR-14; T012) (confidence: high)
+ABSENT: the verification-failure path (exit 1, "left N differences") is not reachable without a fault hook; not tested end to end
+Verification: host stand-in (T013): 10/10 after the fixes
+SCOPE: in (1 changed files)
