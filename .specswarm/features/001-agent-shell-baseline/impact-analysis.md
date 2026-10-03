@@ -287,3 +287,59 @@ with no verdict until the experiment's 8 s watchdog. The image (git 2.47.3) deci
   too, the test fails, and the README and this test are updated together. That is what pinning means.
 
 **Proceed:** yes. The Docker lane is authoritative.
+
+---
+
+# Cycle 7: rule 9's clarification recorded (send `bridge/sends/01-rev10-20261003-003933.md`, discovery revision 10)
+
+**Provenance:** modify row 7. The prompt is at revision 10, `prompt_revision` is 2, and `audited_against`
+is `[2, 3, 4, 5, 6, 7, 8, 9]`. The only unaudited revision is 10.
+- **Revision 10: needs no body change.** Rule 9 gains a clarifying sentence: exit 4 carries a
+  confirmation envelope or a grant envelope, told apart by `status`, and an operator's command never
+  appears in `confirm`. **No criterion changed:** the Acceptance Criteria of `01-rev9-20261001-191224.md`
+  and `01-rev10-20261003-003933.md` are byte-identical (13 criteria, sha256 `7d42021a…`), so removals
+  and rewordings are visible and none occurred.
+  - **Spec rule 9 (line 181) is the body's only statement about exit 4's envelope**, and it states the
+    confirmation envelope only. That is still true under revision 10, which adds a second envelope
+    rather than contradicting the first. No spec line mentions the confirm envelope's old `grant`
+    field, which 004's T018 removed. So this is **not SUPERSEDED**, and the spec is not regenerated.
+  - As with revision 9's sentence in rule 5 (T074), revision 10's is **copied into the spec's rule 9,
+    declared**.
+- **SUPERSEDED / INCOMPLETE:** none.
+
+**001's contract already says the same (lore P004: what was compared).** 004's T018 changed it at
+`b7a6ea6` (on `archive/pre-publish`; unchanged since, `git diff archive/pre-publish HEAD` is empty for
+these paths). Read clause by clause against revision 10's sentence, by a delegate, with the key lines
+re-read here:
+
+| File | What it says | Against revision 10 |
+|---|---|---|
+| `contracts/output-contract.md:33` (exit table) | exit 4: "stdout carries one envelope, told apart by `status`: `confirmation_required` … or `grant_required`" | agrees |
+| `contracts/output-contract.md:112–125` (§ Confirmation) | the confirmation envelope (:112–114); "A missing grant is the other exit-4 envelope": the grant, `limit {name, allowed, needed}`, `extend`, `extend_by: "operator"`, `performed: false`; the operator's command is "never in `confirm`"; not `--yes`-confirmed, "the grant is the confirmation"; "Rule 8 still binds it" | agrees, every clause |
+| `contracts/grant-envelope.schema.json` | requires `grant`, `limit`, `extend`, `extend_by` (const `operator`), `performed` (const `false`), `status` const `grant_required`; :28 no `confirm` key, checked by C9 and the agentio units (the schema subset has no `not`) | agrees |
+| `contracts/confirm-envelope.schema.json` | properties `tool, target, scope, status, plan, confirm`; `status` const `confirmation_required`; **no `grant`** | agrees; silent on operator commands in `confirm` (no `additionalProperties: false`), which C9 enforces |
+| `tools/agentio/agentio.py` `grant_required()` (:276–312) | refuses unless `Tool(grant_envelope=True)`; emits the grant envelope with `extend_by="operator"`, `performed=False`, exit 4; `confirm_required()` builds `confirm` from the tool's own argv plus `--yes` | agrees |
+| `contracts/conformance.md:34` C9 and `tools/bin/timelike-conform` `check_envelope` | every exit 4 prints one envelope of a declared `status`; a grant envelope has `limit`, `extend_by: "operator"`, `performed: false` and no `confirm`; no `confirm` names a command outside the tool's own | agrees |
+
+**Disagreements: none.** Two observations, neither a disagreement, recorded and not acted on:
+- Rule 8's clause for a grant client is stated only in `output-contract.md:123–124`. The schemas,
+  C9 and agentio are silent: agentio ties `--dry-run` to `destructive` alone, which is rule 8 for
+  every tool, so nothing is missing.
+- Nothing forbids declaring a tool both `mutating=True` and `grant_envelope=True`, which would give a
+  grant client `--yes`. No tool does (`adele` leaves `mutating` at False). In that combination
+  `Tool.codes()` would describe exit 4 as confirmation only. A guard belongs to whichever cycle adds a
+  second grant client; it is noted for the mentor, not built here.
+
+**Proposed change:** the spec's rule 9 only. No code, test or contract change, so nothing outside
+`.specswarm/` changes and no Docker lane is needed (send § 2).
+
+| Component | Change | Impact |
+|---|---|---|
+| `spec.md` contract rule 9 | Revision 10's clarification appended in place, declared | None on behaviour |
+| `spec.md` frontmatter `audited_against` | 10 appended (Step 9, full) | Provenance only |
+| `audit-log.md` | one `full` row | Provenance only |
+| Other features | None. 004's T018 already changed 001's contract and recorded it under its `changed_other_features` | — |
+
+**Breaking changes:** none. **Risk:** low; documentation only.
+
+**Proceed:** yes.
