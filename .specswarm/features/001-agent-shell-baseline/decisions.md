@@ -872,3 +872,13 @@ Verification:
 - implement step 10 run from the installed 2.22.0 blocks with `CLAUDE_PLUGIN_ROOT` set: Quality Score unknown, all six components excluded with reasons, gate warned
 - all 13 citations in § Cycle 6 match exactly one line of the send (grep -cF = 1)
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: yes)
+
+### T079: spec rule 9 — revision 10's clarification appended in place, declared (cycle 7)
+**Started:** 2026-10-03T00:45:27+00:00 | **Completed:** 2026-10-03T00:45:40+00:00
+
+INHERITED: impact-analysis § Cycle 7 — spec line 181 is the body's only statement about exit 4's envelope, still true; 001's contract agrees with revision 10 clause by clause (T018, `b7a6ea6`) (confidence: high)
+ASSUMED: the annotation copies the prompt's sentence verbatim and closes with a provenance note, in the shape cycle 6 used for rule 5 (T074) (confidence: high)
+FLAGGED: none
+ABSENT: no other spec line changed: FR-9 and SC-5 name the exit-code vocabulary, not the envelope; the confirm envelope's removed `grant` field was never in the spec, so nothing to strike
+ABSENT: no contract, code or test change — the contract already says the same; the two observations in impact-analysis § Cycle 7 (rule 8 stated only in output-contract.md; nothing forbids `mutating` with `grant_envelope`) are noted for the mentor, not built
+Verification: the annotation's sentence equals the send's (`bridge/sends/01-rev10-20261003-003933.md`, rule 9) after whitespace normalisation (VERBATIM)

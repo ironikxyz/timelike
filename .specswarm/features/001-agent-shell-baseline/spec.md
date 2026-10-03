@@ -179,7 +179,13 @@ The contract (binding on every timelike tool, in every feature):
 7. Idempotent.
 8. `--dry-run` for anything destructive.
 9. Mutating without `--yes` exits 4 with a JSON envelope naming the plan and the confirm command.
-   There is never an interactive fallback.
+   There is never an interactive fallback. *(Clarified, revision 10: exit 4 carries either this
+   confirmation envelope or a grant envelope, told apart by `status`. A grant envelope names the grant,
+   the exceeded limit and the operator's extend command, marked as the operator's, and states that
+   nothing was performed. An operator's command never appears in `confirm`. A client whose requests
+   Adele brokers is not `--yes`-confirmed: the grant is the confirmation, and rule 8 still applies.
+   Annotated in place by cycle 7, declared; the contract was amended to match by feature 004 at
+   `b7a6ea6`.)*
 10. No daemons. State lives only under a scratch directory and an optional git-excluded project cache.
 11. Deterministic, sorted output. No timestamps except behind `--verbose`.
 12. The first line is a self-labelling header naming the tool, target and scope.
