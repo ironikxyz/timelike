@@ -60,7 +60,7 @@ working on their own files. The tools are written here.
     (same sha256);
   - `TIMELIKE_SNAPSHOT_MAX_ENTRIES=5` is refused, naming the count and the variable;
   - a non-integer value is exit 2.
-- [ ] T007 [P] [US5] E2E `tests/e2e/snapshot-refuses-home-root-and-their-ancestors.bats`:
+- [X] T007 [P] [US5] E2E `tests/e2e/snapshot-refuses-home-root-and-their-ancestors.bats`:
   - `snapshot` from `~`, `/` and `/home` is refused (exit 1, the reason, "change into the project
     directory"), and nothing is written to the store;
   - `undo` there is refused the same way;

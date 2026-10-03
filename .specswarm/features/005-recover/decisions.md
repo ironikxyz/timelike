@@ -65,3 +65,13 @@ FLAGGED: review fix — size_matches runs its own =~, which clobbered BASH_REMAT
 ABSENT: unreadable-file and special-file exclusions are covered by units only (the agent cannot make devices; a 000 file is a unit)
 Verification: host stand-in (T013): 10/10 after the fix
 SCOPE: in (1 changed files)
+
+### T007: e2e FR-2 and R7 — snapshot-refuses-home-root-and-their-ancestors.bats (delegate A)
+**Started:** 2026-10-03T02:00+00:00 (delegated) | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: the amended contract: refusals are verdicts on stdout with "do instead:" (T012) (confidence: high)
+ASSUMED: nothing is stored on a refusal, checked by listing the store directory (confidence: high)
+FLAGGED: none
+ABSENT: the type -a cells can only pass in the image (they pin /opt/timelike/bin); on the host stand-in they fail by construction
+Verification: host stand-in (T013): 12/16, the 4 failures being exactly the type -a cells; shellcheck clean after an unused local was removed
+SCOPE: in (1 changed files)
