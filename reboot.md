@@ -9,25 +9,23 @@ Read this first after a context clear. It is a snapshot. The artifacts it points
 (`ironikxyz/timelike`). `master` is the public lineage and tracks `public/main`:
 - `4662060` is **the first public commit**: one root, whose tree is `7e050fd`'s (`f1de497…`). It is
   pushed to `public/main`.
-- `81fe8f3` (and this commit) are the cutover bookkeeping: FOR-MENTOR Item 16, the cycle report
+- `81fe8f3` is the cutover bookkeeping: FOR-MENTOR Item 16, the cycle report
   `.specswarm/maintenance/publish-cutover/cycle-report.md`, and **`CLAUDE.md` rule 5, the push rule**.
-  **They are not pushed.** They wait for the mentor's discharge **and** the operator's OK.
+  The mentor discharged the cutover, and **`81fe8f3` is pushed** (`public/main`, 2026-10-03, on the
+  operator's OK). The `reboot.md` commits and Item 16's closure after it are local: push them only with
+  the next discharged work, on the operator's OK (rule 5).
 - The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`). It holds every hash cited in
   `bridge/`, and it is also in the private, closed `timelike-history`. The old local branches are
   unchanged. Before the cutover, the publish redaction merged at `47d1e62` and feature 004 at `6bcc1ec`;
   both are discharged.
 - Remotes: `public` (push and fetch); `history` (fetch-only, push URL `no-push`).
 - Commit identity, this repository only: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>`.
-- FOR-MENTOR Items 1–15 are closed. **Item 16 is open**, for the mentor's independent check of
-  `public/main` (tree, count, deny-list over every object).
+- FOR-MENTOR Items 1–16 are closed.
 
 ## Next actions
 
-1. Read the bridge tail (`../bridge/history.md`) for the mentor's check and discharge of the cutover.
-   **Push nothing** until the mentor has discharged it **and** the operator says to push (rule 5).
-   Then: the deny-list PASS with the list read; `git log public/main..master --format='%an %ae %cn %ce'`
-   shows only the identity; `git push` (upstream; never force); close Item 16 with the push output.
-2. Then the next send: 07 s0, then 05 s0; 12 slice 1 carries Item 14's (b). New branches start from
+1. Done 2026-10-03: the cutover is discharged, `81fe8f3` is pushed, and Item 16 is closed.
+2. The next send: 07 s0, then 05 s0; 12 slice 1 carries Item 14's (b). New branches start from
    this `master`.
 3. 001's spec is UNAUDITED at revision 10 until its next modify cycle.
 
@@ -412,4 +410,4 @@ follow-up did.
 | Scan gate | `scan/scan.sh`, `scan/evaluate.py`, `scan/baseline/*.json` |
 | Governance | `.specswarm/constitution.md` (1.4.2), `tech-stack.md`, `quality-standards.md`, all `[2..10]` (audited at `cb943d3`) |
 | Metrics | `.specswarm/metrics.json` (`003`: plugin score unknown; project figures beside it). Scan baselines `scan/baseline/timelike-{agent,vanilla,bench-driver}.json`, all reviewed 2026-10-01 (80/79/51 entries after `09e2c0b`) |
-| Register to mentor | `FOR-MENTOR.md` (Items 1–15 closed; 16 open) |
+| Register to mentor | `FOR-MENTOR.md` (Items 1–16 closed) |

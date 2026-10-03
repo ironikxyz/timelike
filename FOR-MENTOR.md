@@ -674,9 +674,11 @@ append-only, so the correction is recorded here and in this cycle's report.
 
 ## Item 16 — Publish cutover (maintenance send `maint-publish-cutover-20261003-003150`): the first public commit, by id only
 
-**Status:** open, raised 2026-10-03 on `master` (the new lineage), for the mentor's independent check of
-the remote. These bookkeeping commits are **not pushed**: they wait for the mentor's discharge and the
-operator's OK. The cycle report is `.specswarm/maintenance/publish-cutover/cycle-report.md`.
+**Status:** closed 2026-10-03. The mentor verified the remote independently and discharged the cutover
+(`../bridge/history.md`, discharge, 2026-10-03T00:37:29Z), clearing the bookkeeping commit `81fe8f3` for
+push on the operator's OK. The operator gave it, and `81fe8f3` is pushed (see **The bookkeeping push**
+below). The cycle report is `.specswarm/maintenance/publish-cutover/cycle-report.md`. (As first raised:
+open, for the mentor's independent check of the remote; the bookkeeping commits unpushed.)
 
 **Before starting:** `master` was at `7e050fd` with a clean tree, there were no remotes, and the
 deny-list over HEAD, with the list read, was **PASS** (7 entries, 246 files, every id 0/0). The public
@@ -734,3 +736,16 @@ changed no file: the tree equals `archive/pre-publish`'s.
 
 **The push rule** is now rule 5 in `CLAUDE.md`. The old local branches are unchanged, and the tag
 `feature-001-complete` stays local, both archived in `timelike-history`.
+
+**The bookkeeping push** (2026-10-03, on the operator's OK relayed with the mentor's check). Only
+`81fe8f3`, the commit the mentor checked; the `reboot.md` commit after it stays local. Before it, per
+rule 5: the deny-list over `81fe8f3` with the list read was **PASS** (7 entries, 247 files, P1–P7 all
+0/0), and `git log public/main..81fe8f3 --format='%an %ae %cn %ce'` showed only the ironik.xyz noreply
+identity. The token went through a throwaway `GIT_ASKPASS` with `-c credential.helper=`; the script was
+deleted, and the output was checked for the token before printing:
+```
+$ git -c credential.helper= push public 81fe8f3:refs/heads/main      (exit 0)
+To https://github.com/ironikxyz/timelike.git
+   4662060..81fe8f3  81fe8f3 -> main
+```
+After `git fetch public`: `public/main` = `81fe8f379d8d`.
