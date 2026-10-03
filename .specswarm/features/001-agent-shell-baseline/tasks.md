@@ -431,7 +431,7 @@ nothing outside `.specswarm/` changes, so there is no Docker lane (send § 2).
 - [X] T079 Spec contract rule 9 (`spec.md`, lines 181–182): append revision 10's clarification in place,
   declared, as revision 9's was appended to rule 5 (T074). No other spec line states exit 4's envelope
   (impact analysis § Cycle 7), so nothing else in the body changes.
-- [ ] T080 Provenance (modify Step 9): compute the append with the installed `audit-append` block in
+- [X] T080 Provenance (modify Step 9): compute the append with the installed `audit-append` block in
   `full` mode (revision 10's criteria byte-identical to revision 9's, so removals are visible); write
   `audited_against` in `spec.md` frontmatter and one `full` row in `audit-log.md`. Never touch
   `prompt_revision`, `discovery_revision` or `source_prompt`.

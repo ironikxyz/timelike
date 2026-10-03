@@ -892,3 +892,4 @@ ASSUMED: computed with the installed `audit-append` block (2.26.1, byte-identica
 FLAGGED: 10 is appended in this cycle rather than deferred to a lane addendum, against this instance's usual convention (append only after the Docker lane re-establishes) — chose to append now because the send instructs it for a `.specswarm/`-only cycle and names the lane to cite (`f73ac79`); the tree outside `.specswarm/` is unchanged from master (confidence: high)
 ABSENT: `prompt_revision`, `discovery_revision`, `source_prompt` and `source_send` untouched; no spec body change in this task
 Verification: `git diff` touches only spec.md's `audited_against` line and one appended audit-log row
+SCOPE: none — no files outside the feature's artifacts changed
