@@ -107,3 +107,13 @@ FLAGGED: none
 ABSENT: no second copy of any logic in undo; nothing undo does is reachable except through snapshot's code
 Verification: conform passes with both installed together (unit and host); a first conform attempt failed because the shebang rewrite kept -I (my install's error, not the tool's), recorded in the cycle report
 SCOPE: in (1 changed files)
+
+### T002: lint lists — pyproject.toml (ruff extend-include, mypy files) and Makefile SHELLCHECK_FILES
+**Started:** 2026-10-03T02:05+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: the two tool files (T009–T011) and the six e2e files (T001, T003–T007) the lists name (confidence: high)
+ASSUMED: committed after the files exist, so no list names a missing file at any commit (confidence: high)
+FLAGGED: none
+ABSENT: no other Makefile change: e2e discovery is by directory, so make test runs the new bats files without being told
+Verification: ruff check and ruff format --check clean over tools tests scan bench (54 files); mypy 2.3.1 strict "no issues found in 19 source files"; shellcheck 0.11.0 clean over the extended SHELLCHECK_FILES
+SCOPE: in (2 changed files)

@@ -24,7 +24,7 @@ working on their own files. The tools are written here.
   (`.git/hooks/pre-commit`), a nested repository (`vendor/lib` with its own `.git` and a file), a
   `0600` file, an executable script, a symlink, and a script `rmsrc.sh` that deletes `src/`.
   `sh`-compatible, with arguments `DIR`.
-- [ ] T002 [P] `pyproject.toml`: ruff `extend-include` and mypy `files` gain `tools/bin/snapshot` and
+- [X] T002 [P] `pyproject.toml`: ruff `extend-include` and mypy `files` gain `tools/bin/snapshot` and
   `tools/bin/undo`. `Makefile` `SHELLCHECK_FILES` gains the fixture and the five bats files of
   T003–T007.
 
