@@ -428,7 +428,7 @@ the task text below. The tasks change Markdown only -->
 Governance is current at `[2..10]` (`cb943d3`), so there is no audit task. No criterion changes, and
 nothing outside `.specswarm/` changes, so there is no Docker lane (send § 2).
 
-- [ ] T079 Spec contract rule 9 (`spec.md`, lines 181–182): append revision 10's clarification in place,
+- [X] T079 Spec contract rule 9 (`spec.md`, lines 181–182): append revision 10's clarification in place,
   declared, as revision 9's was appended to rule 5 (T074). No other spec line states exit 4's envelope
   (impact analysis § Cycle 7), so nothing else in the body changes.
 - [ ] T080 Provenance (modify Step 9): compute the append with the installed `audit-append` block in

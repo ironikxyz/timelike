@@ -882,3 +882,4 @@ FLAGGED: none
 ABSENT: no other spec line changed: FR-9 and SC-5 name the exit-code vocabulary, not the envelope; the confirm envelope's removed `grant` field was never in the spec, so nothing to strike
 ABSENT: no contract, code or test change — the contract already says the same; the two observations in impact-analysis § Cycle 7 (rule 8 stated only in output-contract.md; nothing forbids `mutating` with `grant_envelope`) are noted for the mentor, not built
 Verification: the annotation's sentence equals the send's (`bridge/sends/01-rev10-20261003-003933.md`, rule 9) after whitespace normalisation (VERBATIM)
+SCOPE: none — no files outside the feature's artifacts changed
