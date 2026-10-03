@@ -65,7 +65,7 @@ working on their own files. The tools are written here.
     directory"), and nothing is written to the store;
   - `undo` there is refused the same way;
   - `type -a snapshot` and `type -a undo` each print exactly one line, under `/opt/timelike/bin`.
-- [ ] T008 [P] Units `tests/unit/test_snapshot.py` and `tests/unit/test_undo.py`, every FR of the spec
+- [X] T008 [P] Units `tests/unit/test_snapshot.py` and `tests/unit/test_undo.py`, every FR of the spec
   against real repositories built by git in `tmp_path`, with tools run as subprocesses (`conftest.run`):
   - the workspace rules (FR-1 to FR-3, with `HOME` pointed into `tmp_path`);
   - capture of every kind, `.git` out of scope at any depth, the exclusions and their reasons, entry-cap

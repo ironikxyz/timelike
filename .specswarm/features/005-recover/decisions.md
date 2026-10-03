@@ -75,3 +75,13 @@ FLAGGED: none
 ABSENT: the type -a cells can only pass in the image (they pin /opt/timelike/bin); on the host stand-in they fail by construction
 Verification: host stand-in (T013): 12/16, the 4 failures being exactly the type -a cells; shellcheck clean after an unused local was removed
 SCOPE: in (1 changed files)
+
+### T008: units tests/unit/test_snapshot.py and tests/unit/test_undo.py (delegate B)
+**Started:** 2026-10-03T02:00+00:00 (delegated) | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: conftest's subprocess conventions; test_conform.install for the conform run (both tools in one bindir); test_adele_cli's load_conform pattern (confidence: high)
+ASSUMED: written from the contract alone by a general-purpose delegate, then run against the tools: 70 of 71 passed first time; the one failure was the tool's wording against the contract, and the tool was changed (T012) (confidence: high)
+FLAGGED: review addition — test_a_repeated_undo_yes_changes_nothing_the_default_skips_safety_snapshots pins the amended default (FR-14; T012) (confidence: high)
+ABSENT: no slow marker on the two 10 s lock tests (none is registered in pyproject; adding one is outside these files); the verification-failure path needs a fault hook and is not tested
+Verification: 72 passed (test_snapshot.py + test_undo.py, venv pytest 8.4.2, Python 3.12.3); ruff and ruff format clean after line-length and B904 fixes
+SCOPE: in (2 changed files)
