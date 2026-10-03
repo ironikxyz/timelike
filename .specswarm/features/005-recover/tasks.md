@@ -18,7 +18,7 @@ working on their own files. The tools are written here.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Fixture `tests/e2e/fixtures/recover-repo.sh`: builds a real repository **with git**
+- [X] T001 [P] Fixture `tests/e2e/fixtures/recover-repo.sh`: builds a real repository **with git**
   inside the container as the agent (P005, R9). It has commits, a `.gitignore` with ignored files
   (`build/out.bin`, `*.log`), untracked files, a staged change, a `git stash`, a repository hook
   (`.git/hooks/pre-commit`), a nested repository (`vendor/lib` with its own `.git` and a file), a
