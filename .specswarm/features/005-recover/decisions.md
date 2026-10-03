@@ -85,3 +85,15 @@ FLAGGED: review addition — test_a_repeated_undo_yes_changes_nothing_the_defaul
 ABSENT: no slow marker on the two 10 s lock tests (none is registered in pyproject; adding one is outside these files); the verification-failure path needs a fault hook and is not tested
 Verification: 72 passed (test_snapshot.py + test_undo.py, venv pytest 8.4.2, Python 3.12.3); ruff and ruff format clean after line-length and B904 fixes
 SCOPE: in (2 changed files)
+
+### T009 and T010: tools/bin/snapshot — workspace, store, walk, exclusions, take and list; planner, apply, verify
+**Started:** 2026-10-03T02:05+00:00 | **Completed:** 2026-10-03T02:12:44+00:00
+
+INHERITED: spec D-1 to D-10, research R1–R8, data-model, contracts/recover-cli.md (confidence: high)
+ASSUMED: T009 and T010 are one file and were written as one; they are committed together and both ticked by this commit (confidence: high)
+FLAGGED: refusals, a missing snapshot and a failed verification are verdicts on stdout (an Outcome result, exit 1 or 3), not stderr errors — chose this over the contract's first wording because timelike-conform's probes run in conform's own directory (the home directory in the image), and C3/C4 need a header on stdout; adele status is the precedent. Contract amended (T012) (confidence: high)
+FLAGGED: the default restore target skips safety snapshots ("before undo …") — chose this over "the newest of all" because a second bare undo --yes would otherwise undo the first (rule 7, idempotent). Spec FR-14 and the contract amended (T012) (confidence: high)
+ASSUMED: dir modes are set after everything inside them is written, deepest first, so a 0500 directory cannot block its own restore (confidence: high)
+ABSENT: no restore of file times or owners (spec assumption 3); no fsync (a crash mid-restore is covered by the safety snapshot, not by durability); a directory whose mode forbids writing at restore time (changed after the snapshot) can still fail the restore, naming the path and the safety snapshot
+Verification: ruff, ruff format, mypy strict clean; timelike-conform passes on both tools from a project directory and from the home directory; smoke and edge runs on the host (planted symlink at a parent path, planted .git, type changes, FIFO, unreadable file, size cap largest-first, per-file limit, entry cap, bad env value, unknown id); 72 units pass
+SCOPE: in (1 changed files)

@@ -1,0 +1,899 @@
+#!/opt/timelike/python/bin/python3 -I
+"""snapshot — take and list snapshots of the workspace, so a wrong turn can be undone (P5).
+
+`snapshot` copies every file, symlink and directory of the workspace (tracked, untracked or ignored by
+version control) into a content-addressed store in the session scratch directory, and prints the
+snapshot's identifier, file count and size. `snapshot list` lists them. `undo` (a separate command that
+loads this file) restores one.
+
+Scope and limits, stated rather than implied (T2):
+- the workspace is the nearest directory upward holding `.git`, else the current directory; the
+  filesystem root, the home directory and their ancestors are refused (G1);
+- every `.git` is out of scope at any depth: never captured, restored, removed or followed (revision 8);
+- beyond the caps a snapshot is partial and names each excluded file and why, or (entry cap) refused.
+
+No git is run and nothing is hard-linked. Design: .specswarm/features/005-recover/ (spec, research
+R1–R9, data-model.md, contracts/recover-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import pwd
+import shlex
+import stat
+import time
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import agentio
+
+ENV_MAX_BYTES = "TIMELIKE_SNAPSHOT_MAX_BYTES"
+ENV_MAX_FILE_BYTES = "TIMELIKE_SNAPSHOT_MAX_FILE_BYTES"
+ENV_MAX_ENTRIES = "TIMELIKE_SNAPSHOT_MAX_ENTRIES"
+DEFAULT_CAPS = {
+    ENV_MAX_BYTES: 256 * 1024 * 1024,
+    ENV_MAX_FILE_BYTES: 64 * 1024 * 1024,
+    ENV_MAX_ENTRIES: 50_000,
+}
+LOCK_WAIT_S = 10.0
+RECORD_VERSION = 1
+SAFETY_PREFIX = "before undo "  # the reason on the snapshot an undo takes of the state it replaces
+OUT_OF_SCOPE = ".git"  # version control's own state: the project's, never ours (D-4)
+CHUNK = 1 << 20
+
+TOOL = agentio.Tool(
+    name="snapshot",
+    target="workspace",
+    summary="take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it",
+    usage=[
+        "snapshot [-m TEXT]       # take one: prints its id, file count and size, and what was left out",
+        "snapshot list            # this workspace's snapshots, newest first",
+        "undo [ID] --yes          # restore one (the newest by default); undo --dry-run shows the changes",
+        "workspace: the nearest directory upward holding .git, else here; never ~ or /",
+        f"caps: {ENV_MAX_BYTES}, {ENV_MAX_FILE_BYTES}, {ENV_MAX_ENTRIES} (0 = none)",
+    ],
+    probe=("list",),
+    exit_codes={
+        agentio.EXIT_OK: "ok",
+        agentio.EXIT_FAILURE: "refused (home, root, over the entry cap) or failed",
+        agentio.EXIT_USAGE: "usage, or a cap variable that is not a number",
+    },
+    manifest_extra=lambda: {"caps": {k: DEFAULT_CAPS[k] for k in sorted(DEFAULT_CAPS)}},
+)
+
+UNDO_TOOL = agentio.Tool(
+    name="undo",
+    target="workspace",
+    summary="restore the workspace to a snapshot (the newest by default); dry run first, verified after",
+    usage=[
+        "undo --dry-run           # list exactly what a restore would change; change nothing",
+        "undo --yes               # restore the newest snapshot, verify it, keep the replaced state",
+        "undo ID --yes            # restore snapshot ID (see: snapshot list)",
+        "without --yes: exit 4 and the confirmation envelope (its confirm is undo … --yes)",
+        "never touches any .git; files left out of the snapshot are left alone",
+    ],
+    mutating=True,
+    destructive=True,
+    probe=("--dry-run",),
+    exit_codes={
+        agentio.EXIT_OK: "ok (restored and verified, or nothing to change)",
+        agentio.EXIT_FAILURE: "refused, or the restore could not be verified",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such snapshot",
+        agentio.EXIT_CONFIRM: "confirmation required: rerun with --yes",
+    },
+)
+
+
+# ── small helpers ─────────────────────────────────────────────────────────────────────────────
+
+
+def human(n: int) -> str:
+    if n < 1024:
+        return f"{n} B"
+    size = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        size /= 1024
+        if size < 1024 or unit == "TiB":
+            return f"{size:.1f} {unit}"
+    raise AssertionError("unreachable")
+
+
+def caps_from_env() -> dict[str, int]:
+    caps = {}
+    for var, default in DEFAULT_CAPS.items():
+        raw = os.environ.get(var, "").strip()
+        if raw == "":
+            caps[var] = default
+        elif raw.isdigit():
+            caps[var] = int(raw)
+        else:
+            unit = "entries" if var == ENV_MAX_ENTRIES else "bytes"
+            raise agentio.UsageError(
+                f"{var} must be a non-negative whole number of {unit}, not {raw!r}",
+                f"e.g. {var}={default}, or 0 for no cap",
+            )
+    return caps
+
+
+class Outcome(Exception):
+    """A refusal, a missing snapshot or a failed verification: a verdict on stdout, not a stderr error.
+
+    The conformance probes (`snapshot list`, `undo --dry-run`) run wherever conform runs, which in the
+    image is the home directory, so these outcomes must be results with a header (rule 12), as
+    `adele status` reports an unreachable Adele. Usage, lock and I/O failures stay errors (rule 14).
+    """
+
+    def __init__(self, code: int, verdict: str, remedy: str, lines: list[str] | None = None) -> None:
+        super().__init__(verdict)
+        self.code, self.verdict, self.remedy, self.lines = code, verdict, remedy, list(lines or [])
+
+    def result(self, target: str, scope: str) -> agentio.Result:
+        return agentio.Result(
+            target,
+            scope,
+            self.verdict,
+            lines=[f"do instead: {self.remedy}", *self.lines],
+            data={"remedy": self.remedy},
+            exit=self.code,
+        )
+
+
+def refuse(what: str, remedy: str) -> Outcome:
+    return Outcome(agentio.EXIT_FAILURE, f"refused: {what}", remedy)
+
+
+def has_git_part(rel: str) -> bool:
+    return OUT_OF_SCOPE in rel.split("/")
+
+
+def check_rel(rel: str) -> None:
+    """A record path is relative, normalised, and never inside `.git` (defence in depth for D-4)."""
+    parts = rel.split("/")
+    if not rel or rel.startswith("/") or any(p in ("", ".", "..") for p in parts) or OUT_OF_SCOPE in parts:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"refused to touch {rel!r}: not a path inside the workspace's own files",
+            "the snapshot record is damaged; take a new snapshot",
+        )
+
+
+# ── the workspace (FR-1 to FR-3, D-2) ─────────────────────────────────────────────────────────
+
+
+def home_dirs() -> list[str]:
+    homes = []
+    env_home = os.environ.get("HOME", "")
+    if env_home:
+        homes.append(os.path.realpath(env_home))
+    with contextlib.suppress(KeyError):
+        homes.append(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir))
+    return list(dict.fromkeys(homes))  # $HOME first: it is the one the remedy names
+
+
+def find_workspace() -> str:
+    start = os.path.realpath(os.getcwd())
+    d = start
+    while True:
+        if os.path.lexists(os.path.join(d, OUT_OF_SCOPE)):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return start
+        d = parent
+
+
+def store_root(ctx: agentio.Context) -> str:
+    return os.path.realpath(os.path.join(str(ctx.scratch_root), ctx.session, "snapshots"))
+
+
+def check_workspace(ws: str, ctx: agentio.Context, command: str) -> None:
+    homes = home_dirs()
+    home = homes[0] if homes else "your home directory"
+    remedy = f"change into the project directory (a directory below {home}) and run {command} again"
+    if ws == "/":
+        raise refuse(f"{ws} is the filesystem root", remedy)
+    for h in homes:
+        if ws == h:
+            raise refuse(f"{ws} is your home directory", remedy)
+        if h.startswith(ws.rstrip("/") + "/"):
+            raise refuse(f"{ws} is an ancestor of your home directory", remedy)
+    store = store_root(ctx)
+    if store == ws or store.startswith(ws.rstrip("/") + "/"):
+        raise refuse(
+            f"{ws} contains the snapshot store ({store})",
+            "set TIMELIKE_SCRATCH_ROOT outside the workspace",
+        )
+
+
+# ── the walk (data-model § What the walk sees) ────────────────────────────────────────────────
+
+Entry = dict[str, Any]  # {kind: file|link|dir|other, mode, size, target, what, error}
+
+
+class EntryCapExceeded(Exception):
+    pass
+
+
+def _other_kind(mode: int) -> str:
+    if stat.S_ISSOCK(mode):
+        return "socket"
+    if stat.S_ISFIFO(mode):
+        return "fifo"
+    if stat.S_ISBLK(mode):
+        return "block device"
+    if stat.S_ISCHR(mode):
+        return "character device"
+    return "unknown file type"
+
+
+def walk(ws: str, max_entries: int) -> tuple[dict[str, Entry], list[str]]:
+    """Every entry under `ws` except `.git`, by relative path; and the directories holding a `.git`."""
+    entries: dict[str, Entry] = {}
+    git_holders: list[str] = []
+    stack = [""]
+    seen = 0
+    while stack:
+        rel_dir = stack.pop()
+        abs_dir = os.path.join(ws, rel_dir) if rel_dir else ws
+        try:
+            with os.scandir(abs_dir) as it:
+                children = sorted(it, key=lambda e: e.name)
+        except OSError as e:
+            if rel_dir:
+                entries[rel_dir]["error"] = e.strerror or str(e)
+            continue
+        for child in children:
+            rel = f"{rel_dir}/{child.name}" if rel_dir else child.name
+            if child.name == OUT_OF_SCOPE:
+                git_holders.append(rel_dir)
+                continue
+            seen += 1
+            if max_entries and seen > max_entries:
+                raise EntryCapExceeded()
+            try:
+                st = child.stat(follow_symlinks=False)
+            except OSError as e:
+                entries[rel] = {
+                    "kind": "other",
+                    "what": "unreadable",
+                    "size": 0,
+                    "error": e.strerror or str(e),
+                }
+                continue
+            perm = stat.S_IMODE(st.st_mode)
+            if stat.S_ISLNK(st.st_mode):
+                entries[rel] = {"kind": "link", "target": os.readlink(child.path)}
+            elif stat.S_ISDIR(st.st_mode):
+                entries[rel] = {"kind": "dir", "mode": perm}
+                stack.append(rel)
+            elif stat.S_ISREG(st.st_mode):
+                entries[rel] = {"kind": "file", "mode": perm, "size": st.st_size}
+            else:
+                entries[rel] = {"kind": "other", "what": _other_kind(st.st_mode), "size": 0}
+    return entries, git_holders
+
+
+def file_sha(path: str) -> str:
+    h = hashlib.sha256()
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as f:
+        for block in iter(lambda: f.read(CHUNK), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+# ── the store (data-model § Store) ────────────────────────────────────────────────────────────
+
+
+class Store:
+    def __init__(self, ctx: agentio.Context, ws: str) -> None:
+        self.ws = ws
+        self.key = hashlib.sha256(ws.encode()).hexdigest()[:16]
+        self.ctx = ctx
+        self.path = Path(store_root(ctx)) / self.key
+
+    def exists(self) -> bool:
+        return (self.path / "workspace").is_file()
+
+    def create(self) -> None:
+        try:
+            self.ctx.scratch()  # agentio's private session directory (rule 10)
+            for sub in ("snaps", "objects", "artefacts"):
+                (self.path / sub).mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.chmod(self.path.parent, 0o700)
+            os.chmod(self.path, 0o700)
+        except OSError as e:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"cannot create the snapshot store {self.path}: {e.strerror or e}",
+                "check TIMELIKE_SCRATCH_ROOT is writable",
+            ) from None
+        marker = self.path / "workspace"
+        if marker.exists():
+            self.check_owner()
+        else:
+            self._write_atomic(marker, self.ws + "\n", 0o600)
+
+    def check_owner(self) -> None:
+        recorded = (self.path / "workspace").read_text().strip()
+        if recorded != self.ws:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"the snapshot store {self.path} belongs to {recorded}, not {self.ws}",
+                "remove that store directory, or snapshot from another directory",
+            )
+
+    @contextlib.contextmanager
+    def lock(self) -> Iterator[None]:
+        fd = os.open(self.path / "lock", os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            deadline = time.monotonic() + LOCK_WAIT_S
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise agentio.ToolError(
+                            agentio.EXIT_FAILURE,
+                            "another snapshot or undo is running on this workspace"
+                            f" (lock held for {LOCK_WAIT_S:.0f} s: {self.path / 'lock'})",
+                            "wait for it to finish, then run this again",
+                        ) from None
+                    time.sleep(0.05)
+            yield
+        finally:
+            os.close(fd)
+
+    def _write_atomic(self, path: Path, text: str, mode: int) -> None:
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)
+
+    def next_id(self) -> int:
+        p = self.path / "next"
+        n = int(p.read_text().strip()) if p.exists() else 1
+        self._write_atomic(p, f"{n + 1}\n", 0o600)
+        return n
+
+    def object_path(self, sha: str) -> Path:
+        return self.path / "objects" / sha[:2] / sha
+
+    def put(self, src: str) -> tuple[str, int]:
+        """Copy `src` (never followed) into the store; its sha256 and the bytes read."""
+        tmp = self.path / "objects" / f".in.{os.getpid()}.tmp"
+        h = hashlib.sha256()
+        size = 0
+        fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            with os.fdopen(fd, "rb") as fin, open(tmp, "wb") as fout:
+                for block in iter(lambda: fin.read(CHUNK), b""):
+                    h.update(block)
+                    fout.write(block)
+                    size += len(block)
+            sha = h.hexdigest()
+            dest = self.object_path(sha)
+            if dest.exists():
+                tmp.unlink()
+            else:
+                dest.parent.mkdir(mode=0o700, exist_ok=True)
+                os.chmod(tmp, 0o400)
+                os.replace(tmp, dest)
+            return sha, size
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                tmp.unlink()
+
+    def write_record(self, rec: dict[str, Any]) -> None:
+        self._write_atomic(self.path / "snaps" / f"{rec['id']}.json", json.dumps(rec, indent=1) + "\n", 0o600)
+
+    def records(self) -> list[dict[str, Any]]:
+        if not self.exists():
+            return []
+        out = []
+        for p in (self.path / "snaps").glob("*.json"):
+            with contextlib.suppress(ValueError, OSError):
+                out.append(json.loads(p.read_text()))
+        return sorted(out, key=lambda r: int(r["id"]))
+
+    def record(self, ident: int) -> dict[str, Any] | None:
+        p = self.path / "snaps" / f"{ident}.json"
+        return json.loads(p.read_text()) if self.exists() and p.is_file() else None
+
+    def artefact(self, name: str, lines: list[str]) -> str:
+        text = "\n".join(lines) + "\n"
+        path = self.path / "artefacts" / f"{name}-{hashlib.sha256(text.encode()).hexdigest()[:12]}.txt"
+        path.write_text(text)
+        return str(path)
+
+
+# ── taking a snapshot (FR-4 to FR-11) ─────────────────────────────────────────────────────────
+
+
+def _exclusion(rel: str, size: int, reason: str) -> dict[str, Any]:
+    return {"path": rel, "size": size, "reason": reason}
+
+
+def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | None) -> dict[str, Any]:
+    """Walk, choose, copy, record. The caller holds the store's lock and has created the store."""
+    try:
+        entries, _ = walk(store.ws, caps[ENV_MAX_ENTRIES])
+    except EntryCapExceeded:
+        raise refuse(
+            f"{store.ws} has more than {caps[ENV_MAX_ENTRIES]} entries ({ENV_MAX_ENTRIES})",
+            f"snapshot a smaller directory, or raise {ENV_MAX_ENTRIES}",
+        ) from None
+    excluded: list[dict[str, Any]] = []
+    candidates: list[tuple[str, int]] = []
+    for rel, e in entries.items():
+        if e["kind"] == "other":
+            if e.get("what") == "unreadable":
+                excluded.append(_exclusion(rel, 0, f"unreadable: {e.get('error', 'unknown error')}"))
+            else:
+                excluded.append(_exclusion(rel, 0, f"not a regular file, symlink or directory ({e['what']})"))
+        elif e["kind"] == "dir" and "error" in e:
+            excluded.append(_exclusion(rel, 0, f"unreadable: {e['error']}"))
+        elif e["kind"] == "file":
+            if caps[ENV_MAX_FILE_BYTES] and e["size"] > caps[ENV_MAX_FILE_BYTES]:
+                excluded.append(
+                    _exclusion(rel, e["size"], f"over the per-file limit ({caps[ENV_MAX_FILE_BYTES]} bytes)")
+                )
+            else:
+                candidates.append((rel, e["size"]))
+    total = sum(s for _, s in candidates)
+    if caps[ENV_MAX_BYTES] and total > caps[ENV_MAX_BYTES]:
+        dropped = set()
+        for rel, size in sorted(candidates, key=lambda c: (-c[1], c[0])):
+            if total <= caps[ENV_MAX_BYTES]:
+                break
+            dropped.add(rel)
+            total -= size
+            excluded.append(
+                _exclusion(
+                    rel,
+                    size,
+                    f"over the size cap: largest files left out first ({caps[ENV_MAX_BYTES]} bytes)",
+                )
+            )
+        candidates = [c for c in candidates if c[0] not in dropped]
+    captured: list[Entry] = []
+    stored_bytes = 0
+    for rel, size in sorted(candidates):
+        try:
+            sha, read = store.put(os.path.join(store.ws, rel))
+        except OSError as err:
+            excluded.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
+            continue
+        stored_bytes += read
+        captured.append(
+            {"path": rel, "kind": "file", "sha256": sha, "size": read, "mode": entries[rel]["mode"]}
+        )
+    for rel, e in entries.items():
+        if e["kind"] == "dir":
+            captured.append({"path": rel, "kind": "dir", "mode": e["mode"]})
+        elif e["kind"] == "link":
+            captured.append({"path": rel, "kind": "link", "target": e["target"]})
+    captured.sort(key=lambda c: c["path"])
+    excluded.sort(key=lambda x: x["path"])
+    rec = {
+        "v": RECORD_VERSION,
+        "id": store.next_id(),
+        "reason": reason,
+        "label": label,
+        "workspace": store.ws,
+        "taken_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "entries": captured,
+        "excluded": excluded,
+        "files": sum(1 for c in captured if c["kind"] == "file"),
+        "links": sum(1 for c in captured if c["kind"] == "link"),
+        "dirs": sum(1 for c in captured if c["kind"] == "dir"),
+        "bytes": stored_bytes,
+        "excluded_bytes": sum(x["size"] for x in excluded),
+        "partial": bool(excluded),
+        "caps": {
+            "max_bytes": caps[ENV_MAX_BYTES],
+            "max_file_bytes": caps[ENV_MAX_FILE_BYTES],
+            "max_entries": caps[ENV_MAX_ENTRIES],
+        },
+    }
+    store.write_record(rec)
+    return rec
+
+
+def raise_lines(rec: dict[str, Any], caps: dict[str, int]) -> list[str]:
+    """How to raise the cap(s) that bit, to the value that would have captured everything (contract)."""
+    out = []
+    over_file = [x["size"] for x in rec["excluded"] if x["reason"].startswith("over the per-file limit")]
+    if over_file:
+        out.append(f"raise with {ENV_MAX_FILE_BYTES}={max(over_file)}")
+    if any(x["reason"].startswith("over the size cap") for x in rec["excluded"]):
+        sizeable = rec["bytes"] + sum(
+            x["size"]
+            for x in rec["excluded"]
+            if x["reason"].startswith(("over the size cap", "over the per-file"))
+        )
+        out.append(f"raise with {ENV_MAX_BYTES}={sizeable}")
+    return out
+
+
+def cut_or_lines(
+    ctx: agentio.Context, store: Store, name: str, lines: list[str]
+) -> tuple[list[str], agentio.Cut | None]:
+    """Over the output cap, cut with `more` reading the saved list: a re-run would act again."""
+    if ctx.limit <= 0 or len(lines) <= ctx.limit:
+        return lines, None
+    head_n = max(1, ctx.limit // 2)
+    tail_n = max(1, ctx.limit - head_n)
+    full = store.artefact(name, lines)
+    first, last = head_n + 1, len(lines) - tail_n
+    omitted = lines[head_n : len(lines) - tail_n]
+    cut = agentio.Cut(
+        [
+            (f"lines 1–{head_n} of {len(lines)}", lines[:head_n]),
+            (f"lines {last + 1}–{len(lines)} of {len(lines)}", lines[last:]),
+        ],
+        len(omitted),
+        sum(len(x.encode()) + 1 for x in omitted),
+        full,
+        shlex.join(["sed", "-n", f"{first},{last}p", full]),
+    )
+    return [], cut
+
+
+def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result:
+    caps = caps_from_env()
+    store = Store(ctx, ws)
+    store.create()
+    with store.lock():
+        rec = take_locked(store, caps, "on demand", label)
+    size = human(rec["bytes"])
+    if rec["partial"]:
+        verdict = (
+            f"snapshot {rec['id']} taken (partial): {rec['files']} files, {size};"
+            f" excluded {len(rec['excluded'])} files, {human(rec['excluded_bytes'])} — see below"
+        )
+    else:
+        verdict = f"snapshot {rec['id']} taken: {rec['files']} files, {size} (complete)"
+    lines = [
+        f"excluded: {x['path']} ({human(x['size'])}) — {x['reason']}"
+        for x in sorted(rec["excluded"], key=lambda x: (-x["size"], x["path"]))
+    ] + raise_lines(rec, caps)
+    shown, cut = cut_or_lines(ctx, store, "snapshot", lines)
+    data = {
+        k: rec[k]
+        for k in (
+            "id",
+            "reason",
+            "label",
+            "files",
+            "links",
+            "dirs",
+            "bytes",
+            "partial",
+            "excluded",
+            "excluded_bytes",
+        )
+    }
+    data["store"] = str(store.path)
+    return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
+
+
+def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
+    recs = list(reversed(Store(ctx, ws).records()))
+    lines, items = [], []
+    for r in recs:
+        whole = "partial" if r["partial"] else "complete"
+        line = f"{r['id']}  {r['reason']}  {r['files']} files  {human(r['bytes'])}  {whole}"
+        if r.get("label"):
+            line += f'  "{r["label"]}"'
+        item = {k: r[k] for k in ("id", "reason", "label", "files", "bytes", "partial")}
+        if ctx.verbose:
+            line += f"  taken {r['taken_at']}"
+            item["taken_at"] = r["taken_at"]
+        lines.append(line)
+        items.append(item)
+    return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data={"snapshots": items})
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    # Optional to argparse, required by main() only in shape: a required positional would make argparse
+    # refuse --help and --agent-info before agentio handles them (the adele pattern).
+    p.add_argument("verb", nargs="?", choices=("list",), metavar="list")
+    p.add_argument("-m", dest="label", metavar="TEXT", help="a short label for the snapshot")
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.verb == "list" and args.label is not None:
+        raise agentio.UsageError("-m labels a new snapshot; snapshot list takes none", "run snapshot -m TEXT")
+    if args.verb != "list":
+        caps_from_env()  # a bad cap value is a usage error before anything is written
+    ws = find_workspace()
+    scope = "list" if args.verb == "list" else "take"
+    try:
+        check_workspace(ws, ctx, "snapshot")
+        return cmd_list(ctx, ws) if args.verb == "list" else cmd_take(ctx, ws, args.label)
+    except Outcome as o:
+        return o.result(ws, scope)
+
+
+# ── the plan (data-model § Plan) ──────────────────────────────────────────────────────────────
+
+Change = dict[str, str]  # {change: restore|remove|keep, kind, path, why?}
+
+
+def _protected(rel: str, excluded: set[str]) -> bool:
+    parts = rel.split("/")
+    return any("/".join(parts[:i]) in excluded for i in range(1, len(parts) + 1))
+
+
+def make_plan(ws: str, rec: dict[str, Any]) -> list[Change]:
+    current, git_holders = walk(ws, 0)
+    snap = {e["path"]: e for e in rec["entries"]}
+    excluded = {x["path"] for x in rec["excluded"]}
+    plan: list[Change] = []
+    for rel, s in snap.items():
+        c = current.get(rel)
+        if c is None:
+            plan.append({"change": "restore", "kind": s["kind"], "path": rel})
+        elif c["kind"] != s["kind"]:
+            plan.append(
+                {"change": "remove", "kind": c["kind"] if c["kind"] != "other" else "file", "path": rel}
+            )
+            plan.append({"change": "restore", "kind": s["kind"], "path": rel})
+        elif s["kind"] == "file":
+            if c["mode"] != s["mode"] or c["size"] != s["size"] or _sha_or_none(ws, rel) != s["sha256"]:
+                plan.append({"change": "restore", "kind": "file", "path": rel})
+        elif s["kind"] == "link":
+            if c["target"] != s["target"]:
+                plan.append({"change": "restore", "kind": "link", "path": rel})
+        elif c["mode"] != s["mode"]:
+            plan.append({"change": "restore", "kind": "dir", "path": rel})
+    holds: dict[str, str] = {}
+    for holder in git_holders:
+        _mark_holders(holds, holder, ".git")
+    for rel in excluded:
+        _mark_holders(holds, rel.rsplit("/", 1)[0] if "/" in rel else "", "excluded files")
+    for rel, c in current.items():
+        if rel in snap or _protected(rel, excluded):
+            continue
+        if c["kind"] == "dir" and rel in holds:
+            plan.append({"change": "keep", "kind": "dir", "path": rel, "why": holds[rel]})
+        else:
+            plan.append(
+                {"change": "remove", "kind": c["kind"] if c["kind"] != "other" else "file", "path": rel}
+            )
+    order = {"remove": 0, "keep": 1, "restore": 2}
+    plan.sort(key=lambda ch: (ch["path"], order[ch["change"]]))
+    return plan
+
+
+def _sha_or_none(ws: str, rel: str) -> str | None:
+    try:
+        return file_sha(os.path.join(ws, rel))
+    except OSError:
+        return None  # unreadable now: it differs from what was captured, so it is restored
+
+
+def _mark_holders(holds: dict[str, str], rel_dir: str, what: str) -> None:
+    parts = rel_dir.split("/") if rel_dir else []
+    for i in range(len(parts), 0, -1):
+        holds.setdefault("/".join(parts[:i]), what)
+
+
+def plan_line(ch: Change) -> str:
+    if ch["change"] == "keep":
+        return f"keep dir {ch['path']} (holds {ch['why']})"
+    return f"{ch['change']} {ch['kind']} {ch['path']}"
+
+
+def counts(plan: list[Change]) -> tuple[int, int]:
+    return sum(ch["change"] == "restore" for ch in plan), sum(ch["change"] == "remove" for ch in plan)
+
+
+# ── applying it (FR-19, FR-20; research R3) ───────────────────────────────────────────────────
+
+
+def _parent_checked(ws: str, rel: str) -> str:
+    """The real directory `rel` goes into: every component from the workspace down must be a directory."""
+    check_rel(rel)
+    path = ws
+    for comp in rel.split("/")[:-1]:
+        path = os.path.join(path, comp)
+        st = os.lstat(path)
+        if not stat.S_ISDIR(st.st_mode):
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"refused to write {rel}: {path} is not a real directory",
+                "nothing was written through it; run undo --dry-run to see the plan",
+            )
+    return path
+
+
+def _remove(ws: str, rel: str, kind: str) -> None:
+    parent = _parent_checked(ws, rel)
+    target = os.path.join(parent, rel.rsplit("/", 1)[-1])
+    if kind == "dir":
+        os.rmdir(target)
+    else:
+        os.unlink(target)
+
+
+def _restore(store: Store, ws: str, e: Entry) -> None:
+    rel = e["path"]
+    parent = _parent_checked(ws, rel)
+    name = rel.rsplit("/", 1)[-1]
+    target = os.path.join(parent, name)
+    if e["kind"] == "dir":
+        try:
+            st = os.lstat(target)
+        except FileNotFoundError:
+            os.mkdir(target, 0o700)
+        else:
+            if not stat.S_ISDIR(st.st_mode):
+                raise agentio.ToolError(
+                    agentio.EXIT_FAILURE,
+                    f"refused to replace {rel}: it is not a directory",
+                    "run undo --dry-run",
+                )
+        return  # its mode is set after everything inside it is written
+    tmp = os.path.join(parent, f".{name}.undo-{os.getpid()}.tmp")
+    if e["kind"] == "link":
+        os.symlink(e["target"], tmp)
+    else:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with open(store.object_path(e["sha256"]), "rb") as fin:
+                for block in iter(lambda: fin.read(CHUNK), b""):
+                    os.write(fd, block)
+            os.fchmod(fd, e["mode"])
+        finally:
+            os.close(fd)
+    os.replace(tmp, target)  # rename replaces a symlink at the target, never follows it
+
+
+def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -> None:
+    snap = {e["path"]: e for e in rec["entries"]}
+    removals = [ch for ch in plan if ch["change"] == "remove"]
+    for ch in sorted(removals, key=lambda c: (-c["path"].count("/"), c["path"]), reverse=False):
+        _remove(ws, ch["path"], ch["kind"])
+    restores = [snap[ch["path"]] for ch in plan if ch["change"] == "restore"]
+    for e in sorted(
+        (e for e in restores if e["kind"] == "dir"), key=lambda e: (e["path"].count("/"), e["path"])
+    ):
+        _restore(store, ws, e)
+    for e in sorted((e for e in restores if e["kind"] != "dir"), key=lambda e: e["path"]):
+        _restore(store, ws, e)
+    for e in sorted(
+        (e for e in restores if e["kind"] == "dir"), key=lambda e: (-e["path"].count("/"), e["path"])
+    ):
+        os.chmod(os.path.join(_parent_checked(ws, e["path"]), e["path"].rsplit("/", 1)[-1]), e["mode"])
+
+
+# ── undo (FR-14 to FR-20) ─────────────────────────────────────────────────────────────────────
+
+
+def undo_configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("id", nargs="?", metavar="ID", help="the snapshot to restore (default: the newest)")
+
+
+def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
+    recs = store.records()
+    if raw is not None and not raw.isdigit():
+        raise agentio.UsageError(f"{raw!r} is not a snapshot id", "ids are numbers; see: snapshot list")
+    if not recs:
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            f"no snapshot {raw or ''} for {ws}".replace("  ", " "),
+            "take one with: snapshot",
+        )
+    if raw is None:
+        # The newest snapshot the agent took, not a safety snapshot of an earlier undo: otherwise a
+        # second `undo --yes` would undo the first, and undo would not be idempotent (rule 7). Safety
+        # snapshots stay reachable by id (`undo 2 --yes` undoes an undo).
+        chosen = [r for r in recs if not str(r["reason"]).startswith(SAFETY_PREFIX)]
+        return (chosen or recs)[-1]
+    rec = store.record(int(raw))
+    if rec is None:
+        ids = ", ".join(str(r["id"]) for r in reversed(recs))
+        raise Outcome(agentio.EXIT_NOT_FOUND, f"no snapshot {raw} for {ws}", f"snapshots here: {ids}")
+    return rec
+
+
+def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.id is not None and not args.id.isdigit():
+        raise agentio.UsageError(f"{args.id!r} is not a snapshot id", "ids are numbers; see: snapshot list")
+    ws = find_workspace()
+    try:
+        return _undo(args, ctx, ws)
+    except Outcome as o:
+        return o.result(ws, f"restore {args.id or 'newest'}")
+
+
+def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Result:
+    check_workspace(ws, ctx, "undo")
+    store = Store(ctx, ws)
+    if store.exists():
+        store.check_owner()
+    rec = _choose(store, ws, args.id)
+    ident = rec["id"]
+    scope = f"restore {ident}"
+    if args.dry_run or not args.yes:
+        plan = make_plan(ws, rec)
+        lines = [plan_line(ch) for ch in plan]
+        n_restore, n_remove = counts(plan)
+        if args.dry_run:
+            verdict = (
+                f"dry run: snapshot {ident} — {n_restore} to restore, {n_remove} to remove; nothing changed"
+                if n_restore or n_remove
+                else f"dry run: snapshot {ident} — nothing to change"
+            )
+            data = {"id": ident, "restore": n_restore, "remove": n_remove, "plan": plan}
+            return agentio.Result(ws, scope, verdict, lines=lines, data=data)
+        if not (n_restore or n_remove):
+            return agentio.Result(
+                ws, scope, f"nothing to restore: the workspace matches snapshot {ident}", data={"id": ident}
+            )
+        if ctx.limit > 0 and len(lines) > ctx.limit:
+            more = len(lines) - (ctx.limit - 1)
+            lines = [*lines[: ctx.limit - 1], f"… and {more} more: undo {ident} --dry-run --limit 0"]
+        return agentio.confirm_required(ctx, target=ws, scope=scope, plan=lines)
+    with store.lock():
+        plan = make_plan(ws, rec)
+        n_restore, n_remove = counts(plan)
+        if not (n_restore or n_remove):
+            return agentio.Result(
+                ws, scope, f"nothing to restore: the workspace matches snapshot {ident}", data={"id": ident}
+            )
+        before = take_locked(store, caps_from_env(), f"{SAFETY_PREFIX}{ident}", None)
+        try:
+            apply_plan(store, ws, rec, plan)
+        except agentio.ToolError as e:
+            raise agentio.ToolError(
+                e.code, e.what, f"{e.remediation}; the state before is snapshot {before['id']}"
+            ) from None
+        except OSError as e:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"restore of snapshot {ident} stopped: {e.strerror or e} ({e.filename})",
+                f"the state before is snapshot {before['id']}; undo {before['id']} --yes returns to it",
+            ) from None
+        left = [ch for ch in make_plan(ws, rec) if ch["change"] != "keep"]
+    if left:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"restore of snapshot {ident} left {len(left)} differences;"
+            f" the state before is snapshot {before['id']}",
+            f"undo {before['id']} --yes returns to the state before;"
+            f" undo {ident} --dry-run shows what differs",
+            [plan_line(ch) for ch in left],
+        )
+    partial = " (partial)" if before["partial"] else ""
+    verdict = (
+        f"restored to snapshot {ident}: {n_restore} restored, {n_remove} removed; verified;"
+        f" the state before is snapshot {before['id']}{partial}"
+    )
+    shown, cut = cut_or_lines(ctx, store, "undo", [plan_line(ch) for ch in plan])
+    data = {
+        "id": ident,
+        "restored": n_restore,
+        "removed": n_remove,
+        "verified": True,
+        "before": before["id"],
+        "before_partial": before["partial"],
+    }
+    return agentio.Result(ws, scope, verdict, lines=shown, data=data, cut=cut)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

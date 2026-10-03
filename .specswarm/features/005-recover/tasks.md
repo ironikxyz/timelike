@@ -82,11 +82,11 @@ working on their own files. The tools are written here.
 
 ## Phase 3: The tools
 
-- [ ] T009 [US1][US4][US5] `tools/bin/snapshot`: workspace resolution and refusals; the store (layout,
+- [X] T009 [US1][US4][US5] `tools/bin/snapshot`: workspace resolution and refusals; the store (layout,
   key, lock, `next`, objects written by temp and rename, records); the walk (`.git` skipped, the entry
   cap); exclusions (per-file, special files, unreadable, the size cap's largest-first cut); `snapshot`
   and `snapshot list` per the contract, with `Cut` over the limit on `take`.
-- [ ] T010 [US2][US3] `tools/bin/snapshot`, continued: the planner, the apply (removals deepest first,
+- [X] T010 [US2][US3] `tools/bin/snapshot`, continued: the planner, the apply (removals deepest first,
   directories, files and links by temp and rename with `O_NOFOLLOW`, every parent checked with `lstat`,
   `.git` refused by the helpers themselves), and the verify (re-walk, re-plan).
 - [ ] T011 [US2] `tools/bin/undo`: loads `snapshot` from its own real directory (R8); `undo [ID]`,
