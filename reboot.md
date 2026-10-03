@@ -5,26 +5,52 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-03. **The publish-redaction maintenance cycle is merged into `master` at
-`47d1e62`** (`--no-ff`, parents `3c10d11` + `d8477cc`; the merge tree equals the branch tip). The mentor
-signed it off at `f73ac79` (`../bridge/history.md` 20:03:52Z); `d8477cc` is bookkeeping only (the lane
-addendum, Item 15 closed). Before that, feature 004 was merged at `6bcc1ec` and discharged.
-- **`make scan` now runs the publish deny-list** (`scan/denylist.py`) over the tracked tree at HEAD. The
-  list lives OUTSIDE the repository (`../bridge/publish-denylist.txt`, or `TIMELIKE_PUBLISH_DENYLIST`).
-  **Never copy a pattern or a matched string into a tracked file**, a commit message or a test; refer to
-  entries by id (P1–P7). Run it locally with
-  `git archive HEAD | python3 -I scan/denylist.py --list ../bridge/publish-denylist.txt --expect-files $(git ls-tree -r HEAD --name-only | wc -l)`.
-  This workspace's interactive `grep` is a ugrep wrapper that rejects one entry's syntax; use
-  `/usr/bin/grep`.
-- Approvals are attributed to `ironik.xyz` (operator decision, 2026-10-02).
-- FOR-MENTOR Items 1–15 are closed. Nothing is pushed, and there is no remote. The publishing step
-  (a private history archive, a new public root, a public commit identity) is the operator's, attended.
+**Snapshot:** 2026-10-03, before a context clear. **This repository is public**
+(`ironikxyz/timelike`). `master` is the public lineage and tracks `public/main`:
+- `4662060` is **the first public commit**: one root, whose tree is `7e050fd`'s (`f1de497…`). It is
+  pushed to `public/main`.
+- `81fe8f3` (and this commit) are the cutover bookkeeping: FOR-MENTOR Item 16, the cycle report
+  `.specswarm/maintenance/publish-cutover/cycle-report.md`, and **`CLAUDE.md` rule 5, the push rule**.
+  **They are not pushed.** They wait for the mentor's discharge **and** the operator's OK.
+- The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`). It holds every hash cited in
+  `bridge/`, and it is also in the private, closed `timelike-history`. The old local branches are
+  unchanged. Before the cutover, the publish redaction merged at `47d1e62` and feature 004 at `6bcc1ec`;
+  both are discharged.
+- Remotes: `public` (push and fetch); `history` (fetch-only, push URL `no-push`).
+- Commit identity, this repository only: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>`.
+- FOR-MENTOR Items 1–15 are closed. **Item 16 is open**, for the mentor's independent check of
+  `public/main` (tree, count, deny-list over every object).
 
 ## Next actions
 
-1. Wait for the mentor's discharge and the next send (`../bridge/history.md`, `../bridge/sends/`).
-2. Next in line: sends 07 s0, then 05 s0; 12 slice 1 carries Item 14's (b).
+1. Read the bridge tail (`../bridge/history.md`) for the mentor's check and discharge of the cutover.
+   **Push nothing** until the mentor has discharged it **and** the operator says to push (rule 5).
+   Then: the deny-list PASS with the list read; `git log public/main..master --format='%an %ae %cn %ce'`
+   shows only the identity; `git push` (upstream; never force); close Item 16 with the push output.
+2. Then the next send: 07 s0, then 05 s0; 12 slice 1 carries Item 14's (b). New branches start from
+   this `master`.
 3. 001's spec is UNAUDITED at revision 10 until its next modify cycle.
+
+## Publishing recipes (2026-10-03)
+
+- **The deny-list rule:** never write a pattern or a matched string into a tracked file, a commit
+  message or a test. Refer to entries as P1–P7.
+- **The tree check:**
+  `git archive HEAD | python3 -I scan/denylist.py --list ../bridge/publish-denylist.txt --expect-files $(git ls-tree -r HEAD --name-only | wc -l)`.
+  Never put two `git write-tree` calls on either side of one pipe: they race for `index.lock`.
+- **The interactive `grep` here is a ugrep wrapper**, which rejects P2's syntax. In scripts, use
+  `/usr/bin/grep` (GNU). `scan/denylist.py` calls `grep` from PATH, which is GNU here and in the image.
+- **The object scan before a push** (every object, not only files). For each `sha` in
+  `git rev-list --objects <rev>`, write `git cat-file -p <sha>` to a scratch dir. Also write the path
+  names, the second field of `git rev-list --objects`. Then, per id,
+  `{ /usr/bin/grep -rlaiE -e "$re" DIR || [ $? -eq 1 ]; } | wc -l`. The `|| [ $? -eq 1 ]` matters:
+  under `pipefail`, grep's "no match" exit 1 otherwise stops the script silently. End by naming the
+  ids checked. For a control, the same over `archive/pre-publish` finds P1, P2, P6 and P7.
+- **The push:** a throwaway `GIT_ASKPASS` script in the scratchpad (mode 700) answers `Username*` with
+  `x-access-token`, and anything else with `GITHUB_IRONICXYZ_PAT` read from `~/projects/ironik.xyz/.env`.
+  Run `GIT_ASKPASS=<script> GIT_TERMINAL_PROMPT=0 git -c credential.helper= push …`, then delete the
+  script, and check the output holds no token before showing it. Never put the token in a URL, an
+  argument or printed output.
 
 ## Watch items (the mentor tracks them)
 
@@ -386,4 +412,4 @@ follow-up did.
 | Scan gate | `scan/scan.sh`, `scan/evaluate.py`, `scan/baseline/*.json` |
 | Governance | `.specswarm/constitution.md` (1.4.2), `tech-stack.md`, `quality-standards.md`, all `[2..10]` (audited at `cb943d3`) |
 | Metrics | `.specswarm/metrics.json` (`003`: plugin score unknown; project figures beside it). Scan baselines `scan/baseline/timelike-{agent,vanilla,bench-driver}.json`, all reviewed 2026-10-01 (80/79/51 entries after `09e2c0b`) |
-| Register to mentor | `FOR-MENTOR.md` (Items 1–13 closed) |
+| Register to mentor | `FOR-MENTOR.md` (Items 1–15 closed; 16 open) |
