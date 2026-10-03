@@ -435,7 +435,7 @@ nothing outside `.specswarm/` changes, so there is no Docker lane (send § 2).
   `full` mode (revision 10's criteria byte-identical to revision 9's, so removals are visible); write
   `audited_against` in `spec.md` frontmatter and one `full` row in `audit-log.md`. Never touch
   `prompt_revision`, `discovery_revision` or `source_prompt`.
-- [ ] T081 Cycle report § Cycle 7 (the send's block), citing the mentor's lane at `f73ac79` for the 11
+- [X] T081 Cycle report § Cycle 7 (the send's block), citing the mentor's lane at `f73ac79` for the 11
   automated criteria; the deny-list over the tree reads `pass` with the list read. Implement step 10
   recorded as the plugin reports it.
 

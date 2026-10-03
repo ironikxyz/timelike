@@ -904,3 +904,4 @@ FLAGGED: step-10 unit-test and coverage reasons re-run in the plugin's "on this 
 ABSENT: no host lane, lint or coverage (nothing outside `.specswarm/` changed); no Docker lane (send § 2); no demo_points_reached; no Group A fields (no marker on this path); no ship or merge (they wait for sign-off, and ship for a 2.27.0 session)
 ABSENT: the two contract observations (rule 8 unchecked for grant clients; `mutating` with `grant_envelope` not forbidden) are reported, not built
 Verification: all 13 citations in § Cycle 7 match exactly one line of the send (`grep -cF` = 1); no local path in the added text; deny-list pass before commit
+SCOPE: in (1 changed files)
