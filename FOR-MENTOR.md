@@ -847,3 +847,26 @@ rule 3's order has no slot for.
   line stays last. `count`, `shown` and `truncated.omitted_lines` stay consistent (in hits).
 - **Q3: open, with plan.** The mentor recommends (a), JSON follows text: a line longer than `COLUMNS` is
   cut in JSON too, and its full length is carried as data. Not built until plan answers.
+
+## Item 19 — Feature 04 slice 0 (`007-announcements-discovery`): the workspace part of SC-1, narrowed by the send's seam (not blocking)
+
+**Status:** open. Raised 2026-10-04 in dispatch batch `20261004-183704` (send
+`bridge/sends/04-rev1-20261004-183704.md`), on `007-announcements-discovery`.
+
+**What disagrees.** The criterion reads: *"…is present in each supported harness's user-level context
+location **and in the workspace's agent context file when none exists**, without overwriting an existing
+one"*. The send's seam 1 reads: *"Rule 10 (revision 11) says never write inside the workspace. Write at
+the user level in the image… Writing into a project's files would be a tracked change the operator never
+asked for."*
+
+**What was built (spec D-1, FR-7):** user level only, at Claude Code's, Codex CLI's and OpenCode's
+user-level files. The workspace's `CLAUDE.md` / `AGENTS.md` are never created or changed. SC-1's test
+asserts the workspace is untouched, so the narrowing shows in the result.
+
+**Why not a pause:** the seam is an explicit instruction for this batch, which gives the decision an
+informed basis (medium confidence). Nothing else in 04 depends on it.
+
+**For plan (route: plan):** either amend the criterion to the user level (the seam's reading), or say the
+workspace file is wanted when absent, and on what terms against rule 10. Then a later cycle builds it.
+Revision 11's rule 10 speaks of *state* locations. Whether a context file counts as state is the
+question underneath.
