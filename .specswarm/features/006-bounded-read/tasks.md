@@ -52,7 +52,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 - [X] T008 [P] [US1, US2] `tests/unit/test_view.py`, from the contract: window rules, the colon split,
   clipping and usage errors, the cut's figures and `more:` (including a window ending at the file's end),
   JSON `next == truncated.more`, binary types, an empty file, decoding and escape counts, the event.
-- [ ] T009 [P] [US3, US4] `tests/unit/test_search.py`, from the contract: the gitignore matcher's rules
+- [X] T009 [P] [US3, US4] `tests/unit/test_search.py`, from the contract: the gitignore matcher's rules
   (negation, anchoring, `**`, directory-only, nested files, `info/exclude`, `--no-ignore`), grouping and
   order, the cap and `-m`, the narrowing choice, the saved list and `more:`, zero and strict, the time
   limit (exit 124), large and binary skips, `-i` and `-F`, a bad pattern, a missing path.

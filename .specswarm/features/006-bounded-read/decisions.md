@@ -104,3 +104,4 @@ FLAGGED: the 262-hit test compared its section labels with `expected_groups(capp
 ASSUMED: .gitignore files count in files_searched (hidden files are searched); a pruned directory counts as one ignored entry; symlinked files are not followed (confidence: medium)
 ABSENT: the exact zero-match verdict tail; whether a root .gitignore above a searched subdirectory applies (T011 applies it, as git does)
 Verification: 92 collected; ruff, format and mypy strict clean
+SCOPE: in (1 changed files)
