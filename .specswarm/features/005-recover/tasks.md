@@ -128,3 +128,26 @@ The tests come first, from the contract, by delegates who do not see the code. T
 against the contract alone. T012 and T013 reconcile the two, and any disagreement is decided by the
 contract, not by whichever was written last. MVP is US1 + US2 (take and undo); US3–US5 are properties of
 the same code, pinned by their own tests.
+
+## Phase 6: Cycle 2 — revision 11 recorded; plan's store conditions (send `bridge/sends/07-rev11-20261004-030207.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 2): PASSED — plan.md § Tech Stack Compliance Report (Cycle 2) has no
+conflict or prohibition; stdlib Python only -->
+
+The governance audit to revision 11 and the CVE-2026-95619 baselines were done on `master` before this
+phase (`586e298`, `f33c806`) and merged in (`fc5b97d`), as the send orders. They are recorded in the cycle
+report, not as tasks here.
+
+- [ ] T016 [US4] `tools/bin/snapshot`: the size cap counts bytes new to the store, after deduplication
+  (F001, FR-6), and "taken" follows a restorability check, applied to undo's safety snapshot too (F002,
+  FR-9). Contract, data model, spec FR-6, FR-9 and FR-23 annotations, README. Units: 6 new, 1 changed;
+  SC-4's e2e raise value.
+- [ ] T017 Spec § Revision 11 (the constraint, declared; two slice-1 criteria carried, not built), D-5
+  and D-7 "confirmed by discovery revision 11", out-of-scope line. FOR-MENTOR Item 17 closed.
+- [ ] T018 Provenance (modify Step 9): a `none (deferred)` row in `audit-log.md`. The `full` append
+  (2–11) waits for the mentor's Docker lane to re-establish slice 0 on this cycle's commit, as in 001
+  cycles 5 and 6.
+- [ ] T019 Host lane (ruff, mypy, shellcheck, `make test-host`, coverage for `snapshot`), the e2e stand-in,
+  and the cycle report § Cycle 2 (the send's block). Implement step 10 as the plugin reports it.
+
+**Order:** T016 → T017 → T018 → T019.
