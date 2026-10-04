@@ -144,7 +144,7 @@ report, not as tasks here.
   SC-4's e2e raise value.
 - [X] T017 Spec § Revision 11 (the constraint, declared; two slice-1 criteria carried, not built), D-5
   and D-7 "confirmed by discovery revision 11", out-of-scope line. FOR-MENTOR Item 17 closed.
-- [ ] T018 Provenance (modify Step 9): a `none (deferred)` row in `audit-log.md`. The `full` append
+- [X] T018 Provenance (modify Step 9): a `none (deferred)` row in `audit-log.md`. The `full` append
   (2–11) waits for the mentor's Docker lane to re-establish slice 0 on this cycle's commit, as in 001
   cycles 5 and 6.
 - [ ] T019 Host lane (ruff, mypy, shellcheck, `make test-host`, coverage for `snapshot`), the e2e stand-in,

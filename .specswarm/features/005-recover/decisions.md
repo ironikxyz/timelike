@@ -194,3 +194,4 @@ ASSUMED: the mode will be `full` (2–11): removals are visible (the archived re
 FLAGGED: nothing is appended now — this cycle changed code that slice 0's criteria rest on, so the append waits for the mentor's Docker lane, as in 001 cycles 5 and 6 (confidence: high)
 ABSENT: prompt_revision, discovery_revision and source_prompt untouched; spec frontmatter unchanged
 Verification: audit-log.md created with the plugin's header and one `none (deferred)` row
+SCOPE: none — no files outside the feature's artifacts changed
