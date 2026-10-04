@@ -159,3 +159,4 @@ ASSUMED: the stand-in also exports TIMELIKE_BIN_DIRS at its tool directory, so t
 FLAGGED: one e2e expectation corrected: SC-2's missing-file JSON expected `lines == []`, where D-10 (as in 005) puts the `do instead:` line in `lines` in both modes and the units pin it so for `search --strict` (confidence: high)
 ABSENT: nothing here is image evidence: no /opt/timelike/bin, no REVISION stamp, no /opt/timelike/python, host Python 3.12
 Verification: 006's 60 cells: 52 ok; the 8 not ok are image-only (4 `type -a` cells pin /opt/timelike/bin; 4 `timelike` list cells need /opt/timelike/REVISION). 005 and 003 after T015's agentio change: 60 of 70 ok; the 10 not ok are image-only (6 `type -a`, 4 `run` cells whose fixture calls /opt/timelike/python directly), none from the change
+SCOPE: in (1 changed files)
