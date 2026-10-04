@@ -128,3 +128,14 @@ ASSUMED: the file is streamed once (line count, bytes and the window's lines), s
 ABSENT: no anchor column (slice 1); the layout leaves its place between the marker and the text (D-9)
 Verification: 68 units pass; ruff, format, mypy strict clean; the view e2e files through the host stand-in pass
 SCOPE: in (1 changed files)
+
+### T011: tools/bin/search
+**Started:** 2026-10-04T09:45+00:00 | **Completed:** 2026-10-04T10:05+00:00
+
+INHERITED: the contract § search (Q2 (a)), research R1, R2, R6; T015's footer; T009's units (confidence: high)
+FLAGGED: the ignore rules include every `.gitignore` from the enclosing repository's root down to the search root, as git applies them, over only the files met in the walk (the contract said "in the walk"); amended in T012 (confidence: high)
+FLAGGED: the body is kept within --limit by search itself (fewer hits shown, still a hit-list cut); otherwise agentio's generic cap would cut it with a re-run as `more:`, which the contract forbids (confidence: high)
+FLAGGED: uncapped output shows file labels as lines in text only; JSON `lines` stay the hit lines, matching T009 (confidence: medium)
+ASSUMED: symlinks met in the walk are skipped (neither followed nor counted); a pruned ignored directory counts as one ignored entry; --timeout takes decimals, 0 = no limit (confidence: medium)
+ABSENT: no ripgrep (D-8); no context lines around hits; no -w
+Verification: 92 units pass; ruff, format, mypy strict clean; the search e2e files through the host stand-in pass
