@@ -5,27 +5,51 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~10:50Z. Feature 05 slice 0 is **built on `006-bounded-read`** (session loaded
-specswarm 2.35.0, `4ff8dcb`) and **waits for the mentor's Docker lane. Make no commit until the mentor
-says the lane has ended** (lane 005-c failed on a mid-lane commit). **This repository is public**:
+**Snapshot:** 2026-10-04 ~18:00Z, before a clear. Feature 05 slice 0 is built on `006-bounded-read`
+(session loaded specswarm 2.35.0, `4ff8dcb`). **The mentor's lane 006-a has ended: PASSED at
+`99df450`** (`../bridge/history.md` 2026-10-04T10:24:00Z). Nothing else is in flight. **This repository
+is public**:
 - **`public/main` = `fb4f7fb`.** Local `master` = `e27075b`: `22eb8f9` (`reboot.md`), then the governance
   audit to discovery revision 12 (all three files `[2..12]`, no change needed). Unpushed (rule 5).
-- **`006-bounded-read`** (HEAD = this commit): `view` and `search` (T001–T016, all ticked), send
-  `bridge/sends/05-rev1-20261004-085517.md` (re-send at discovery 12; specified from `…-061518`, not
-  re-specified). It changes `tools/agentio/agentio.py` for every tool (revision 12: JSON `lines` cut at
-  COLUMNS with `cut_lines`; `Result.footer`; `Context.columns`) and 001's `contracts/output-contract.md`
-  (the rule-13 sentence). Host lane: 1055 passed; coverage 94%; stand-in 52/60 (8 image-only).
+- **`006-bounded-read`** (HEAD = this commit; `99df450` is the commit the lane tested): `view` and
+  `search` (T001–T016, all ticked), send `bridge/sends/05-rev1-20261004-085517.md` (re-send at discovery
+  12; specified from `…-061518`, not re-specified). It changes `tools/agentio/agentio.py` for every tool
+  (revision 12: JSON `lines` cut at COLUMNS with `cut_lines`; `Result.footer`; `Context.columns`) and
+  001's `contracts/output-contract.md` (the rule-13 sentence).
 - FOR-MENTOR Item 18: Q1 and Q2 closed (a); Q3 answered by discovery revision 12. Items 1–17 closed.
 - Remotes: `public` (push and fetch); `history` (fetch-only). Identity: `ironik.xyz
   <262467776+BotBauble@users.noreply.github.com>`. Pre-publication lineage: `archive/pre-publish`.
 
 ## Next actions
 
-1. **The mentor's lane on `006-bounded-read`** (commit nothing during it). Green: write a § Cycle 1
-   addendum citing it per criterion. Then the D5 capture and interview, sign-off, ship under 2.35.0
-   (the 2.32.0 recipe below; quote the checkout path as `<repo>/`), a hand merge by the mentor, and a push
-   on the operator's OK.
-2. Later: 001's spec records revisions 11 and 12 at its next modify (no criterion changed); 07 slice 1
+1. **Write `### Cycle 1 addendum — the mentor's Docker lane at 99df450`** in
+   `.specswarm/features/006-bounded-read/cycle-report.md` (append-only; Cycle 1's text stays as written).
+   The evidence, read it yourself before citing (never from this note alone):
+   - `../bridge/history.md` 2026-10-04T10:24:00Z, `lane | 006-a`: `make test` PASSED, e2e **343/343**
+     (283 earlier + 60 new; 006's five files 10+14+8+12+16), units 1054 + 1 skipped, Go pass; `make scan`
+     PASS ×4; deny-list PASS (7 entries, 291 files). The 10:24:00Z `reconcile` entry read § Cycle 1.
+   - `tests/out/summary.json` (`git_sha` `99df450…`, exit 0) and `tests/out/e2e.tap`: match each 006
+     file's `@test` names to `ok` lines by name (the 005 addendum's python recipe), per file.
+   - `99df450..HEAD` is `reboot.md` only (check with `git diff --stat`); say so, as 005's addendum did.
+   - criteria_reestablished, superseding Cycle 1's `unconfirmed` for the four automated ones, cited
+     exactly as § Cycle 1 has them (backticks included; `grep -cF` = 1 against the send):
+     `05 · "with right-aligned line numbers, a header naming the file and range out of 412"`,
+     `05 · "and a missing file (exit 3) each behave as specified; a binary file prints its type and size"`,
+     `05 · "shows 50, grouped by file, with a footer stating the 212 omitted and a concrete way to narrow"`,
+     `05 · "and exits 1 only in strict mode _(traces to: P2)_"` → `executed [<file>, n/n, lane 006-a at 99df450]`;
+     `05 · "each result ending with the exact command to narrow or continue _(traces to: D5)_"` stays
+     **unconfirmed** until the mentor's D5 capture and interview (history says "Next: the D5 capture").
+   - also note: every earlier feature's e2e held after the agentio JSON cut (283/283 of them), and the
+     image-only cells the host stand-in could not run (type -a, timelike's list, run's) passed in the image.
+   - provenance: **no change**. `audited_against` stays `[1]`: the spec was generated from prompt revision
+     1, and no later prompt revision exists. No audit-log row is needed.
+   - commit as `[006] cycle report § Cycle 1 addendum: …`, deny-list gated on `: PASS`. Check the history
+     tail first: commit nothing while a lane runs.
+2. **Then:** the mentor's D5 capture and interview (record it as `observed by the operator` only from a
+   history entry and its transcript), sign-off, ship under 2.35.0 (the 2.32.0 recipe below: unset
+   `FEATURE_DIR`, quote the checkout path as `<repo>/`), a hand merge by the mentor, a push on the
+   operator's OK.
+3. Later: 001's spec records revisions 11 and 12 at its next modify (no criterion changed); 07 slice 1
    carries Q2 (state root); 12 slice 1 carries Item 14's (b); 05 slice 1 (overview, anchors).
 
 **006 helpers** (scratchpad, gone after a clear): `commit-006.sh` / `scope-tick-006.sh` (one task commit,
