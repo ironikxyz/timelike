@@ -142,7 +142,7 @@ report, not as tasks here.
   (F001, FR-6), and "taken" follows a restorability check, applied to undo's safety snapshot too (F002,
   FR-9). Contract, data model, spec FR-6, FR-9 and FR-23 annotations, README. Units: 6 new, 1 changed;
   SC-4's e2e raise value.
-- [ ] T017 Spec § Revision 11 (the constraint, declared; two slice-1 criteria carried, not built), D-5
+- [X] T017 Spec § Revision 11 (the constraint, declared; two slice-1 criteria carried, not built), D-5
   and D-7 "confirmed by discovery revision 11", out-of-scope line. FOR-MENTOR Item 17 closed.
 - [ ] T018 Provenance (modify Step 9): a `none (deferred)` row in `audit-log.md`. The `full` append
   (2–11) waits for the mentor's Docker lane to re-establish slice 0 on this cycle's commit, as in 001

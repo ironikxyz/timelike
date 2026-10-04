@@ -184,3 +184,4 @@ ASSUMED: "carried" means recorded in the spec with their slice marker and not bu
 FLAGGED: Item 17's decisions 1, 2, 3 and 6 had no separate ruling; the item closes on the send's instruction with those standing as built, said in the item (confidence: medium)
 ABSENT: no criterion text of slice 0 changed; SC-1 to SC-5 untouched
 Verification: the constraint and both criteria are quoted from the send word for word (checked by substring match with whitespace normalised, since the spec wraps lines)
+SCOPE: out — FOR-MENTOR.md (1 of 1 changed files) (task has FLAGGED: yes)
