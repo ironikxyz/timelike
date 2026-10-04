@@ -182,12 +182,12 @@ Text:
 ```
 view: DIR [overview]
 verdict: F files, D dirs, S under DIR; collapsed N (dependency 1, vcs 1); I ignored files not listed
+.git/  25 files, 9 dirs, 48.0 KiB; vcs — expand: view .git/
+node_modules/  10000 files, 1 dir, 39.1 MiB; dependency — expand: view node_modules/
 src/
-  main.py  2.1 KiB
   util/
     io.py  812 B
-node_modules/  10000 files, 1 dir, 39.1 MiB; dependency — expand: view node_modules/
-.git/  25 files, 9 dirs, 48.0 KiB; vcs — expand: view .git/
+  main.py  2.1 KiB
 README.md  1.2 KiB
 ```
 - **Order and indentation:** directories before files, each group sorted by name (Python's `str` order).
@@ -227,3 +227,19 @@ view --anchors FILE[:A-B|:N]
 
 `N matches in M files (searched K files)` uses the singular for 1: `1 match`, `1 file`,
 `searched 1 file`. The other verdict forms are unchanged.
+
+### Settled at implementation (gaps the unit delegate found)
+
+- **Totals** in the verdict and JSON (`files`, `dirs`, `bytes`) count everything below DIR that is
+  listed or collapsed, collapsed directories' contents included. Ignored *files* are not in them: they
+  are counted separately (`I ignored files not listed`). Files inside an ignored *directory* are in that
+  directory's collapsed line and in the totals, not in `I`.
+- **JSON `collapsed.path`** is the path as the expand command types it (relative to the current
+  directory when below it), without the trailing `/`.
+- **Symlinks** sort among the files, by name.
+- **`U unreadable`** is the verdict's last clause.
+- **Kind collapse** (`vcs`, `dependency`, `build`) applies under `--no-ignore` and `--limit 0` too.
+  `--no-ignore` removes only the `ignored` kind, and `--limit 0` only the `budget` kind.
+- **The over-budget cut** is agentio's generic one. Its `more` is the same command with `--limit 0`
+  appended.
+

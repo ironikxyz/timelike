@@ -123,7 +123,7 @@ commits per task, and the scope is the files each task names.
 
 ### Tests first (from the contract; delegated, disjoint files)
 
-- [ ] T017 [P] [US6] [US7] [US8] `tests/unit/test_view_slice1.py`:
+- [X] T017 [P] [US6] [US7] [US8] `tests/unit/test_view_slice1.py`:
   - the overview: order, indentation, sizes, symlinks, ignore rules, the five collapse kinds, the
     breadth-first fit, the 100,000 cap (patched lower), the verdict clauses, JSON, `--no-ignore`,
     `--limit 0`, the over-budget cut, a missing directory;

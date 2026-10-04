@@ -224,3 +224,14 @@ ASSUMED: the README's "view and search" section is where agents and operators re
 ABSENT: "The edit tool accepts N:anchor" describes 06 slice 1, which is not built in this batch (08 is 06's slice 0) — worded as the form it accepts, stated in this feature's contract
 Verification: the example lines match the tools' output on the T019/T020 fixtures; deny-list PASS
 SCOPE: in (1 changed files)
+
+### T017: tests/unit/test_view_slice1.py (delegated)
+**Started:** after cd4e2b9 (19:18:44Z; the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T19:27:38Z
+
+INHERITED: contracts/view-search-cli.md § Slice 1, spec FR-24 to FR-38 — from the Cycle 2 spec (confidence: high)
+FLAGGED: test-first shown by the delegate after the fact — run against an export of cd4e2b9 (before T019–T021): 60 failed for the missing feature (51 overview/anchors, 4 plurals), 3 passed correctly (missing directory, unchanged layout, an already-right plural); all 63 pass now (confidence: high)
+FLAGGED: six contract gaps the delegate found (totals, collapsed.path, symlink order, the unreadable clause, kind collapse under --no-ignore and --limit 0, the cut's more), and the example's order breaking its own sort rule — settled in the contract as built (confidence: high)
+ASSUMED (delegate): the 100,000 count cap is untested — the contract offers no lowering mechanism (confidence: high)
+ABSENT: the cap, as above; it is recorded under not_verified
+Verification: reviewed; 63 passed; ruff, format and mypy clean on the file
+SCOPE: in (1 changed files)
