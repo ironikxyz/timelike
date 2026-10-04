@@ -18,6 +18,7 @@ import contextlib
 import ctypes
 import errno
 import os
+import re
 import resource
 import shlex
 import signal
@@ -46,6 +47,9 @@ FREEZE_ROUNDS = 50
 POLL_S = 0.05
 SETTLE_S = 0.1  # after the command exits, let what it backgrounded finish forking before looking (R5)
 CGROUP_ENV = "TIMELIKE_CGROUP_ROOT"  # slice 1: where memory.events, .max and .peak are read (R16)
+DISK_FULL_ENV = "TIMELIKE_RUN_DISK_FULL_BYTES"
+DISK_FULL_BYTES = 1 << 20  # fewer free bytes than this, or no free inodes, is a full filesystem (R17)
+ENOSPC_MESSAGES = ("No space left on device", "Disk quota exceeded")  # strerror(ENOSPC), (EDQUOT)
 
 TOOL = agentio.Tool(
     name="run",
@@ -103,6 +107,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if not command:
         raise agentio.UsageError("no command given", "write the command after run, e.g. run make test")
     limit, source = resolve_timeout(args.timeout)
+    full_bytes = resolve_disk_full()
     log = open_log(ctx)
     set_subreaper()
     cgroup = cgroup_dir()
@@ -112,6 +117,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     outcome = execute(command, log, limit, source)
     duration = time.monotonic() - started
     memory = memory_reading(outcome, cgroup, kills_before)
+    disk = disk_reading(outcome, log, ctx.scratch(), full_bytes)
 
     count, lines, cut = display(log, ctx.limit)
     verdict = f"exit {outcome.exit} ({outcome.words}) · {duration:.1f} s · {count} lines · log {log}"
@@ -142,6 +148,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
             "detached": [{"pid": pid, "name": name} for pid, name in outcome.detached],
             "not_stopped": [{"pid": pid, "name": name} for pid, name in outcome.not_stopped],
             "memory": memory,
+            "disk": disk,
         },
     )
 
@@ -189,9 +196,16 @@ def open_log(ctx: agentio.Context) -> Path:
         return path
     except OSError as e:
         where = e.filename or str(ctx.scratch_root)
+        room = ""  # FR-32: say how much room the scratch filesystem has, when it can be read
+        probe = Path(where)
+        while not probe.exists() and probe != probe.parent:
+            probe = probe.parent
+        fs = filesystem("scratch", probe, DISK_FULL_BYTES)
+        if fs["free_bytes"] is not None:
+            room = f" ({fs['mount'] or probe} has {size(fs['free_bytes'])} free)"
         raise agentio.ToolError(
             agentio.EXIT_FAILURE,
-            f"cannot create the log under {where}: {e.strerror or e}",
+            f"cannot create the log under {where}: {e.strerror or e}{room}",
             "free or fix the scratch space (TIMELIKE_SCRATCH_ROOT); the command was not run",
         ) from None
 
@@ -424,6 +438,119 @@ def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[st
     elif rose:
         outcome.notes.append(f"OOM kill during the command ({limit})")
     return data
+
+
+# ── why the command died: disk (slice 1; spec FR-29 to FR-32, research R17) ───────────────────────
+
+
+def resolve_disk_full() -> int:
+    raw = os.environ.get(DISK_FULL_ENV)
+    if raw is None or raw == "":
+        return DISK_FULL_BYTES
+    if not raw.isdigit():
+        raise agentio.UsageError(
+            f"{DISK_FULL_ENV}: {raw!r} is not a number of bytes",
+            f"set {DISK_FULL_ENV} to a whole number of bytes, e.g. {DISK_FULL_BYTES}, or unset it",
+        )
+    return int(raw)
+
+
+def mount_of(path: Path) -> str | None:
+    """The longest mount point in /proc/self/mountinfo (field 5, octal escapes decoded) holding path."""
+    try:
+        real = os.path.realpath(path)
+        lines = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        return None
+    best: str | None = None
+    for line in lines:
+        fields = line.split(" ")
+        if len(fields) < 5:
+            continue
+        point = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), fields[4])
+        if (real == point or real.startswith(point.rstrip("/") + "/")) and (
+            best is None or len(point) > len(best)
+        ):
+            best = point
+    return best
+
+
+def filesystem(role: str, path: Path, full_bytes: int) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "role": role,
+        "path": str(path),
+        "mount": mount_of(path),
+        "free_bytes": None,
+        "free_inodes": None,
+        "full": False,
+    }
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return entry
+    free = st.f_bavail * st.f_frsize
+    inodes = st.f_favail if st.f_files else None  # 0 files in total: the filesystem has no inode limit
+    entry.update(free_bytes=free, free_inodes=inodes, full=free < full_bytes or inodes == 0)
+    return entry
+
+
+def log_mentions(log: Path) -> str | None:
+    """The first ENOSPC message in the log, read in blocks with an overlap, or None."""
+    wanted = [m.encode() for m in ENOSPC_MESSAGES]
+    overlap = max(len(w) for w in wanted)
+    tail = b""
+    try:
+        with log.open("rb") as f:
+            while block := f.read(1 << 20):
+                window = tail + block
+                for message, raw in zip(ENOSPC_MESSAGES, wanted, strict=True):
+                    if raw in window:
+                        return message
+                tail = window[-overlap:]
+    except OSError:
+        return None
+    return None
+
+
+def disk_reading(outcome: Outcome, log: Path, scratch: Path, full_bytes: int) -> list[dict[str, Any]]:
+    """Decide the disk part of the verdict; return JSON's data.disk (empty when the command succeeded).
+
+    The workspace (the current directory) and the scratch filesystem (the log's) are read. A full one,
+    or the ENOSPC message in the output, makes the cause disk, unless memory already decided it.
+    """
+    if outcome.command_exit in (None, 0):
+        return []
+    try:
+        workspace = Path(os.getcwd())
+    except OSError:
+        workspace = Path(".")
+    entries = [filesystem("workspace", workspace, full_bytes), filesystem("scratch", scratch, full_bytes)]
+    if entries[1]["full"]:
+        outcome.notes.append("log may be incomplete")
+    if outcome.cause != "command":
+        return entries
+    full = [e for e in entries if e["full"]]
+    message = None if full else log_mentions(log)
+    if not full and message is None:
+        return entries
+
+    def named(chosen: list[dict[str, Any]]) -> str:
+        said: list[str] = []
+        seen: set[str] = set()
+        for e in chosen:
+            where = e["mount"] or e["path"]
+            if where in seen or e["free_bytes"] is None:
+                continue  # one filesystem holding both is named once
+            seen.add(where)
+            said.append(f"{where} has {size(e['free_bytes'])} free")
+        return ", ".join(said)
+
+    outcome.cause = "disk"
+    if full:
+        outcome.words = f"disk full: {named(full)}"
+    else:
+        outcome.words = f'disk full: "{message}" in the output; {named(entries)}'
+    return entries
 
 
 # ── the process tree, read from /proc (R3, R5) ─────────────────────────────────────────────────

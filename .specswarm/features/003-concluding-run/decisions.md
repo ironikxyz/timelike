@@ -271,3 +271,16 @@ ABSENT: no attribution finer than the container cgroup — not readable without 
 ABSENT: the image check — no Docker here; SC-8 runs in the mentor's lane on a throwaway with --memory 96m
 Verification: ruff, format, mypy clean; host smoke over a fake cgroup (rise+SIGKILL → exit 137 "out of memory: limit 96.0 MiB, peak 96.0 MiB"; no limit; malformed memory.max reason; exit 0 → not looked at); tests/unit/test_run_slice1.py memory tests 10/10 (the delegate's, uncommitted until T020)
 SCOPE: in (1 changed files)
+
+### T024: run — the disk cause (FR-29 to FR-32)
+**Started:** 2026-10-04T19:53Z | **Completed:** 2026-10-04T20:05Z
+
+INHERITED: Outcome.notes and the memory-first ordering — from T023 (confidence: high)
+FLAGGED: "full" is under 1 MiB free for an unprivileged writer (f_bavail) or no free inodes, OR the ENOSPC message in the log — chose both signals over statvfs alone, because a writer that hits ENOSPC often deletes its partial file and free space recovers before run looks; the message survives in the log unless the log's own filesystem was the full one, which statvfs then shows (R17) (confidence: high)
+FLAGGED: a filesystem holding both the workspace and the scratch is named once — the unit delegate found the contract silent on it (confidence: high)
+FLAGGED: TIMELIKE_RUN_DISK_FULL_BYTES is a documented threshold (manifest disk_full_bytes), also what the host units use to make a filesystem count as full — chose a real knob over a test-only hook (confidence: medium)
+ASSUMED: a filesystem reporting f_files == 0 has no inode limit, so its inodes never make it full (confidence: medium)
+ABSENT: a full filesystem other than the workspace's and the scratch's (say, /tmp when the scratch root moved) — not checked; the criterion names those two
+ABSENT: a verdict line cut at COLUMNS before the slice-1 parts when the log path is very long — the image's log path is short (~55 chars); JSON's verdict is uncut; recorded for the cycle report
+Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py memory and disk: 24/24 (the delegate's; its go() helper now sets COLUMNS=1000, because pytest's scratch paths are long and the text verdict was cut before the slice-1 note — a test fix, committed with T020)
+SCOPE: in (1 changed files)
