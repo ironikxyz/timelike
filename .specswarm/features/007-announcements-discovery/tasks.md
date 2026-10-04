@@ -46,7 +46,7 @@ manifest (SC-3).
 ## Phase 4: Polish
 
 - [X] T008 Host lane: lint, units with coverage, `make test-host`, start-up. Results in `decisions.md`.
-- [ ] T009 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
+- [X] T009 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
 
 ## Dependencies
 

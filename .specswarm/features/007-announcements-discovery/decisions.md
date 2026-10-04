@@ -88,3 +88,12 @@ ASSUMED: the image's Python 3.14.7 behaves as the host's for subprocess and os.r
 ABSENT: the e2e — the delegate dry-ran its in-container scripts with stand-ins; the image and the entrypoint run only in the mentor's lane
 Verification: ruff check and format (63 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats and the entrypoint: clean; units with subprocess coverage: 1309 passed, 1 skipped (530 s); Python 95% overall, timelike 92%; make test-host: passed; p95 (host, 20 runs, exits asserted): timelike --help 76 ms, --json 69 ms, announce --status 72 ms, tools 688 ms, announce 675 ms
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T009: cycle report § Cycle 1, implement step 10, metrics entry
+**Started:** 2026-10-04T20:23:08Z | **Completed:** 2026-10-04T20:23:47Z
+
+INHERITED: T001–T008's records (confidence: high)
+FLAGGED: SC-1 cited as built for its user-level part only, with Item 19 named beside the citation — the citation is the criterion's, the narrowing is stated next to it rather than in it (confidence: high)
+ABSENT: demo_points_reached — the mentor derives it
+Verification: four citations, grep -cF = 1 each against the send; step 10 run from the installed blocks (identical to 003's); metrics.json gains 007 only; deny-list PASS
+SCOPE: in (1 changed files)
