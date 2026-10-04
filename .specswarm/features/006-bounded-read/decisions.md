@@ -160,3 +160,12 @@ FLAGGED: one e2e expectation corrected: SC-2's missing-file JSON expected `lines
 ABSENT: nothing here is image evidence: no /opt/timelike/bin, no REVISION stamp, no /opt/timelike/python, host Python 3.12
 Verification: 006's 60 cells: 52 ok; the 8 not ok are image-only (4 `type -a` cells pin /opt/timelike/bin; 4 `timelike` list cells need /opt/timelike/REVISION). 005 and 003 after T015's agentio change: 60 of 70 ok; the 10 not ok are image-only (6 `type -a`, 4 `run` cells whose fixture calls /opt/timelike/python directly), none from the change
 SCOPE: in (1 changed files)
+
+### T014: README — "view and search — bounded reads, each ending with the next command"
+**Started:** 2026-10-04T10:15+00:00 | **Completed:** 2026-10-04T10:18+00:00
+
+INHERITED: the contract as amended (T012, T015) (confidence: high)
+ASSUMED: the README is where this project announces tools (003's and 005's decision, kept); `timelike` lists both automatically (confidence: high)
+FLAGGED: none
+ABSENT: no harness context file inside the image announces them (none exists yet, as for 005)
+Verification: each example's output text checked against the contract and the units (the binary line's size format, the narrow line, the strict exit)
