@@ -309,3 +309,14 @@ FLAGGED (delegate): test_agentio.py::test_rev9_pass_through_exit_only_with_cause
 ABSENT: two rules matching overlapping text, event_args getting agentio's flag-style redaction too, paths-only allowlists — the delegate found the contract silent; T026 states them
 Verification: reviewed (secret-shaped values built at run time; redact_text over both files finds nothing); 107 passed, five repeated runs (random values); ruff, format clean
 SCOPE: in (2 changed files)
+
+### T020: tests/unit/test_run_slice1.py (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:27Z
+
+INHERITED: contracts/run-cli.md § Slice 1, spec § Slice 1 — from the Cycle 2 spec (confidence: high)
+FLAGGED: test-first in order for run — all 35 failed for the right reason before T023–T025; they found three contract gaps that changed the code (fail closed for the command line, a shared filesystem named once, a malformed memory.max reason) (confidence: high)
+FLAGGED: go() sets COLUMNS=1000 — my change in review: the verdict's slice-1 parts follow the log path, pytest's scratch paths are long, and under COLUMNS 200 rule 13 cut the text verdict before them; the image's log path is short (confidence: high)
+ASSUMED (delegate): the manifest's redaction_rules.path is checked only to end in redaction.toml (the host has no /etc/timelike) (confidence: medium)
+ABSENT: FR-32 (the scratch filesystem named when the log cannot be created) — not unit-tested; the e2e scratch cell reaches the in-run case, not this one
+Verification: reviewed; 35/35 pass against T023–T025; background children found and killed through pid files; ruff, format, mypy clean
+SCOPE: in (1 changed files)

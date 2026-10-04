@@ -255,7 +255,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
     keeping its line count;
   - the pass-through gate for `memory` and `disk`;
   - `Context.event_args` in the event.
-- [ ] T020 [P] [US5] [US6] [US7] `tests/unit/test_run_slice1.py`:
+- [X] T020 [P] [US5] [US6] [US7] `tests/unit/test_run_slice1.py`:
   - memory over a fake cgroup directory (`TIMELIKE_CGROUP_ROOT`): rise and failure, rise and success,
     no rise, `max`, unreadable;
   - disk over fake statvfs and mountinfo, and the ENOSPC text;
