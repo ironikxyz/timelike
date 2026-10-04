@@ -18,12 +18,14 @@ import contextlib
 import ctypes
 import errno
 import os
+import resource
 import shlex
 import signal
 import subprocess
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import agentio
 
@@ -43,6 +45,7 @@ KILL_WINDOW_S = 3.0  # freeze, SIGKILL, re-scan: at most this long before report
 FREEZE_ROUNDS = 50
 POLL_S = 0.05
 SETTLE_S = 0.1  # after the command exits, let what it backgrounded finish forking before looking (R5)
+CGROUP_ENV = "TIMELIKE_CGROUP_ROOT"  # slice 1: where memory.events, .max and .peak are read (R16)
 
 TOOL = agentio.Tool(
     name="run",
@@ -83,7 +86,7 @@ def configure(p: argparse.ArgumentParser) -> None:
 class Outcome:
     """What decided the call: the command's own exit, run's limit, or run itself (data-model.md)."""
 
-    __slots__ = ("cause", "command_exit", "detached", "exit", "not_stopped", "words")
+    __slots__ = ("cause", "command_exit", "detached", "exit", "not_stopped", "notes", "words")
 
     def __init__(self, cause: str, exit: int, command_exit: int | None, words: str) -> None:
         self.cause = cause
@@ -92,6 +95,7 @@ class Outcome:
         self.words = words
         self.detached: list[tuple[int, str]] = []  # still running after the command exited (FR-9)
         self.not_stopped: list[tuple[int, str]] = []  # alive after the stop sequence; expected empty
+        self.notes: list[str] = []  # slice 1's verdict additions, in the contract's order
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
@@ -101,10 +105,13 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     limit, source = resolve_timeout(args.timeout)
     log = open_log(ctx)
     set_subreaper()
+    cgroup = cgroup_dir()
+    kills_before = read_oom_kills(cgroup)
 
     started = time.monotonic()
     outcome = execute(command, log, limit, source)
     duration = time.monotonic() - started
+    memory = memory_reading(outcome, cgroup, kills_before)
 
     count, lines, cut = display(log, ctx.limit)
     verdict = f"exit {outcome.exit} ({outcome.words}) · {duration:.1f} s · {count} lines · log {log}"
@@ -117,6 +124,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         verdict += f" · detached: {named}" + (f" (+{more} more)" if more else "")
     if outcome.not_stopped:  # never claim a clean stop that was not observed (H3)
         verdict += " · not stopped: " + ", ".join(f"{pid} {name}" for pid, name in outcome.not_stopped)
+    verdict += "".join(f" · {note}" for note in outcome.notes)
     return agentio.Result(
         target=shlex.join(command),
         scope="run",
@@ -133,6 +141,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
             "timeout_s": limit,
             "detached": [{"pid": pid, "name": name} for pid, name in outcome.detached],
             "not_stopped": [{"pid": pid, "name": name} for pid, name in outcome.not_stopped],
+            "memory": memory,
         },
     )
 
@@ -309,6 +318,112 @@ def command_outcome(rc: int) -> Outcome:
             sig = f"signal {n}"
         return Outcome("command", 128 + n, 128 + n, f"command killed by signal {n} ({sig})")
     return Outcome("command", rc, rc, f"command exited {rc}")
+
+
+# ── why the command died: memory (slice 1; spec FR-25 to FR-28, research R16) ─────────────────────
+
+
+def cgroup_dir() -> Path:
+    """This process's cgroup v2 directory: /proc/self/cgroup's `0::` path under /sys/fs/cgroup."""
+    override = os.environ.get(CGROUP_ENV)
+    if override:
+        return Path(override)
+    with contextlib.suppress(OSError):
+        for line in Path("/proc/self/cgroup").read_text().splitlines():
+            if line.startswith("0::"):
+                return Path("/sys/fs/cgroup") / line[3:].lstrip("/")
+    return Path("/sys/fs/cgroup")
+
+
+def read_oom_kills(cgroup: Path) -> int | str:
+    """memory.events' oom_kill count, or the reason it could not be read."""
+    path = cgroup / "memory.events"
+    try:
+        text = path.read_text()
+    except OSError as e:
+        return f"{path}: {e.strerror or e}"
+    for line in text.splitlines():
+        key, _, value = line.partition(" ")
+        if key == "oom_kill" and value.strip().isdigit():
+            return int(value)
+    return f"{path}: no oom_kill count"
+
+
+def _read_bytes(path: Path) -> int | None:
+    """memory.max or memory.peak: an integer, None for `max` (no limit). Raises OSError/ValueError."""
+    text = path.read_text().strip()
+    if text == "max":
+        return None
+    if not text.isdigit():
+        raise ValueError(f"{path}: not a number of bytes: {text[:40]!r}")
+    return int(text)
+
+
+def size(n: int) -> str:
+    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`)."""
+    if n < 1024:
+        return f"{n} B"
+    value = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        value /= 1024
+        if value < 1024 or unit == "TiB":
+            break
+    return f"{value:.1f} {unit}"
+
+
+def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[str, Any]:
+    """Decide the memory part of the verdict; return JSON's data.memory (contract § Slice 1).
+
+    The OOM kill count rising during the command, with the command failing, makes the cause memory.
+    A rise under exit 0 is a note. A SIGKILL (137) with unreadable files is `memory: unknown`. A cause
+    is never guessed (send seam 1). The cgroup is the container's (R16), so the words say "out of
+    memory", and the peak is the container's.
+    """
+    max_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024  # KiB on Linux
+    data: dict[str, Any] = {
+        "state": "not looked at",
+        "limit_bytes": None,
+        "peak_bytes": None,
+        "oom_kills": None,
+        "command_max_rss_bytes": max_rss or None,
+        "reason": None,
+    }
+    if outcome.cause != "command" or outcome.command_exit is None:
+        return data  # run's own limit fired, or the command never ran: not a memory question
+    after = read_oom_kills(cgroup)
+    failed = outcome.command_exit != 0
+    sigkill = outcome.command_exit == 128 + signal.SIGKILL
+    if isinstance(before, str) or isinstance(after, str):
+        reason = before if isinstance(before, str) else str(after)
+        if failed or sigkill:
+            data.update(state="unknown", reason=reason)
+        if sigkill:
+            outcome.notes.append(f"memory: unknown ({reason})")
+        return data
+    rose = after - before
+    if not (failed or rose):
+        return data
+    data.update(state="read", oom_kills=rose)
+    try:
+        data["limit_bytes"] = _read_bytes(cgroup / "memory.max")
+        data["peak_bytes"] = _read_bytes(cgroup / "memory.peak")
+    except OSError as e:
+        data["reason"] = f"{e.filename or cgroup}: {e.strerror or e}"
+    except ValueError as e:
+        data["reason"] = str(e)
+    peak = size(data["peak_bytes"]) if data["peak_bytes"] is not None else "unknown"
+    if data["limit_bytes"] is not None:
+        limit = f"limit {size(data['limit_bytes'])}, peak {peak}"
+    elif data["reason"] is None:
+        limit = f"no limit set, peak {peak}"
+    else:
+        limit = f"limit unknown, peak {peak}"
+    if rose and failed:
+        outcome.cause = "memory"
+        outcome.words = f"out of memory: {limit}"
+    elif rose:
+        outcome.notes.append(f"OOM kill during the command ({limit})")
+    return data
 
 
 # ── the process tree, read from /proc (R3, R5) ─────────────────────────────────────────────────

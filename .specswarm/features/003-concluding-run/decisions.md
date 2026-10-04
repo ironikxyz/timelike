@@ -258,3 +258,16 @@ ABSENT: gitleaks' `paths` allowlists and `path` rules — output has no path; no
 ABSENT: environment-value matching — spec FR-34 decides patterns only
 Verification: ruff, ruff format, mypy strict clean; a generated token, AWS key id and 20-line PEM block redacted with the line count kept; low-entropy and EXAMPLE look-alikes not redacted; 200k lines in 0.09–0.24 s; tests/unit/test_agentio.py, test_conform*.py, test_run.py: 166 passed
 SCOPE: in (1 changed files)
+
+### T023: run — the memory cause (FR-25 to FR-28)
+**Started:** 2026-10-04T19:35Z | **Completed:** 2026-10-04T19:52Z
+
+INHERITED: agentio's pass-through gate admits cause memory with command_exit — from T022 (confidence: high)
+FLAGGED: an OOM kill is read as the oom_kill count rising during the command, together with a failed command — chose that over "exit 137 means memory", because the OOM killer may kill a grandchild and the command then exits with whatever its shell reports, and because 137 is also any SIGKILL (research R16) (confidence: high)
+FLAGGED: the peak is memory.peak, the container cgroup's peak since it started, named "peak" with command_max_rss_bytes beside it in JSON — chose it over getrusage alone, because the criterion asks for the usage that hit the limit, which is the cgroup's; per-command cgroup peaks need kernel 6.12 or a child cgroup the agent cannot create (confidence: medium)
+FLAGGED: with memory.max = max the words are "out of memory: no limit set, peak P" — changed from "limit no limit" (contract amended, the unit delegate told) (confidence: high)
+ASSUMED: peer agents in one container share the count, so another process's OOM kill during the command is attributed to it — accepted and documented (spec FR-28 limit, R16) (confidence: medium)
+ABSENT: no attribution finer than the container cgroup — not readable without delegation (R16)
+ABSENT: the image check — no Docker here; SC-8 runs in the mentor's lane on a throwaway with --memory 96m
+Verification: ruff, format, mypy clean; host smoke over a fake cgroup (rise+SIGKILL → exit 137 "out of memory: limit 96.0 MiB, peak 96.0 MiB"; no limit; malformed memory.max reason; exit 0 → not looked at); tests/unit/test_run_slice1.py memory tests 10/10 (the delegate's, uncommitted until T020)
+SCOPE: in (1 changed files)
