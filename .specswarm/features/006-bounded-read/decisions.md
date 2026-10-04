@@ -33,3 +33,12 @@ FLAGGED: none
 ABSENT: no long hit line in the repo, so search's `long lines cut:` path is covered by the units only (T009), not by e2e
 Verification: run under dash on the host: big.txt 412 lines (16276 bytes), repo 262 hits in 10 files (12 searched), 25 + 5 ignored, 9 inside .git; the narrowing rule picks src (188 of 262) with no tie; a changed count makes the script exit 1 (delegate's check)
 SCOPE: in (1 changed files)
+
+### T003: e2e for SC-1, written from the contract before the tools (delegate A)
+**Started:** 2026-10-04T07:12+00:00 | **Completed:** 2026-10-04T09:25+00:00
+
+INHERITED: the contract, the T001 fixture, helpers.bash; the coordinator's mid-task corrections (revision 12's JSON cut, target_line, the narrowing rule, the shlex scope) (confidence: high)
+ASSUMED: expected values come from the fixture inside the container (awk, sed, wc, git ls-files as the search oracle), never from the tool (P004) (confidence: high)
+FLAGGED: none
+ABSENT: no image run here (no Docker, R10); the Docker lane decides
+Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
