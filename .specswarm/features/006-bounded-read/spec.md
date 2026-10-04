@@ -84,7 +84,9 @@ the verdict says *no match (strict)*, so it cannot be mistaken for a failure.
   the cap shows the first N lines of it, as a cut. `--limit 0` lifts the cap, which is how the agent asks
   for a whole large file.
 - **FR-7** A line longer than the terminal width is cut in text mode at `COLUMNS` with
-  `…[cut N bytes]` (rule 13, as every timelike tool does). JSON carries the line whole.
+  `…[cut N bytes]` (rule 13, as every timelike tool does). **JSON: pending Q3** (FOR-MENTOR Item 18;
+routed to plan). The mentor recommends that JSON follows text (the same cut, with the full length as
+data); as first written, JSON carried the line whole. Not built until plan answers.
 
 ### `view`: what it refuses or reports instead of content
 
@@ -200,7 +202,10 @@ bytes not shown. Its full output is **the file itself**, by its absolute path; a
 nothing. **Its `more:` is the next window's command** (`view FILE:121-240`). That is the prompt's
 "footer naming the next range command". It is a narrower reading of `more` than "prints everything
 omitted", which an earlier tool's `sed -n` over its artefact satisfies. **Raised in FOR-MENTOR Item 18
-before this part is built** (D-11).
+before this part is built** (D-11). *(Answered (a), mentor, 2026-10-04,
+`../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md`: the next window is D5's
+"continue", and the bundle's own `view` footer is a continuation. JSON's `truncated.more` equals the
+text's `more:`.)*
 
 **D-3 · Search: hits against lines.** The cap counts **hits** (50). Each hit prints as one line, so
 for search the omitted *lines* in rule 3's omission line equal the omitted hits, and its bytes are those
@@ -208,7 +213,8 @@ lines' bytes. File-group labels are section labels, not counted lines. JSON's `t
 `omitted_lines` (= omitted hits), `omitted_bytes`, `full_output` (the saved hit list) and `more` (`sed -n
 A,Bp <hit list>`, never a re-run). `count` and `shown` carry the hit totals. **The narrowing command is the
 last line before the omission line**, written `narrow: search … <dir>  (N of the 262)`, so the footer
-both states the 212 and narrows. **Raised with D-2** (where the narrowing sits relative to rule 3's order).
+both states the 212 and narrows. **Raised with D-2** (where the narrowing sits relative to rule 3's order). *(Answered (a), same file: a
+body line before the closing lines is content, and the order does not forbid it.)*
 
 **D-4 · Strict mode's exit 1.** Discovery's constraint asks for it (grep compatibility). It is opt-in
 (`--strict`), and the manifest's `exit_codes` declares 1 as *"failed; with --strict, also: no match"*.

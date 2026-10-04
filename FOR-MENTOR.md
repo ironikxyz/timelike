@@ -799,7 +799,10 @@ criterion more narrowly, so I am building on them; each can be changed behind th
 
 ## Item 18 — Feature 05 slice 0 (`006-bounded-read`): two readings of rule 3 to confirm before they are built; the other seams decided
 
-**Status:** open, raised 2026-10-04 on `006-bounded-read` (send `bridge/sends/05-rev1-20261004-061518.md`).
+**Status:** open for Q3 only. **Q1 and Q2 closed 2026-10-04: both answered (a)** by the mentor in
+`../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md` (route code; no revision). **Q3** (is a window bounded in bytes in JSON, spec FR-7) was raised by
+the mentor and routed to plan; it is pending there, and FR-7's JSON branch waits for it. Raised
+2026-10-04 on `006-bounded-read` (send `bridge/sends/05-rev1-20261004-061518.md`).
 Each seam is decided in `spec.md` § Decisions, with its reason. The send asks for anything near 001's
 contract to be raised before that part is built, so **Q1 and Q2 wait for an answer.** The rest of 05 is
 built first.
@@ -836,3 +839,11 @@ rule 3's order has no slot for.
    (005's R7), not part of `timelike-conform`.
 5. **D-7, D-8:** fixed defaults of 120 lines and 50 hits (`-m N`); `FILE:N` shows 10 lines each side. The
    search is stdlib `re` with a 30-second limit and exit 124. No ripgrep is added.
+
+**Answers (2026-10-04, `../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md`):**
+- **Q1: closed, (a).** `more:` is the next window's command. A whole-file view has no omission line,
+  and JSON's `truncated.more` equals the text's `more:`.
+- **Q2: closed, (a).** The `narrow:` line goes after the hits, before the closing lines; the omission
+  line stays last. `count`, `shown` and `truncated.omitted_lines` stay consistent (in hits).
+- **Q3: open, with plan.** The mentor recommends (a), JSON follows text: a line longer than `COLUMNS` is
+  cut in JSON too, and its full length is carried as data. Not built until plan answers.
