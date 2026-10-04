@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -110,6 +110,17 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
 > already requires cap excess to exit 4 with an escalation; it now names the grant envelope. The
 > check itself changes in feature 004's Cycle 2 (12 s0). No threshold moved. Revision 10 is
 > appended to `governance_audited_against`.
+>
+> **Audited against discovery revision 11** (2026-10-04), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T00:24:17Z), § "What Changed In Those Revisions", and
+> `../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md` § Resolution. **No change
+> needed:** revision 11 revises the Agent output contract's rule 10 (two state locations, a
+> per-session scratch directory and a per-workspace state root outside the workspace; the
+> in-workspace project cache is withdrawn). This file derives from Constraints, but no gate restates
+> rule 10's state locations. The *Snapshots (T2)* budget and the *Snapshot restore round-trip (P5)*
+> gate name no store technology, so the stack's move from git to a stdlib store leaves them true.
+> The state root's survival criteria reach code as 07 slice-1 acceptance criteria, not as a gate.
+> No threshold moved. Revision 11 is appended to `governance_audited_against`.
 
 # Quality Standards - Timelike
 
