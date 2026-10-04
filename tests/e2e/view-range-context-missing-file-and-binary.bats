@@ -248,7 +248,8 @@ check_missing() {
   expect_j exit 3
   expect_j verdict "no such file: missing/bgi.txt"
   expect_j remedy "$remedy"
-  expect_j lines "[]"
+  # D-10, as in 005: the `do instead:` line is the first of `lines` in both modes, with data.remedy beside it
+  expect_j lines "[\"do instead: ${remedy}\"]"
 }
 
 # raw_clean FILE — the stdout bytes saved in FILE carry no NUL, 0x7f, 0x89 or 0x1a byte.
