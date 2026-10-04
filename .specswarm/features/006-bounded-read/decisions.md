@@ -149,3 +149,4 @@ FLAGGED: contract amended where it was wrong or silent, each marked in place: JS
 FLAGGED: one test corrected: `expected_groups` counted a file's hits from the shown 50 only, contradicting the test's own `(20 of 40)` assertion and the contract; it now takes every hit for the totals (confidence: high)
 ABSENT: no tool behaviour changed in this task; every disagreement was decided by the contract
 Verification: 160 units pass (68 view, 92 search); ruff, format, mypy strict clean
+SCOPE: in (1 changed files)

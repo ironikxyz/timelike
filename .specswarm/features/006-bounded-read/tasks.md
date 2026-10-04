@@ -73,7 +73,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 
 ## Phase 5: Integration
 
-- [ ] T012 Units T008 and T009 against the tools. A disagreement is decided by the contract; where the
+- [X] T012 Units T008 and T009 against the tools. A disagreement is decided by the contract; where the
   contract is wrong or silent, the contract is amended and the amendment recorded.
 - [ ] T013 The e2e files through the host docker stand-in (advisory), and each fixture command run through
   the real tools on the host.
