@@ -526,3 +526,51 @@ criterion, and a membership test over criteria-changing revisions finds no hole 
   runs.
 
 **not_verified** (still open): D7, the operator's demo.
+
+### Cycle 2 addendum 2 — reconcile mode `full`, and D7 observed (2026-10-04)
+
+At the operator's instruction, this addendum supersedes two statements of the addendum above:
+`reconcile_mode` and D7's mode. That addendum is left as written (append-only). Its lane evidence
+stands, and is not repeated except where cited.
+
+**criteria_reestablished** (final for Cycle 2; supersedes both earlier lists):
+
+- `07 · "of the workspace and prints its identifier, file count and size"` — **executed
+  [`tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats`, 4/4, in the image: lane 005-d
+  at `e50a82f`, `../bridge/history.md` 2026-10-04T04:32:39Z]**
+- `07 · "removes files created after it, and a dry run lists exactly those changes first"` — **executed
+  [`tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats`, 10/10, in the image:
+  lane 005-d at `e50a82f`]**
+- `07 · "are unchanged by taking or restoring a snapshot"` — **executed
+  [`tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats`, 4/4, in the
+  image: lane 005-d at `e50a82f`]**
+- `07 · "is refused or partial, and the verdict names what was excluded and why"` — **executed
+  [`tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`, 10/10, in the image:
+  lane 005-d at `e50a82f`]**
+- `07 · "restores it with one undo command _(traces to: D7)_"` — **observed by the operator**
+  (`../bridge/history.md` 2026-10-04T04:59:15Z; transcript `bridge/.d7-demo-20261004T044030Z.txt`).
+  This was on the live stack from lane 005-d: `timelike-agent` at revision `e50a82f`, image
+  `sha256:d4c49415…`, as the agent user under `bash -lc`. The sequence was `snapshot` (verified, 3 files),
+  then `rm -rf docs` (the wrong directory), then `undo` (exit 4, the confirmation envelope, nothing
+  changed), then `undo --yes` (exit 0, verified, the state before is snapshot 2). The three files' sha256
+  are identical before the delete and after the undo. The operator accepted it as one undo command with
+  rule 9's confirmation step. The transcript was read by this instance; its hashes and verdicts are as
+  stated.
+
+There are **five slice-0 criteria: four automated and one Manual (D7)**. The automated four are executed
+in the image, and D7 is observed by a person, not run by a test. Each citation matches exactly one line
+of the send. The two revision-11 criteria are *(slice 1)* and are not cited.
+
+**reconcile_mode: `full`.** `audited_against` is now **`[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`**, computed by
+the installed `audit-append` block in `full` mode (appended 2–10 beside 11). `full` appends every
+revision in (`prompt_revision`, N]. Its conditions hold:
+- revision 11's criteria were checked in full (above);
+- removals are visible (the rev-1 send's prompt copy) and none occurred;
+- no added criterion of this slice was left unaddressed.
+
+Revisions 2–10 did not change prompt 07. The `audit-log.md` row records the basis and supersedes the
+`scoped` row. `prompt_revision`, `discovery_revision` and `source_prompt` are untouched.
+
+**not_verified:** nothing remains open for slice 0's criteria. The earlier `not_verified` items about the
+host (stand-in, timing, two defensive branches of `verify`, a file changing mid-snapshot) still stand as
+written.

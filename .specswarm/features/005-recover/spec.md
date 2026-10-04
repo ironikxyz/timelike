@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/07-recover.md
 source_send: bridge/sends/07-rev1-20261003-013915.md
 prompt_revision: 1
 discovery_revision: 10
-audited_against: [1, 11]
+audited_against: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 slice: 0
 ---
 
