@@ -261,7 +261,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
   - disk over fake statvfs and mountinfo, and the ENOSPC text;
   - redaction of the log, the header, the event, the verdict count, `log_rewritten`, a detached holder,
     and fail closed.
-- [ ] T021 [P] [US5] [US6] [US7] The e2e files, one per criterion, each under `bash -c` and `bash -lc`:
+- [X] T021 [P] [US5] [US6] [US7] The e2e files, one per criterion, each under `bash -c` and `bash -lc`:
   - `tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats`: a throwaway with `--memory 96m
     --memory-swap 96m`;
   - `tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats`: throwaways with

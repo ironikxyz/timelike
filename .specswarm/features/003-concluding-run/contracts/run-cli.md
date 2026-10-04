@@ -84,6 +84,16 @@ At most five detached children are named in the verdict, then `(+N more)`; JSON 
   - **A malformed `memory.max` or `memory.peak`** gives `reason` `<path>: not a number of bytes: '<text>'`,
     and the words say `limit unknown`.
   - **An OOM kill under exit 0 with no limit** reads `OOM kill during the command (no limit set, peak <P>)`.
+  - **"`data.…`"** in this section names the result's data fields. In JSON they are top-level keys, as
+    in slice 0 (`memory`, `disk`, `redaction`, `log`).
+  - **The header** is redacted after the command is joined (`shlex.join`). A secret, being one shell
+    word of letters and digits, is unquoted, so the marker appears bare: `run: printf %s [REDACTED:token] [run]`.
+  - **`redacted N` counts the log's secrets only.** A secret in the command line is redacted in the
+    header and the event but not counted.
+  - **Sizes at a unit boundary** follow the arithmetic: one decimal of the quotient in the first unit
+    under 1024, so 1023.96 KiB prints as `1024.0 KiB`.
+  - **A scratch filesystem smaller than the threshold** counts as full whenever a command fails. That
+    is true of it: it has less than 1 MiB free.
 
 ### Exit and cause
 | Exit | When | cause | command_exit |

@@ -330,3 +330,16 @@ ASSUMED: the earlier no-limit wording (spec FR-26, contract) and the TIMELIKE_RU
 ABSENT: 001's agent-info.schema.json — redaction_rules and disk_full_bytes are tool-specific manifest extras, which the schema already allows (the run units validate run's manifest against it)
 Verification: the README and contract text read against the code (cause words, verdict additions, fail closed); deny-list PASS
 SCOPE: in (2 changed files)
+
+### T021: e2e — one file per automated criterion (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:45Z
+
+INHERITED: contracts/run-cli.md § Slice 1; helpers.bash (run_in, exec_plain, start_throwaway); the throwaway pattern of container-derived-defaults.bats (confidence: high)
+FLAGGED: memory and disk run in throwaway containers from the verified image (--memory 96m --memory-swap 96m; --tmpfs /work:size=1m,mode=1777; --tmpfs /scratch:size=256k,mode=1777), with each limit read back from the throwaway before it is relied on; a failed precondition FAILS the cells with its reason, never skips (confidence: high)
+FLAGGED: no secret reaches the runner or tests/out — generated in the container, checked there with grep -cF against a secrets file, only counts printed; each SC-10 cell has its own session, so "stored" covers the whole scratch directory, events.jsonl included (confidence: high)
+FLAGGED (delegate): the scratch cell's 256 KiB filesystem counts as full under FR-30 even when empty; the command failing on its own write is what makes the case real — accepted, stated in the contract (confidence: medium)
+ASSUMED (delegate): the allocator writes its pages (b"x" * 8 MiB per step), so the limit is reached (confidence: high)
+FLAGGED: Makefile SHELLCHECK_FILES gains the three files, so make lint covers them; Makefile is not named in tasks.md, so this task records SCOPE out (confidence: high)
+ABSENT: not run — no Docker here (R10); the first run is the mentor's lane. FR-27, FR-28 and FR-39 are covered by units only, and SC-9 has no text-mode variant
+Verification: reviewed (the size formatter is run's algorithm; the verdict assertions match the contract); shellcheck clean; bats --count parses (delegate); gitleaks v8.30.1 over the three files: nothing, default and shared config (delegate); deny-list PASS
+SCOPE: out — Makefile (1 of 4 changed files) (task has FLAGGED: yes)
