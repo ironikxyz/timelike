@@ -185,3 +185,12 @@ FLAGGED: Item 17's decisions 1, 2, 3 and 6 had no separate ruling; the item clos
 ABSENT: no criterion text of slice 0 changed; SC-1 to SC-5 untouched
 Verification: the constraint and both criteria are quoted from the send word for word (checked by substring match with whitespace normalised, since the spec wraps lines)
 SCOPE: out — FOR-MENTOR.md (1 of 1 changed files) (task has FLAGGED: yes)
+
+### T018: provenance — revision 11 deferred until the lane (Cycle 2)
+**Started:** 2026-10-04T03:22+00:00 | **Completed:** 2026-10-04T03:23+00:00
+
+INHERITED: modify Step 2 row 7 (computed by the installed provenance-inputs and provenance-row blocks: N 11, prompt_revision 1, audited_against [1]) (confidence: high)
+ASSUMED: the mode will be `full` (2–11): removals are visible (the archived rev-1 send), none occurred, revisions 2–10 did not change prompt 07, and the slice-1 criteria are outside a slice-0 spec rather than unaddressed criteria of it (the mentor's 3c skips another slice's criteria) (confidence: medium)
+FLAGGED: nothing is appended now — this cycle changed code that slice 0's criteria rest on, so the append waits for the mentor's Docker lane, as in 001 cycles 5 and 6 (confidence: high)
+ABSENT: prompt_revision, discovery_revision and source_prompt untouched; spec frontmatter unchanged
+Verification: audit-log.md created with the plugin's header and one `none (deferred)` row
