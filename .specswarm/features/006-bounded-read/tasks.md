@@ -39,7 +39,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
   (SC-1): exact lines 1–120 against the fixture, right alignment, the header scope, `more:` and its
   result (lines 121–240), the omission line's counts computed by the test, and a whole-file view (no
   omission line). `bash -c` and `bash -lc`.
-- [ ] T004 [P] [US2] `tests/e2e/view-range-context-missing-file-and-binary.bats` (SC-2): `:40-80`, `:40`
+- [X] T004 [P] [US2] `tests/e2e/view-range-context-missing-file-and-binary.bats` (SC-2): `:40-80`, `:40`
   (30–50, `>` on 40), missing (exit 3, `do instead:`), ELF and PNG (type and size, no content bytes).
 - [ ] T005 [P] [US3] `tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats`
   (SC-3): 50 hits grouped by file, 262 and 212 stated, ignored matches not counted, `.git` never
