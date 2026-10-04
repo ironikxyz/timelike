@@ -93,3 +93,14 @@ ASSUMED: the long-lines line is the last of JSON `lines`; the cut applies to the
 ABSENT: none of the verdict variants the contract writes as `…`; no singular wording
 Verification: 68 collected; ruff, format and mypy strict clean; all pass against T010 and T015
 SCOPE: in (1 changed files)
+
+### T009: tests/unit/test_search.py, from the contract (delegate B)
+**Started:** 2026-10-04T07:12+00:00 | **Completed:** 2026-10-04T09:10+00:00
+
+INHERITED: test_view.py's and test_snapshot.py's helpers; the narrowing rule from data-model.md (confidence: high)
+FLAGGED: the narrowing follows the rule (src, 188) over the contract's example (src/engine, 148); the example was wrong and is corrected in T012 (confidence: high)
+FLAGGED: --timeout 0.001 over 3000 files, not --timeout 0, because the contract gave 0 no meaning; T012 now makes 0 = no limit (confidence: medium)
+FLAGGED: the 262-hit test compared its section labels with `expected_groups(capped[:CAP])`, which counts a file's hits from the shown 50 only and so contradicted the test's own next assertion `(20 of 40)`; corrected in T012 (as written: a test bug)
+ASSUMED: .gitignore files count in files_searched (hidden files are searched); a pruned directory counts as one ignored entry; symlinked files are not followed (confidence: medium)
+ABSENT: the exact zero-match verdict tail; whether a root .gitignore above a searched subdirectory applies (T011 applies it, as git does)
+Verification: 92 collected; ruff, format and mypy strict clean
