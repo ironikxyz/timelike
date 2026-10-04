@@ -255,3 +255,12 @@ ASSUMED: the image's Python 3.14.7 gives the same overview and anchors as the ho
 ABSENT: the e2e on a stand-in — the e2e delegate dry-ran the 14 bash -c cells through a stub docker (T018); bash -lc cells and the image wait for the mentor's lane
 Verification: ruff check and format (62 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats: clean; units with subprocess coverage: 1259 passed, 1 skipped (483 s); Python 95% overall, view 94%, search 93%; make test-host: passed; start-up p95 (host, 40 runs, exits asserted): view --help 70 ms, view --json FILE 72 ms, view --json --anchors FILE 75 ms
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T024: cycle report § Cycle 2, implement step 10, metrics entry
+**Started:** 2026-10-04T19:44:26Z | **Completed:** 2026-10-04T19:44:58Z
+
+INHERITED: T017–T023's records — from T023 (confidence: high)
+FLAGGED: the report says plan and tasks were followed from the session's loaded 2.35.0 text, not re-invoked for this feature — chose to state it over implying a run (confidence: high)
+ABSENT: demo_points_reached — the mentor derives it; an audit-log row — row 4
+Verification: three citations, grep -cF = 1 each against the send; step 10 re-run from the installed blocks (output identical to 003's run); metrics.json gains 006-cycle-2 only; deny-list PASS
+SCOPE: in (1 changed files)
