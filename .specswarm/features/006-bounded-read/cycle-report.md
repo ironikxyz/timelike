@@ -375,3 +375,93 @@ Prompt 05 has no revision after 1, so there is nothing to append. No `audit-log.
 
 **not_verified:** nothing remains open for slice 0's criteria. The earlier items still stand as written:
 search speed in the image, and a window ending at the file's end (units only).
+
+### Cycle 1 ship — `/specswarm:ship` under specswarm 2.35.0 (`4ff8dcb`), 2026-10-04
+
+**The build that ran: 4.0.1-botbaubble.2.35.0.** The session expanded `/specswarm:ship` with the cache path
+`…/specswarm/4.0.1-botbaubble.2.35.0`. `installed_plugins.json` records that version with `gitCommitSha`
+`4ff8dcb`, the build this cycle was built under. `commands/ship.md`, `commands/analyze-quality.md` and
+`lib/quality-standards-parser.sh` are byte-identical to 2.32.0's. `lib/features-location.sh` differs,
+and `quality-source` uses it to resolve the feature.
+
+It ran on `006-bounded-read` at **`021f6fa`**, with a clean tree, after the operator relayed the mentor's
+instruction to ship. `99df450..021f6fa` changes only `cycle-report.md` and `reboot.md`, so the code
+shipped is the code lane 006-a tested and D5 observed.
+
+**How it ran: the 005 recipe.**
+- I ran analyze-quality's blocks (`analysis-context`, `component-applicability`,
+  `tests-agnostic-score`, `unknown-resolvability`, `module-score`, `overall-score`, `quality-report`)
+  from the installed file, with `MODULES` set to 001's eight.
+- Then I ran ship's blocks: `quality-source` with `FEATURE_DIR` **unset**, then `quality-threshold`,
+  the threshold echo lines and `quality-gate`. `CLAUDE_PLUGIN_ROOT` was the 2.35.0 cache path.
+- **Step 4 (`/specswarm:complete`) was not run.** It needs stdin, and the mentor merges `--no-ff` by
+  hand. So Step 5's summary did not run either.
+
+A first attempt aborted in analyze-quality's `module-score` block (`MODULE_COMPONENTS: unbound
+variable`). The cause was a `set -u` I had added to the wrapper script, not the plugin. The run below
+has no `set -u`, as 005's did not.
+
+The output is verbatim, except for two lines of mine marked `==` and the checkout's absolute path,
+written `<repo>/` (P2).
+
+```
+== analyze-quality (2.35.0 blocks) ==
+🔤 Language: Python
+Overall Quality: unknown (no module could be scored (8 unscored))
+📄 Wrote <repo>/.specswarm/features/006-bounded-read/quality-report.json (overall_state: unknown, written by 4.0.1-botbaubble.2.35.0)
+== ship (2.35.0 blocks) ==
+📍 Current branch: 006-bounded-read @ 021f6fa
+NOTE: <repo>/.specswarm/features/006-bounded-read/quality-report.json reports overall_state='unknown' - the score is not a measurement
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/006-bounded-read/quality-report.json says overall_state='unknown'
+   (no module could be scored (8 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+== QUALITY_STATE=unknown ==
+```
+
+`quality-report.json` as written (`.specswarm/features/006-bounded-read/quality-report.json`, committed
+with this section):
+
+```
+{
+  "overall_score": null,
+  "overall_state": "unknown",
+  "unknown_is": "unresolvable",
+  "unknown_why": "no component of this Python project could be measured: pytest is declared but could not be run on this machine",
+  "set": "no module could be scored (8 unscored)",
+  "modules_scored": 0,
+  "modules_total": 8,
+  "generated_at": "2026-10-04T18:19:49+00:00",
+  "generated_by": "/specswarm:analyze-quality",
+  "generated_by_version": "4.0.1-botbaubble.2.35.0"
+}
+```
+
+**Field results:**
+- **D77 held:** `quality-source` resolved the report from the branch, with no hand-set `FEATURE_DIR`.
+  This was its first run on 2.35.0's `features-location.sh`.
+- **D85 held:** the gate said *the analysis reported no number* and named the report's state and set.
+- **D72 held:** it printed the report's `unknown_why`, and said re-running will not change the result.
+- **D71 held:** `modules_scored: 0` of `modules_total: 8`.
+- **The gate is UNKNOWN and warns.** `min_quality_score: 0`, `enforce_gates: false`: the merge is not
+  blocked. No number was produced, and none was filled in by hand. The project's own figures stay beside
+  it in `.specswarm/metrics.json` → `006.project_measurements_not_scored`.
+
+**Not merged, not pushed.** Next: the mentor's hand merge into `master`, then a push to `public/main` on
+the operator's OK, after the deny-list and identity checks (CLAUDE.md rule 5).
