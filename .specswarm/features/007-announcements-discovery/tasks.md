@@ -40,7 +40,7 @@ manifest (SC-3).
 - [X] T006 `image/Dockerfile`: COPY the curated file and the entrypoint; generate and check after the
   stamp; `ENTRYPOINT`. Update `tests/unit/test_timelike*.py` and the 001 e2e cells if one asserts the
   old usage.
-- [ ] T007 `README.md`: an announcements section; `Makefile` `SHELLCHECK_FILES` gains the entrypoint
+- [X] T007 `README.md`: an announcements section; `Makefile` `SHELLCHECK_FILES` gains the entrypoint
   and the e2e files.
 
 ## Phase 4: Polish

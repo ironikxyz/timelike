@@ -68,3 +68,12 @@ ASSUMED: pgrep exists in the image (procps, Dockerfile line 31) and the command 
 ABSENT: --check's `extra:` and Codex's override end to end — units cover them
 Verification: reviewed; shellcheck clean; bats --count 6, 6, 6 (delegate); in-container scripts dry-run on the host with stand-ins, failure cases included (delegate); four contract gaps settled as built
 SCOPE: in (3 changed files)
+
+### T007: README — announcements section; Makefile SHELLCHECK_FILES
+**Started:** 2026-10-04T19:57:29Z | **Completed:** 2026-10-04T20:00:19Z
+
+INHERITED: the behaviour of T004–T006 (confidence: high)
+ASSUMED: the README is a place agents and operators read (P3); the announcement itself is the place harnesses read (confidence: high)
+ABSENT: the README's Status paragraph — it lists features by slice; 007 is added when the batch is reconciled
+Verification: shellcheck clean over the four new files; the README text matches the paths and commands as built
+SCOPE: in (2 changed files)
