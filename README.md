@@ -30,7 +30,9 @@ report. See "Speedup bench" below.
   rest
 - `$?` is the command's own exit
 
-See "run" below.
+**Slice 1 (natural, built on `modify/003-slice-1`):** the verdict names a memory kill (limit and
+peak) and a full filesystem (which one, and its free space), and secrets are shown and stored as
+`[REDACTED:<type>]`. See "run" below.
 
 **Feature 004 (prompt 12), slice 0: Adele and grants (skeletal).** Adele is the one authority,
 outside the agent's privilege, that holds credentials and enforces the operator's grants. In slice 0
@@ -189,8 +191,18 @@ run sh -c 'make 2>&1 | grep -v noise'  # shell syntax goes through a shell: run 
   limit).
 - **The command gets no stdin.** A prompt fails fast instead of waiting. `cat x | run grep y` does not
   feed `grep`; write `run sh -c 'cat x | grep y'`.
-- Slice 1 adds memory and disk causes, and secret redaction. Slice 2 adds log garbage collection and
-  repeat detection.
+- **It says why a command died** (slice 1). If the container's memory limit killed it, the verdict says
+  `out of memory: limit 96.0 MiB, peak 96.0 MiB` instead of a bare 137. If a filesystem filled up, it
+  says `disk full: /work has 0 B free` (the workspace, or the scratch space that holds the log). The
+  exit still passes through. When the memory files cannot be read, the verdict says
+  `memory: unknown (…)`; it never guesses.
+- **Secrets are shown and stored as `[REDACTED:<type>]`** (slice 1): in the shown lines, in the saved
+  log (which keeps its line count, so line numbers stay true), in the header and in the session event.
+  The verdict counts them (`redacted 2 (key 1, token 1)`). The rules are 18 known provider formats from
+  gitleaks, in `/etc/timelike/redaction.toml`. `make scan`'s gitleaks reads the same file, and
+  `run --agent-info` lists the rules. If the rules cannot be read, the output is withheld and the
+  verdict says why.
+- Slice 2 adds log garbage collection and repeat detection.
 
 ## snapshot and undo — wrong turns are recoverable
 

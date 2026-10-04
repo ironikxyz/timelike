@@ -320,3 +320,13 @@ ASSUMED (delegate): the manifest's redaction_rules.path is checked only to end i
 ABSENT: FR-32 (the scratch filesystem named when the log cannot be created) — not unit-tested; the e2e scratch cell reaches the in-run case, not this one
 Verification: reviewed; 35/35 pass against T023–T025; background children found and killed through pid files; ruff, format, mypy clean
 SCOPE: in (1 changed files)
+
+### T026: 001's output contract (pass-through, rule 15's rule set), README's run section, run-cli.md's settled gaps
+**Started:** 2026-10-04T20:28Z | **Completed:** 2026-10-04T20:36Z
+
+INHERITED: the behaviour of T022–T025 and the gaps T019/T020's delegates reported (confidence: high)
+FLAGGED: 001's pass-through paragraph now admits any cause when the exit equals command_exit, naming memory and disk — declared as changed_other_features; 001's spec is not modified (its own next modify records it), as the send's precedent for contract text (confidence: high)
+ASSUMED: the earlier no-limit wording (spec FR-26, contract) and the TIMELIKE_RUN_DISK_FULL_BYTES detail, edited before T018 and committed by no task, belong here (feature artifacts) (confidence: high)
+ABSENT: 001's agent-info.schema.json — redaction_rules and disk_full_bytes are tool-specific manifest extras, which the schema already allows (the run units validate run's manifest against it)
+Verification: the README and contract text read against the code (cause words, verdict additions, fail closed); deny-list PASS
+SCOPE: in (2 changed files)

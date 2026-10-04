@@ -359,8 +359,8 @@ revision 1 from the start, marked *(slice 1)*. They are **added work** on a body
   `/sys/fs/cgroup`. `TIMELIKE_CGROUP_ROOT` overrides the directory, for tests on hosts. It reads
   `memory.events`' `oom_kill` count before starting the command and after it ends.
 - **FR-26:** When the count rose and the command did not exit 0, the cause is **`memory`**. The words
-  are `out of memory: limit <L>, peak <P>`, where `<L>` is `memory.max` (or `no limit` for `max`) and
-  `<P>` is `memory.peak`, both in binary units with one decimal. The exit code still passes through:
+  are `out of memory: limit <L>, peak <P>`, where `<L>` is `memory.max`, and `<P>` is
+  `memory.peak`. When `memory.max` is `max`, the words are `out of memory: no limit set, peak <P>`, both in binary units with one decimal. The exit code still passes through:
   137 when the command itself was killed, or what its parent reported.
 - **FR-27:** When the count rose and the command exited 0 anyway (a child was killed, and the command
   survived it), the cause stays `command`. The verdict adds ` · OOM kill during the command (limit <L>,

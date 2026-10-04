@@ -56,7 +56,34 @@ At most five detached children are named in the verdict, then `(+N more)`; JSON 
 
 ### Environment
 `TIMELIKE_REDACTION_RULES` (default `/etc/timelike/redaction.toml`), `TIMELIKE_CGROUP_ROOT` (default:
-`/sys/fs/cgroup` joined with `/proc/self/cgroup`'s `0::` path; for tests).
+`/sys/fs/cgroup` joined with `/proc/self/cgroup`'s `0::` path; for tests), `TIMELIKE_RUN_DISK_FULL_BYTES`
+(default 1048576: a filesystem with fewer free bytes is full; a non-negative integer, else usage exit 2).
+
+**Detail the tests rely on:**
+- `memory.events` is `key value` lines, and only `oom_kill` is read. `memory.max` is an integer or
+  `max`, and `memory.peak` is an integer. A file that is absent or unreadable is named in `reason` as
+  `<absolute path>: <strerror>`.
+- `data.memory` is filled whenever a memory reading was attempted. It is attempted when the command
+  did not exit 0, or when it was killed by SIGKILL. `state: "not looked at"` means the command exited
+  0 and no OOM kill was counted. In that case the before and after readings were still taken, so an OOM
+  kill under exit 0 is seen (FR-27).
+- `data.disk` is checked only when the command did not exit 0. Otherwise it is `[]`.
+- Sizes: `B`, `KiB`, `MiB`, `GiB`, `TiB`. Below 1 KiB they are written as an integer (`0 B`, `512 B`),
+  otherwise with one decimal (`96.0 MiB`).
+- Redaction counts the secrets replaced. A multi-line private key counts once.
+- The verdict's `redacted` list is ordered by type name: `redacted 3 (credential 1, key 1, token 1)`.
+- **Settled at implementation** (gaps the test delegates found):
+  - **Two rules matching overlapping text:** the match starting first wins, and on a tie the longer one.
+    The other is skipped, so one value is one secret.
+  - **`event_args`:** the session event records `run`'s arguments redacted with the rule set, and
+    agentio's flag-style redaction (`--token=…`) still applies on top.
+  - **A rule whose allowlists hold only `paths`** loads with an empty allowlist. Output has no path.
+  - **Rules unavailable** withholds the command line too. The header, JSON `target` and the event's
+    arguments become `(withheld: redaction rules unavailable)`.
+  - **A filesystem holding both the workspace and the scratch** is named once in the disk words.
+  - **A malformed `memory.max` or `memory.peak`** gives `reason` `<path>: not a number of bytes: '<text>'`,
+    and the words say `limit unknown`.
+  - **An OOM kill under exit 0 with no limit** reads `OOM kill during the command (no limit set, peak <P>)`.
 
 ### Exit and cause
 | Exit | When | cause | command_exit |
@@ -75,7 +102,7 @@ Memory is tested before disk. Every other row is slice 0's.
 … · detached output after this is not kept                 when the log was rewritten while held
 … · output withheld: redaction rules unavailable (<reason>); the log is unredacted
 ```
-Cause words: `out of memory: limit <L>, peak <P>` (`<L>` may be `no limit`); `disk full: <mount> has
+Cause words: `out of memory: limit <L>, peak <P>` (with no limit: `out of memory: no limit set, peak <P>`); `disk full: <mount> has
 <free> free[, <mount> has <free> free]`; `disk full: "<message>" in the output; <mount> has <free> free,
 <mount> has <free> free` (workspace, then scratch). Sizes are binary units with one decimal (`96.0 MiB`,
 `0 B`).

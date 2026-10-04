@@ -278,7 +278,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
 - [X] T024 [US6] `tools/bin/run`: the disk cause (FR-29 to FR-32).
 - [X] T025 [US7] `tools/bin/run`: redaction of the log, the shown lines, the header and the event
   arguments; the verdict count; fail closed; the manifest (FR-33 to FR-40).
-- [ ] T026 The declared contract text and the place agents read:
+- [X] T026 The declared contract text and the place agents read:
   - `.specswarm/features/001-agent-shell-baseline/contracts/output-contract.md`: the pass-through
     paragraph and § Redaction;
   - `README.md`: the `run` section gains the causes and redaction.
