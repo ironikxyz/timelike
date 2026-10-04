@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~20:30Z. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
+**Snapshot:** 2026-10-04 ~20:45Z, before a clear. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
 `../bridge/dispatch/pause-06.md`, rule 9 (is `edit` mutating?), plan's choice by the send's own seam;
 not picked. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge
 nothing (the batch leaves its branches standing).
@@ -49,6 +49,49 @@ mentor's lane after the batch.
   no-literal-secrets rule and the deny-list rule. Review their contract findings and settle them in the
   contract as built.
 - **Never compose a time:** read it with `date` (memory: read-times-from-clock).
+
+**Resuming 06 after pause-06 is answered:**
+- Read the answer where plan put it: beside the question in `../bridge/dispatch/pause-06.md`, or in a
+  `../bridge/feedback/` file. Check that `pause-06.md` is gone, which is the mentor's resume signal.
+- Record the answer in `.specswarm/features/008-edit/spec.md` FR-12: replace the [NEEDS CLARIFICATION]
+  and set `status: In Progress`. Cite where the answer is.
+- Then run `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement --dispatch`. Every other seam
+  is decided in the spec:
+  - atomic write and hash checks;
+  - three matching levels: exact, line endings, indentation mapping;
+  - three nearest candidates, at a 0.5 floor;
+  - the name `edit`, with a `type -a` cell (Debian's mailcap would install `/usr/bin/edit`);
+  - flags, not stdin.
+- Its cycle report is new: `.specswarm/features/008-edit/cycle-report.md`, `## Cycle 1 — bridge/sends/06-rev1-20261004-183704.md`.
+  Say the batch paused, and that `pause-06.md` was written by this instance.
+- **The other named pause is 09 s1's seam 1** (services: rules 8 and 9). Read its block before
+  specifying it.
+
+**Open items from this batch, for the batch's final report:**
+- **FOR-MENTOR Item 19:** 04's SC-1 workspace part, narrowed by the send's seam; routed to plan.
+- **Plugin observations to relay (2.35.0):** implement's expansion clobbers awk's `$0`; specify's
+  expansion breaks on a quoted description (the stray quote is in the description; an unquoted `&`
+  would background part of the line). That is the send's `$ARGUMENTS` question, answered with a real case.
+- **A 006 Cycle 1 defect, fixed on 007:** `tools/bin/view` and `search` were committed `100644`. The
+  image's `COPY --chmod=0755` hid it.
+- **A process slip:** composed timestamps in 003 Cycle 2's decisions, corrected by an appended note.
+  Rule now: read times from the clock.
+- **plan and tasks were not re-invoked** for 006 and 007. Their 2.35.0 text from 003 was followed, and
+  the cycle reports say so. Invoke them for each remaining feature.
+
+**Per-feature paths in this batch:**
+
+| Feature | Report | New tests |
+|---|---|---|
+| 003 s1 | `003-concluding-run/cycle-report.md` § Cycle 2 | `tests/unit/test_run_slice1.py`, `test_agentio_redaction.py`, `test_redaction_rules.py`; e2e `run-killed-by-memory-…`, `run-full-scratch-…`, `run-secrets-redacted-…` |
+| 006 s1 | `006-bounded-read/cycle-report.md` § Cycle 2 | `tests/unit/test_view_slice1.py`; e2e `view-directory-overview-…`, `view-anchor-mode-…`, `view-and-search-slice-1-carried-items.bats` + `fixtures/bounded-read-slice1.sh` |
+| 007 | `007-announcements-discovery/cycle-report.md` § Cycle 1 | `tests/unit/test_announce.py`; e2e `announcement-at-most-60-…`, `announcement-generated-…`, `timelike-tools-manifest-…` |
+
+Shared files this batch touched:
+- `image/rootfs/etc/timelike/redaction.toml` (shared with `scan/scan.sh`'s gitleaks `--config`) and
+  `standard-tools.json`;
+- `image/rootfs/opt/timelike/libexec/entrypoint` (the image's ENTRYPOINT);
+- `tests/unit/conftest.py` (`TIMELIKE_REDACTION_RULES`).
 
 **006 helpers** (scratchpad, gone after a clear): `commit-006.sh` / `scope-tick-006.sh` (one task commit,
 then a "scope record, task ticked" commit; the scope-check block from 2.35.0, unchanged since 2.32.0);
