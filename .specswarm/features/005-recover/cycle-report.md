@@ -466,3 +466,16 @@ in `.specswarm/metrics.json` → `005-cycle-2.project_measurements_not_scored`. 
   `*.sh`, `*.bash` and `*.bats`.
 - The five 005 e2e files through the host stand-in: 40/44 (the 4 `type -a` cells).
 - The publish deny-list read `pass` with the list read before every commit (7 entries, P1–P7 0/0).
+
+**Implement step 9b: decision log** (plugin `scope-tally` and `decision-tally`, 2.32.0, over 005's
+`tasks.md` and `decisions.md` after T019; cumulative over Cycles 1 and 2):
+
+```
+scope: planned=19 recorded=18 unplanned=0 unrecorded=1 in=12 out=3 none=3 unknown=0 flagged=9 flagged_out=1 other=9 other_out=2
+decisions: sections=18 flagged_sections=9 non_flagged_sections=9 sections_without_absent=0 flagged=14 assumed=26 deferred=0 absent=18 inherited=17 low_confidence=0 flagged_low_confidence=0
+```
+
+- **Cycle 2 alone** (the differences from Cycle 1's tallies): 4 tasks planned and 4 recorded. T016 `in`,
+  T017 `out` (`FOR-MENTOR.md`), T018 `none`, T019 `out` (`.specswarm/metrics.json`, as for T015).
+  3 FLAGGED sections with 5 FLAGGED entries; 0 low-confidence (two FLAGGED entries say `medium`).
+- `unrecorded=1` is still Cycle 1's T010 (recorded in T009's section).
