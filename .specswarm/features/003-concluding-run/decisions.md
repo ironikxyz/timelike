@@ -354,3 +354,15 @@ ABSENT: the e2e on a host stand-in — not rebuilt this cycle (the scratchpad st
 ABSENT: undo's 88% coverage — 005's module, unchanged by this cycle
 Verification: ruff check and format (61 files), mypy strict (21 files), shellcheck over every *.sh, *.bash, *.bats: clean; units with subprocess coverage: 1196 passed, 1 skipped (457 s); Python 95% overall (agentio 94%, run 92%); make test-host: passed (hook logic 29/29); start-up p95 run --help 78 ms, run --json true 98 ms (host, 40 runs, every exit asserted)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T028: cycle report § Cycle 2, implement step 10, metrics entry
+**Started:** 2026-10-04T21:00Z | **Completed:** 2026-10-04T21:15Z
+
+INHERITED: T018–T027's records and the host-lane figures — from T027 (confidence: high)
+FLAGGED: criteria cited with their trace markers — the bare sentences also appear in the send's scope list, so without the marker three citations matched two lines (grep -cF = 1 for all four now) (confidence: high)
+FLAGGED: Group A reports each of the ten contracted fields as present, for a marker written after this commit — the marker is written by this same dispatch run from the installed tally blocks, and marker-fields is run over it before completion is reported (confidence: high)
+ASSUMED: step 10's components are the plugin's own reasons, unchanged from 006's run (same machine, same install) — re-run here, not copied (confidence: high)
+ABSENT: demo_points_reached — the mentor derives it
+ABSENT: an audit-log row — modify row 4, nothing appended
+Verification: step 10 run from the installed blocks and library (output verbatim in the report); metrics.json gains 003-cycle-2 only (diff: additions); deny-list PASS
+SCOPE: in (1 changed files)
