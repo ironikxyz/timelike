@@ -179,12 +179,14 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
                     f"--anchors needs a file; {path} is a directory", f"view --anchors FILE, or view {path}"
                 )
             return overview(ctx, path, not args.no_ignore)
-        return show(ctx, path, a, b, single)
+        return show(ctx, path, a, b, single, args.anchors)
     except Outcome as o:
         return o.result(path)
 
 
-def show(ctx: agentio.Context, path: str, a: int | None, b: int | None, single: bool) -> agentio.Result:
+def show(
+    ctx: agentio.Context, path: str, a: int | None, b: int | None, single: bool, anchors: bool = False
+) -> agentio.Result:
     try:
         st = os.stat(path)
     except FileNotFoundError:
@@ -218,7 +220,7 @@ def show(ctx: agentio.Context, path: str, a: int | None, b: int | None, single: 
                 data={"path": path, "abs_path": abs_path, "binary": True, "type": kind, "size": size},
             )
         f.seek(0)
-        return window(ctx, f, path, abs_path, a, b, single)
+        return window(ctx, f, path, abs_path, a, b, single, anchors)
 
 
 # ── the overview: view DIR (slice 1; spec FR-24 to FR-31, research R7, R8) ───────────────────────
@@ -458,8 +460,22 @@ def overview(ctx: agentio.Context, path: str, use_ignore: bool) -> agentio.Resul
     return agentio.Result(path, "overview", verdict, lines=lines, data=data)
 
 
+def anchor_of(body: bytes) -> str:
+    """FR-33: the first 6 hex of the SHA-256 of a line's raw bytes, its line ending already removed."""
+    import hashlib  # deferred: only --anchors needs it
+
+    return hashlib.sha256(body).hexdigest()[:6]
+
+
 def window(
-    ctx: agentio.Context, f: Any, path: str, abs_path: str, a: int | None, b: int | None, single: bool
+    ctx: agentio.Context,
+    f: Any,
+    path: str,
+    abs_path: str,
+    a: int | None,
+    b: int | None,
+    single: bool,
+    anchors: bool = False,
 ) -> agentio.Result:
     # The requested range, before the file's length is known (data-model § Window rules).
     if single and a is not None:
@@ -505,6 +521,7 @@ def window(
     width = len(str(total))
     decoder = _Decoder()
     lines: list[str] = []
+    anchored: list[str] = []
     escapes = 0
     for n, raw in enumerate(raws, start):
         body = raw[:-1] if raw.endswith(b"\n") else raw
@@ -513,7 +530,13 @@ def window(
         text, had = clean(decoder.decode(body))
         escapes += had
         marker = ">" if n == target else " "
-        lines.append(f"{n:>{width}}{marker} {text}")
+        if anchors:  # D-9's column: number, marker, anchor, text
+            mark = anchor_of(body)
+            anchored.append(f"{n}:{mark}")
+            lines.append(f"{n:>{width}}{marker}{mark} {text}")
+        else:
+            lines.append(f"{n:>{width}}{marker} {text}")
+    flag = ["--anchors"] if anchors else []  # FR-35: continuing keeps the mode
 
     scope = f"lines {start}-{end} of {total}"
     whole = start == 1 and end == total
@@ -524,19 +547,21 @@ def window(
         notes.append(f"{escapes} lines had terminal escapes stripped")
     verdict = "; ".join([scope + (" (whole file)" if whole else ""), *notes])
 
-    nxt = shlex.join(["view", f"{path}:{end + 1}-{end + WINDOW}"]) if end < total else None
+    nxt = shlex.join(["view", *flag, f"{path}:{end + 1}-{end + WINDOW}"]) if end < total else None
     data = _data(path, abs_path, total, start, end, target, nxt, clipped, decoder.replaced, escapes)
+    if anchors:
+        data["anchors"] = anchored
     shown = len(lines)
     long_lines = sum(len(x) > ctx.columns for x in lines) if ctx.columns > 0 else 0
     if long_lines:
         # Discovery revision 12 and D5: the closing lines give the exact command that reads them whole.
-        whole_cmd = shlex.join(["view", f"{path}:{start}-{end}", "--columns", "0"])
+        whole_cmd = shlex.join(["view", *flag, f"{path}:{start}-{end}", "--columns", "0"])
         lines.append(f"long lines cut: {long_lines}; read them whole with: {whole_cmd}")
         data["long_lines_cut"] = long_lines
     footer = 1 if long_lines else 0
     if whole:
         return agentio.Result(path, scope, verdict, lines=lines, data=data, footer=footer)
-    more = nxt or shlex.join(["view", f"{path}:{max(1, start - WINDOW)}-{start - 1}"])
+    more = nxt or shlex.join(["view", *flag, f"{path}:{max(1, start - WINDOW)}-{start - 1}"])
     cut = agentio.Cut([(scope, lines)], total - shown, total_bytes - shown_bytes, abs_path, more)
     return agentio.Result(path, scope, verdict, data=data, cut=cut, footer=footer)
 

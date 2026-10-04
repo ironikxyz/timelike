@@ -194,3 +194,14 @@ ABSENT: the 100,000 count cap is not reached by any fixture here — a unit woul
 ABSENT: --no-ignore keeps .git collapsed, as specified; nothing lists inside .git
 Verification: ruff, format, mypy clean; a fixture repository (10,000-file node_modules, .git, build, an ignored file, a symlink): node_modules one line with its counts and expand command, symlink shown not followed, 1 ignored file counted; view node_modules/ expands breadth-first within 200 lines; tests/unit/test_view.py 2 expectations updated for FR-24 (declared), 160 passed with test_search.py
 SCOPE: in (2 changed files)
+
+### T020: view --anchors (FR-32 to FR-35)
+**Started:** 2026-10-04T19:21:53Z | **Completed:** 2026-10-04T19:22:04Z
+
+INHERITED: the window code and the overview's flags — from T019 (confidence: high)
+FLAGGED: the anchor hashes the line's raw bytes (before decoding, escape stripping and the COLUMNS cut), line ending removed — chose raw bytes over the shown text, because the shown text depends on COLUMNS and on replacement, which would make the anchor unstable across views; removing \r\n makes CRLF and LF copies agree, which 06 needs (R9) (confidence: high)
+FLAGGED: 6 hex characters (24 bits) — chose them over 4 (16 bits, 1 in 65,536 per changed line) as short enough for a column and unlikely to collide over a session of edits; 06 also checks the line number (R9) (confidence: medium)
+ASSUMED: hashlib is imported only under --anchors, so the file mode's start-up is unchanged (confidence: high)
+ABSENT: anchors in the overview — a directory has no lines of a file; --anchors on a directory is a usage error (T019)
+Verification: ruff, format, mypy clean; a 4-line file with a CRLF line, an escape sequence and an invalid byte: each anchor equals sha256(raw line)[:6] computed separately; view --anchors FILE:2 marks line 2
+SCOPE: in (1 changed files)
