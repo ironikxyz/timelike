@@ -1,0 +1,539 @@
+#!/opt/timelike/python/bin/python3 -I
+"""search — find a pattern under a directory, hits grouped by file, at most 50 shown (P2, P3).
+
+Shaped like `grep -rn` with a cap: Python regular expressions (close to `grep -E`), case-sensitive unless
+-i, fixed string with -F. Ignore rules are respected by default (every `.gitignore` from the enclosing
+repository's root down, and `.git/info/exclude`), read in the standard library: no git command runs, so a
+repository's configuration executes nothing (spec D-5). Over the cap the output is a cut: it ends with a
+concrete narrowing (`narrow:`), and `more:` reads every hit from a saved list, never a re-run. Zero
+matches exits 0; `--strict` makes it exit 1, as grep does. A time limit always ends the search with 124.
+
+Design: .specswarm/features/006-bounded-read/ (spec, research R1, R2, R6, data-model.md,
+contracts/view-search-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import codecs
+import hashlib
+import os
+import re
+import shlex
+import stat
+import time
+from collections import Counter
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from typing import Any
+
+import agentio
+
+CAP = 50
+TIMEOUT_S = 30.0
+MAX_FILE = 16 * 1024 * 1024
+SNIFF = 8192
+GIT = ".git"
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
+
+TOOL = agentio.Tool(
+    name="search",
+    target="paths",
+    summary="find a pattern in files, hits grouped by file, 50 shown, with how to narrow and see the rest",
+    usage=[
+        "search PATTERN [PATH...]     # recursively, from . by default; Python regex, case-sensitive",
+        "  -i ignore case, -F fixed string, -m N show N hits (0 = all), --no-ignore, --strict",
+        "  --timeout S (default 30; 0 = none): the search always ends, with 124 if the limit fires",
+        "skips .git, files .gitignore excludes, binary files and files over 16 MiB (all counted)",
+        "zero matches exits 0; with --strict it exits 1, as grep does",
+        "a hit's whole line: view FILE:LINE",
+    ],
+    probe=("-m", "1", "ID", "/etc/os-release"),
+    exit_codes={
+        agentio.EXIT_OK: "ok (zero matches is 0, with count 0)",
+        agentio.EXIT_FAILURE: "failed; with --strict, also: no match",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such path",
+        agentio.EXIT_TIMEOUT: "the time limit fired",
+    },
+    manifest_extra=lambda: {"cap": CAP, "timeout_s": TIMEOUT_S, "max_file_bytes": MAX_FILE},
+)
+
+
+class Outcome(Exception):
+    """A missing path, an unreadable root or a strict no-match: a verdict on stdout, not a stderr error."""
+
+    def __init__(
+        self, code: int, verdict: str, remedy: str | None = None, data: dict[str, Any] | None = None
+    ):
+        super().__init__(verdict)
+        self.code, self.verdict, self.remedy, self.data = code, verdict, remedy, dict(data or {})
+
+    def result(self, target: str, scope: str) -> agentio.Result:
+        lines = [f"do instead: {self.remedy}"] if self.remedy else []
+        data = {**self.data, **({"remedy": self.remedy} if self.remedy else {})}
+        return agentio.Result(target, scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+# ── ignore rules (research R2; git's gitignore(5), without git) ──────────────────────────────
+
+
+@dataclass
+class Rule:
+    base: str  # the directory the rules apply below, relative to the walk's frame ("" = its root)
+    rx: re.Pattern[str]
+    negate: bool
+    dir_only: bool
+
+
+def _translate(pat: str) -> str:
+    """A gitignore glob (already stripped of !, a trailing / and a leading /) as a regex body."""
+    out: list[str] = []
+    i, n = 0, len(pat)
+    while i < n:
+        if pat.startswith("**/", i) and (i == 0 or pat[i - 1] == "/"):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pat.startswith("**", i) and i + 2 == n and (i == 0 or pat[i - 1] == "/"):
+            out.append(".*")
+            i += 2
+        elif pat[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pat[i] == "?":
+            out.append("[^/]")
+            i += 1
+        elif pat[i] == "[":
+            j = pat.find("]", i + 2)
+            if j == -1:
+                out.append(re.escape("["))
+                i += 1
+                continue
+            body = pat[i + 1 : j]
+            if body[:1] in ("!", "^"):
+                body = "^" + body[1:]
+            out.append("[" + body.replace("\\", "\\\\") + "]")
+            i = j + 1
+        elif pat[i] == "\\" and i + 1 < n:
+            out.append(re.escape(pat[i + 1]))
+            i += 2
+        else:
+            out.append(re.escape(pat[i]))
+            i += 1
+    return "".join(out)
+
+
+def parse_ignore(text: str, base: str) -> list[Rule]:
+    rules: list[Rule] = []
+    for raw in text.splitlines():
+        line = raw
+        # trailing spaces are trimmed unless escaped with a backslash
+        stripped = line.rstrip(" ")
+        if stripped.endswith("\\") and len(stripped) < len(line):
+            stripped += " "
+        line = stripped
+        if not line or line.startswith("#"):
+            continue
+        negate = line.startswith("!")
+        if negate or line.startswith(("\\!", "\\#")):  # "!" negates; "\!" and "\#" are literal
+            line = line[1:]
+        dir_only = line.endswith("/") and not line.endswith("\\/")
+        if dir_only:
+            line = line.rstrip("/")
+        if not line:
+            continue
+        anchored = "/" in line
+        line = line.lstrip("/")
+        body = _translate(line)
+        rx = re.compile(("^" if anchored else "^(?:.*/)?") + body + "$")
+        rules.append(Rule(base, rx, negate, dir_only))
+    return rules
+
+
+def ignored(rules: list[Rule], rel: str, is_dir: bool) -> bool:
+    """The last matching rule decides (rules run from lowest to highest precedence)."""
+    verdict = False
+    for r in rules:
+        if r.base:
+            if not rel.startswith(r.base + "/"):
+                continue
+            sub = rel[len(r.base) + 1 :]
+        else:
+            sub = rel
+        if r.dir_only and not is_dir:
+            continue
+        if r.rx.match(sub):
+            verdict = not r.negate
+    return verdict
+
+
+def _read_text(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def enclosing_repo(start: str) -> str | None:
+    d = os.path.realpath(start)
+    if not os.path.isdir(d):
+        d = os.path.dirname(d)
+    while True:
+        if os.path.isdir(os.path.join(d, GIT)):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def base_rules(root_real: str) -> tuple[list[Rule], str]:
+    """info/exclude and the .gitignore files above the search root, framed at the repository's root.
+
+    Returns the rules and the root's path relative to the repository (the frame the walk extends)."""
+    repo = enclosing_repo(root_real)
+    if repo is None:
+        return [], ""
+    rules: list[Rule] = []
+    text = _read_text(os.path.join(repo, GIT, "info", "exclude"))
+    if text:
+        rules += parse_ignore(text, "")
+    rel = os.path.relpath(root_real, repo)
+    rel = "" if rel == "." else rel
+    parts = rel.split("/") if rel else []
+    for i in range(len(parts)):  # the root's own .gitignore is read by the walk
+        base = "/".join(parts[:i])
+        text = _read_text(os.path.join(repo, base, ".gitignore"))
+        if text:
+            rules += parse_ignore(text, base)
+    return rules, rel
+
+
+# ── the walk and the search ───────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class Scan:
+    hits: list[tuple[str, int, str]] = field(default_factory=list)
+    files_searched: int = 0
+    skipped: dict[str, int] = field(
+        default_factory=lambda: {"ignored": 0, "binary": 0, "large": 0, "unreadable": 0}
+    )
+    timed_out: bool = False
+    not_reached: str | None = None
+
+
+class _Decoder:
+    def __init__(self) -> None:
+        self.name = f"search-replace-{id(self)}"
+        codecs.register_error(self.name, lambda e: ("�" * (e.end - e.start), e.end))  # type: ignore[attr-defined]
+
+    def decode(self, raw: bytes) -> str:
+        return raw.decode("utf-8", self.name)
+
+
+def display(path: str) -> str:
+    """Relative to the current directory when under it, so a printed command works pasted here (P002)."""
+    cwd = os.getcwd()
+    real = os.path.abspath(path)
+    if real == cwd or real.startswith(cwd.rstrip("/") + "/"):
+        rel = os.path.relpath(real, cwd)
+        return rel
+    return real
+
+
+def walk(root: str, use_ignore: bool) -> Iterator[tuple[str, str]]:
+    """Yield ("file", path) for each candidate file under root, and ("ignored", path) for each pruned entry.
+
+    Directories named .git are never entered; symbolic links met during the walk are not followed."""
+    real = os.path.realpath(root)
+    rules, frame = base_rules(real) if use_ignore else ([], "")
+    stack: list[tuple[str, str, list[Rule]]] = [(root, frame, rules)]
+    while stack:
+        dir_path, rel_dir, active = stack.pop()
+        if use_ignore:
+            text = _read_text(os.path.join(dir_path, ".gitignore"))
+            if text:
+                active = active + parse_ignore(text, rel_dir)
+        try:
+            with os.scandir(dir_path) as it:
+                children = sorted(it, key=lambda e: e.name.encode())
+        except OSError:
+            yield "unreadable", dir_path
+            continue
+        subdirs: list[tuple[str, str, list[Rule]]] = []
+        for child in children:
+            if child.name == GIT:
+                continue
+            rel = f"{rel_dir}/{child.name}" if rel_dir else child.name
+            try:
+                is_link = child.is_symlink()
+                is_dir = not is_link and child.is_dir(follow_symlinks=False)
+            except OSError:
+                yield "unreadable", child.path
+                continue
+            if is_link:
+                continue
+            if use_ignore and ignored(active, rel, is_dir):
+                yield "ignored", child.path
+                continue
+            if is_dir:
+                subdirs.append((child.path, rel, active))
+            else:
+                yield "file", child.path
+        stack.extend(reversed(subdirs))
+
+
+def search_file(path: str, rx: re.Pattern[str], scan: Scan, decoder: _Decoder) -> None:
+    try:
+        st = os.stat(path)
+        if not stat.S_ISREG(st.st_mode):
+            return
+        if st.st_size > MAX_FILE:
+            scan.skipped["large"] += 1
+            return
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        scan.skipped["unreadable"] += 1
+        return
+    if b"\x00" in raw[:SNIFF]:
+        scan.skipped["binary"] += 1
+        return
+    scan.files_searched += 1
+    text = decoder.decode(raw)
+    if not rx.search(text):
+        return
+    shown = display(path)
+    parts = text.split("\n")
+    if text.endswith("\n"):
+        parts.pop()
+    for n, line in enumerate(parts, 1):
+        if line.endswith("\r"):
+            line = line[:-1]
+        if rx.search(line):
+            if "\x1b" in line:
+                line = _ANSI_RE.sub("", line).replace("\x1b", "")
+            scan.hits.append((shown, n, line))
+
+
+def run_search(roots: list[str], rx: re.Pattern[str], use_ignore: bool, limit_s: float) -> Scan:
+    scan = Scan()
+    decoder = _Decoder()
+    deadline = time.monotonic() + limit_s if limit_s > 0 else None
+    for root in roots:
+        if os.path.isdir(root):
+            entries: Iterator[tuple[str, str]] = walk(root, use_ignore)
+        else:
+            entries = iter([("file", root)])  # an explicit file is searched whatever the ignore rules say
+        for kind, path in entries:
+            if deadline is not None and time.monotonic() >= deadline:
+                scan.timed_out = True
+                scan.not_reached = display(path)
+                return scan
+            if kind == "ignored":
+                scan.skipped["ignored"] += 1
+            elif kind == "unreadable":
+                scan.skipped["unreadable"] += 1
+            else:
+                search_file(path, rx, scan, decoder)
+    return scan
+
+
+# ── the output ────────────────────────────────────────────────────────────────────────────────
+
+
+def narrowing(hits: list[tuple[str, int, str]], words: list[str]) -> tuple[str, int, str] | str:
+    """data-model § Narrowing: the place below the roots with the most hits but fewer than all, shallowest
+    on ties. Returns (path, n, command), or the all-in-one-file sentence."""
+    total = len(hits)
+    cand: Counter[str] = Counter()
+    for path, _, _ in hits:
+        lead = "/" if path.startswith("/") else ""
+        parts = path.lstrip("/").split("/")
+        for i in range(1, len(parts) + 1):
+            cand[lead + "/".join(parts[:i])] += 1
+    eligible = [(n, -p.count("/"), p) for p, n in cand.items() if n < total]
+    if not eligible:
+        path, line, _ = hits[0]
+        return f"narrow: all {total} are in {path}; narrow the pattern, or view {path}:{line}"
+    eligible.sort(key=lambda e: (-e[0], -e[1], e[2]))
+    n, _, path = eligible[0]
+    return path, n, shlex.join([*words, path])
+
+
+def summary(scan: Scan) -> str:
+    skips = ", ".join(f"{v} {k}" for k, v in scan.skipped.items() if v)
+    return f"searched {scan.files_searched} files" + (f"; skipped {skips}" if skips else "")
+
+
+def save_hits(ctx: agentio.Context, hits: list[tuple[str, int, str]]) -> str:
+    text = "".join(f"{p}:{n}:{t}\n" for p, n, t in hits)
+    d = ctx.scratch() / "search"
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = d / f"hits-{hashlib.sha256(text.encode()).hexdigest()[:12]}.txt"
+    path.write_text(text)
+    return str(path)
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("pattern", nargs="?", metavar="PATTERN")
+    p.add_argument("paths", nargs="*", metavar="PATH")
+    p.add_argument("-i", dest="ignore_case", action="store_true", help="ignore case")
+    p.add_argument("-F", dest="fixed", action="store_true", help="PATTERN is a fixed string")
+    p.add_argument("-m", dest="cap", type=int, default=CAP, metavar="N", help="show at most N hits (0 = all)")
+    p.add_argument("--strict", action="store_true", help="zero matches exits 1, as grep does")
+    p.add_argument("--no-ignore", dest="no_ignore", action="store_true", help="also search ignored files")
+    p.add_argument("--timeout", type=float, default=TIMEOUT_S, metavar="S", help="seconds (0 = no limit)")
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.pattern is None:
+        raise agentio.UsageError("search needs a PATTERN", "run search PATTERN [PATH...]")
+    if args.cap < 0:
+        raise agentio.UsageError(f"-m {args.cap} is negative", "use -m N, or -m 0 for every hit")
+    if args.timeout < 0:
+        raise agentio.UsageError(f"--timeout {args.timeout:g} is negative", "use --timeout S, or 0 for none")
+    try:
+        rx = re.compile(
+            re.escape(args.pattern) if args.fixed else args.pattern, re.I if args.ignore_case else 0
+        )
+    except re.error as e:
+        where = f" at position {e.pos}" if e.pos is not None else ""
+        raise agentio.UsageError(
+            f"pattern {args.pattern!r} does not compile: {e.msg}{where}",
+            "fix the pattern, or use -F for a fixed string",
+        ) from None
+    roots = args.paths or ["."]
+    target = " ".join(roots)
+    scope = shlex.quote(args.pattern)
+    try:
+        return respond(ctx, args, rx, roots, target, scope)
+    except Outcome as o:
+        return o.result(target, scope)
+
+
+def respond(
+    ctx: agentio.Context,
+    args: argparse.Namespace,
+    rx: re.Pattern[str],
+    roots: list[str],
+    target: str,
+    scope: str,
+) -> agentio.Result:
+    for root in roots:
+        if not os.path.lexists(root):
+            raise Outcome(
+                agentio.EXIT_NOT_FOUND, f"no such path: {root}", "check the path; search from . by default"
+            )
+        if os.path.isdir(root) and not os.access(root, os.R_OK | os.X_OK):
+            raise Outcome(agentio.EXIT_FAILURE, f"cannot read {root}: permission denied")
+    scan = run_search(roots, rx, not args.no_ignore, args.timeout)
+    hits = sorted(scan.hits, key=lambda h: (h[0].encode(), h[1]))
+    count = len(hits)
+    per_file = Counter(h[0] for h in hits)
+    data: dict[str, Any] = {
+        "pattern": args.pattern,
+        "roots": roots,
+        "count": count,
+        "files_matched": len(per_file),
+        "files_searched": scan.files_searched,
+        "skipped": dict(scan.skipped),
+        "strict": args.strict,
+        "timed_out": scan.timed_out,
+        "narrow": None,
+    }
+    if scan.timed_out:
+        data["not_reached"] = scan.not_reached
+
+    if count == 0 and not scan.timed_out:
+        data["shown"] = 0
+        if args.strict:
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"no match (strict): 0 matches ({summary(scan)})",
+                "drop --strict to treat no match as a result",
+                data,
+            )
+        return agentio.Result(target, scope, f"0 matches ({summary(scan)})", data=data)
+
+    words = ["search", *(["-i"] if args.ignore_case else []), *(["-F"] if args.fixed else [])]
+    words += [*(["--no-ignore"] if args.no_ignore else []), args.pattern]
+
+    cap = args.cap or count
+    shown_n = min(cap, count)
+    while True:  # the body must fit the output cap, so agentio never cuts it with a re-run (rule 3)
+        shown = hits[:shown_n]
+        files_shown = len({h[0] for h in shown})
+        omitted = count - shown_n
+        long_cut = [h for h in shown if ctx.columns > 0 and len(f"{h[1]}: {h[2]}") > ctx.columns]
+        footer_n = (1 if long_cut else 0) + (1 if omitted else 0)
+        body_n = shown_n + footer_n + (files_shown if ctx.mode == "text" and not omitted else 0)
+        if ctx.limit <= 0 or body_n <= ctx.limit or shown_n <= 1:
+            break
+        shown_n = max(1, shown_n - (body_n - ctx.limit))
+
+    footer: list[str] = []
+    if long_cut:
+        p, n, _ = long_cut[0]
+        cmd = shlex.join(["view", f"{p}:{n}", "--columns", "0"])
+        footer.append(f"long lines cut: {len(long_cut)}; read one whole with: {cmd}")
+        data["long_lines_cut"] = len(long_cut)
+    if omitted:
+        nar = narrowing(hits, words)
+        if isinstance(nar, str):
+            footer.append(nar)
+            data["narrow"] = nar.removeprefix("narrow: ")
+        else:
+            _, n, cmd = nar
+            footer.append(f"narrow: {cmd}  ({n} of the {count})")
+            data["narrow"] = cmd
+    data["shown"] = shown_n
+
+    head = f"{count} matches in {len(per_file)} files"
+    if scan.timed_out:
+        limit_text = f"{args.timeout:g}"
+        verdict = (
+            f"time limit {limit_text} s reached: searched {scan.files_searched} files,"
+            f" {count} matches so far; not reached: {scan.not_reached}"
+        )
+        code = agentio.EXIT_TIMEOUT
+    elif omitted:
+        verdict = f"{head}; {shown_n} shown, {omitted} omitted ({summary(scan)})"
+        code = agentio.EXIT_OK
+    else:
+        verdict = f"{head} ({summary(scan)})"
+        code = agentio.EXIT_OK
+
+    groups: list[tuple[str, list[str]]] = []
+    for p, n, t in shown:
+        if not groups or groups[-1][0] != p:
+            groups.append((p, []))
+        groups[-1][1].append(f"{n}: {t}")
+    labelled = [
+        (f"{p} ({len(ls)})" if len(ls) == per_file[p] else f"{p} ({len(ls)} of {per_file[p]})", ls)
+        for p, ls in groups
+    ]
+
+    if not omitted:
+        if ctx.mode == "text":
+            lines = [x for label, ls in labelled for x in (f"── {label} ──", *ls)]
+        else:
+            lines = [x for _, ls in labelled for x in ls]
+        return agentio.Result(
+            target, scope, verdict, lines=lines + footer, data=data, exit=code, footer=len(footer)
+        )
+
+    full = save_hits(ctx, hits)
+    more = shlex.join(["sed", "-n", f"{shown_n + 1},{count}p", full])
+    omitted_bytes = sum(len(f"{p}:{n}:{t}".encode()) + 1 for p, n, t in hits[shown_n:])
+    if labelled:
+        last_label, last_lines = labelled[-1]
+        labelled[-1] = (last_label, [*last_lines, *footer])
+    cut = agentio.Cut(labelled, omitted, omitted_bytes, full, more)
+    return agentio.Result(target, scope, verdict, data=data, exit=code, cut=cut, footer=len(footer))
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

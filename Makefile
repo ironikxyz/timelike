@@ -69,6 +69,12 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats \
   tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats \
   tests/e2e/snapshot-refuses-home-root-and-their-ancestors.bats \
+  tests/e2e/fixtures/bounded-read.sh \
+  tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats \
+  tests/e2e/view-range-context-missing-file-and-binary.bats \
+  tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats \
+  tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats \
+  tests/e2e/view-and-search-resolve-once-and-pass-conform.bats \
   bench/run.sh
 PY_IN_IMAGE := docker run --rm -v "$(CURDIR)":/src:ro -w /src -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv \
   -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint bash timelike-agent:local -c

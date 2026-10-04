@@ -226,6 +226,29 @@ snapshot list                       # this workspace's snapshots, newest first
   survive a container restart, not a recreate, and each `TIMELIKE_SESSION` has its own.
 - Slice 1 adds automatic snapshots before destructive commands and a restorable trash.
 
+## view and search — bounded reads, each ending with the next command
+
+`view` shows a numbered window of a file. `search` finds a pattern and groups the hits by file. Both say
+what they left out, and how to get it:
+
+```
+view src/engine.py              # lines 1-120 of 412; ends with: more: view src/engine.py:121-240
+view src/engine.py:40           # lines 30-50, line 40 marked >
+view build/app.o                # binary file: ELF, 18.2 KiB (18640 bytes); content not shown
+search parse_args               # 50 hits grouped by file; ends with narrow: search parse_args src  (188 of the 262)
+search no_such_thing --strict   # exit 1, as grep does; without --strict, 0 matches exits 0
+```
+
+- **Bounded:** a window is 120 lines (`view FILE:A-B` for a range, `--limit 0` for a whole file when you
+  mean it), and a search shows 50 hits (`-m N`). Long lines are cut at `COLUMNS` in text and JSON alike,
+  and the output names the exact command that reads them whole (`view FILE:N --columns 0`).
+- **The rest is never a re-run:** a window's `more:` is the next window; a search's `more:` reads every
+  hit from a list saved in the session scratch directory.
+- **Ignore rules without git:** `search` skips `.git`, what `.gitignore` and `.git/info/exclude` exclude,
+  binary files and files over 16 MiB, and counts each. It reads the ignore files itself, so a
+  repository's git configuration runs nothing. `--no-ignore` searches everything but `.git`.
+- **Always ends:** a search stops at 30 seconds (`--timeout S`) with exit 124 and names what it reached.
+
 ## Speedup bench
 
 ```bash

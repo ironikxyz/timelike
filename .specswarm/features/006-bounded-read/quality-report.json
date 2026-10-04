@@ -1,0 +1,12 @@
+{
+  "overall_score": null,
+  "overall_state": "unknown",
+  "unknown_is": "unresolvable",
+  "unknown_why": "no component of this Python project could be measured: pytest is declared but could not be run on this machine",
+  "set": "no module could be scored (8 unscored)",
+  "modules_scored": 0,
+  "modules_total": 8,
+  "generated_at": "2026-10-04T18:19:49+00:00",
+  "generated_by": "/specswarm:analyze-quality",
+  "generated_by_version": "4.0.1-botbaubble.2.35.0"
+}

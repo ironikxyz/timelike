@@ -796,3 +796,54 @@ criterion more narrowly, so I am building on them; each can be changed behind th
 - **Decisions 1, 2, 3 and 6:** no separate ruling was asked for or given. They stand as built (spec D-1
   to D-3, D-10), and the item closes on the send's instruction. A later ruling on any of them would be
   a new item.
+
+## Item 18 — Feature 05 slice 0 (`006-bounded-read`): two readings of rule 3 to confirm before they are built; the other seams decided
+
+**Status:** open for Q3 only. **Q1 and Q2 closed 2026-10-04: both answered (a)** by the mentor in
+`../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md` (route code; no revision). **Q3** (is a window bounded in bytes in JSON, spec FR-7) was raised by
+the mentor and routed to plan; it is pending there, and FR-7's JSON branch waits for it. Raised
+2026-10-04 on `006-bounded-read` (send `bridge/sends/05-rev1-20261004-061518.md`).
+Each seam is decided in `spec.md` § Decisions, with its reason. The send asks for anything near 001's
+contract to be raised before that part is built, so **Q1 and Q2 wait for an answer.** The rest of 05 is
+built first.
+
+**Q1 · D-2: `view`'s window as a rule-3 cut, and what its `more:` is.** A window that shows less than the
+whole file is treated as cut output. It ends with the omission line, whose figures count the file's lines
+and bytes not shown, and whose full output is the file itself. A whole-file view has no omission line,
+so its absence still means nothing was left out. The question is `more:`:
+- **(a) recommended:** `more:` is **the next window's command** (`view FILE:121-240`). That is the prompt's
+  "footer naming the next range command". It prints the next part of what was omitted, not all of it.
+- **(b):** `more:` prints **everything omitted** (`view FILE:121-412 --limit 0`), as 003's and 005's
+  `sed -n` over their artefacts do, and the next window goes on a line of its own before it. This is
+  faithful to "the exact command that prints what was omitted", but two continue commands in one footer
+  are one too many.
+
+**Q2 · D-3: `search`'s narrowing line and rule 3's order.** The cap counts hits (50). Each hit is one
+line, so the omission line's omitted lines equal the omitted hits. Its `more:` is `sed -n A,Bp` over the
+saved hit list, never a re-run. The criterion also wants "a concrete way to narrow" in the footer, which
+rule 3's order has no slot for.
+- **(a) recommended:** a line `narrow: search … <dir>  (N of the 262)` as the last line before `more:`, so
+  the footer reads narrow, more, exit, full output, omission line.
+- **(b):** the narrowing goes in the verdict line only.
+
+**Decided, not waiting** (no contract change, no narrower reading of a criterion):
+1. **D-1:** JSON stays the default under a pipe. **The D5 demo's agent sees JSON by default.** Its `lines`
+   are the same numbered lines text mode prints, with `start`, `end`, `total`, `target` and `next` as data.
+2. **D-4:** `--strict` makes zero matches exit 1. It is declared in the manifest's `exit_codes`, and the
+   verdict says `no match (strict)`.
+3. **D-5:** ignore rules are read in the standard library (`.gitignore` per directory and
+   `.git/info/exclude`). No git command runs, because 001's layer does not pin `core.fsmonitor`. The
+   limits: no `core.excludesFile`, and no knowledge of which files are tracked.
+4. **D-6:** the names are `view` (discovery's own P3 example; vim's alias, but the image has no vim) and
+   `search`. **A correction to the send:** the `type -a` cells are e2e tests in each feature's bats files
+   (005's R7), not part of `timelike-conform`.
+5. **D-7, D-8:** fixed defaults of 120 lines and 50 hits (`-m N`); `FILE:N` shows 10 lines each side. The
+   search is stdlib `re` with a 30-second limit and exit 124. No ripgrep is added.
+
+**Answers (2026-10-04, `../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md`):**
+- **Q1: closed, (a).** `more:` is the next window's command. A whole-file view has no omission line,
+  and JSON's `truncated.more` equals the text's `more:`.
+- **Q2: closed, (a).** The `narrow:` line goes after the hits, before the closing lines; the omission
+  line stays last. `count`, `shown` and `truncated.omitted_lines` stay consistent (in hits).
+- **Q3: open, with plan.** The mentor recommends (a), JSON follows text: a line longer than `COLUMNS` is
+  cut in JSON too, and its full length is carried as data. Not built until plan answers.

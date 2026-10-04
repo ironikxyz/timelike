@@ -49,6 +49,7 @@ REDACTION_TYPES = frozenset({"token", "password", "key", "secret", "credential"}
 RESERVED_KEYS = frozenset(
     {"tool", "target", "scope", "verdict", "exit", "lines", "errors", "truncated"}
     | {"cause", "command_exit", "sections"}  # pass-through and tool-cut output (discovery revision 9)
+    | {"cut_lines"}  # rule 13 in JSON: the content strings cut, by index (discovery revision 12)
 )
 
 # Exit 4's two envelopes, told apart by `status` (discovery revision 10)
@@ -191,6 +192,7 @@ class Result:
         "envelope",
         "errors",
         "exit",
+        "footer",
         "lines",
         "scope",
         "target",
@@ -210,6 +212,7 @@ class Result:
         cause: str | None = None,  # command | timeout | usage | internal, open (discovery revision 9)
         command_exit: int | None = None,  # the wrapped command's own exit, None when it never ran
         cut: Cut | None = None,
+        footer: int = 0,  # trailing body lines that are the tool's own closing commands, never cut (rule 13)
     ) -> None:
         self.target = target
         self.scope = scope
@@ -222,10 +225,11 @@ class Result:
         self.cause = cause
         self.command_exit = command_exit
         self.cut = cut
+        self.footer = footer
 
 
 class Context:
-    __slots__ = ("argv", "limit", "mode", "scratch_root", "session", "tool", "verbose")
+    __slots__ = ("argv", "columns", "limit", "mode", "scratch_root", "session", "tool", "verbose")
 
     def __init__(
         self,
@@ -236,6 +240,7 @@ class Context:
         mode: str,  # "json" | "text"
         limit: int,  # 0 = uncapped
         verbose: bool,
+        columns: int = DEFAULT_COLUMNS,  # rule 13's line cut; a tool may set it per call, 0 = no cut
     ) -> None:
         self.tool = tool
         self.argv = argv
@@ -244,6 +249,7 @@ class Context:
         self.mode = mode
         self.limit = limit
         self.verbose = verbose
+        self.columns = columns
 
     def scratch(self) -> Path:
         """This session's private scratch directory, created on first use (rule 10)."""
@@ -360,7 +366,8 @@ def run(
             raise UsageError("--json and --text are mutually exclusive", f"run {tool.name} with one of them")
         mode = "json" if args.json else "text" if args.text else ("text" if _stdout_is_tty() else "json")
         limit = args.limit if args.limit is not None else _env_int("TIMELIKE_OUTPUT_LIMIT", DEFAULT_LIMIT)
-        ctx = Context(tool, raw, session, root, mode, limit, verbose)
+        columns = _env_int("COLUMNS", DEFAULT_COLUMNS) or DEFAULT_COLUMNS
+        ctx = Context(tool, raw, session, root, mode, limit, verbose, columns)
         if args.help:
             code = _emit_help(tool, parser)
         elif args.agent_info:
@@ -469,8 +476,8 @@ def _clean(text: str) -> str:
 
 
 def _cut(line: str, columns: int) -> str:
-    """Rule 13: cut at COLUMNS with a marker and the byte count removed."""
-    if len(line) <= columns:
+    """Rule 13: cut at COLUMNS with a marker and the byte count removed (no cut when columns is 0)."""
+    if columns <= 0 or len(line) <= columns:
         return line
     rest = line[columns:]
     return f"{line[:columns]} …[cut {len(rest.encode())} bytes]"
@@ -555,7 +562,7 @@ def _emit_result(r: Result, ctx: Context, started: float) -> int:
     if clash:
         raise ValueError(f"result data may not use reserved keys {sorted(clash)}")
 
-    columns = _env_int("COLUMNS", DEFAULT_COLUMNS) or DEFAULT_COLUMNS
+    columns = ctx.columns
     header = f"{ctx.tool.name}: {_clean(r.target)} [{_clean(r.scope)}]"
     body = [_clean(x) for x in r.lines]
     errors = [_clean(x) for x in r.errors]
@@ -586,11 +593,19 @@ def _emit_result(r: Result, ctx: Context, started: float) -> int:
         shown = body[:head_n] + errs + body[len(body) - tail_n :]
 
     if ctx.mode == "json":
+        # Discovery revision 12: rule 13's line cut applies to JSON's content strings too, with the same
+        # marker, and the bytes cut are carried as data. Verdict, errors and data fields are not content.
+        json_lines, cut_lines = [], []
+        for i, x in enumerate(shown):
+            c = x if i >= len(shown) - r.footer else _cut(x, columns)
+            if c != x:
+                cut_lines.append({"index": i, "cut_bytes": len(x[columns:].encode())})
+            json_lines.append(c)
         doc: dict[str, Any] = {"tool": ctx.tool.name, "target": _clean(r.target), "scope": _clean(r.scope)}
         rest: dict[str, Any] = {
             "verdict": r.verdict,
             "exit": r.exit,
-            "lines": shown,
+            "lines": json_lines,
             "errors": errors,
             **r.data,
         }
@@ -601,6 +616,8 @@ def _emit_result(r: Result, ctx: Context, started: float) -> int:
             rest["sections"] = [{"label": label, "count": len(lines)} for label, lines in r.cut.sections]
         if truncated is not None:
             rest["truncated"] = truncated
+        if cut_lines:
+            rest["cut_lines"] = cut_lines
         if ctx.verbose:
             rest["duration_ms"] = int((time.monotonic() - started) * 1000)
         doc.update(_clean_data(rest))
@@ -608,15 +625,20 @@ def _emit_result(r: Result, ctx: Context, started: float) -> int:
         return r.exit
 
     out = [header, f"verdict: {_clean(r.verdict)}"]
+    keep = set(range(len(shown) - r.footer, len(shown)))  # shown-index of the tool's closing lines
     if truncated is None:
-        out += body + errors
         out = [_cut(x, columns) for x in out]
+        out += [x if i in keep else _cut(x, columns) for i, x in enumerate(body)]
+        out += [_cut(x, columns) for x in errors]
     elif r.cut is not None:
-        for label, lines in r.cut.sections:
-            out.append(f"── {_clean(label)} ──")
-            out += [_clean(x) for x in lines]
-        out.append(f"more: {r.cut.more}")
         out = [_cut(x, columns) for x in out]
+        i = 0
+        for label, lines in r.cut.sections:
+            out.append(_cut(f"── {_clean(label)} ──", columns))
+            for x in lines:
+                out.append(_clean(x) if i in keep else _cut(_clean(x), columns))
+                i += 1
+        out.append(_cut(f"more: {r.cut.more}", columns))
         out += [
             f"exit: {r.exit}",
             f"full output: {truncated['full_output']}",
