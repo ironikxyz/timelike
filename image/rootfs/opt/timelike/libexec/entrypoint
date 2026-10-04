@@ -1,0 +1,7 @@
+#!/bin/sh
+# timelike's entrypoint (feature 007, spec FR-5 to FR-8): on every container start, place the
+# announcement in each harness's user-level context file, then become the container's command.
+# Placement is best effort: whatever happens, the command runs (`timelike announce --status` says what
+# was placed and why not). It never writes inside the workspace (spec D-1).
+/opt/timelike/bin/timelike announce --install >/dev/null 2>&1 || true
+exec "$@"

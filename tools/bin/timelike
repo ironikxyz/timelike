@@ -13,6 +13,7 @@ is a failure, never a blank.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -319,8 +320,96 @@ def tools_manifest() -> agentio.Result:
     return agentio.Result("tools", "manifest", verdict, lines=lines, data={"tools": entries})
 
 
-def placements(write: bool) -> agentio.Result:  # T005 builds this; until then it says so
-    raise agentio.UsageError("--install and --status are not built yet", "T005")
+# ── placement on container start (feature 007; spec FR-5 to FR-8, research R1, R2) ───────────────
+
+
+def harness_files() -> list[tuple[str, Path]]:
+    """Each supported harness's user-level context file (research R1)."""
+    home = Path(os.environ.get("HOME") or "/home/agent")
+    codex_home = Path(os.environ.get("CODEX_HOME") or home / ".codex")
+    return [
+        ("claude-code", home / ".claude" / "CLAUDE.md"),
+        ("codex", codex_home / "AGENTS.md"),
+        ("opencode", home / ".config" / "opencode" / "AGENTS.md"),
+    ]
+
+
+def _first_line(text: str) -> str:
+    return text.split("\n", 1)[0]
+
+
+def _place(path: Path, text: str) -> None:
+    """Write beside the target, then rename, so a reader never sees half a file (mode 0644)."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.timelike-{os.getpid()}")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o644)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def placement(harness: str, path: Path, text: str | None, why: str, write: bool) -> dict[str, Any]:
+    entry: dict[str, Any] = {"harness": harness, "path": str(path), "state": "", "reason": None}
+
+    def no(reason: str) -> dict[str, Any]:
+        entry.update(state="not placed", reason=reason)
+        return entry
+
+    if text is None:
+        return no(why)
+    try:
+        if path.is_dir():
+            return no("a directory is there")
+        existing = path.read_text(errors="replace") if path.exists() else None
+    except OSError as e:
+        return no(e.strerror or str(e))
+    if existing is not None and existing == text:
+        entry["state"] = "current"
+    elif existing is not None and not _first_line(existing).startswith(MARKER):
+        return no("a file that is not timelike's is there; it is left as it is")
+    elif not write:
+        return no(
+            "absent"
+            if existing is None
+            else f"an older announcement ({_first_line(existing)[len(MARKER) :].split(';')[0]})"
+        )
+    else:
+        try:
+            _place(path, text)
+        except OSError as e:
+            return no(e.strerror or str(e))
+        entry["state"] = "placed" if existing is None else "replaced"
+    if harness == "codex":
+        override = path.with_name("AGENTS.override.md")
+        with contextlib.suppress(OSError):
+            if override.is_file() and override.read_text().strip():
+                entry.update(state="shadowed", reason=f"{override} is read instead")
+    return entry
+
+
+def placements(write: bool) -> agentio.Result:
+    """--install (writes: the entrypoint, on every container start) or --status (reads only)."""
+    source = announcement_path()
+    try:
+        text: str | None = source.read_text()
+        why = ""
+    except OSError as err:
+        text, why = None, f"no announcement: {source}: {err.strerror or err}"
+    entries = [placement(h, p, text, why, write) for h, p in harness_files()]
+    lines = [
+        f"{e['harness']}: {e['state']}{(': ' + e['reason']) if e['reason'] else ''} — {e['path']}"
+        for e in entries
+    ]
+    counts: dict[str, int] = {}
+    for e in entries:
+        counts[e["state"]] = counts.get(e["state"], 0) + 1
+    verdict = ", ".join(f"{n} {state}" for state, n in counts.items())
+    return agentio.Result(
+        "announce", "install" if write else "status", verdict, lines=lines, data={"placements": entries}
+    )
 
 
 if __name__ == "__main__":

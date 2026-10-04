@@ -20,3 +20,15 @@ ASSUMED: a summary's whitespace is collapsed to one line (`" ".join(split())`), 
 ABSENT: placement (--install, --status) — T005; a placeholder refuses it with a usage error until then
 Verification: ruff, format, mypy clean; on a fake bin dir with the 8 real tools: 23 lines, 8 tools, marker with the revision; --check equal → 0, a removed line → 1 "missing: undo"; tools: 8 timelike + 20 standard entries; plain `timelike` unchanged; test_conform*, test_view*, test_search: passed
 SCOPE: in (3 changed files)
+
+### T005: timelike announce --install / --status; the entrypoint
+**Started:** 2026-10-04T19:52:51Z | **Completed:** 2026-10-04T19:53:17Z
+
+INHERITED: the announcement file and the marker line — from T004 (confidence: high)
+FLAGGED: placement replaces a file only when its first line is timelike's marker; any other file is left byte for byte ("not placed") — chose the marker over a content or name test, because only a file timelike wrote carries it, and an older timelike announcement must be replaced so a rebuilt image is never stale (confidence: high)
+FLAGGED: Codex's non-empty AGENTS.override.md is reported as "shadowed" after placing AGENTS.md, rather than writing into the override — the override is the operator's or the user's (confidence: high)
+FLAGGED: the entrypoint discards install's output and ignores its exit, then execs the command — a placement must never stop a container (FR-8); --status is how a person or a test sees what happened (confidence: high)
+ASSUMED: a directory created for a harness file gets mode 0700 and the file 0644, written beside the target and renamed (confidence: high)
+ABSENT: the image wiring (COPY, ENTRYPOINT) — T006
+Verification: ruff, format, mypy, shellcheck clean; temp HOME: 3 placed, byte-identical; again 3 current; someone else's codex file kept ("mine"), a stale timelike file replaced; a non-empty AGENTS.override.md → codex shadowed; a missing source → 3 not placed with the reason, exit 0
+SCOPE: in (2 changed files)
