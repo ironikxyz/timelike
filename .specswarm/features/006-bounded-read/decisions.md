@@ -117,3 +117,13 @@ ASSUMED: verdicts, errors and data fields are not content and are not cut (revis
 ABSENT: no total byte bound per call (revision 6's bench question); 001's spec is not modified (the re-send: UNAUDITED at 11 and 12, the next 01 modify records both)
 Verification: all units 895 + the new ones; only the two 005 cases changed, both through the helper; the 005 and 003 e2e through the host stand-in show no new failure (the 4 type -a and 4 run cells need the image)
 SCOPE: in (3 changed files)
+
+### T010: tools/bin/view
+**Started:** 2026-10-04T07:15+00:00 | **Completed:** 2026-10-04T09:45+00:00
+
+INHERITED: the contract § view (Q1 (a)); T015's agentio `columns` and `footer`; T008's units (confidence: high)
+FLAGGED: a window that ends at the file's end has nothing after it, so its `more:` is the window before (`FILE:{S-120}-{S-1}`); Q1 answered `more:` for a window with lines after it, and is silent on this case (confidence: medium)
+FLAGGED: `--limit 0` with no range shows the whole file (spec FR-6, quickstart), where data-model.md first said 1-120; the data model is corrected in T012 (confidence: high)
+ASSUMED: the file is streamed once (line count, bytes and the window's lines), so a large file is never held whole; stray ESC bytes the rule-13 pattern leaves are removed too, or conform's C8 would fail (confidence: high)
+ABSENT: no anchor column (slice 1); the layout leaves its place between the marker and the text (D-9)
+Verification: 68 units pass; ruff, format, mypy strict clean; the view e2e files through the host stand-in pass

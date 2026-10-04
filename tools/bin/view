@@ -1,0 +1,308 @@
+#!/opt/timelike/python/bin/python3 -I
+"""view — show a numbered window of a file, bounded, ending with the command for the next window (P2, P3).
+
+`view FILE` shows lines 1-120 (or the whole file when it is shorter); `view FILE:A-B` a range;
+`view FILE:N` line N with 10 lines of context each side. A window that shows less than the whole file is
+cut output (rule 3): it ends with the omission line, whose full output is the file itself and whose
+`more:` is the next window's command. A whole-file view has no omission line. A binary file prints its
+type and size instead of content.
+
+Design: .specswarm/features/006-bounded-read/ (spec, research R3-R5, data-model.md,
+contracts/view-search-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import codecs
+import os
+import re
+import shlex
+import stat
+from typing import Any
+
+import agentio
+
+WINDOW = 120
+CONTEXT = 10
+SNIFF = 8192
+_SPEC_RE = re.compile(r"^(.+):(\d+)(?:-(\d+))?$")
+# Rule 13, as agentio applies it, plus any ESC its pattern leaves behind: conform's C8 rejects a bare one.
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
+_MAGIC: tuple[tuple[int, bytes, str], ...] = (
+    (0, b"\x7fELF", "ELF"),
+    (0, b"\x89PNG\r\n\x1a\n", "PNG"),
+    (0, b"\xff\xd8\xff", "JPEG"),
+    (0, b"GIF8", "GIF"),
+    (0, b"\x1f\x8b", "gzip"),
+    (0, b"PK\x03\x04", "zip"),
+    (0, b"%PDF", "PDF"),
+    (0, b"SQLite format 3\x00", "SQLite"),
+    (257, b"ustar", "tar"),
+)
+
+TOOL = agentio.Tool(
+    name="view",
+    target="file",
+    summary="show a numbered window of a file (120 lines); ends with the command for the next window",
+    usage=[
+        "view FILE              # lines 1-120, or the whole file if it is shorter",
+        "view FILE:A-B          # lines A to B",
+        "view FILE:N            # line N with 10 lines of context each side, N marked >",
+        "view FILE --limit 0    # the whole file, when you mean it",
+        "a binary file prints its type and size, not its bytes; search finds text across files",
+        "note: where vim is installed, its `view` is shadowed (/opt/timelike/bin is first on PATH)",
+    ],
+    probe=("/etc/os-release",),
+    exit_codes={
+        agentio.EXIT_OK: "ok",
+        agentio.EXIT_FAILURE: "the file could not be read",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such file",
+    },
+    manifest_extra=lambda: {"window": WINDOW, "context": CONTEXT},
+)
+
+
+class Outcome(Exception):
+    """A missing or unreadable file: a verdict on stdout (contract § Outcomes), not a stderr error."""
+
+    def __init__(self, code: int, scope: str, verdict: str, remedy: str | None = None) -> None:
+        super().__init__(verdict)
+        self.code, self.scope, self.verdict, self.remedy = code, scope, verdict, remedy
+
+    def result(self, target: str) -> agentio.Result:
+        lines = [f"do instead: {self.remedy}"] if self.remedy else []
+        data = {"remedy": self.remedy} if self.remedy else {}
+        return agentio.Result(target, self.scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+def human(n: int) -> str:
+    if n < 1024:
+        return f"{n} B"
+    size = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        size /= 1024
+        if size < 1024 or unit == "TiB":
+            return f"{size:.1f} {unit}"
+    raise AssertionError("unreachable")
+
+
+def resolve(arg: str) -> tuple[str, int | None, int | None, bool]:
+    """FILE as given, the range (A, B), and whether it is `FILE:N`. A file that exists wins, colon and all."""
+    m = _SPEC_RE.match(arg)
+    if os.path.lexists(arg) or not m:
+        return arg, None, None, False
+    a = int(m.group(2))
+    if m.group(3) is None:
+        return m.group(1), a, None, True
+    return m.group(1), a, int(m.group(3)), False
+
+
+def file_type(head: bytes) -> str:
+    for offset, magic, name in _MAGIC:
+        if head[offset : offset + len(magic)] == magic:
+            return name
+    return "data"
+
+
+class _Decoder:
+    """UTF-8 with each undecodable byte replaced and counted (research R4)."""
+
+    def __init__(self) -> None:
+        self.replaced = 0
+        self.name = f"view-count-{id(self)}"
+        codecs.register_error(self.name, self._handle)
+
+    def _handle(self, exc: UnicodeError) -> tuple[str, int]:
+        if not isinstance(exc, UnicodeDecodeError):
+            raise exc
+        self.replaced += exc.end - exc.start
+        return "�" * (exc.end - exc.start), exc.end
+
+    def decode(self, raw: bytes) -> str:
+        return raw.decode("utf-8", self.name)
+
+
+def clean(text: str) -> tuple[str, bool]:
+    if "\x1b" not in text:
+        return text, False
+    return _ANSI_RE.sub("", text).replace("\x1b", ""), True
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    # Optional to argparse, required by main(): a required positional would make argparse refuse --help
+    # and --agent-info before agentio handles them (the adele and snapshot pattern).
+    p.add_argument("file", nargs="?", metavar="FILE[:A-B|:N]", help="the file, with an optional range")
+    p.add_argument(
+        "--columns",
+        type=int,
+        metavar="N",
+        help="cut lines at N characters for this call (default COLUMNS; 0 = whole lines)",
+    )
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if not args.file:
+        raise agentio.UsageError("view needs a FILE", "run view FILE, view FILE:A-B or view FILE:N")
+    if args.columns is not None:
+        if args.columns < 0:
+            raise agentio.UsageError(
+                f"--columns {args.columns} is negative", "use --columns N, or 0 for whole lines"
+            )
+        ctx.columns = args.columns  # discovery revision 12: reading long lines whole is an explicit request
+    path, a, b, single = resolve(args.file)
+    try:
+        return show(ctx, path, a, b, single)
+    except Outcome as o:
+        return o.result(path)
+
+
+def show(ctx: agentio.Context, path: str, a: int | None, b: int | None, single: bool) -> agentio.Result:
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            "not found",
+            f"no such file: {path}",
+            "check the name; search for it with: "
+            + shlex.join(["search", "-F", os.path.basename(path), "."]),
+        ) from None
+    except OSError as e:
+        raise Outcome(agentio.EXIT_FAILURE, "unreadable", f"cannot read {path}: {e.strerror or e}") from None
+    if stat.S_ISDIR(st.st_mode):
+        raise agentio.UsageError(
+            f"{path} is a directory", f"view a file in it, or: {shlex.join(['search', 'PATTERN', path])}"
+        )
+    abs_path = os.path.realpath(path)
+    try:
+        f = open(path, "rb")  # noqa: SIM115 — closed below, after the streaming read
+    except OSError as e:
+        raise Outcome(agentio.EXIT_FAILURE, "unreadable", f"cannot read {path}: {e.strerror or e}") from None
+    with f:
+        head = f.read(SNIFF)
+        if b"\x00" in head:
+            size = st.st_size
+            kind = file_type(head)
+            return agentio.Result(
+                path,
+                "binary",
+                f"binary file: {kind}, {human(size)} ({size} bytes); content not shown",
+                data={"path": path, "abs_path": abs_path, "binary": True, "type": kind, "size": size},
+            )
+        f.seek(0)
+        return window(ctx, f, path, abs_path, a, b, single)
+
+
+def window(
+    ctx: agentio.Context, f: Any, path: str, abs_path: str, a: int | None, b: int | None, single: bool
+) -> agentio.Result:
+    # The requested range, before the file's length is known (data-model § Window rules).
+    if single and a is not None:
+        start, want_end, target = max(1, a - CONTEXT), a + CONTEXT, a
+    elif a is not None:
+        start, want_end, target = a, (b if b is not None else a), None
+    else:
+        start, want_end, target = 1, (0 if ctx.limit == 0 else WINDOW), None  # 0: to the end
+    if ctx.limit > 0 and want_end and want_end - start + 1 > ctx.limit:
+        want_end = start + ctx.limit - 1
+
+    total = total_bytes = shown_bytes = 0
+    raws: list[bytes] = []
+    for raw in f:
+        total += 1
+        total_bytes += len(raw)
+        if total >= start and (not want_end or total <= want_end):
+            raws.append(raw)
+            shown_bytes += len(raw)
+
+    # Validation needs the length; a bad range names it (contract § Refusals and errors).
+    requested_end = b if (a is not None and not single and b is not None) else None
+    if a is not None:
+        if a < 1 or (requested_end is not None and a > requested_end):
+            raise agentio.UsageError(f"bad range {path}:{a}-{requested_end}", f"{path} has {total} lines")
+        if a > total:
+            raise agentio.UsageError(
+                f"line {a} is past the end: {path} has {total} lines",
+                f"view {shlex.quote(path)}:{max(1, total - WINDOW + 1)}-{total}"
+                if total
+                else f"{path} is empty",
+            )
+    if total == 0:
+        return agentio.Result(
+            path,
+            "empty",
+            "empty file (0 lines)",
+            data=_data(path, abs_path, 0, 0, 0, None, None, False, 0, 0),
+        )
+
+    end = min(want_end, total) if want_end else total
+    clipped = requested_end is not None and requested_end > total
+    width = len(str(total))
+    decoder = _Decoder()
+    lines: list[str] = []
+    escapes = 0
+    for n, raw in enumerate(raws, start):
+        body = raw[:-1] if raw.endswith(b"\n") else raw
+        if body.endswith(b"\r"):
+            body = body[:-1]
+        text, had = clean(decoder.decode(body))
+        escapes += had
+        marker = ">" if n == target else " "
+        lines.append(f"{n:>{width}}{marker} {text}")
+
+    scope = f"lines {start}-{end} of {total}"
+    whole = start == 1 and end == total
+    notes = [f"clipped to {total}"] if clipped else []
+    if decoder.replaced:
+        notes.append(f"{decoder.replaced} undecodable bytes shown as U+FFFD")
+    if escapes:
+        notes.append(f"{escapes} lines had terminal escapes stripped")
+    verdict = "; ".join([scope + (" (whole file)" if whole else ""), *notes])
+
+    nxt = shlex.join(["view", f"{path}:{end + 1}-{end + WINDOW}"]) if end < total else None
+    data = _data(path, abs_path, total, start, end, target, nxt, clipped, decoder.replaced, escapes)
+    shown = len(lines)
+    long_lines = sum(len(x) > ctx.columns for x in lines) if ctx.columns > 0 else 0
+    if long_lines:
+        # Discovery revision 12 and D5: the closing lines give the exact command that reads them whole.
+        whole_cmd = shlex.join(["view", f"{path}:{start}-{end}", "--columns", "0"])
+        lines.append(f"long lines cut: {long_lines}; read them whole with: {whole_cmd}")
+        data["long_lines_cut"] = long_lines
+    footer = 1 if long_lines else 0
+    if whole:
+        return agentio.Result(path, scope, verdict, lines=lines, data=data, footer=footer)
+    more = nxt or shlex.join(["view", f"{path}:{max(1, start - WINDOW)}-{start - 1}"])
+    cut = agentio.Cut([(scope, lines)], total - shown, total_bytes - shown_bytes, abs_path, more)
+    return agentio.Result(path, scope, verdict, data=data, cut=cut, footer=footer)
+
+
+def _data(
+    path: str,
+    abs_path: str,
+    total: int,
+    start: int,
+    end: int,
+    target: int | None,
+    nxt: str | None,
+    clipped: bool,
+    replaced: int,
+    escapes: int,
+) -> dict[str, Any]:
+    return {
+        "path": path,
+        "abs_path": abs_path,
+        "total": total,
+        "start": start,
+        "end": end,
+        "target_line": target,
+        "next": nxt,
+        "clipped": clipped,
+        "replaced_bytes": replaced,
+        "escape_lines": escapes,
+    }
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)
