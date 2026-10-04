@@ -74,3 +74,69 @@ None.
 
 ### ❌ Prohibited Technologies (cannot use)
 None used.
+
+---
+
+# Cycle 2 plan: slice 1 (the overview, anchors, carried items)
+
+**Branch:** `modify/006-slice-1` (from `modify/003-slice-1` `4857215`) · **Spec:** `spec.md` § Slice 1 ·
+**Send:** `bridge/sends/05-rev1-20261004-183704.md` (prompt revision 1, discovery revision 12; dispatch 2
+of 8) · **specswarm:** 4.0.1-botbaubble.2.35.0 (`4ff8dcb`), the expanded command's cache path
+
+## Summary
+
+`view` gains two modes, and `search` corrects a word:
+- **`view DIR`, the overview:** one walk below DIR, which never follows symlinks and applies `search`'s
+  ignore rules, loaded from `view`'s own directory as `undo` loads `snapshot`. It collapses by kind, and
+  then breadth-first to fit rule 3's line budget.
+- **`view --anchors`:** a 6-hex SHA-256 anchor per line, in D-9's column.
+- **`search`:** singular forms in its verdict.
+
+The rest is tests: units, three e2e files, and the carried measurement of search speed in the image.
+
+## Technical Context
+
+| Item | Value |
+|---|---|
+| Language | Python 3.14.x (image), host lane 3.12 |
+| Dependencies | stdlib only. Added: `hashlib` (anchors), `importlib.machinery.SourceFileLoader` (search's ignore rules), as 005's `undo` does |
+| Budget | rule 3's cap (`ctx.limit`), lines; COLUMNS cut from agentio (revision 12) |
+| Testing | pytest units (`tests/unit/test_view_slice1.py`, new; `test_search.py` for the plurals); bats e2e: three new files, `bash -c` and `bash -lc` |
+| Performance | A 10,000-file dependency directory is counted, not listed (R8). No start-up change for the file mode: `hashlib` is imported only under `--anchors`, and the search module only for a directory |
+| Unknowns | none (R7–R10) |
+
+## Constitution Check
+
+| Principle | Check | Result |
+|---|---|---|
+| P1 Unaided completion | Each collapsed line gives the exact command to expand it | ✅ |
+| P2 Every call concludes | The overview is bounded in lines and counting is capped (100,000+), so it always concludes and says what it collapsed | ✅ |
+| P3 Found where agents look | No new name: `view DIR` (vim's `view .` lists a directory) | ✅ |
+| P4 / P5 / P6 | Not touched (read-only tools) | n/a |
+| P7 Harness-agnostic | All in the tool | ✅ |
+| H2 One output contract | Rule 3's budget and rule 13's cut, from agentio; no new unit | ✅ |
+| H5 Stdlib-first | hashlib, os.scandir | ✅ |
+| H7 Every acceptance criterion is a test | SC-6 and SC-7 one e2e file each; SC-8 Manual; the carried items in a third file | ✅ |
+
+## Phase 0: Research
+
+`research.md` R7–R10 (appended).
+
+## Phase 1: Design
+
+`contracts/view-search-cli.md` § Slice 1, `data-model.md` § Slice 1. `quickstart.md` is unchanged. There
+is no agent context file in this repository.
+
+## Tech Stack Compliance Report (Cycle 2)
+
+### ✅ Approved Technologies (already in stack)
+Python (stdlib: `hashlib`, `os.scandir`, `importlib.machinery`), bats-core, pytest.
+
+### ➕ New Technologies (auto-added)
+None.
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None.
