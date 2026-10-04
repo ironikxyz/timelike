@@ -5,28 +5,34 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~05:35Z. Feature 07 slice 0 (`005-recover`, Cycles 1 and 2) is **shipped,
-merged, discharged and pushed** (session loaded specswarm 2.32.0, `19829a6`). **This repository is
-public** (`ironikxyz/timelike`):
-- **`master` = `public/main` = `fb4f7fb`** (merge of `005-recover` at `77b78d9`; pushed 2026-10-04 on
-  the mentor's discharge, `../bridge/history.md` 05:26:41Z, and the operator's OK; `git ls-remote`
-  confirmed). This `reboot.md` commit is local and goes out with the next discharged work (rule 5).
-- 005: `audited_against [1..11]` (full), all five slice-0 criteria re-established (four executed in
-  the image, lane 005-d at `e50a82f`; D7 observed by the operator). FOR-MENTOR Items 1–17 closed.
-- The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`), also in the closed, private
-  `timelike-history`.
-- Remotes: `public` (push and fetch); `history` (fetch-only, push URL `no-push`).
-- Commit identity, this repository only: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>`.
+**Snapshot:** 2026-10-04 ~10:50Z. Feature 05 slice 0 is **built on `006-bounded-read`** (session loaded
+specswarm 2.35.0, `4ff8dcb`) and **waits for the mentor's Docker lane. Make no commit until the mentor
+says the lane has ended** (lane 005-c failed on a mid-lane commit). **This repository is public**:
+- **`public/main` = `fb4f7fb`.** Local `master` = `e27075b`: `22eb8f9` (`reboot.md`), then the governance
+  audit to discovery revision 12 (all three files `[2..12]`, no change needed). Unpushed (rule 5).
+- **`006-bounded-read`** (HEAD = this commit): `view` and `search` (T001–T016, all ticked), send
+  `bridge/sends/05-rev1-20261004-085517.md` (re-send at discovery 12; specified from `…-061518`, not
+  re-specified). It changes `tools/agentio/agentio.py` for every tool (revision 12: JSON `lines` cut at
+  COLUMNS with `cut_lines`; `Result.footer`; `Context.columns`) and 001's `contracts/output-contract.md`
+  (the rule-13 sentence). Host lane: 1055 passed; coverage 94%; stand-in 52/60 (8 image-only).
+- FOR-MENTOR Item 18: Q1 and Q2 closed (a); Q3 answered by discovery revision 12. Items 1–17 closed.
+- Remotes: `public` (push and fetch); `history` (fetch-only). Identity: `ironik.xyz
+  <262467776+BotBauble@users.noreply.github.com>`. Pre-publication lineage: `archive/pre-publish`.
 
 ## Next actions
 
-1. Nothing is in flight. Read `../bridge/active-prompt.md` and the tail of `../bridge/history.md` for
-   the next send.
-2. Later sends: 05 s0; 12 slice 1 carries Item 14's (b); 07 slice 1 carries Q2 (the per-workspace
-   state root; 001's rule-10 wording; restore-snapshots-first, which D-10 already does). 001's spec
-   records revision 11 at its next modify cycle.
-3. Upstream (the mentor relays): `find_feature_dir` pads with `printf %03d`, so feature directory 008
-   and later mis-resolve. timelike reaches 008 two features from now.
+1. **The mentor's lane on `006-bounded-read`** (commit nothing during it). Green: write a § Cycle 1
+   addendum citing it per criterion. Then the D5 capture and interview, sign-off, ship under 2.35.0
+   (the 2.32.0 recipe below; quote the checkout path as `<repo>/`), a hand merge by the mentor, and a push
+   on the operator's OK.
+2. Later: 001's spec records revisions 11 and 12 at its next modify (no criterion changed); 07 slice 1
+   carries Q2 (state root); 12 slice 1 carries Item 14's (b); 05 slice 1 (overview, anchors).
+
+**006 helpers** (scratchpad, gone after a clear): `commit-006.sh` / `scope-tick-006.sh` (one task commit,
+then a "scope record, task ticked" commit; the scope-check block from 2.35.0, unchanged since 2.32.0);
+`tally006.sh`; the docker stand-in in `stub/` (exports TIMELIKE_BIN_DIRS) with tools in `tb/`; bats in
+`bats/`. **Work on `master` from a worktree** (`git worktree add <scratch>/master-wt master`) when
+delegates are reading the feature branch.
 
 **Ship recipe under 2.32.0 (worked, 005):** extract analyze-quality's blocks (`analysis-context`,
 `component-applicability`, `tests-agnostic-score`, `unknown-resolvability`, `module-score`,
