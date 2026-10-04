@@ -86,7 +86,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
   `Result.footer` so a tool's closing commands are never cut); 001's
   `contracts/output-contract.md` gains the both-modes sentence; spec FR-7 amended and D-12; the contract's
   long-lines section; 005's `tests/unit/test_snapshot.py` outcome helper expects the cut remedy line.
-- [ ] T016 Host lane: ruff, mypy, shellcheck, `make test-host`, coverage for the two tools. The cycle
+- [X] T016 Host lane: ruff, mypy, shellcheck, `make test-host`, coverage for the two tools. The cycle
   report § Cycle 1 (the send's block), implement step 10 as the plugin reports it, metrics entry.
 
 ## Dependencies
