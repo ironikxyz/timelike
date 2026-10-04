@@ -11,7 +11,7 @@ No state is kept between calls except `search`'s saved hit lists in the session 
 | `abs_path` | string | its real path: the omission line's full output |
 | `total` | int | lines in the file (`\n` count, plus one for a final line without `\n`; 0 for empty) |
 | `start`, `end` | int | the range shown, 1-based, inclusive (0, 0 for an empty file) |
-| `target` | int or null | N for `FILE:N` |
+| `target_line` | int or null | N for `FILE:N` (not `target`: rule 12 reserves it for FILE) |
 | `next` | string or null | the next window's command when lines remain after `end`, else null |
 | `clipped` | bool | a requested end past the file was clipped to `total` |
 | `replaced_bytes` | int | undecodable bytes shown as U+FFFD |
@@ -23,7 +23,8 @@ No state is kept between calls except `search`'s saved hit lists in the session 
 space. Slice 1's anchor goes between the marker and the text (spec D-9).
 
 **Window rules:**
-- no range: `1 .. min(total, 120)`;
+- no range: `1 .. min(total, 120)`, or the whole file with `--limit 0` (spec FR-6; corrected in
+  implement: this line first said 1..120 for `--limit 0` too, against FR-6 and the quickstart);
 - `A-B`: `A .. min(B, total)`; `A > total`, `A < 1` or `A > B` is a usage error;
 - `N`: `max(1, N-10) .. min(total, N+10)`; `N > total` or `N < 1` is a usage error;
 - then, when `limit > 0` and the range is longer than `limit`: `start .. start+limit-1`;

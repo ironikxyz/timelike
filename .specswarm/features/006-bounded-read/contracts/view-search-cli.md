@@ -71,7 +71,7 @@ file)`. Text ends on the file's last line.
 - `N undecodable bytes shown as U+FFFD`;
 - `N lines had terminal escapes stripped`.
 
-**JSON data:** `path`, `abs_path`, `total`, `start`, `end`, `target`, `next`, `clipped`,
+**JSON data:** `path`, `abs_path`, `total`, `start`, `end`, `target_line`, `next`, `clipped`,
 `replaced_bytes`, `escape_lines`.
 
 **Binary** (a NUL in the first 8 KiB): exit 0, scope `binary`, verdict
@@ -96,7 +96,7 @@ search PATTERN [PATH...]    hits grouped by file, at most 50 shown
   -m N          show at most N hits (default 50; 0 = all)
   --strict      zero matches exits 1, as grep does
   --no-ignore   also search what .gitignore and .git/info/exclude exclude
-  --timeout S   end the search after S seconds (default 30) with exit 124
+  --timeout S   end the search after S seconds (default 30; decimals allowed; 0 = no limit) with exit 124
 ```
 
 Manifest: `mutating: false`, `destructive: false`, `probe: ["-m", "1", "ID", "/etc/os-release"]`. Exit
@@ -104,14 +104,19 @@ codes: `0` ok (zero matches is 0, with `count: 0`), `1` failed; **with --strict,
 usage, `3` no such path, `124` the time limit fired.
 
 **Target and scope.** `<target>` is the PATHs joined by a space (`.` by default). The scope is the
-pattern, `shlex`-quoted.
+pattern, `shlex`-quoted (so `parse_args` prints bare, and `needle fn` as `'needle fn'`). *(Corrected in
+implement: the examples first showed `['parse_args']`, which shlex does not produce, and narrowed to
+`src/engine` where the rule picks `src`. JSON's window field is `target_line`, because `target` is rule
+12's reserved top-level key.)*
 
 **What is searched.**
 - Each PATH recursively; a PATH that is a file is searched itself, whatever the ignore rules say.
 - Directories named `.git` are never entered. Symbolic links met during the walk are not followed.
   Hidden files are searched (grep's habit).
-- Ignore rules (spec D-5): every `.gitignore` in the walk, applying to its own subtree, and the enclosing
-  repository's `.git/info/exclude`. `--no-ignore` turns both off.
+- Ignore rules (spec D-5): every `.gitignore` from the enclosing repository's root down, each applying
+  to its own subtree (those above the search root too, as git applies them), and the repository's
+  `.git/info/exclude`. `--no-ignore` turns both off. *(Amended in implement: this first said "in the
+  walk", which would miss a root `.gitignore` when searching a subdirectory.)*
 - Skipped and counted: binary files (NUL in the first 8 KiB), files over 16 MiB, unreadable files.
 
 **Pattern.** Python `re` (extended syntax, close to `grep -E`), case-sensitive; `-i`, `-F`. A pattern
@@ -119,7 +124,7 @@ that does not compile is exit 2, naming the error's position.
 
 **Output, all hits shown** (`count ≤ cap`):
 ```
-search: . ['parse_args']
+search: . [parse_args]
 verdict: 12 matches in 3 files (searched 41 files; skipped 5 ignored)
 ── src/cli.py (5) ──
 14: def parse_args(argv):
@@ -129,13 +134,13 @@ Each section label is `<path> (<hits in that file>)`. Each hit line is `<line>: 
 
 **Output, hits omitted** (`count > cap`): a cut.
 ```
-search: . ['parse_args']
+search: . [parse_args]
 verdict: 262 matches in 9 files; 50 shown, 212 omitted (searched 120 files; skipped 30 ignored)
 ── src/a.py (12) ──
 …
 ── src/engine/run.py (8 of 41) ──
 …
-narrow: search parse_args src/engine  (148 of the 262)
+narrow: search parse_args src  (188 of the 262)
 more: sed -n 51,262p /tmp/timelike/<session>/search/hits-0123456789ab.txt
 exit: 0
 full output: /tmp/timelike/<session>/search/hits-0123456789ab.txt

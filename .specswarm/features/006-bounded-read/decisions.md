@@ -140,3 +140,12 @@ ASSUMED: symlinks met in the walk are skipped (neither followed nor counted); a 
 ABSENT: no ripgrep (D-8); no context lines around hits; no -w
 Verification: 92 units pass; ruff, format, mypy strict clean; the search e2e files through the host stand-in pass
 SCOPE: in (1 changed files)
+
+### T012: units against the tools; the contract corrected where the units found it wrong
+**Started:** 2026-10-04T09:10+00:00 | **Completed:** 2026-10-04T10:10+00:00
+
+INHERITED: T008–T011, T015 (confidence: high)
+FLAGGED: contract amended where it was wrong or silent, each marked in place: JSON `target_line` (rule 12 reserves `target`); the scope is `shlex.quote(pattern)` (the example's `['parse_args']` was not); the narrowing example now follows the rule (`src`, 188); `--timeout` takes decimals and 0 = no limit; ignore rules include the `.gitignore` files above the search root; data-model's `--limit 0` reads the whole file (FR-6) (confidence: high)
+FLAGGED: one test corrected: `expected_groups` counted a file's hits from the shown 50 only, contradicting the test's own `(20 of 40)` assertion and the contract; it now takes every hit for the totals (confidence: high)
+ABSENT: no tool behaviour changed in this task; every disagreement was decided by the contract
+Verification: 160 units pass (68 view, 92 search); ruff, format, mypy strict clean

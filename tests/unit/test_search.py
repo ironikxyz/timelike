@@ -81,8 +81,11 @@ def hit_paths(lab: Lab, *args: str, cwd: Path | None = None) -> set[str]:
     return {g[0] for g in groups(text_of(r))}
 
 
-def expected_groups(hits: list[Hit]) -> list[tuple[str, int, int | None, list[str]]]:
-    per = Counter(h[0] for h in hits)
+def expected_groups(
+    hits: list[Hit], all_hits: list[Hit] | None = None
+) -> list[tuple[str, int, int | None, list[str]]]:
+    """Sections for the shown `hits`; a file's total comes from `all_hits` (every hit, shown or not)."""
+    per = Counter(h[0] for h in (all_hits if all_hits is not None else hits))
     out: list[tuple[str, int, int | None, list[str]]] = []
     for path, line, text in hits:
         if not out or out[-1][0] != path:
@@ -157,7 +160,7 @@ def test_262_hits_show_50_with_the_cut_footer(lab: Lab, capped: list[Hit]) -> No
         out[1]
         == "verdict: 262 matches in 6 files; 50 shown, 212 omitted (searched 7 files; skipped 2 ignored)"
     )
-    assert groups(out) == expected_groups(capped[:CAP])
+    assert groups(out) == expected_groups(capped[:CAP], capped)
     assert [g[:3] for g in groups(out)] == [("docs/guide.md", 30, None), ("src/cli.py", 20, 40)]
     narrow = expected_narrow(capped)
     assert narrow == ("src", 188)
