@@ -246,3 +246,12 @@ FLAGGED: Makefile SHELLCHECK_FILES gains the four files; Makefile is named in 00
 ABSENT: bash -lc cells, the image's Python 3.14 and git, docker exec timing, and the image's search speed — not groundable without Docker; the mentor's lane runs them
 Verification: reviewed; shellcheck clean; bats --count 6, 12, 10 (delegate); every expected value computed in the container by an oracle (image Python, coreutils, git)
 SCOPE: in (5 changed files)
+
+### T023: host lane — lint, units with coverage, make test-host, start-up
+**Started:** 2026-10-04T19:31:44Z | **Completed:** 2026-10-04T19:44:10Z
+
+INHERITED: T017–T022's files (confidence: high)
+ASSUMED: the image's Python 3.14.7 gives the same overview and anchors as the host's 3.12.3 (os.scandir, hashlib, str sorting) (confidence: high)
+ABSENT: the e2e on a stand-in — the e2e delegate dry-ran the 14 bash -c cells through a stub docker (T018); bash -lc cells and the image wait for the mentor's lane
+Verification: ruff check and format (62 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats: clean; units with subprocess coverage: 1259 passed, 1 skipped (483 s); Python 95% overall, view 94%, search 93%; make test-host: passed; start-up p95 (host, 40 runs, exits asserted): view --help 70 ms, view --json FILE 72 ms, view --json --anchors FILE 75 ms
+SCOPE: none — no files outside the feature's artifacts changed

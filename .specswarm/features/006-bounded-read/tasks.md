@@ -149,7 +149,7 @@ commits per task, and the scope is the files each task names.
 
 ### Polish
 
-- [ ] T023 Host lane: lint, units with coverage, `make test-host`, `view --help` start-up. Results in
+- [X] T023 Host lane: lint, units with coverage, `make test-host`, `view --help` start-up. Results in
   `decisions.md`.
 - [ ] T024 `cycle-report.md` § Cycle 2, implement step 10, `.specswarm/metrics.json`, the marker.
 
