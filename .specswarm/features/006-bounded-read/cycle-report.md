@@ -322,3 +322,56 @@ Each citation still matches exactly one line of the send (`grep -cF` = 1 for all
 
 **Provenance: no change.** `audited_against` stays `[1]`. The spec was generated from prompt revision 1,
 and prompt 05 has no later revision. No `audit-log.md` row is needed. `reconcile_mode` stays `full`.
+
+### Cycle 1 addendum 2 — D5 observed by the operator (2026-10-04)
+
+This addendum supersedes one statement of the addendum above: D5's mode. That addendum stays as written
+(append-only). Its lane evidence stands and is cited here, not repeated.
+
+**criteria_reestablished** (final for Cycle 1; supersedes both earlier lists):
+
+- `05 · "with right-aligned line numbers, a header naming the file and range out of 412"` — **executed
+  [`tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats`, 8/8, in the image:
+  lane 006-a at `99df450`, `../bridge/history.md` 2026-10-04T10:24:00Z]**
+- `05 · "and a missing file (exit 3) each behave as specified; a binary file prints its type and size"` —
+  **executed [`tests/e2e/view-range-context-missing-file-and-binary.bats`, 16/16, in the image: lane 006-a
+  at `99df450`]**
+- `05 · "shows 50, grouped by file, with a footer stating the 212 omitted and a concrete way to narrow"` —
+  **executed [`tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats`, 10/10,
+  in the image: lane 006-a at `99df450`]**
+- `05 · "and exits 1 only in strict mode _(traces to: P2)_"` — **executed
+  [`tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats`, 14/14, in the image: lane 006-a
+  at `99df450`]**
+- `05 · "each result ending with the exact command to narrow or continue _(traces to: D5)_"` — **observed
+  by the operator** (`../bridge/history.md` 2026-10-04T18:17:46Z; transcript
+  `bridge/.d5-demo-20261004T175825Z.txt`). It ran on the live stack from lane 006-a: `timelike-agent` at
+  revision `99df450`, image `sha256:0a2d0491…`, the image `make test` and `make scan` passed. It ran as
+  the agent user under `bash -lc`, with stdout a pipe, so the output was JSON as under a harness. The
+  fixture was a copy of the stdlib `email` package, plus an ignored `build/` copy. The sequence:
+  - `view email/_header_value_parser.py`: lines 1–120 of 3153, with `more` `view …:121-240`;
+  - that command, run as printed: lines 121–240, with `next` 241–360;
+  - `search "def get_"`: 68 matches in 4 files, 50 shown, 18 omitted, grouped by file. `build/` was
+    skipped as ignored and 9 files as binary. It ended with `narrow: search 'def get_'
+    email/_header_value_parser.py  (44 of the 68)`;
+  - that command, run as printed: 44 matches, uncapped. It ends on its last hit with no footer
+    (revision 6: a footer only when more remains);
+  - the capped search's `more:` (`sed -n` over the saved hit list) printed omitted hits with their paths.
+
+  Per the history entry, the mentor cross-checked the counts with `grep -rc` in the same container
+  (44 + 17 + 5 + 2 = 68). The operator answered fresh interview questions against the output, and all four
+  answers matched. The operator accepted D5 as observed. I read the transcript; its commands, counts and
+  closing commands are as stated.
+
+There are **five slice-0 criteria: four automated and one Manual (D5)**. The four automated criteria were
+executed in the image. D5 was observed by a person, not run by a test. Each citation matches exactly one
+line of the send (`grep -cF` = 1). The two slice-1 criteria are not cited.
+
+**A wording defect the transcript shows,** not a criterion failure: the single-file search's verdict
+reads `44 matches in 1 files (searched 1 files)`. The plural is not agreed. It is left for slice 1 and
+not changed here, so the commit that was tested and signed off stays the commit shipped.
+
+**Provenance: no change.** `audited_against` stays `[1]`, and `reconcile_mode` stays `full`.
+Prompt 05 has no revision after 1, so there is nothing to append. No `audit-log.md` row is needed.
+
+**not_verified:** nothing remains open for slice 0's criteria. The earlier items still stand as written:
+search speed in the image, and a window ending at the file's end (units only).
