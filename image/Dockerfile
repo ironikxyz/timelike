@@ -124,6 +124,10 @@ COPY --chmod=0644 image/rootfs/etc/profile.d/10-timelike-shell-env.sh /etc/profi
 # The redaction rule set (contract rule 15; feature 003 slice 1, spec FR-33): read by `run` through
 # agentio, and by make scan's gitleaks step from the checkout, so the two cannot diverge.
 COPY --chmod=0644 image/rootfs/etc/timelike/redaction.toml /etc/timelike/redaction.toml
+# The announcement's inputs (feature 007): the curated standard tools for `timelike tools`, and the
+# entrypoint that places the announcement in each harness's user-level context file on container start.
+COPY --chmod=0644 image/rootfs/etc/timelike/standard-tools.json /etc/timelike/standard-tools.json
+COPY --chmod=0755 image/rootfs/opt/timelike/libexec/entrypoint /opt/timelike/libexec/entrypoint
 RUN test -f /etc/bash.bashrc \
       || { echo "error: /etc/bash.bashrc is missing — interactive bash would not reach the timelike hook" >&2; exit 1; } \
  && printf '\n# timelike: container-derived defaults for interactive bash (modify.md F004)\n%s\n' \
@@ -189,6 +193,22 @@ RUN if [ -z "${GIT_SHA:-}" ]; then \
  && chmod 0444 /opt/timelike/REVISION
 LABEL org.opencontainers.image.revision=$GIT_SHA
 
+# --- 8b. The announcement (feature 007, spec FR-1 to FR-3; lore cross-stack P003) ---------------------
+# Generated from every installed tool's own --agent-info, after the stamp so it names this revision, and
+# checked: an image whose announcement misses a tool is not built. The tools run here as root, so they
+# get a scratch root of their own, removed after: a root-owned /tmp/timelike would lock the agent out of
+# its scratch space.
+RUN scratch="$(mktemp -d)" \
+ && TIMELIKE_SCRATCH_ROOT="${scratch}" /opt/timelike/bin/timelike announce --write /etc/timelike/announcement.md \
+ && TIMELIKE_SCRATCH_ROOT="${scratch}" /opt/timelike/bin/timelike announce --check \
+ && rm -rf "${scratch}" \
+ && chmod 0444 /etc/timelike/announcement.md \
+ && test "$(wc -l < /etc/timelike/announcement.md)" -le 60 \
+ && test ! -e /tmp/timelike
+
 # --- 9. Run as the unprivileged agent (step 10) ------------------------------------------------------
 USER agent
 WORKDIR /home/agent
+# Places the announcement for each harness on every container start, then execs the command (feature
+# 007, spec FR-5 to FR-8). `docker exec` does not run it; it runs once per container start.
+ENTRYPOINT ["/opt/timelike/libexec/entrypoint"]

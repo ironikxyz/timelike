@@ -44,3 +44,15 @@ FLAGGED: four contract gaps settled as built (conditional rules, the tools text 
 ABSENT: a second bin directory in the image — the order fix matters on hosts and in tests only
 Verification: 50 passed; ruff, format and mypy clean
 SCOPE: in (2 changed files)
+
+### T006: image/Dockerfile — the curated file and the entrypoint copied; the announcement generated and checked after the stamp; ENTRYPOINT
+**Started:** 2026-10-04T19:53:39Z | **Completed:** 2026-10-04T19:57:13Z
+
+INHERITED: the subcommands and the entrypoint — from T004 and T005 (confidence: high)
+FLAGGED: generation runs as root during the build with its own throwaway scratch root, removed after, and the step asserts /tmp/timelike does not exist — the tools write their session events into the scratch root, and a root-owned /tmp/timelike in the image would lock the agent out of its scratch space (rule 10) (confidence: high)
+FLAGGED: the step runs after the build stamp, so the announcement names this revision (P003), and only this layer and the stamp's change per commit (confidence: high)
+FLAGGED: ENTRYPOINT changes the agent image for every consumer: compose's agent, the e2e throwaways (start_throwaway runs IMAGE sleep infinity, so the entrypoint runs) and the bench's timelike arm — declared; docker exec does not run it (confidence: medium)
+ASSUMED: no e2e test asserts the agent's home is empty or lists it (a grep over tests/e2e and tests/host found none) (confidence: medium)
+ABSENT: an image build — no Docker here; the mentor's lane builds it
+Verification: the build step simulated on the host (fake /etc, the real tools, a scratch root of its own): write "23 lines, 8 tools"; check "all 8 installed tools are announced", exit 0; the scratch root received the tools' session directory (so the separate root is needed); 23 ≤ 60. A first attempt was blocked by Claude Code's removal safety check (an rm -rf of a variable inside sh -c); re-run without any removal, the scratch directory left in the scratchpad. That blocked attempt also cost a blank line in decisions.md (the helper had begun appending)
+SCOPE: in (1 changed files)
