@@ -235,3 +235,14 @@ ASSUMED (delegate): the 100,000 count cap is untested — the contract offers no
 ABSENT: the cap, as above; it is recorded under not_verified
 Verification: reviewed; 63 passed; ruff, format and mypy clean on the file
 SCOPE: in (1 changed files)
+
+### T018: e2e — SC-6, SC-7 and the carried items (delegated)
+**Started:** after cd4e2b9 (19:18:44Z; the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T19:31:25Z
+
+INHERITED: contracts/view-search-cli.md § Slice 1; the slice-0 006 e2e helpers and fixture (confidence: high)
+FLAGGED: not purely test-first — T019–T022 landed while the delegate wrote; its host dry run (a stub docker, paths rewritten) passed all 14 bash -c cells against the code, and it changed three expectations after seeing the tool's output (the verdict's kind order, anchors against file lines only, totals without unlisted ignored files), each a contract gap, all three now stated in the contract as built (confidence: high)
+FLAGGED: FR-37's speed is a printed TAP diagnostic, not an asserted value; the cell asserts the search concludes within 30 s and reaches all 8 files (40 matches), so an early stop cannot pass. Host dry run: 86.9 MB/s over 39.9 MiB (confidence: high)
+FLAGGED: Makefile SHELLCHECK_FILES gains the four files; Makefile is named in 006's tasks.md from Cycle 1 (T002's SHELLCHECK_FILES line), so the record reads SCOPE in (confidence: high)
+ABSENT: bash -lc cells, the image's Python 3.14 and git, docker exec timing, and the image's search speed — not groundable without Docker; the mentor's lane runs them
+Verification: reviewed; shellcheck clean; bats --count 6, 12, 10 (delegate); every expected value computed in the container by an oracle (image Python, coreutils, git)
+SCOPE: in (5 changed files)

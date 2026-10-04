@@ -53,6 +53,9 @@ test-host:
 # mypy run through the uv inside the built agent image, on the image's own interpreter.
 SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh tests/host/run.sh \
   tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats \
+  tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats \
+  tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
+  tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \
   tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats \
   tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats \
   tests/host/test_env_layer.sh tests/e2e/helpers.bash scan/scan.sh scripts/demo.sh \

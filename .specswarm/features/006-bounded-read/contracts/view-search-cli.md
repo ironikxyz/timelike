@@ -181,7 +181,7 @@ view DIR              the overview of DIR (`.` included), within rule 3's budget
 Text:
 ```
 view: DIR [overview]
-verdict: F files, D dirs, S under DIR; collapsed N (dependency 1, vcs 1); I ignored files not listed
+verdict: F files, D dirs, S under DIR; collapsed N (vcs 1, dependency 1); I ignored files not listed
 .git/  25 files, 9 dirs, 48.0 KiB; vcs — expand: view .git/
 node_modules/  10000 files, 1 dir, 39.1 MiB; dependency — expand: view node_modules/
 src/
@@ -219,7 +219,8 @@ view --anchors FILE[:A-B|:N]
 - **Line:** `{n:>width}{marker}{anchor} {text}`, where the anchor is 6 lowercase hex characters:
   `hashlib.sha256(raw_line_without_line_ending).hexdigest()[:6]`. The line ending removed is a trailing
   `\n`, then a trailing `\r`.
-- **JSON** adds `anchors: ["N:hhhhhh", …]`, parallel to `lines`. It is absent without `--anchors`.
+- **JSON** adds `anchors: ["N:hhhhhh", …]`, one per **file line** shown, in order. A closing body line
+  (`long lines cut: …`) has no anchor. It is absent without `--anchors`.
 - **Continuing:** `next`, `more` and the long-lines command include `--anchors` when it was given.
 - `--anchors` on a directory is a usage error (exit 2): the overview has no lines of a file.
 

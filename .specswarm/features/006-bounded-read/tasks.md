@@ -131,7 +131,7 @@ commits per task, and the scope is the files each task names.
     an edit, CRLF and LF agree, JSON `anchors`, `--anchors` kept in `next`/`more`, refused on a
     directory;
   - the search plurals.
-- [ ] T018 [P] [US6] [US7] [US8] e2e, each under `bash -c` and `bash -lc`:
+- [X] T018 [P] [US6] [US7] [US8] e2e, each under `bash -c` and `bash -lc`:
   - `tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats` (SC-6);
   - `tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats` (SC-7);
   - `tests/e2e/view-and-search-slice-1-carried-items.bats` (a window ending at the end, the plural,
