@@ -35,7 +35,7 @@ manifest (SC-3).
 
 ## Phase 3: Implementation
 
-- [ ] T004 [US1] [US3] `tools/bin/timelike`: `announce` (`--write`, `--check`) and `tools`.
+- [X] T004 [US1] [US3] `tools/bin/timelike`: `announce` (`--write`, `--check`) and `tools`.
 - [ ] T005 [US2] `tools/bin/timelike`: `announce --install` and `--status`; `image/rootfs/opt/timelike/libexec/entrypoint`.
 - [ ] T006 `image/Dockerfile`: COPY the curated file and the entrypoint; generate and check after the
   stamp; `ENTRYPOINT`. Update `tests/unit/test_timelike*.py` and the 001 e2e cells if one asserts the

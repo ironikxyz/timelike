@@ -1,6 +1,10 @@
 #!/opt/timelike/python/bin/python3 -I
 """timelike — the agent environment: its build revision, the contract version, the tools on PATH.
 
+`timelike announce` generates the environment's announcement from the installed tools' own manifests,
+checks it, places it in each harness's user-level context file on container start, and reports where it
+is; `timelike tools` prints the manifest of timelike and curated standard tools (feature 007, prompt 04).
+
 The build revision is the environment's own proof of what it is (constitution H8; lore cross-stack
 P003): it is read from /opt/timelike/REVISION, written at build time, and an empty or missing stamp
 is a failure, never a blank.
@@ -9,13 +13,22 @@ is a failure, never a blank.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import agentio
 
 REVISION_FILE = "/opt/timelike/REVISION"
+ANNOUNCEMENT_FILE = "/etc/timelike/announcement.md"
+STANDARD_TOOLS_FILE = "/etc/timelike/standard-tools.json"
+ANNOUNCEMENT_MAX_LINES = 60  # prompt 04's bound
+MARKER = "<!-- timelike announcement: revision "
+JSON_VALUES = ("yes", "no")
+RISKS = frozenset({"none", "pager", "editor", "prompt", "repl", "waits", "unbounded output"})
 
 
 def revision() -> str:
@@ -58,16 +71,53 @@ def tools_on_path() -> list[str]:
     return sorted(names)
 
 
+def tool_paths() -> dict[str, str]:
+    """Every executable file in the bin directories, by name; the first directory wins (as PATH does)."""
+    found: dict[str, str] = {}
+    for d in bin_dirs():
+        try:
+            entries = sorted(os.scandir(d), key=lambda e: e.name)
+        except OSError:
+            continue
+        for e in entries:
+            if e.name not in found and e.is_file() and os.access(e.path, os.X_OK):
+                found[e.name] = e.path
+    return found
+
+
 TOOL = agentio.Tool(
     name="timelike",
     target="environment",
     summary="The agent environment: build revision, output contract version, timelike tools on PATH",
-    usage=["timelike [--json|--text]", "timelike --agent-info    manifest, including the build revision"],
+    usage=[
+        "timelike [--json|--text]",
+        "timelike tools             timelike and standard tools: JSON support, interactivity risk, instead",
+        "timelike announce          the announcement placed for harnesses; --check, --status, --install",
+        "timelike --agent-info      manifest, including the build revision",
+    ],
     manifest_extra=lambda: {"revision": revision()},
 )
 
 
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("action", nargs="?", choices=["tools", "announce"], help="tools or announce")
+    p.add_argument("--write", metavar="PATH", help="announce: write the announcement to PATH")
+    p.add_argument(
+        "--check", nargs="?", const="", metavar="PATH", help="announce: exit 1 naming tools missing from it"
+    )
+    p.add_argument("--install", action="store_true", help="announce: place it for each harness")
+    p.add_argument("--status", action="store_true", help="announce: report each placement")
+
+
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.action == "tools":
+        return tools_manifest()
+    if args.action == "announce":
+        return announce(args)
+    if args.write or args.check is not None or args.install or args.status:
+        raise agentio.UsageError(
+            "--write, --check, --install and --status belong to announce", "timelike announce …"
+        )
     rev = revision()
     tools = tools_on_path()
     lines = [f"revision: {rev}", f"contract: {agentio.CONTRACT}", f"tools: {len(tools)}"]
@@ -83,5 +133,195 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     )
 
 
+# ── the announcement (feature 007; spec FR-1 to FR-4, contract § The announcement) ───────────────
+
+
+def manifest_of(name: str, path: str) -> dict[str, Any]:
+    try:
+        r = subprocess.run(  # each tool's own manifest: the announcement cannot drift from it
+            [path, "--agent-info"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL
+        )
+        doc = json.loads(r.stdout)
+        if r.returncode != 0 or not isinstance(doc, dict) or not isinstance(doc.get("summary"), str):
+            raise ValueError(f"exit {r.returncode}, no summary")
+        return doc
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{name} --agent-info failed: {e}",
+            f"fix {name}'s manifest; the announcement is generated from every tool's own",
+        ) from None
+
+
+def generate() -> tuple[list[str], dict[str, str]]:
+    """The announcement's lines and the tools in it (name → summary)."""
+    rev = revision()
+    paths = tool_paths()
+    summaries = {name: " ".join(manifest_of(name, path)["summary"].split()) for name, path in paths.items()}
+    has = summaries.__contains__
+    lines = [
+        f"{MARKER}{rev}; generated from the tools' manifests; do not edit -->",
+        "# timelike",
+        f"This shell is timelike (revision {rev}): tools on PATH that speak one output contract.",
+        "",
+        "## Tools",
+        *(f"- `{name}` — {summary}" for name, summary in summaries.items()),
+        "",
+        "## How to work here",
+        "- Every tool ends with a verdict and, when it left anything out, the exact command for the rest.",
+        "- `--json` works everywhere; `--help` is short; `--agent-info` is each tool's manifest.",
+    ]
+    if has("run"):
+        lines.append(
+            "- Long or possibly hanging commands: `run CMD` (it concludes, keeps the log, `$?` is CMD's)."
+        )
+    if has("view") and has("search"):
+        lines.append(
+            "- Read with `view FILE[:A-B]`, orient with `view DIR`, search with `search PATTERN [DIR]`."
+        )
+    if has("snapshot") and has("undo"):
+        lines.append("- Before a risky change: `snapshot`; to go back: `undo`.")
+    if has("timelike"):
+        lines.append(
+            "- `timelike tools`: every tool, standard ones too, with the safer command to use instead."
+        )
+    lines += ["", "These tools work the same whether or not this file is read."]
+    if len(lines) > ANNOUNCEMENT_MAX_LINES:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"the announcement would be {len(lines)} lines; the bound is {ANNOUNCEMENT_MAX_LINES}",
+            "shorten the rules, or group tools",
+        )
+    return lines, summaries
+
+
+def announced_tools(text: str) -> list[str]:
+    """The tool names in an announcement's `## Tools` section."""
+    names: list[str] = []
+    in_tools = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            in_tools = line == "## Tools"
+            continue
+        if in_tools and line.startswith("- `") and "` — " in line:
+            names.append(line[3 : line.index("` — ")])
+    return names
+
+
+def announcement_path() -> Path:
+    return Path(os.environ.get("TIMELIKE_ANNOUNCEMENT") or ANNOUNCEMENT_FILE)
+
+
+def announce(args: argparse.Namespace) -> agentio.Result:
+    if sum(bool(x) for x in (args.write, args.check is not None, args.install, args.status)) > 1:
+        raise agentio.UsageError(
+            "use one of --write, --check, --install, --status", "timelike announce --check"
+        )
+    if args.check is not None:
+        return check(Path(args.check) if args.check else announcement_path())
+    if args.install or args.status:
+        return placements(write=args.install)
+    lines, summaries = generate()
+    data: dict[str, Any] = {"tools": list(summaries), "line_count": len(lines)}
+    if args.write:
+        target = Path(args.write)
+        try:
+            target.write_text("\n".join(lines) + "\n")
+        except OSError as e:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE, f"cannot write {target}: {e.strerror or e}", "check the path"
+            ) from None
+        data["written"] = str(target)
+        return agentio.Result(
+            "announce", "write", f"wrote {target}: {len(lines)} lines, {len(summaries)} tools", data=data
+        )
+    verdict = f"{len(lines)} lines, {len(summaries)} tools, revision {revision()}"
+    return agentio.Result("announce", "announcement", verdict, lines=lines, data=data)
+
+
+def check(path: Path) -> agentio.Result:
+    try:
+        text = path.read_text()
+    except OSError as e:
+        return agentio.Result(
+            str(path), "check", f"cannot read {path}: {e.strerror or e}", exit=agentio.EXIT_FAILURE
+        )
+    listed = announced_tools(text)
+    installed = list(tool_paths())
+    missing = [t for t in installed if t not in listed]
+    extra = [t for t in listed if t not in installed]
+    data = {"path": str(path), "missing": missing, "extra": extra, "tools": installed}
+    if not missing and not extra:
+        return agentio.Result(
+            str(path), "check", f"all {len(installed)} installed tools are announced", data=data
+        )
+    parts = ([f"missing: {', '.join(missing)}"] if missing else []) + (
+        [f"extra: {', '.join(extra)}"] if extra else []
+    )
+    return agentio.Result(str(path), "check", "; ".join(parts), data=data, exit=agentio.EXIT_FAILURE)
+
+
+# ── the manifest: timelike tools (feature 007; spec FR-9 to FR-12) ───────────────────────────────
+
+
+def standard_tools() -> list[dict[str, Any]]:
+    path = Path(os.environ.get("TIMELIKE_STANDARD_TOOLS") or STANDARD_TOOLS_FILE)
+    try:
+        doc = json.loads(path.read_text())
+        entries = doc["tools"]
+        out: list[dict[str, Any]] = []
+        for e in entries:
+            entry = {k: e[k] for k in ("name", "summary", "json", "interactive_risk", "instead")}
+            if not all(isinstance(v, str) for v in entry.values()):
+                raise ValueError(f"{entry.get('name')}: every field is a string")
+            if not (entry["json"] in JSON_VALUES or entry["json"].startswith("partial: ")):
+                raise ValueError(f"{entry['name']}: json is yes, no or 'partial: <how>'")
+            if not {r.strip() for r in entry["interactive_risk"].split(",")} <= RISKS:
+                raise ValueError(f"{entry['name']}: interactive_risk outside {sorted(RISKS)}")
+            out.append(entry)
+        return out
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"the curated standard tools file is unusable: {path}: {e}",
+            "fix the file (contract: timelike-announce-tools.md § The manifest)",
+        ) from None
+
+
+def tools_manifest() -> agentio.Result:
+    paths = tool_paths()
+    on_path = set(tools_on_path())
+    entries: list[dict[str, Any]] = []
+    for name, path in paths.items():
+        doc = manifest_of(name, path)
+        entries.append(
+            {
+                "name": name,
+                "kind": "timelike",
+                "installed": name in on_path,
+                "summary": " ".join(doc["summary"].split()),
+                "json": "yes",  # contract rule 1: every timelike tool speaks JSON
+                "interactive_risk": "none",  # rule 4: no tool prompts, pages or edits
+                "instead": "",
+            }
+        )
+    for e in sorted(standard_tools(), key=lambda e: e["name"]):
+        entries.append({**e, "kind": "standard", "installed": shutil.which(e["name"].split()[0]) is not None})
+    lines = [
+        f"{e['name']}  [{e['kind']}]  json={e['json']}  risk={e['interactive_risk']}"
+        + (f"  instead: {e['instead']}" if e["instead"] else "")
+        for e in entries
+    ]
+    n_tl = sum(e["kind"] == "timelike" for e in entries)
+    n_std = len(entries) - n_tl
+    installed = sum(e["installed"] for e in entries if e["kind"] == "standard")
+    verdict = f"{n_tl} timelike tools, {n_std} standard tools ({installed} installed)"
+    return agentio.Result("tools", "manifest", verdict, lines=lines, data={"tools": entries})
+
+
+def placements(write: bool) -> agentio.Result:  # T005 builds this; until then it says so
+    raise agentio.UsageError("--install and --status are not built yet", "T005")
+
+
 if __name__ == "__main__":
-    agentio.run(TOOL, main)
+    agentio.run(TOOL, main, configure=configure)
