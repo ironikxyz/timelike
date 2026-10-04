@@ -5,58 +5,50 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~18:00Z, before a clear. Feature 05 slice 0 is built on `006-bounded-read`
-(session loaded specswarm 2.35.0, `4ff8dcb`). **The mentor's lane 006-a has ended: PASSED at
-`99df450`** (`../bridge/history.md` 2026-10-04T10:24:00Z). Nothing else is in flight. **This repository
-is public**:
-- **`public/main` = `fb4f7fb`.** Local `master` = `e27075b`: `22eb8f9` (`reboot.md`), then the governance
-  audit to discovery revision 12 (all three files `[2..12]`, no change needed). Unpushed (rule 5).
-- **`006-bounded-read`** (HEAD = this commit; `99df450` is the commit the lane tested): `view` and
-  `search` (T001–T016, all ticked), send `bridge/sends/05-rev1-20261004-085517.md` (re-send at discovery
-  12; specified from `…-061518`, not re-specified). It changes `tools/agentio/agentio.py` for every tool
-  (revision 12: JSON `lines` cut at COLUMNS with `cut_lines`; `Result.footer`; `Context.columns`) and
-  001's `contracts/output-contract.md` (the rule-13 sentence).
-- FOR-MENTOR Item 18: Q1 and Q2 closed (a); Q3 answered by discovery revision 12. Items 1–17 closed.
-- Remotes: `public` (push and fetch); `history` (fetch-only). Identity: `ironik.xyz
-  <262467776+BotBauble@users.noreply.github.com>`. Pre-publication lineage: `archive/pre-publish`.
+**Snapshot:** 2026-10-04 ~20:30Z. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
+`../bridge/dispatch/pause-06.md`, rule 9 (is `edit` mutating?), plan's choice by the send's own seam;
+not picked. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge
+nothing (the batch leaves its branches standing).
+
+**The stack** (each cut from the previous; nothing merged; `master` = `public/main` = `aa8127d`):
+1. `modify/003-slice-1` — 03 s1 done (`4857215`): memory/disk causes, redaction (shared gitleaks rule file).
+2. `modify/006-slice-1` — 05 s1 done (`eb5c8e2`): `view DIR` overview, `view --anchors`, plurals.
+3. `007-announcements-discovery` — 04 s0 done (`60f0d73`): announcement, entrypoint, `timelike tools`.
+   FOR-MENTOR Item 19 (SC-1's workspace part, narrowed by the seam).
+4. `008-edit` — 06 s0 **paused** (`e0605cc`): spec only, FR-12 open. HEAD is here.
+5. Not started: 08 s1 (`009-session-journal`), 09 s1 (`010-services-interactive`; its seam 1 is the
+   batch's other named pause), 10 s1 (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
+
+Each done feature: cycle report § Cycle N (dispatch; Group A from `.implement-complete`), marker
+committed, metrics entry (`003-cycle-2`, `006-cycle-2`, `007`). All criteria `unconfirmed` until the
+mentor's lane after the batch.
 
 ## Next actions
 
-1. **DONE at `b3c19ee` (2026-10-04): the addendum below is written and committed.** It was:
-   **Write `### Cycle 1 addendum — the mentor's Docker lane at 99df450`** in
-   `.specswarm/features/006-bounded-read/cycle-report.md` (append-only; Cycle 1's text stays as written).
-   The evidence, read it yourself before citing (never from this note alone):
-   - `../bridge/history.md` 2026-10-04T10:24:00Z, `lane | 006-a`: `make test` PASSED, e2e **343/343**
-     (283 earlier + 60 new; 006's five files 10+14+8+12+16), units 1054 + 1 skipped, Go pass; `make scan`
-     PASS ×4; deny-list PASS (7 entries, 291 files). The 10:24:00Z `reconcile` entry read § Cycle 1.
-   - `tests/out/summary.json` (`git_sha` `99df450…`, exit 0) and `tests/out/e2e.tap`: match each 006
-     file's `@test` names to `ok` lines by name (the 005 addendum's python recipe), per file.
-     The recipe: parse `tests/out/e2e.tap` lines `^(ok|not ok) \d+ (.*?)( # .*)?$` into name → status;
-     for each `tests/e2e/view-*.bats` and `search-*.bats`, collect `^@test "(.*?)"` names and count the
-     statuses (all `ok`, none `MISSING`).
-   - `99df450..HEAD` is `reboot.md` only (check with `git diff --stat`); say so, as 005's addendum did.
-   - criteria_reestablished, superseding Cycle 1's `unconfirmed` for the four automated ones, cited
-     exactly as § Cycle 1 has them (backticks included; `grep -cF` = 1 against the send):
-     `05 · "with right-aligned line numbers, a header naming the file and range out of 412"`,
-     `05 · "and a missing file (exit 3) each behave as specified; a binary file prints its type and size"`,
-     `05 · "shows 50, grouped by file, with a footer stating the 212 omitted and a concrete way to narrow"`,
-     `05 · "and exits 1 only in strict mode _(traces to: P2)_"` → `executed [<file>, n/n, lane 006-a at 99df450]`;
-     `05 · "each result ending with the exact command to narrow or continue _(traces to: D5)_"` stays
-     **unconfirmed** until the mentor's D5 capture and interview (history says "Next: the D5 capture").
-   - also note: every earlier feature's e2e held after the agentio JSON cut (283/283 of them), and the
-     image-only cells the host stand-in could not run (type -a, timelike's list, run's) passed in the image.
-   - provenance: **no change**. `audited_against` stays `[1]`: the spec was generated from prompt revision
-     1, and no later prompt revision exists. No audit-log row is needed.
-   - commit as `[006] cycle report § Cycle 1 addendum: …`, deny-list gated on `: PASS`. Check the history
-     tail first: commit nothing while a lane runs.
-2. **DONE 2026-10-04:** D5 observed (§ Cycle 1 addendum 2, `021f6fa`), and ship under 2.35.0 (§ Cycle 1
-   ship): gate UNKNOWN, warns. **Next: the mentor's hand merge, then a push on the operator's OK.** It was:
-   **Then:** the mentor's D5 capture and interview (record it as `observed by the operator` only from a
-   history entry and its transcript), sign-off, ship under 2.35.0 (the 2.32.0 recipe below: unset
-   `FEATURE_DIR`, quote the checkout path as `<repo>/`), a hand merge by the mentor, a push on the
-   operator's OK.
-3. Later: 001's spec records revisions 11 and 12 at its next modify (no criterion changed); 07 slice 1
-   carries Q2 (state root); 12 slice 1 carries Item 14's (b); 05 slice 1 (overview, anchors).
+1. **Wait for the answer to pause-06** (beside it, or in `bridge/feedback/`). Then record it in
+   `008-edit` spec FR-12, run plan → tasks → implement --dispatch for 06, and continue with 08 s1 …
+   11 s1 from `bridge/dispatch/code-track.md`, each branch cut from the previous.
+2. The mentor's lane after the batch, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
+   (`human-track.md`), hand merges, pushes on the operator's OK.
+
+**Batch recipes (scratchpad, gone after a clear; rebuild them):**
+- **Expanded command text is not safe to run.** 2.35.0's implement expansion turns awk's `$0` into
+  the argument. specify's pastes a quoted description into double quotes. Run every block from the
+  installed file (awk the `# >>> name` … `# <<< name` range), with `ARGUMENTS` as a variable.
+- **`commit-task.sh FEATURE_DIR TASK FLAGGED DECFILE MSG FILES…`:** appends DECFILE (with `@START@` and
+  `@END@` filled from the clock: run `start.sh TASK` at a task's start), gates on the deny-list,
+  commits, computes SCOPE with the installed `scope-check` block (under `set +euo pipefail`; it is not
+  written for -e), ticks the task, and amends.
+- **`write-marker.sh FEATURE_DIR TASKS TESTS COVERAGE LINT`:** the ten fields, with the tallies from the
+  installed blocks, then `marker-fields` (prints MARKER-CLEAN).
+- **Step 10:** `step10.sh` runs the installed `quality-components`, `quality-scale` and
+  `unmeasured-explains-itself` blocks. Its output so far is identical each time (unknown, warned).
+- **Coverage rc:** add `/tmp/pytest-of-*/*/*/tl/` to `[paths] bin` (007's announce tests install
+  `timelike` there; without it the total read 51%).
+- **Delegates** wrote every cycle's units and e2e from the contract. Brief each with its files, the
+  no-literal-secrets rule and the deny-list rule. Review their contract findings and settle them in the
+  contract as built.
+- **Never compose a time:** read it with `date` (memory: read-times-from-clock).
 
 **006 helpers** (scratchpad, gone after a clear): `commit-006.sh` / `scope-tick-006.sh` (one task commit,
 then a "scope record, task ticked" commit; the scope-check block from 2.35.0, unchanged since 2.32.0);
