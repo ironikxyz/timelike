@@ -18,7 +18,7 @@ manifest (SC-3).
 
 ## Phase 2: Tests first (from the contract; delegated)
 
-- [ ] T002 [P] [US1] [US2] [US3] `tests/unit/test_announce.py`:
+- [X] T002 [P] [US1] [US2] [US3] `tests/unit/test_announce.py`:
   - generation from fake tools' manifests (a temporary bin directory), the 60-line bound, a failing
     `--agent-info`;
   - `--check` (missing, extra, equal);

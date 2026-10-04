@@ -83,7 +83,7 @@ def tool_paths() -> dict[str, str]:
         for e in entries:
             if e.name not in found and e.is_file() and os.access(e.path, os.X_OK):
                 found[e.name] = e.path
-    return found
+    return dict(sorted(found.items()))  # name order across directories (contract § The announcement)
 
 
 TOOL = agentio.Tool(
@@ -269,6 +269,8 @@ def standard_tools() -> list[dict[str, Any]]:
     path = Path(os.environ.get("TIMELIKE_STANDARD_TOOLS") or STANDARD_TOOLS_FILE)
     try:
         doc = json.loads(path.read_text())
+        if doc.get("v") != 1:
+            raise ValueError(f"version {doc.get('v')!r}; this timelike reads v 1")
         entries = doc["tools"]
         out: list[dict[str, Any]] = []
         for e in entries:
@@ -340,7 +342,9 @@ def _first_line(text: str) -> str:
 
 def _place(path: Path, text: str) -> None:
     """Write beside the target, then rename, so a reader never sees half a file (mode 0644)."""
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    missing = [d for d in (path.parent, *path.parent.parents) if not d.exists()]
+    for d in reversed(missing):  # every directory created is 0700, not only the last (contract)
+        d.mkdir(mode=0o700)
     tmp = path.with_name(f".{path.name}.timelike-{os.getpid()}")
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o644)

@@ -32,3 +32,15 @@ ASSUMED: a directory created for a harness file gets mode 0700 and the file 0644
 ABSENT: the image wiring (COPY, ENTRYPOINT) — T006
 Verification: ruff, format, mypy, shellcheck clean; temp HOME: 3 placed, byte-identical; again 3 current; someone else's codex file kept ("mine"), a stale timelike file replaced; a non-empty AGENTS.override.md → codex shadowed; a missing source → 3 not placed with the reason, exit 0
 SCOPE: in (2 changed files)
+
+
+### T002: tests/unit/test_announce.py (delegated); four deviations it found
+**Started:** after 8b45fc2 (the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T19:56:54Z
+
+INHERITED: the contract (with TIMELIKE_ANNOUNCEMENT, added while it worked) and test_conform.py's harness (confidence: high)
+FLAGGED: committed after T004–T006 landed; its 49 tests ran against the code and 4 failed on real deviations, three fixed in tools/bin/timelike here: name order across bin dirs (sorted globally, first directory wins), every created directory 0700 (not only the last), a curated file with v != 1 rejected (confidence: high)
+FLAGGED: the fourth, `current` for a same-revision file with another body — kept the code (restore it: the marker says do not edit) and changed the contract and the test, split into an identical-is-current test and a hand-edited-is-replaced test (confidence: medium)
+FLAGGED: four contract gaps settled as built (conditional rules, the tools text and verdict, the status line format, v 1) (confidence: high)
+ABSENT: a second bin directory in the image — the order fix matters on hosts and in tests only
+Verification: 50 passed; ruff, format and mypy clean
+SCOPE: in (2 changed files)

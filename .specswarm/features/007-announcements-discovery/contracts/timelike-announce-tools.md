@@ -12,6 +12,11 @@ timelike announce --status     report each placement
 timelike tools                 the manifest: timelike tools and curated standard tools
 ```
 
+**Environment:** `TIMELIKE_ANNOUNCEMENT` (default `/etc/timelike/announcement.md`) is the file `--install`,
+`--status` and `--check` read, and `--check`'s default. `TIMELIKE_STANDARD_TOOLS` is the curated file.
+`TIMELIKE_BIN_DIRS` gives the tools (as `timelike` already reads it), and `TIMELIKE_REVISION` gives the
+revision (001's test hook).
+
 ## The announcement
 
 - Line 1, the marker: `<!-- timelike announcement: revision <REV>; generated from the tools' manifests; do not edit -->`.
@@ -32,8 +37,9 @@ timelike tools                 the manifest: timelike tools and curated standard
 | codex | `${CODEX_HOME:-$HOME/.codex}/AGENTS.md` (shadowed when `AGENTS.override.md` is non-empty there) |
 | opencode | `$HOME/.config/opencode/AGENTS.md` |
 
-States: `placed` (written now), `current` (timelike's marker at this revision; untouched), `replaced`
-(timelike's marker at another revision; rewritten), `not placed: <reason>` (someone else's file, or an
+States: `placed` (written now), `current` (byte-identical to the announcement; untouched), `replaced`
+(timelike's marker, but not identical: another revision, or a hand-edited copy; rewritten, since the
+marker says do not edit), `not placed: <reason>` (someone else's file, or an
 error), `shadowed: <path>` (Codex override). `--install` always exits 0, and its verdict counts the
 states. `--status` changes nothing and exits 0. The JSON for both carries `placements: [{harness, path,
 state, reason}]`. Directories are created with mode 0700. Files are written to a temporary file beside
@@ -55,3 +61,13 @@ Curated entries come from `/etc/timelike/standard-tools.json` (`TIMELIKE_STANDAR
 
 `/opt/timelike/libexec/entrypoint` (POSIX sh): `timelike announce --install >/dev/null 2>&1 || true`,
 then `exec "$@"`. The image's `ENTRYPOINT ["/opt/timelike/libexec/entrypoint"]`, `CMD` unchanged.
+
+## Settled at implementation (gaps the unit delegate found)
+
+- **Rules are conditional:** a "How to work here" line that names a tool is written only when that tool
+  is installed, so the announcement never names one that is not (the spec's measurable outcome).
+- **`timelike tools` text:** `  instead: …` is omitted when `instead` is empty. In the verdict,
+  `(K installed)` counts the standard tools found on PATH.
+- **`--status` and `--install` text:** one line per harness, `HARNESS: STATE[: REASON] — PATH`.
+- **The curated file's `v`** must be 1; any other value is malformed (exit 1).
+
