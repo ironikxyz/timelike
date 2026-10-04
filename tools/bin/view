@@ -542,9 +542,9 @@ def window(
     whole = start == 1 and end == total
     notes = [f"clipped to {total}"] if clipped else []
     if decoder.replaced:
-        notes.append(f"{decoder.replaced} undecodable bytes shown as U+FFFD")
+        notes.append(f"{_n(decoder.replaced, 'undecodable byte')} shown as U+FFFD")
     if escapes:
-        notes.append(f"{escapes} lines had terminal escapes stripped")
+        notes.append(f"{_n(escapes, 'line')} had terminal escapes stripped")
     verdict = "; ".join([scope + (" (whole file)" if whole else ""), *notes])
 
     nxt = shlex.join(["view", *flag, f"{path}:{end + 1}-{end + WINDOW}"]) if end < total else None

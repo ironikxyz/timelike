@@ -363,9 +363,14 @@ def narrowing(hits: list[tuple[str, int, str]], words: list[str]) -> tuple[str, 
     return path, n, shlex.join([*words, path])
 
 
+def plural(count: int, word: str, many: str | None = None) -> str:
+    """`1 file`, `2 files` (spec FR-36: the D5 transcript read `1 files`)."""
+    return f"{count} {word if count == 1 else (many or word + 's')}"
+
+
 def summary(scan: Scan) -> str:
     skips = ", ".join(f"{v} {k}" for k, v in scan.skipped.items() if v)
-    return f"searched {scan.files_searched} files" + (f"; skipped {skips}" if skips else "")
+    return f"searched {plural(scan.files_searched, 'file')}" + (f"; skipped {skips}" if skips else "")
 
 
 def save_hits(ctx: agentio.Context, hits: list[tuple[str, int, str]]) -> str:
@@ -491,12 +496,12 @@ def respond(
             data["narrow"] = cmd
     data["shown"] = shown_n
 
-    head = f"{count} matches in {len(per_file)} files"
+    head = f"{plural(count, 'match', 'matches')} in {plural(len(per_file), 'file')}"
     if scan.timed_out:
         limit_text = f"{args.timeout:g}"
         verdict = (
-            f"time limit {limit_text} s reached: searched {scan.files_searched} files,"
-            f" {count} matches so far; not reached: {scan.not_reached}"
+            f"time limit {limit_text} s reached: searched {plural(scan.files_searched, 'file')},"
+            f" {plural(count, 'match', 'matches')} so far; not reached: {scan.not_reached}"
         )
         code = agentio.EXIT_TIMEOUT
     elif omitted:

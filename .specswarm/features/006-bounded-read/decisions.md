@@ -205,3 +205,13 @@ ASSUMED: hashlib is imported only under --anchors, so the file mode's start-up i
 ABSENT: anchors in the overview — a directory has no lines of a file; --anchors on a directory is a usage error (T019)
 Verification: ruff, format, mypy clean; a 4-line file with a CRLF line, an escape sequence and an invalid byte: each anchor equals sha256(raw line)[:6] computed separately; view --anchors FILE:2 marks line 2
 SCOPE: in (1 changed files)
+
+### T021: search's (and view's) verdict plurals (FR-36)
+**Started:** 2026-10-04T19:22:11Z | **Completed:** 2026-10-04T19:22:51Z
+
+INHERITED: the D5 transcript's defect `44 matches in 1 files (searched 1 files)` (mentor, history 2026-10-04T18:27:32Z) — from 006 Cycle 1 (confidence: high)
+FLAGGED: view's own verdict notes had the same defect (`1 undecodable bytes`, `1 lines had terminal escapes stripped`), seen in T020's check — fixed here too, beyond the task's wording, because the carried item is the plural and leaving one tool's would carry it again (confidence: high)
+ASSUMED: "skipped N kind" stays as written (`skipped 1 ignored`): the kind is an adjective there, with no plural to fix (confidence: high)
+ABSENT: plurals in other tools' verdicts (run, snapshot, adele) — not this feature's; none was reported
+Verification: ruff and format clean; tests/unit/test_view.py and test_search.py: 160 passed (their expectations use counts above 1); the singular cases are in T017's units
+SCOPE: in (2 changed files)
