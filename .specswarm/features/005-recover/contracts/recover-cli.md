@@ -28,7 +28,7 @@ Usage errors (exit 2), the lock timeout and I/O failures remain structured error
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TIMELIKE_SNAPSHOT_MAX_BYTES` | `268435456` | size cap on a snapshot's stored content; `0` = none |
+| `TIMELIKE_SNAPSHOT_MAX_BYTES` | `268435456` | size cap on the bytes a snapshot adds to the store, after deduplication (content already stored costs nothing; repeated content counts once; *Cycle 2, revision 11*); `0` = none |
 | `TIMELIKE_SNAPSHOT_MAX_FILE_BYTES` | `67108864` | per-file limit; `0` = none |
 | `TIMELIKE_SNAPSHOT_MAX_ENTRIES` | `50000` | entry cap on the walk; `0` = none |
 | `TIMELIKE_SCRATCH_ROOT`, `TIMELIKE_SESSION` | agentio's | where the store lives |
@@ -45,16 +45,27 @@ snapshot list             list this workspace's snapshots, newest first
 Manifest: `mutating: false`, `destructive: false`, probe `["list"]`. Exit codes: 0, 1, 2.
 
 **Take**, scope `take`:
+- *(Cycle 2, revision 11.)* The verdict says `taken` only after the snapshot is verified restorable:
+  the record read back, and every object it names re-hashed. If verification fails, nothing is taken:
+  exit 1, a verdict `snapshot <id> not taken: it could not be verified restorable: <what>`, then
+  `do instead: run snapshot again; if this repeats, the store <store> is damaged: remove it and take a
+  new snapshot`. The identifier stays used.
 - Verdict, complete: `snapshot <id> taken: <F> files, <size> (complete)`.
 - Verdict, partial: `snapshot <id> taken (partial): <F> files, <size>; excluded <E> files, <esize> — see below`.
 - `<size>` is human-readable bytes (`512 B`, `2.1 KiB`, `3.4 MiB`, `1.2 GiB`, one decimal).
 - Lines, one per exclusion, largest first then by path: `excluded: <path> (<size>) — <reason>`. A last
   line names how to raise the cap that bit: `raise with TIMELIKE_SNAPSHOT_MAX_BYTES=<n>` and/or
   `TIMELIKE_SNAPSHOT_MAX_FILE_BYTES=<n>`, where `<n>` is the value that would have captured everything.
+  For the size cap that is the content new to this store (files over the per-file limit counted whole),
+  so a second snapshot names less than the first when the first stored part of it.
+- Over the size cap, the largest new content is left out first, ties by path; files sharing one content
+  are left out together.
 - Over the output limit, the cut keeps the verdict, and `more` is a `sed -n` over the full list
   (`<store>/artefacts/…`), never a re-run.
-- JSON `data`: `id`, `reason` (`"on demand"`), `label`, `files`, `links`, `dirs`, `bytes`, `partial`,
-  `excluded` (the full list of `{path, size, reason}`), `excluded_bytes`, `store`.
+- JSON `data`: `id`, `reason` (`"on demand"`), `label`, `files`, `links`, `dirs`, `bytes`, `stored_bytes`
+  (bytes this snapshot added to the store), `partial`, `excluded` (the full list of
+  `{path, size, reason}`), `excluded_bytes`, `verified` (true), `store`. *(`stored_bytes` and
+  `verified` added in Cycle 2.)*
 
 **List**, scope `list`:
 - Verdict: `<N> snapshots` (`0 snapshots` when none, exit 0).
@@ -104,7 +115,10 @@ nothing (rule 7). `undo <S> --yes` restores a safety snapshot, which undoes an u
   `nothing to restore: the workspace matches snapshot <id>`.
 - **`--yes`, empty plan:** exit 0, same verdict as above. No safety snapshot is taken.
 - **`--yes`, non-empty plan:**
-  1. take the safety snapshot `S` (reason `before undo <id>`);
+  1. take the safety snapshot `S` (reason `before undo <id>`), verified as for `snapshot`. If it cannot
+     be verified, nothing is applied: exit 1, a verdict `restore of snapshot <id> not started: the
+     snapshot of the state it would replace failed: <its verdict>`, then `do instead: nothing was
+     changed; run undo <id> --yes again; …` *(Cycle 2)*;
   2. apply the plan;
   3. walk again and re-plan against the snapshot.
   - If the re-plan is empty: exit 0, verdict

@@ -21,6 +21,11 @@ except by a confirmed restore.
   share a store. If `workspace` names a different path from the one hashed (a collision), the store is
   refused (exit 1); this is never expected.
 - Identifiers come from `next`, read and incremented under the lock: 1, 2, 3, and never reused.
+- **Verification before "taken"** *(Cycle 2, revision 11; stack note 12)*: after the record is written
+  it is read back and compared, every entry path must be one a restore may write, and every object it
+  names must be a regular file of the recorded size whose sha256 is its name. On any failure the record
+  is deleted (its identifier stays used), a damaged object is removed so the next snapshot stores it
+  again, and the snapshot is not taken.
 
 ## Snapshot record (`snaps/<id>.json`)
 
@@ -36,6 +41,8 @@ except by a confirmed restore.
 | `excluded` | list | sorted by `path` |
 | `files`, `links`, `dirs` | int | counts of captured entries by kind |
 | `bytes` | int | total size of captured file content |
+| `stored_bytes` | int | bytes this snapshot added to the store: content not already in it, counted once *(Cycle 2, revision 11)* |
+| `size_cap_needed` | int | only when the size cap was applied: the new content it would have taken to capture every candidate *(Cycle 2)* |
 | `excluded_bytes` | int | total size of excluded files |
 | `partial` | bool | `excluded` is not empty |
 | `caps` | object | `{max_bytes, max_file_bytes, max_entries}` in force when taken |
@@ -51,7 +58,10 @@ workspace root itself is not an entry.
 
 **Exclusion:** `{path, size, reason}` with `reason` one of:
 - `over the per-file limit (<n> bytes)`;
-- `over the size cap: largest files left out first (<n> bytes)`;
+- `over the size cap: largest files left out first (<n> bytes)`. The cap counts bytes new to the
+  store (*Cycle 2, discovery revision 11*): content already stored costs nothing, and content repeated
+  within the snapshot counts once. Files sharing one content are left out together, largest content
+  first, ties by the smallest path;
 - `not a regular file, symlink or directory (<kind>)`, where kind is socket, fifo, block device or
   character device;
 - `unreadable: <strerror>`.

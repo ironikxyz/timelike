@@ -107,7 +107,10 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
 - **FR-6** **Excluded** (captured as a name and size only, never as content):
   - a file larger than the per-file limit;
   - when the remaining content would exceed the snapshot's size cap, the **largest** remaining files,
-    one at a time, until it fits (ties broken by path);
+    one at a time, until it fits (ties broken by path). *(Amended in Cycle 2, declared, for discovery
+    revision 11's condition 3: the cap counts the bytes the snapshot **adds to the store**, after
+    deduplication. Content already stored counts as nothing, content repeated within the snapshot
+    counts once, and files sharing one content are left out together.)*
   - anything that is not a regular file, symlink or directory (sockets, FIFOs, devices);
   - a file that cannot be read.
 
@@ -123,7 +126,11 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
 - **FR-9** `snapshot` takes a snapshot of the workspace. Its verdict names the identifier, the file count
   and the size captured; when partial, the number and size of what was excluded; and its first lines of
   output list the exclusions, largest first, each with its reason, bounded by the output cap. With
-  `--json` the exclusions are listed in full.
+  `--json` the exclusions are listed in full. *(Amended in Cycle 2, declared, for discovery revision
+  11's condition 4 and `stack.md` note 12:)* the verdict says **taken** only after the snapshot is
+  verified restorable: its record is read back, and every object it names is re-hashed against its
+  name. A snapshot that fails verification is not taken: no record stays, the verdict says so and why,
+  and exit is 1.
 - **FR-10** A snapshot may carry a short label (`-m TEXT`). It always records **why** it was taken:
   `on demand` for `snapshot`, `before undo <id>` for the safety snapshot of FR-15. Slice 1 adds further
   reasons.
@@ -176,7 +183,9 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
 - **FR-23** Snapshots live outside the workspace, in the session's scratch directory (rule 10), one store
   per workspace. Content is stored by copy, addressed by its hash, so identical content is stored once
   across snapshots. No hard links (an in-place edit would change the snapshot), no snapshotting
-  filesystem and no container commit.
+  filesystem and no container commit. *(Cycle 2: confirmed by discovery revision 11, which keeps the
+  store's slice-0 location — outside the workspace — and moves it to a per-workspace state root in
+  slice 1.)*
 - **FR-24** Two invocations against the same store never interleave: a second waits for the first, up to
   a bounded time, and then exits 1 naming the holder.
 

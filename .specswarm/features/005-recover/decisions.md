@@ -160,3 +160,16 @@ ASSUMED: corrected two of my own records in place, each saying so: T002's mypy v
 ABSENT: no Docker lane (R10); no ship or merge (they wait for the mentor's sign-off, and ship's D85 is its own field run); no demo_points_reached; no Group A (no marker on this path)
 Verification: make test-host 889 passed, 60/60, 29/29; coverage 93% for the two tools; ruff, mypy, shellcheck clean; implement step 10 run from the installed 2.27.0 blocks (unknown, warned); all five criterion citations match one send line each
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)
+
+### T016: the size cap counts bytes new to the store; "taken" after a restorability check (Cycle 2)
+**Started:** 2026-10-04T03:09+00:00 | **Completed:** 2026-10-04T03:20+00:00
+
+INHERITED: plan's conditions 3 and 4 (resolution Q1; `stack.md` note 12) via send 07-rev11-20261004-030207; conditions 1 and 2 checked as met by the existing code and units (confidence: high)
+FLAGGED: the size cap's unit is now the content a snapshot adds to the store, so an over-the-cap snapshot is less partial when part of the workspace is already stored, and the raise line names the new content, not the workspace's whole size; contract, data model and spec FR-6 amended to say so, declared (confidence: high)
+FLAGGED: files sharing one content are left out together, largest content first, ties by smallest path; leaving out one copy alone saves nothing (confidence: high)
+FLAGGED: verification re-hashes every object a snapshot names (one read of its distinct content), not only the objects it wrote, because `put` trusts an object it finds in place; a damaged object is removed so the next snapshot stores it again (confidence: medium — the cost is one extra read per snapshot; measured in T019)
+ASSUMED: the verdict lines stay byte-identical (the lane established them); `stored_bytes` and `verified` are JSON additions only (confidence: high)
+ASSUMED: a failed verification is an Outcome (exit 1, `do instead:`), as the contract treats a failed restore verification; the record is deleted and its id stays used (FR-11) (confidence: high)
+ASSUMED: undo's safety snapshot goes through the same check, and a failure there applies nothing — D-10's "an undo is undoable" depends on it (confidence: high)
+ABSENT: no change to the walk, the plan, apply or the lock; no record version bump (readers require neither new field)
+Verification: units 78 passed (72 + 6 new; 1 changed for the cap's unit); ruff, ruff format, mypy clean; the five 005 e2e files through the host stand-in 40/44 (the 4 being the image-only type -a cells, as in Cycle 1), SC-4's raise value 300000 included

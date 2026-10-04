@@ -523,12 +523,20 @@ def test_per_file_limit_and_size_cap_exclude_largest_first_with_reasons(lab: Lab
     assert [e["path"] for e in rec["excluded"]] == ["a.bin", "big.bin"]  # the record sorts by path
     assert {e["path"] for e in rec["entries"]} == {"b.bin", "c.bin", "small.txt"}
     assert rec["caps"] == {"max_bytes": 520, "max_file_bytes": 1000, "max_entries": 50000}
+    assert (d["stored_bytes"], d["verified"]) == (510, True)
 
-    t = snap(lab, "--text", **caps)
+    # Revision 11 (condition 3): the cap counts bytes NEW to the store. b, c and small are stored now,
+    # so a second snapshot adds only a.bin (300 <= 520) and leaves out only what the per-file limit does.
+    d2 = take(lab, **caps)
+    assert [(x["path"], x["reason"]) for x in d2["excluded"]] == [("big.bin", per_file)]
+    assert (d2["files"], d2["bytes"], d2["stored_bytes"]) == (4, 810, 300)
+
+    # The text form, from an empty store (another session), where the size cap bites as in the JSON run.
+    t = snap(lab, "--text", TIMELIKE_SESSION=f"{SESSION}-text", **caps)
     assert t.returncode == 0
     out = text_of(t)
     assert out[0] == f"snapshot: {os.path.realpath(lab.ws)} [take]"
-    assert out[1].startswith("verdict: snapshot 2 taken (partial): ")
+    assert out[1].startswith("verdict: snapshot 1 taken (partial): ")
     ex = [x for x in out if x.startswith("excluded: ")]
     assert ex == [  # largest first, then by path
         f"excluded: big.bin ({human(5000)}) — {per_file}",
@@ -539,8 +547,89 @@ def test_per_file_limit_and_size_cap_exclude_largest_first_with_reasons(lab: Lab
     assert raise_lines and out[-len(raise_lines) :] == raise_lines, out
     named = " ".join(raise_lines)
     assert "TIMELIKE_SNAPSHOT_MAX_FILE_BYTES=5000" in named
-    # the value that would have captured everything: all regular-file content, big.bin included
+    # the value that would have captured everything: all content new to that store, big.bin included
     assert "TIMELIKE_SNAPSHOT_MAX_BYTES=5810" in named
+
+
+# ── revision 11, plan's conditions on the store (send 07-rev11-20261004-030207) ───────────────
+
+
+def object_bytes(lab: Lab) -> int:
+    """What the store holds, measured by the test on disk (P004), not by the tool's account of it."""
+    return sum(p.stat().st_size for p in (lab.store() / "objects").rglob("*") if p.is_file())
+
+
+def test_a_repeated_snapshot_of_an_unchanged_workspace_adds_no_stored_bytes(lab: Lab) -> None:
+    make_repo(lab.ws, lab.home)
+    first = take(lab)
+    held = object_bytes(lab)
+    assert first["stored_bytes"] == held > 0
+    second = take(lab)
+    assert object_bytes(lab) == held  # condition 1: nothing new on disk
+    assert second["stored_bytes"] == 0 and second["bytes"] == first["bytes"]
+    write(lab.ws / "notes" / "new.txt", b"n" * 123)
+    third = take(lab)
+    assert third["stored_bytes"] == 123 and object_bytes(lab) == held + 123  # only what changed
+
+
+def test_the_size_cap_counts_bytes_already_stored_as_nothing(lab: Lab) -> None:
+    for i in range(4):
+        write(lab.ws / f"f{i}.bin", bytes([65 + i]) * 400)
+    take(lab)  # no cap: 1600 bytes stored
+    write(lab.ws / "g.bin", b"g" * 300)
+    d = take(lab, TIMELIKE_SNAPSHOT_MAX_BYTES="500")  # 1900 bytes of files, 300 of them new
+    assert d["partial"] is False and d["excluded"] == [], d["excluded"]
+    assert (d["files"], d["bytes"], d["stored_bytes"]) == (5, 1900, 300)
+
+
+def test_the_size_cap_counts_content_repeated_within_a_snapshot_once(lab: Lab) -> None:
+    write(lab.ws / "a.bin", b"x" * 300)
+    write(lab.ws / "copy" / "a.bin", b"x" * 300)
+    write(lab.ws / "b.bin", b"y" * 150)
+    d = take(lab, TIMELIKE_SNAPSHOT_MAX_BYTES="450")  # 750 bytes of files, 450 of distinct content
+    assert d["partial"] is False, d["excluded"]
+    assert (d["files"], d["bytes"], d["stored_bytes"]) == (3, 750, 450)
+    assert object_bytes(lab) == 450
+
+
+def test_over_the_cap_files_sharing_content_are_left_out_together_largest_first(lab: Lab) -> None:
+    write(lab.ws / "a.bin", b"x" * 300)
+    write(lab.ws / "dup.bin", b"x" * 300)
+    write(lab.ws / "b.bin", b"y" * 200)
+    write(lab.ws / "c.txt", b"z" * 10)
+    t = snap(lab, "--text", TIMELIKE_SNAPSHOT_MAX_BYTES="250")  # new content 510 > 250
+    assert t.returncode == 0, t.stderr
+    reason = "over the size cap: largest files left out first (250 bytes)"
+    out = text_of(t)
+    assert [x for x in out if x.startswith("excluded: ")] == [
+        f"excluded: a.bin ({human(300)}) — {reason}",
+        f"excluded: dup.bin ({human(300)}) — {reason}",
+    ]
+    assert out[-1] == "raise with TIMELIKE_SNAPSHOT_MAX_BYTES=510"  # distinct new content, counted once
+    rec = record(lab, 1)
+    assert {e["path"] for e in rec["entries"]} == {"b.bin", "c.txt"}
+    assert (rec["bytes"], rec["stored_bytes"]) == (210, 210)
+
+
+def test_taken_follows_a_check_that_every_stored_object_reads_back_by_its_hash(lab: Lab) -> None:
+    """Condition 4: plant a damaged object where `put` will find it and trust it. The re-hash catches
+    it: no snapshot is taken or listed, the damaged object is removed, and the next snapshot succeeds."""
+    write(lab.ws / "a.txt", b"real content\n")
+    digest = hashlib.sha256(b"real content\n").hexdigest()
+    take(lab)  # creates the store; snapshot 1 is sound
+    obj = lab.store() / "objects" / digest[:2] / digest
+    obj.chmod(0o600)
+    obj.write_bytes(b"real contenX\n")  # same size, wrong bytes
+
+    d = outcome(snap(lab, "--json"), 1, "take")
+    assert d["verdict"].startswith("snapshot 2 not taken: it could not be verified restorable: object ")
+    assert not d["verdict"].startswith("snapshot 2 taken") and "run snapshot again" in d["remedy"]
+    assert not (lab.store() / "snaps" / "2.json").exists() and not obj.exists()
+    assert snapshot_ids(lab) == [1]
+
+    d3 = take(lab)
+    assert d3["id"] == 3 and d3["verified"] is True  # ids are never reused (FR-11)
+    assert obj.read_bytes() == b"real content\n"
 
 
 def test_only_the_per_file_limit_bit_names_only_its_variable(lab: Lab) -> None:

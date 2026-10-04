@@ -10,7 +10,9 @@ Scope and limits, stated rather than implied (T2):
 - the workspace is the nearest directory upward holding `.git`, else the current directory; the
   filesystem root, the home directory and their ancestors are refused (G1);
 - every `.git` is out of scope at any depth: never captured, restored, removed or followed (revision 8);
-- beyond the caps a snapshot is partial and names each excluded file and why, or (entry cap) refused.
+- beyond the caps a snapshot is partial and names each excluded file and why, or (entry cap) refused;
+  the size cap counts the bytes a snapshot adds to the store, after deduplication (revision 11);
+- "taken" is said only after the record and every object it names are read back and re-hashed.
 
 No git is run and nothing is hard-linked. Design: .specswarm/features/005-recover/ (spec, research
 R1–R9, data-model.md, contracts/recover-cli.md).
@@ -370,8 +372,8 @@ class Store:
     def object_path(self, sha: str) -> Path:
         return self.path / "objects" / sha[:2] / sha
 
-    def put(self, src: str) -> tuple[str, int]:
-        """Copy `src` (never followed) into the store; its sha256 and the bytes read."""
+    def put(self, src: str) -> tuple[str, int, bool]:
+        """Copy `src` (never followed) into the store; its sha256, the bytes read, and whether it was new."""
         tmp = self.path / "objects" / f".in.{os.getpid()}.tmp"
         h = hashlib.sha256()
         size = 0
@@ -384,19 +386,58 @@ class Store:
                     size += len(block)
             sha = h.hexdigest()
             dest = self.object_path(sha)
-            if dest.exists():
+            if os.path.lexists(dest):
                 tmp.unlink()
-            else:
-                dest.parent.mkdir(mode=0o700, exist_ok=True)
-                os.chmod(tmp, 0o400)
-                os.replace(tmp, dest)
-            return sha, size
+                return sha, size, False
+            dest.parent.mkdir(mode=0o700, exist_ok=True)
+            os.chmod(tmp, 0o400)
+            os.replace(tmp, dest)
+            return sha, size, True
         finally:
             with contextlib.suppress(FileNotFoundError):
                 tmp.unlink()
 
+    def has(self, sha: str) -> bool:
+        return os.path.lexists(self.object_path(sha))
+
+    def record_path(self, ident: int) -> Path:
+        return self.path / "snaps" / f"{ident}.json"
+
     def write_record(self, rec: dict[str, Any]) -> None:
-        self._write_atomic(self.path / "snaps" / f"{rec['id']}.json", json.dumps(rec, indent=1) + "\n", 0o600)
+        self._write_atomic(self.record_path(rec["id"]), json.dumps(rec, indent=1) + "\n", 0o600)
+
+    def verify(self, rec: dict[str, Any]) -> str | None:
+        """Can `rec` be restored? Read its record back, and re-hash every object it names (stack note 12).
+
+        Returns what is wrong, or None. A damaged object is removed, so the next snapshot stores it again
+        instead of trusting the copy `put` found in place.
+        """
+        try:
+            back = json.loads(self.record_path(rec["id"]).read_text())
+        except (OSError, ValueError) as err:
+            return f"its record cannot be read back ({err})"
+        if back != rec:
+            return "its record reads back different from what was written"
+        sizes: dict[str, int] = {}
+        for e in rec["entries"]:
+            try:
+                check_rel(e["path"])
+            except agentio.ToolError:
+                return f"{e['path']!r} is not a path a restore may write"
+            if e["kind"] == "file":
+                sizes[e["sha256"]] = e["size"]
+        for sha, size in sorted(sizes.items()):
+            obj = self.object_path(sha)
+            try:
+                st = os.lstat(obj)
+                ok = stat.S_ISREG(st.st_mode) and st.st_size == size and file_sha(str(obj)) == sha
+            except OSError as err:
+                return f"object {sha[:12]} cannot be read ({err.strerror or err})"
+            if not ok:
+                with contextlib.suppress(OSError):
+                    obj.unlink()
+                return f"object {sha[:12]} does not match its hash (removed; it is stored again next time)"
+        return None
 
     def records(self) -> list[dict[str, Any]]:
         if not self.exists():
@@ -426,7 +467,10 @@ def _exclusion(rel: str, size: int, reason: str) -> dict[str, Any]:
 
 
 def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | None) -> dict[str, Any]:
-    """Walk, choose, copy, record. The caller holds the store's lock and has created the store."""
+    """Walk, choose, copy, record, verify. The caller holds the store's lock and has created the store.
+
+    Raises Outcome when the snapshot cannot be shown restorable: then it is not taken (no record stays).
+    """
     try:
         entries, _ = walk(store.ws, caps[ENV_MAX_ENTRIES])
     except EntryCapExceeded:
@@ -451,31 +495,18 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
                 )
             else:
                 candidates.append((rel, e["size"]))
-    total = sum(s for _, s in candidates)
-    if caps[ENV_MAX_BYTES] and total > caps[ENV_MAX_BYTES]:
-        dropped = set()
-        for rel, size in sorted(candidates, key=lambda c: (-c[1], c[0])):
-            if total <= caps[ENV_MAX_BYTES]:
-                break
-            dropped.add(rel)
-            total -= size
-            excluded.append(
-                _exclusion(
-                    rel,
-                    size,
-                    f"over the size cap: largest files left out first ({caps[ENV_MAX_BYTES]} bytes)",
-                )
-            )
-        candidates = [c for c in candidates if c[0] not in dropped]
+    candidates, cut, needed = _fit_size_cap(store, caps[ENV_MAX_BYTES], candidates)
+    excluded.extend(cut)
     captured: list[Entry] = []
-    stored_bytes = 0
+    total = stored = 0
     for rel, size in sorted(candidates):
         try:
-            sha, read = store.put(os.path.join(store.ws, rel))
+            sha, read, new = store.put(os.path.join(store.ws, rel))
         except OSError as err:
             excluded.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
             continue
-        stored_bytes += read
+        total += read
+        stored += read if new else 0
         captured.append(
             {"path": rel, "kind": "file", "sha256": sha, "size": read, "mode": entries[rel]["mode"]}
         )
@@ -498,7 +529,8 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
         "files": sum(1 for c in captured if c["kind"] == "file"),
         "links": sum(1 for c in captured if c["kind"] == "link"),
         "dirs": sum(1 for c in captured if c["kind"] == "dir"),
-        "bytes": stored_bytes,
+        "bytes": total,
+        "stored_bytes": stored,
         "excluded_bytes": sum(x["size"] for x in excluded),
         "partial": bool(excluded),
         "caps": {
@@ -507,8 +539,59 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
             "max_entries": caps[ENV_MAX_ENTRIES],
         },
     }
+    if needed is not None:
+        rec["size_cap_needed"] = needed
     store.write_record(rec)
+    problem = store.verify(rec)
+    if problem is not None:
+        with contextlib.suppress(OSError):
+            store.record_path(rec["id"]).unlink()
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"snapshot {rec['id']} not taken: it could not be verified restorable: {problem}",
+            f"run snapshot again; if this repeats, the store {store.path} is damaged:"
+            " remove it and take a new snapshot",
+        )
     return rec
+
+
+def _fit_size_cap(
+    store: Store, cap: int, candidates: list[tuple[str, int]]
+) -> tuple[list[tuple[str, int]], list[dict[str, Any]], int | None]:
+    """Apply the size cap to the bytes this snapshot would ADD to the store (revision 11, condition 3).
+
+    Content already in the store, or repeated within this snapshot, is stored once and counts once. When
+    even the files' plain sizes fit, nothing is hashed twice. Otherwise each file is hashed, and the
+    largest new content is left out first (ties by path); files sharing content are left out together,
+    since leaving out one alone saves nothing. Returns the files to copy, the exclusions, and (when the
+    cap bit) the cap that would have captured everything.
+    """
+    if not cap or sum(s for _, s in candidates) <= cap:
+        return candidates, [], None
+    keep: list[tuple[str, int]] = []
+    cut: list[dict[str, Any]] = []
+    groups: dict[str, list[tuple[str, int]]] = {}
+    for rel, size in candidates:
+        try:
+            sha = file_sha(os.path.join(store.ws, rel))
+        except OSError as err:
+            cut.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
+            continue
+        if store.has(sha):
+            keep.append((rel, size))  # stored already: costs nothing
+        else:
+            groups.setdefault(sha, []).append((rel, size))
+    new_bytes = {sha: members[0][1] for sha, members in groups.items()}  # same content, same size
+    needed = sum(new_bytes.values())
+    total = needed
+    reason = f"over the size cap: largest files left out first ({cap} bytes)"
+    for sha in sorted(groups, key=lambda h: (-new_bytes[h], min(r for r, _ in groups[h]))):
+        if total <= cap:
+            keep.extend(groups[sha])
+            continue
+        total -= new_bytes[sha]
+        cut.extend(_exclusion(rel, size, reason) for rel, size in groups[sha])
+    return keep, cut, needed
 
 
 def raise_lines(rec: dict[str, Any], caps: dict[str, int]) -> list[str]:
@@ -518,11 +601,9 @@ def raise_lines(rec: dict[str, Any], caps: dict[str, int]) -> list[str]:
     if over_file:
         out.append(f"raise with {ENV_MAX_FILE_BYTES}={max(over_file)}")
     if any(x["reason"].startswith("over the size cap") for x in rec["excluded"]):
-        sizeable = rec["bytes"] + sum(
-            x["size"]
-            for x in rec["excluded"]
-            if x["reason"].startswith(("over the size cap", "over the per-file"))
-        )
+        # The cap counts bytes new to the store, so this is what the snapshot would have added: every
+        # new content it hashed, plus the files the per-file limit kept out (counted whole, unhashed).
+        sizeable = rec.get("size_cap_needed", rec["stored_bytes"]) + sum(over_file)
         out.append(f"raise with {ENV_MAX_BYTES}={sizeable}")
     return out
 
@@ -580,11 +661,13 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
             "links",
             "dirs",
             "bytes",
+            "stored_bytes",
             "partial",
             "excluded",
             "excluded_bytes",
         )
     }
+    data["verified"] = True
     data["store"] = str(store.path)
     return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
 
@@ -855,7 +938,16 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
             return agentio.Result(
                 ws, scope, f"nothing to restore: the workspace matches snapshot {ident}", data={"id": ident}
             )
-        before = take_locked(store, caps_from_env(), f"{SAFETY_PREFIX}{ident}", None)
+        try:
+            before = take_locked(store, caps_from_env(), f"{SAFETY_PREFIX}{ident}", None)
+        except Outcome as o:
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"restore of snapshot {ident} not started: the snapshot of the state it would replace"
+                f" failed: {o.verdict}",
+                f"nothing was changed; run undo {ident} --yes again; if this repeats, the store"
+                f" {store.path} is damaged: remove it and take a new snapshot",
+            ) from None
         try:
             apply_plan(store, ws, rec, plan)
         except agentio.ToolError as e:

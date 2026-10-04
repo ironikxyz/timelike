@@ -8,6 +8,7 @@ is asserted as well, never instead. Helpers come from test_snapshot.py.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
@@ -486,6 +487,29 @@ def test_excluded_files_are_left_alone_and_a_partial_safety_snapshot_says_so(lab
     assert (lab.ws / "big.bin").read_bytes() == b"C" * 600
     assert (lab.ws / "src.txt").read_text() == "source\n"
     assert not (lab.ws / "notes.txt").exists()
+
+
+def test_a_safety_snapshot_that_fails_verification_stops_the_restore_before_any_change(lab: Lab) -> None:
+    """Revision 11, condition 4, on undo's own snapshot (D-10): with the state it would replace not shown
+    restorable, the restore never starts. A damaged object is planted for the new file's content."""
+    write(lab.ws / "a.txt", "kept\n")
+    take(lab)
+    write(lab.ws / "new.txt", "made after\n")
+    write(lab.ws / "a.txt", "edited\n")
+    digest = hashlib.sha256(b"made after\n").hexdigest()
+    obj = lab.store() / "objects" / digest[:2] / digest
+    write(obj, "made aftex\n")
+    before = tree(lab.ws)
+
+    d = outcome(undo(lab, "--json", "--yes"), 1, "restore newest")
+    assert d["verdict"].startswith("restore of snapshot 1 not started: the snapshot of the state it would")
+    assert "could not be verified restorable" in d["verdict"]
+    assert d["remedy"].startswith("nothing was changed; run undo 1 --yes again"), d["remedy"]
+    assert tree(lab.ws) == before  # nothing applied
+    assert snapshot_ids(lab) == [1] and not obj.exists()
+    y = doc_of(undo(lab, "--json", "--yes"))  # the damaged object is gone, so the next attempt succeeds
+    assert y["verified"] is True and (lab.ws / "a.txt").read_text() == "kept\n"
+    assert not (lab.ws / "new.txt").exists()
 
 
 # ── refusals and usage ────────────────────────────────────────────────────────────────────────

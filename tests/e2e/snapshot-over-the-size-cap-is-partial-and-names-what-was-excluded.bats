@@ -215,7 +215,9 @@ check_size_cap_partial() {
   [[ "${EXCLUDED_LINES[0]}" == "excluded: build/big-a.bin ("*") — over the size cap"* ]] || flunk "first excluded line (largest first): ${EXCLUDED_LINES[0]}"
   [[ "${EXCLUDED_LINES[1]}" == "excluded: assets/big-b.bin ("*") — over the size cap"* ]] || flunk "second excluded line: ${EXCLUDED_LINES[1]}"
   local last="${lines[${#lines[@]} - 1]}"
-  [[ "$last" == *"raise with TIMELIKE_SNAPSHOT_MAX_BYTES=${BYTES}"* ]] || flunk "last line does not raise the size cap to ${BYTES}: $last"
+  # The cap counts bytes new to the store (discovery revision 11): the first run stored everything but
+  # the two large files, so this second snapshot would add exactly their 300000 bytes.
+  [[ "$last" == *"raise with TIMELIKE_SNAPSHOT_MAX_BYTES=300000"* ]] || flunk "last line does not raise the size cap to 300000 (the bytes new to the store): $last"
   [[ "$last" != *"TIMELIKE_SNAPSHOT_MAX_FILE_BYTES"* ]] || flunk "last line names the per-file cap, which did not bite: $last"
 
   manifest after
