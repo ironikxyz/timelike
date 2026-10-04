@@ -138,7 +138,7 @@ The governance audit to revision 11 and the CVE-2026-95619 baselines were done o
 phase (`586e298`, `f33c806`) and merged in (`fc5b97d`), as the send orders. They are recorded in the cycle
 report, not as tasks here.
 
-- [ ] T016 [US4] `tools/bin/snapshot`: the size cap counts bytes new to the store, after deduplication
+- [X] T016 [US4] `tools/bin/snapshot`: the size cap counts bytes new to the store, after deduplication
   (F001, FR-6), and "taken" follows a restorability check, applied to undo's safety snapshot too (F002,
   FR-9). Contract, data model, spec FR-6, FR-9 and FR-23 annotations, README. Units: 6 new, 1 changed;
   SC-4's e2e raise value.

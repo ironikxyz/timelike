@@ -173,3 +173,4 @@ ASSUMED: a failed verification is an Outcome (exit 1, `do instead:`), as the con
 ASSUMED: undo's safety snapshot goes through the same check, and a failure there applies nothing — D-10's "an undo is undoable" depends on it (confidence: high)
 ABSENT: no change to the walk, the plan, apply or the lock; no record version bump (readers require neither new field)
 Verification: units 78 passed (72 + 6 new; 1 changed for the cap's unit); ruff, ruff format, mypy clean; the five 005 e2e files through the host stand-in 40/44 (the 4 being the image-only type -a cells, as in Cycle 1), SC-4's raise value 300000 included
+SCOPE: in (5 changed files)
