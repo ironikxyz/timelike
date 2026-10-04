@@ -22,7 +22,8 @@ is public**:
 
 ## Next actions
 
-1. **Write `### Cycle 1 addendum — the mentor's Docker lane at 99df450`** in
+1. **DONE at `b3c19ee` (2026-10-04): the addendum below is written and committed.** It was:
+   **Write `### Cycle 1 addendum — the mentor's Docker lane at 99df450`** in
    `.specswarm/features/006-bounded-read/cycle-report.md` (append-only; Cycle 1's text stays as written).
    The evidence, read it yourself before citing (never from this note alone):
    - `../bridge/history.md` 2026-10-04T10:24:00Z, `lane | 006-a`: `make test` PASSED, e2e **343/343**
