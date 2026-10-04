@@ -5,44 +5,34 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~03:50Z, after Cycle 2 of `005-recover` (session loaded **specswarm 2.32.0**,
-`19829a6`). **This repository is public** (`ironikxyz/timelike`). `master` tracks `public/main`:
-- **`public/main` = `9522f55`.** Local `master` = `f33c806`, 3 ahead and unpushed: this file's earlier
-  commit `64d5d2e`, the governance audit to revision 11 (`586e298`), and the CVE-2026-95619 baselines
-  (`f33c806`). They go out only with discharged work, on the operator's OK (rule 5).
-- **`005-recover`** (local, HEAD = this commit; `master` merged in at `fc5b97d`): feature 07 slice 0,
-  Cycles 1 and 2. Cycle 2 (send `07-rev11-20261004-030207`) is built and recorded:
-  - plan's four store conditions: 1 and 2 met as built; 3 (the size cap counts bytes new to the store)
-    and 4 ("taken" only after the record is read back and every object re-hashed; undo's safety snapshot
-    too) built in T016;
-  - spec § Revision 11 (the constraint declared, the two slice-1 criteria carried); D-5 and D-7 confirmed;
-  - **FOR-MENTOR Item 17 closed** (Items 1–17 are all closed);
-  - `audit-log.md`: `none (deferred)`. The `full` append of 2–11 waits for the mentor's lane;
-  - host lane: 895 passed, 60/60, 29/29; coverage 92% for the two tools; stand-in 40/44.
-- **Not signed off.** Every automated criterion is unconfirmed until the mentor's Docker lane on
-  `005-recover`'s HEAD. `make scan` must PASS on all four images with the new baselines. D7 waits for
-  the operator interview.
+**Snapshot:** 2026-10-04 ~05:35Z. Feature 07 slice 0 (`005-recover`, Cycles 1 and 2) is **shipped,
+merged, discharged and pushed** (session loaded specswarm 2.32.0, `19829a6`). **This repository is
+public** (`ironikxyz/timelike`):
+- **`master` = `public/main` = `fb4f7fb`** (merge of `005-recover` at `77b78d9`; pushed 2026-10-04 on
+  the mentor's discharge, `../bridge/history.md` 05:26:41Z, and the operator's OK; `git ls-remote`
+  confirmed). This `reboot.md` commit is local and goes out with the next discharged work (rule 5).
+- 005: `audited_against [1..11]` (full), all five slice-0 criteria re-established (four executed in
+  the image, lane 005-d at `e50a82f`; D7 observed by the operator). FOR-MENTOR Items 1–17 closed.
 - The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`), also in the closed, private
   `timelike-history`.
 - Remotes: `public` (push and fetch); `history` (fetch-only, push URL `no-push`).
 - Commit identity, this repository only: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>`.
 
-## Next actions (in this order)
+## Next actions
 
-1. **Wait for the mentor's lane on `005-recover`** (don't commit during it). When it lands:
-   - if green, append the `full` row (2–11) to `audit-log.md`, set `audited_against: [1, 2, …, 11]` in
-     `spec.md`, and write a `### Cycle 2 addendum` in `cycle-report.md` citing the lane per criterion;
-   - if scan fails on new scanner data, check its premise first (memory: check instruction premises).
-2. **Then:** the D7 interview (the mentor's), sign-off, ship from a session with 2.32.0 loaded (D85's
-   field run; merge by hand, `--no-ff`, exactly the signed-off commit), and push only on the
-   operator's OK.
-3. Later sends: 05 s0; 12 slice 1 carries Item 14's (b); 07 slice 1 carries Q2 (the per-workspace
-   state root; 001's rule-10 wording; restore-snapshots-first, which D-10 already does).
+1. Nothing is in flight. Read `../bridge/active-prompt.md` and the tail of `../bridge/history.md` for
+   the next send.
+2. Later sends: 05 s0; 12 slice 1 carries Item 14's (b); 07 slice 1 carries Q2 (the per-workspace
+   state root; 001's rule-10 wording; restore-snapshots-first, which D-10 already does). 001's spec
+   records revision 11 at its next modify cycle.
+3. Upstream (the mentor relays): `find_feature_dir` pads with `printf %03d`, so feature directory 008
+   and later mis-resolve. timelike reaches 008 two features from now.
 
-**Cycle 2 helpers** (scratchpad, gone after a clear): `commit-task.sh` + `scope-tick.sh` (the installed
-`scope-check` block, sourced with `set +e`; one task commit, then a "scope record, task ticked"
-commit); `qs.sh` (quality-scale + unmeasured-explains-itself); `tally.sh` (scope-tally and
-decision-tally); the docker stand-in in `stub/` with tools in `tb/` (shebang `/usr/bin/python3`).
+**Ship recipe under 2.32.0 (worked, 005):** extract analyze-quality's blocks (`analysis-context`,
+`component-applicability`, `tests-agnostic-score`, `unknown-resolvability`, `module-score`,
+`overall-score`, `quality-report`) and ship's (`quality-source`, `quality-threshold`, the threshold
+lines, `quality-gate`) with `textwrap.dedent` into one script, `MODULES` = 001's eight; **unset
+`FEATURE_DIR`** before `quality-source`. Quote the checkout path as `<repo>/` (P2). Merge by hand.
 
 ## Publishing recipes (2026-10-03)
 
