@@ -219,3 +219,250 @@ decisions: sections=14 flagged_sections=6 non_flagged_sections=8 sections_withou
 - `out=1` is T015's `.specswarm/metrics.json`: implement step 10 writes it, and `tasks.md` does not name it
   (the same as 001's T078).
 - 6 FLAGGED sections and 0 low-confidence entries, so this run gives the promotion bar nothing.
+
+## Cycle 2 — bridge/sends/07-rev11-20261004-030207.md
+
+**Written:** 2026-10-04. Not in dispatch mode. **specswarm 4.0.1-botbaubble.2.32.0** (`19829a6`), the
+version this session loaded: the expanded commands name the cache path `…/4.0.1-botbaubble.2.32.0`
+(lore Q002). The sequence was `/specswarm:constitution` (governance, on `master`), then
+`/specswarm:modify 005 --from-send bridge/sends/07-rev11-20261004-030207.md` on `005-recover`, then the
+plan, tasks and implement records for the cycle (Phase 6, T016–T019). The send's `005-recover` was kept;
+`modify` did not ask for a new branch. **Nothing was pushed or merged.** The lane, the D7 interview and
+the mentor's sign-off come first (CLAUDE.md rule 5).
+
+This cycle's path is named here, as the send asks: `.specswarm/features/005-recover/cycle-report.md`.
+CLAUDE.md names the same file, so there is no second report.
+
+**Status in one line:** governance is audited to revision 11, and the CVE-2026-95619 baselines are on
+`master` and merged in. Plan's four store conditions: two held as built, and two were built (the size cap
+after dedup; "taken" only after a restorability check). Revision 11 is recorded in the spec, Item 17 is
+closed, and the host lane passes. Nothing has run in the image yet.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/07-rev11-20261004-030207.md |
+| source_prompt | plan/.discover/prompts/07-recover.md |
+| prompt_revision | 11 |
+| discovery_revision | 11 |
+| slice | 0 |
+
+These are the send's own values. The spec's frontmatter keeps `prompt_revision: 1` and
+`discovery_revision: 10`, the revisions its body was generated from. Only `audited_against` may move, and
+it waits for the lane (*Provenance* below).
+
+### Before the modify: on `master`, then merged into `005-recover`
+
+**Governance audit, discovery revision 10 → 11** (`586e298`). Source: `../bridge/governance-context.md`
+(`/mentor:regovern` 2026-10-04T00:24:17Z), § "What Changed In Those Revisions". This was three edits, as
+the send said:
+
+| File | How | Result |
+|---|---|---|
+| `constitution.md` | `/specswarm:constitution` (2.32.0) | **No change needed.** No article restates rule 10's state locations or the project cache; H2 points at the contract rather than restating its rules; P5 and T2 name no store technology. 1.4.2 stands. Sync Impact Report entry, `governance_audited_against` += 11 |
+| `tech-stack.md` | by hand | **Amended.** The git line said "snapshots, shadow store outside the workspace". It now reads as the agent's own version control, "not the snapshot store (discovery revision 11)", and the stdlib content-addressed store is noted under Python. 1.3.0 → 1.3.1. `lib/tech-stack-parser.sh` reads the same 41 technologies before and after. Prose note, += 11 |
+| `quality-standards.md` | by hand | **No change needed.** No gate restates rule 10; the *Snapshots (T2)* budget and the *Snapshot restore round-trip (P5)* gate name no store technology. Prose note, += 11 |
+
+All three now read `governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`.
+
+**CVE-2026-95619 baselines** (`f33c806`; send `bridge/sends/maint-baseline-cve-2026-95619-20261004-024309.md`).
+In each image, three entries were added (`gcc-14-base`, `libgcc-s1`, `libstdc++6`; High; origin `base
+layer`). They were taken from that image's own `baseline.proposed.json` of the 2026-10-04 lane and placed
+after CVE-2026-102010's:
+
+| Baseline | Entries | Review note |
+|---|---|---|
+| `scan/baseline/timelike-agent.json` | 80 → 83 | one, attributed to `ironik.xyz` |
+| `scan/baseline/timelike-vanilla.json` | 79 → 82 | one, attributed to `ironik.xyz` |
+| `scan/baseline/timelike-bench-driver.json` | 51 → 54 | one, attributed to `ironik.xyz` |
+
+Nothing else changed in the baselines: `review_by` stays 2026-12-27, and so do `reviewed` and the
+origins. As an advisory check only, `scan/evaluate.py report` was re-run on the host over copies of that
+lane's own scan output with these baselines: **PASS** for agent, vanilla and bench-driver (83, 82 and 54
+baselined). The scan units passed (112). The deny-list read `pass` with the list read.
+
+**Merge:** `master` → `005-recover` at `fc5b97d`, with no conflict.
+
+### Provenance (modify Step 2 and Step 9)
+
+The installed `provenance-inputs` and `provenance-row` blocks gave **row 7**: the same prompt, `N 11`,
+`prompt_revision 1`, `audited_against [1]`. `modify` took the feature number from the standalone `005`
+argument. The branch is not `modify/NNN`, so without the argument it would have asked on stdin, as the
+send said.
+
+The classification compares the prompt copy in `bridge/sends/07-rev1-20261003-013915.md` with this send's.
+Only additions differ: the revision note, one constraint and two *(slice 1)* criteria. **Nothing was
+removed or reworded**, so removals are visible and none occurred. Revisions 2–10 did not change prompt 07.
+**Not superseded.** The constraint's slice-0 part ("outside the workspace") holds as built; the two
+criteria are carried, not built (spec § Revision 11).
+
+**`audited_against` is not appended yet**: `audit-log.md` has one `none (deferred)` row. This cycle
+changed `tools/bin/snapshot`, which slice 0's criteria rest on, so the expected **`full`** append of
+2–11 waits for the mentor's Docker lane on this cycle's commit, as in 001 cycles 5 and 6. A `### Cycle 2
+addendum` will record it.
+
+### Plan's four conditions on the store (resolution Q1), checked against `005-recover` at `f83e984`
+
+| # | Condition | As built at `f83e984` | Now | Evidence (test or code line → result) |
+|---|---|---|---|---|
+| 1 | Blobs deduplicated by content across snapshots | **Met.** `Store.put` stores by sha256 and drops the copy when the object exists (`tools/bin/snapshot:389`) | unchanged | `test_content_is_stored_by_hash_outside_the_workspace` (two snapshots: one object on disk) → pass. New, measured on disk: `test_a_repeated_snapshot_of_an_unchanged_workspace_adds_no_stored_bytes`: the second snapshot adds **0** bytes to `objects/` and reports `stored_bytes 0`; a 123-byte change adds exactly 123 → pass |
+| 2 | Symlinks stored as links, never followed out of the workspace | **Met.** The walk records `os.readlink` (`:276`), never descends a link, and restore writes `os.symlink` (`:835`) | unchanged | `test_take_records_tracked_untracked_ignored_files_links_and_dirs_with_modes`: `src-link` recorded as `("link", "src")` with no `src-link/app.py`, `dangling`, and `outside-link` with nothing from outside captured → pass. `test_yes_restores_every_kind_byte_identical_and_names_the_safety_snapshot` restores links byte-identical → pass |
+| 3 | The size cap counts stored bytes after dedup | **Not met.** The cap was compared with the sum of every candidate's plain size, so content already stored or repeated counted again | **Built (T016).** `_fit_size_cap` (`:558`, called at `:498`): content already stored costs nothing (`:580`), repeated content counts once, the largest new content is left out first, files sharing content are left out together; the raise line names the new content | `test_the_size_cap_counts_bytes_already_stored_as_nothing` (1900 bytes of files, 300 new, cap 500 → complete, `stored_bytes 300`); `test_the_size_cap_counts_content_repeated_within_a_snapshot_once` (750 bytes, 450 distinct, cap 450 → complete; 450 on disk); `test_over_the_cap_files_sharing_content_are_left_out_together_largest_first`; the changed `test_per_file_limit_and_size_cap_exclude_largest_first_with_reasons` (a second snapshot adds only a.bin); SC-4's e2e raise value 300000 → all pass. **What a capped snapshot left out** is still named per file with its reason (FR-6) |
+| 4 | "Taken" only after checking that the snapshot is restorable | **Not met.** "Taken" followed the record write | **Built (T016).** `Store.verify` (`:409`, called at `:545`) is **a hash check**: the record is read back and compared, every entry path is checked as one a restore may write, and every object it names must be a regular file of the recorded size whose sha256 is its name. On failure no record stays (the id stays used), the damaged object is removed so the next snapshot stores it again, and the verdict is `snapshot <id> not taken: …` (exit 1). The same check guards `undo --yes`'s safety snapshot: if it fails, nothing is applied | `test_taken_follows_a_check_that_every_stored_object_reads_back_by_its_hash` (a damaged object planted where `put` trusts it → not taken, not listed, object removed; the next snapshot is id 3 and stores the content again) → pass. `test_a_safety_snapshot_that_fails_verification_stops_the_restore_before_any_change` (the workspace tree is identical after the refused undo) → pass |
+
+**The cost of condition 4, measured on the host (advisory):** a 53 MB, 391-file workspace, page cache
+warm, three runs each of first and repeat snapshot. At `f83e984`: 364–407 ms. Now: 554–594 ms. That is
+about +180 ms, one re-read of the snapshot's distinct content. Under the size cap, the plain sizes decide
+first, so nothing is hashed twice unless the cap is in play.
+
+**Contract changes (declared, in `contracts/recover-cli.md`, `data-model.md`, spec FR-6, FR-9, FR-23,
+README):** the verdict lines are byte-identical. JSON `data` gains `stored_bytes` and `verified`. There
+are two new outcomes (exit 1): `snapshot <id> not taken: it could not be verified restorable: <what>`,
+and `restore of snapshot <id> not started: …`. The record gains `stored_bytes` and `size_cap_needed`, and
+`v` stays 1.
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. Every task was done by this instance; no subagent was used.
+
+**criteria_reestablished**
+
+Nothing has run in the image this cycle (no Docker here, R10). Cycle 2 changed the code under SC-1, SC-2
+and SC-4, so the image results from Cycle 1's lane at `f83e984` no longer cover this tree. Every automated
+criterion is `unconfirmed` until the mentor's lane on this cycle's commit.
+
+- `07 · "of the workspace and prints its identifier, file count and size"` — **unconfirmed** (Docker lane
+  pending; `tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats`; the verdict format is
+  unchanged)
+- `07 · "removes files created after it, and a dry run lists exactly those changes first"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats`)
+- `07 · "are unchanged by taking or restoring a snapshot"` — **unconfirmed** (Docker lane pending;
+  `tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats`)
+- `07 · "is refused or partial, and the verdict names what was excluded and why"` — **unconfirmed**
+  (Docker lane pending; `tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`,
+  whose second-run raise value changed to 300000)
+- `07 · "restores it with one undo command _(traces to: D7)_"` — **unconfirmed**. Manual (D7): the mentor
+  interviews the operator on the real exchange after the Docker lane.
+
+Each citation matches exactly one line of this send (`grep -cF` = 1 for all five). The two revision-11
+criteria are *(slice 1)* and are neither built nor cited.
+
+**reconcile_mode:** `full` is expected (2–11: removals visible, none occurred, revisions 2–10 did not
+touch the prompt, and the slice-1 criteria are outside a slice-0 spec). **It is not applied yet.** It is
+deferred to the lane, recorded as `none (deferred)` in `audit-log.md`. If the mentor reads the two
+slice-1 criteria as unaddressed criteria of this spec, the mode is `scoped` (11 alone) or `none`. I have
+not assumed that reading.
+
+**not_verified**
+- **Everything in the image:** the five e2e files on this tree; conform over `snapshot` and `undo` after
+  the change; Python 3.14.7 (the host is 3.12.3); the overlay filesystem.
+- **`make scan` with the new baselines.** The host re-evaluation used the lane's own scan output from
+  2026-10-04; a fresh scan may carry newer scanner data.
+- **The host stand-in is not image evidence:** 40 of 44 ok, the 4 not-ok being the `type -a` cells (as
+  in Cycle 1).
+- **Verification's cost at the default caps in the image:** measured on the host only (above).
+- **A file changing between the cap pass and the copy:** handled by Assumption 4 (recorded as read), and
+  untested.
+- **Two of `verify`'s defensive branches** are uncovered: a record that cannot be read back or reads back
+  different, and an object that cannot be opened.
+- **D7 (the demo):** unconfirmed until the operator interview.
+
+**changed_other_features:** none in behaviour. The shared files changed are `README.md` (the snapshot
+section's caps paragraph and a "Stored once" bullet), `FOR-MENTOR.md` (Item 17 closed), the three
+governance files and the three scan baselines (on `master`, for every image).
+
+**process_failures_recorded**
+1. **The code came before the task list.** T016's code and tests were written and passing before the
+   modify, plan and tasks records existed. Those records were then written and committed first, and the
+   code was committed under T016. The order of record is right; the order of work was not.
+2. **My scope helper failed after T016's commit.** The installed `scope-check` block, sourced under
+   `set -euo pipefail`, stopped on a `grep` exit 1. The commit had landed; the scope record was then
+   written by the fixed helper (`eb6a46d`). That is a defect of my wrapper, not of the block.
+3. **Two bugs in my own new tests**, caught on the first run: `"taken:" not in …` also matched `not
+   taken:`, and undo's outcome scope is `restore newest`, not `restore 1`. While fixing the second, undo's
+   remedy was changed from "run snapshot again" to "run undo <id> --yes again".
+4. **One verification wording corrected before commit:** T017 first said the quotes were checked "by
+   grep". They were checked by substring match with whitespace normalised, since the spec wraps lines.
+5. **T017 scored `SCOPE: out`** (`FOR-MENTOR.md`; `tasks.md` names it without an extension, which the
+   extractor does not read). It is recorded as computed, with FLAGGED yes.
+6. **Plugin observations, for the mentor to relay** (2.32.0, first session):
+   - **`modify`'s number fallback works:** with `005` as a standalone argument, it resolved `005-recover`
+     on a non-`modify/` branch without reading stdin. `printf %03d` on `005` gives 005. The send's octal
+     note (`008` and `009` give 000) was not exercised.
+   - **`modify`'s provenance blocks now set their own inputs** (D89): row 7 came from the blocks, not by
+     hand.
+   - **Step 10e no longer consults the absent quality-gates library** (D88). It reads `package.json`,
+     and there is none here: `none`.
+   - **`/specswarm:constitution`, followed as expanded, needed no input for a no-change audit.** Its
+     provenance section names the operation used (append N).
+
+**retired_prompts_seen:** `bridge/sends/07-rev11-20261004-002459.md`, superseded by this send and never
+built from. Nothing was built from it.
+
+### Implement step 10 — quality validation (specswarm 2.32.0), as the library reported it
+
+```
+🧪 Running Quality Validation
+=============================
+- Detector:
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+- run_tests pytest: rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+- parse_test_results: total=unknown passed=unknown failed=unknown skipped=unknown
+- run_coverage pytest: unknown (rc 1)
+- step 10e: browser test framework: none (no package.json)
+- quality-components: QC_BROWSER_STATE=not-applicable:no web project detected, so there is nothing to drive a browser over
+                      QC_BUNDLE_STATE=unavailable:lib/bundle-size-monitor.sh is not present in this install
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**. With `block_merge_on_failure: false` and `min_quality_score: 0`, it warns and
+does not halt. No component was filled in by hand. The project's own figures are recorded **beside** it
+in `.specswarm/metrics.json` → `005-cycle-2.project_measurements_not_scored`. The output is verbatim.
+
+**Host lane** (advisory; scratch venv, Python 3.12.3):
+- `make test-host`: **895 passed** (175.5 s); env layer 60/60; hook logic 29/29.
+- This feature's units: 78 passed (6 new).
+- Coverage of the two tools (line and branch, subprocesses included): `snapshot` 92%, `undo` 88% (20
+  statements), together **92%**.
+- ruff clean (54 files formatted); mypy strict: no issues in 19 files; shellcheck clean over every
+  `*.sh`, `*.bash` and `*.bats`.
+- The five 005 e2e files through the host stand-in: 40/44 (the 4 `type -a` cells).
+- The publish deny-list read `pass` with the list read before every commit (7 entries, P1–P7 0/0).
