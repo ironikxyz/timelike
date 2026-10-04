@@ -284,3 +284,17 @@ ABSENT: a full filesystem other than the workspace's and the scratch's (say, /tm
 ABSENT: a verdict line cut at COLUMNS before the slice-1 parts when the log path is very long — the image's log path is short (~55 chars); JSON's verdict is uncut; recorded for the cycle report
 Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py memory and disk: 24/24 (the delegate's; its go() helper now sets COLUMNS=1000, because pytest's scratch paths are long and the text verdict was cut before the slice-1 note — a test fix, committed with T020)
 SCOPE: in (1 changed files)
+
+### T025: run — redaction of the log, the shown lines, the header and the event; the verdict count; fail closed; the manifest (FR-33 to FR-40)
+**Started:** 2026-10-04T20:06Z | **Completed:** 2026-10-04T20:24Z
+
+INHERITED: agentio.load_redaction_rules, redact_text, Context.event_args — from T022; Outcome.notes order — from T023/T024 (confidence: high)
+FLAGGED: the log is replaced by its redacted copy (write beside it, rename) only when something matched, after a keyword pre-scan — chose rename-on-match over always rewriting, because a log with no secret then stays exactly as the command wrote it, including a detached child's later output (slice 0's edge case keeps holding) (confidence: high)
+FLAGGED: when the rules are unavailable, run fails closed for the command line too: the header and the event's arguments become "(withheld: redaction rules unavailable)" — the unit delegate found that withholding only the body left a secret argument in the header and the event (confidence: high)
+FLAGGED: tests/unit/conftest.py base_env points every tool test at the repository's rule file — chose that over setting it per test, because run withholds its output without rules and the unit lanes run outside the agent image; without it 14 slice-0 tests failed by design; the file is not named in tasks.md, so this task records SCOPE out (confidence: high)
+ASSUMED: surrogateescape round-trips every non-secret byte of the log, so a binary or non-UTF-8 output is kept byte for byte (confidence: high)
+ASSUMED: a private key longer than 64 KiB at a block boundary is not a case to carry further — PEM keys are a few KiB (confidence: high)
+ABSENT: redaction of output written after the verdict by a detached child — not possible after run returns; the verdict says "detached output after this is not kept" when the log was replaced
+ABSENT: environment values as secrets — FR-34
+Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py, test_run.py, test_agentio_redaction.py, test_redaction_rules.py: 185 passed (the delegates' files are committed with T019/T020)
+SCOPE: out — tests/unit/conftest.py (1 of 2 changed files) (task has FLAGGED: yes)

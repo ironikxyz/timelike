@@ -276,7 +276,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
   - `Context.event_args`.
 - [X] T023 [US5] `tools/bin/run`: the memory cause (FR-25 to FR-28).
 - [X] T024 [US6] `tools/bin/run`: the disk cause (FR-29 to FR-32).
-- [ ] T025 [US7] `tools/bin/run`: redaction of the log, the shown lines, the header and the event
+- [X] T025 [US7] `tools/bin/run`: redaction of the log, the shown lines, the header and the event
   arguments; the verdict count; fail closed; the manifest (FR-33 to FR-40).
 - [ ] T026 The declared contract text and the place agents read:
   - `.specswarm/features/001-agent-shell-baseline/contracts/output-contract.md`: the pass-through
