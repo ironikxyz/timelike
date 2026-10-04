@@ -249,6 +249,8 @@ view src/engine.py:40           # lines 30-50, line 40 marked >
 view build/app.o                # binary file: ELF, 18.2 KiB (18640 bytes); content not shown
 search parse_args               # 50 hits grouped by file; ends with narrow: search parse_args src  (188 of the 262)
 search no_such_thing --strict   # exit 1, as grep does; without --strict, 0 matches exits 0
+view .                          # overview in 200 lines; node_modules/ is one line: counts, expand: view node_modules/
+view --anchors src/app.py:40-60 # each line with a 6-hex anchor of its content: " 42 a3f9c1 return x"
 ```
 
 - **Bounded:** a window is 120 lines (`view FILE:A-B` for a range, `--limit 0` for a whole file when you
@@ -260,6 +262,13 @@ search no_such_thing --strict   # exit 1, as grep does; without --strict, 0 matc
   binary files and files over 16 MiB, and counts each. It reads the ignore files itself, so a
   repository's git configuration runs nothing. `--no-ignore` searches everything but `.git`.
 - **Always ends:** a search stops at 30 seconds (`--timeout S`) with exit 124 and names what it reached.
+- **An overview to orient** (slice 1): `view DIR` lists the tree within the same 200-line budget,
+  directories first and files with their sizes. It respects the ignore files, and collapses `.git`,
+  dependency and build directories (and, to fit, deeper ones) into one line each, with counts and the
+  `expand:` command.
+- **Anchors** (slice 1): `view --anchors` shows each line's anchor, the first 6 hex characters of the
+  SHA-256 of its raw bytes. The same content keeps its anchor wherever the line moves; changed content
+  gets a new one. `N:anchor` is the form the edit tool (feature 06) is to accept from its slice 1.
 
 ## Speedup bench
 

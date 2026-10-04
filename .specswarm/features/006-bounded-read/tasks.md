@@ -145,7 +145,7 @@ commits per task, and the scope is the files each task names.
 - [X] T020 [US7] `tools/bin/view`: `--anchors` (FR-32 to FR-35).
 - [X] T021 [US8] `tools/bin/search`: the verdict's plurals (FR-36); `tests/unit/test_search.py` where an
   expectation names a plural.
-- [ ] T022 `README.md`: the `view` section gains the overview and anchors.
+- [X] T022 `README.md`: the `view` section gains the overview and anchors.
 
 ### Polish
 

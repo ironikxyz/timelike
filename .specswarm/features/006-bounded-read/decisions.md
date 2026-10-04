@@ -215,3 +215,12 @@ ASSUMED: "skipped N kind" stays as written (`skipped 1 ignored`): the kind is an
 ABSENT: plurals in other tools' verdicts (run, snapshot, adele) — not this feature's; none was reported
 Verification: ruff and format clean; tests/unit/test_view.py and test_search.py: 160 passed (their expectations use counts above 1); the singular cases are in T017's units
 SCOPE: in (2 changed files)
+
+### T022: README — the view section gains the overview and anchors
+**Started:** 2026-10-04T19:22:58Z | **Completed:** 2026-10-04T19:23:07Z
+
+INHERITED: the behaviour of T019–T021 (confidence: high)
+ASSUMED: the README's "view and search" section is where agents and operators read about both (P3) (confidence: high)
+ABSENT: "The edit tool accepts N:anchor" describes 06 slice 1, which is not built in this batch (08 is 06's slice 0) — worded as the form it accepts, stated in this feature's contract
+Verification: the example lines match the tools' output on the T019/T020 fixtures; deny-list PASS
+SCOPE: in (1 changed files)
