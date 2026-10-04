@@ -30,7 +30,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
     `src/cli.py` 40, `tests/` 44, `docs/` 30), plus 25 in `build/out.txt` and 5 in `app.log` (ignored);
     a committed and an untracked file each carrying some; a file in `.git/` carrying it (never searched).
   The counts are asserted inside the script with `grep -c`, so a fixture that drifts fails at build time.
-- [ ] T002 [P] `pyproject.toml`: ruff `extend-include` and mypy `files` gain `tools/bin/view` and
+- [X] T002 [P] `pyproject.toml`: ruff `extend-include` and mypy `files` gain `tools/bin/view` and
   `tools/bin/search`. `Makefile` `SHELLCHECK_FILES` gains the fixture and the e2e files of T003–T007.
 
 ## Phase 2: Tests from the contract (delegated, before the tools)

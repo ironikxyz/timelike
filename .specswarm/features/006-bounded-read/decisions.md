@@ -22,3 +22,4 @@ ASSUMED: the lists name files that T001, T003–T007, T010 and T011 create; unti
 FLAGGED: none
 ABSENT: no new lint rule or tool version; nothing else in pyproject or the Makefile changed
 Verification: `git diff` shows only the six SHELLCHECK_FILES lines and the two Python list entries
+SCOPE: in (2 changed files)
