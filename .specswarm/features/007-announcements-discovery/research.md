@@ -24,8 +24,8 @@ container's PID tree is unchanged.
 
 ## R3 · The 60-line budget
 
-There are 9 tools on `/opt/timelike/bin` as of this batch (`adele`, `run`, `search`, `snapshot`,
-`timelike`, `timelike-conform`, `undo`, `view`, plus later features' tools), one line each. The header,
+There are 8 tools in `tools/bin` as of this branch (`adele`, `run`, `search`, `snapshot`, `timelike`,
+`timelike-conform`, `undo`, `view`; counted with `ls`), one line each, and later features in this batch add more. The header,
 the rules and the closing take about 14 lines, which leaves room for about 40 more tools. The generator
 fails at build if the result exceeds 60 lines, so the bound is checked, not hoped.
 
