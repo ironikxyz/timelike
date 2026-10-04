@@ -127,3 +127,4 @@ FLAGGED: `--limit 0` with no range shows the whole file (spec FR-6, quickstart),
 ASSUMED: the file is streamed once (line count, bytes and the window's lines), so a large file is never held whole; stray ESC bytes the rule-13 pattern leaves are removed too, or conform's C8 would fail (confidence: high)
 ABSENT: no anchor column (slice 1); the layout leaves its place between the marker and the text (D-9)
 Verification: 68 units pass; ruff, format, mypy strict clean; the view e2e files through the host stand-in pass
+SCOPE: in (1 changed files)

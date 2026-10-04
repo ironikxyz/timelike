@@ -59,7 +59,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 
 ## Phase 3: User Stories 1 and 2 — `view`
 
-- [ ] T010 [US1, US2] `tools/bin/view` on agentio (contract § view): resolution, the window rules,
+- [X] T010 [US1, US2] `tools/bin/view` on agentio (contract § view): resolution, the window rules,
   the line layout with the marker column (room for slice 1's anchor), the `Cut` with the file as full
   output and the next window as `more:`, binary by NUL plus magic type, decoding counts, verdicts as
   outcomes.
