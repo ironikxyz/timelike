@@ -232,3 +232,15 @@ Verification:
 - shellcheck 0.11.0: clean on the edited file
 - host, sandboxed (`setsid --wait timeout -k 5 40`): the test's own fixture, extracted from the file, run through `tools/bin/run --text --timeout 2`. rc 124 in 4.4 s (image: 4.3 s). Line 2 is `verdict: exit 124 (timeout after 2 s (--timeout); raise with --timeout or TIMELIKE_RUN_TIMEOUT) · 4.1 s · …`, with no "not stopped". After 1.5 s, all five members (main, plain, nested-timeout, setsid, trap-term) had stopped beating and were not alive. This is host evidence, not image evidence
 SCOPE: in (1 changed files)
+
+### T018: the shared rule file, the image COPY, scan.sh --config
+**Started:** 2026-10-04T19:05Z | **Completed:** 2026-10-04T19:12Z
+
+INHERITED: spec FR-33, research R15 (the 18 rule ids, gitleaks' format, extend useDefault) — from the Cycle 2 spec (confidence: high)
+FLAGGED: the rule file is gitleaks' own config format, read by both run (agentio, tomllib) and gitleaks — chose one shared file over run-only regexes, because the stack note and 001's rule 15 both say the set is shared, and a second copy would diverge (confidence: high)
+FLAGGED: 18 provider rules copied byte for byte from gitleaks v8.30.1 defaults, overriding them by id with an added tag — chose override-with-tag over new ids, because new ids would make gitleaks report each leak twice, and the tag carries rule 15's type (confidence: high)
+ASSUMED: gitleaks ignores nothing it needs and accepts `tags` and `[[rules.allowlists]]` as written — verified, not assumed: the v8.30.1 binary (checksum-checked) loads the file, reports a planted generated token as `github-pat` with `["redact:token"]`, and finds 0 leaks in timelike's history with it (confidence: high)
+ABSENT: the 25 default rules Python's re cannot compile, and generic-api-key — not in the redaction set (R15); they stay in the scan through useDefault
+ABSENT: no Docker here, so the image COPY is not built in this task — the mentor's lane builds it; a unit (T019) and an e2e cell (T021) check /etc/timelike/redaction.toml loads in the image
+Verification: field-by-field equality of regex, entropy, keywords, allowlists and description against the pinned defaults (script, scratch); gitleaks v8.30.1 over the history and over a planted scratch repository
+SCOPE: in (3 changed files)

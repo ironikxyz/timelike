@@ -237,7 +237,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
 
 ### Setup
 
-- [ ] T018 The shared rule file and its two readers' wiring:
+- [X] T018 The shared rule file and its two readers' wiring:
   - `image/rootfs/etc/timelike/redaction.toml`: `[extend] useDefault = true`, plus the 18 rules of spec
     FR-33, copied from gitleaks v8.30.1's `config/gitleaks.toml` and checked field by field, each with
     `tags = ["redact:<type>"]`;

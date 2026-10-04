@@ -205,6 +205,8 @@ fi
 # subcommand for history (`dir` scans only the working tree, which misses a secret committed and
 # later deleted). --exit-code 0 makes a leak exit 0 too, so a non-zero exit can only mean gitleaks
 # failed; findings come from the JSON. --redact keeps the secrets themselves out of scan/out.
+# --config is the rule set run's output redaction reads too (feature 003 slice 1, FR-33): gitleaks'
+# defaults, extended by 18 of them tagged with their redaction type, so the scan's rules are unchanged.
 # Run as the invoking user, who owns the checkout, so git's safe.directory check passes.
 # gitleaks_step — once, into scan/out; its record is appended to every image's steps.tsv.
 gitleaks_step() {
@@ -214,7 +216,7 @@ if [ ! -d .git ]; then
   record gitleaks error "not a plain git checkout (.git is not a directory), so history cannot be mounted"
 elif docker run --rm --network none "${as_me[@]}" -e HOME=/tmp \
   -v "$root:/repo:ro" -v "$root/$out:/out" "$GITLEAKS_IMAGE" \
-  git /repo --no-banner --redact --exit-code 0 \
+  git /repo --no-banner --redact --exit-code 0 --config /repo/image/rootfs/etc/timelike/redaction.toml \
   --report-format json --report-path /out/gitleaks.json >"$out/gitleaks.err" 2>&1; then
   if [ -s "$out/gitleaks.json" ]; then
     record gitleaks ran "gitleaks ${GITLEAKS_IMAGE%%@*}"
