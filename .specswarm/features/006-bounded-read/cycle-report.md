@@ -262,3 +262,63 @@ decisions: sections=16 flagged_sections=9 non_flagged_sections=7 sections_withou
 - `out=1` is T016's `.specswarm/metrics.json`: implement step 10 writes it, and `tasks.md` does not name it
   (as for 005's T015).
 - 9 FLAGGED sections and 0 low-confidence entries, so this run gives the promotion bar nothing.
+
+### Cycle 1 addendum — the mentor's Docker lane at 99df450
+
+Source: `../bridge/history.md` 2026-10-04T10:24:00Z (`lane | 006-a`; the `reconcile` entry at the same
+time read § Cycle 1), and the lane's own outputs: `tests/out/summary.json` (`lane docker`, `git_sha
+99df450…`, exit 0, every step `pass`), `tests/out/e2e.tap`, `tests/out/unit.txt`, `scan/out/denylist.json`.
+`99df450..HEAD` changes `reboot.md` only (`git diff --stat`), so the tested tree is this cycle's code.
+
+- **`make test`: PASSED.** e2e **343/343** (`1..343`, 0 `not ok`, no skips). That is 283 cells of the
+  earlier features plus this feature's 60. 006's five files were checked by matching each `@test` name to
+  its line in `tests/out/e2e.tap`. Every cell is `ok`, and none is missing:
+  - `view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats` 8/8
+  - `view-range-context-missing-file-and-binary.bats` 16/16
+  - `search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats` 10/10
+  - `search-zero-matches-exits-0-and-1-only-in-strict-mode.bats` 14/14
+  - `view-and-search-resolve-once-and-pass-conform.bats` 12/12
+
+  Units: 1054 passed, 1 skipped. Go: pass.
+- **`make scan`: PASS ×4** (agent, adele, vanilla, bench-driver), per the history entry. Deny-list:
+  `pass`, 7 entries (P1–P7, 0 matches each), 291 tracked files.
+
+**criteria_reestablished** (this supersedes Cycle 1's `unconfirmed` for the four automated criteria;
+the Cycle 1 section is unchanged):
+
+- `05 · "with right-aligned line numbers, a header naming the file and range out of 412"` — **executed
+  [`tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats`, 8/8, lane 006-a at
+  `99df450`]**
+- `05 · "and a missing file (exit 3) each behave as specified; a binary file prints its type and size"` —
+  **executed [`tests/e2e/view-range-context-missing-file-and-binary.bats`, 16/16, lane 006-a at `99df450`]**
+- `05 · "shows 50, grouped by file, with a footer stating the 212 omitted and a concrete way to narrow"` —
+  **executed [`tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats`, 10/10,
+  lane 006-a at `99df450`]**
+- `05 · "and exits 1 only in strict mode _(traces to: P2)_"` — **executed
+  [`tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats`, 14/14, lane 006-a at `99df450`]**
+- `05 · "each result ending with the exact command to narrow or continue _(traces to: D5)_"` —
+  **unconfirmed**. Manual (D5): the mentor's capture and interview with the operator come next.
+
+Each citation still matches exactly one line of the send (`grep -cF` = 1 for all five).
+
+**Closed from Cycle 1's not_verified:**
+- **The image-only cells:** 006's resolution file passed in the image, 12/12:
+  - the four `type -a` cells (`/opt/timelike/bin/view` and `/opt/timelike/bin/search`);
+  - conform over both tools, 4 cells;
+  - `timelike`'s tool list naming both, 4 cells.
+
+  The cells the host stand-in could not run in other features also passed in the image: 005's and 003's
+  `type -a` cells, and `run`'s cells whose fixture calls `/opt/timelike/python`.
+- **Other features after the agentio JSON cut:** all 283 earlier cells passed (`run` 003, `snapshot`
+  and `undo` 005, `adele` 004, conform, the bench). No earlier e2e changed in this cycle.
+- **Python 3.14.7:** the image build asserts the pinned interpreter. The lane's units ran under it
+  (`tests/out/unit.txt:23` and `tests/out/startup.json`: `python=3.14.7`; start-up p95 91.7 ms, budget
+  100 ms).
+
+**Still not_verified:**
+- **D5.**
+- **Search speed in the image.** The lane ran the suite but did not measure search speed.
+- **A window ending at the file's end.** Only the units test this case.
+
+**Provenance: no change.** `audited_against` stays `[1]`. The spec was generated from prompt revision 1,
+and prompt 05 has no later revision. No `audit-log.md` row is needed. `reconcile_mode` stays `full`.
