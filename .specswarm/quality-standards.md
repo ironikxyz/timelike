@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -121,6 +121,16 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 > gate name no store technology, so the stack's move from git to a stdlib store leaves them true.
 > The state root's survival criteria reach code as 07 slice-1 acceptance criteria, not as a gate.
 > No threshold moved. Revision 11 is appended to `governance_audited_against`.
+>
+> **Audited against discovery revision 12** (2026-10-04), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T08:54:45Z), § "What Changed In Those Revisions", and
+> `../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md` § Q3. **No change
+> needed:** revision 12 clarifies the Agent output contract's rule 13 (the line cut applies in both
+> modes; in JSON each content string, with the cut byte count as data). This file derives from
+> Constraints, but no gate restates rule 13 as text-only or names a JSON exemption. The *Output contract
+> (H2)* gate cites the conformance check (C8 checks ANSI, not the line cut). The cut itself changes in
+> `agentio` in feature 006's cycle. No threshold moved. Revision 12 is appended to
+> `governance_audited_against`.
 
 # Quality Standards - Timelike
 
