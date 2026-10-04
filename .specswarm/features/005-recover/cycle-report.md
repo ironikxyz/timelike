@@ -574,3 +574,175 @@ Revisions 2–10 did not change prompt 07. The `audit-log.md` row records the ba
 **not_verified:** nothing remains open for slice 0's criteria. The earlier `not_verified` items about the
 host (stand-in, timing, two defensive branches of `verify`, a file changing mid-snapshot) still stand as
 written.
+
+### Cycle 2 ship — `/specswarm:ship` under specswarm 2.32.0 (`19829a6`), 2026-10-04
+
+Run on `005-recover` at **`61356ea`**, the commit the mentor signed off (`../bridge/history.md`
+2026-10-04T05:06:58Z), with a clean tree. The session loaded **4.0.1-botbaubble.2.32.0**: the expanded
+commands name `…/specswarm/4.0.1-botbaubble.2.32.0`, and the marketplace checkout is at **`19829a6`**
+("docs: REBOOT at 2.32.0 …"), which is `installed_plugins.json`'s `gitCommitSha`. **This is the first
+field run of D85.**
+
+How it ran: ship Step 1 was run from the installed file. Step 2's `/specswarm:analyze-quality` blocks
+(`analysis-context`, `component-applicability`, `tests-agnostic-score`, `unknown-resolvability`,
+`module-score`, `overall-score`, `quality-report`) were run from the installed file with `MODULES` =
+001's eight, as in the 003 and 004 recipe. Then ship's `quality-source`, `quality-threshold`, the
+threshold echo lines and `quality-gate` were run with `CLAUDE_PLUGIN_ROOT` set to that cache path.
+`FEATURE_DIR` was **unset** before `quality-source`, so D77's own resolution found the feature. **Step 4
+(`/specswarm:complete`) was not run.** The mentor merges `--no-ff` by hand, and complete needs stdin.
+Step 5's summary therefore did not run either. The output below is verbatim apart from two lines of mine marked `==`, the
+`AQ_TESTS_*` and `components:` echoes I added to show the inputs, and the checkout's absolute path,
+written `<repo>/` because it matches publish deny-list entry P2.
+
+```
+🚢 SpecSwarm Ship - Quality-Gated Merge
+══════════════════════════════════════════
+
+This command enforces quality standards before merge:
+  1. Runs comprehensive quality analysis
+  2. Checks quality score meets threshold
+  3. If passing: merges to parent branch
+  4. If failing: reports issues and blocks merge
+
+📍 Current branch: 005-recover
+
+
+== analyze-quality (specswarm 2.32.0) ==
+🔤 Language: Python
+AQ_TESTS_LINE=tests|25|?|measured:pytest
+AQ_TESTS_SCORE=unavailable:pytest is declared but could not be run on this machine
+components:
+tests|25|-|unavailable:pytest is declared but could not be run on this machine
+docs|15|-|unavailable:sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector
+architecture|20|-|unavailable:sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector
+security|20|-|unavailable:sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector
+bundle|7|-|unavailable:lib/bundle-size-monitor.sh is not in this install
+lazy-loading|7|-|unavailable:sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector
+images|6|-|unavailable:sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector
+tools/agentio|unknown
+tools/bin|unknown
+scan|unknown
+image|unknown
+scripts|unknown
+bench/benchlib|unknown
+bench/bin|unknown
+bench/images+run.sh|unknown
+excluded: tools/agentio: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+tools/bin: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+scan: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+image: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+scripts: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+bench/benchlib: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+bench/bin: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+bench/images+run.sh: tests — unavailable: pytest is declared but could not be run on this machine (25 points not counted either way)
+docs — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (15 points not counted either way)
+architecture — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+security — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (20 points not counted either way)
+bundle — unavailable: lib/bundle-size-monitor.sh is not in this install (7 points not counted either way)
+lazy-loading — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (7 points not counted either way)
+images — unavailable: sections 2-6 match only JavaScript/TypeScript sources; there is no Python detector (6 points not counted either way)
+
+Overall Quality: unknown (no module could be scored (8 unscored))
+📄 Wrote <repo>/.specswarm/features/005-recover/quality-report.json (overall_state: unknown, written by 4.0.1-botbaubble.2.32.0)
+
+== ship Step 2: quality-source ==
+NOTE: <repo>/.specswarm/features/005-recover/quality-report.json reports overall_state='unknown' - the score is not a measurement
+== ship Step 3 ==
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/005-recover/quality-report.json says overall_state='unknown'
+   (no module could be scored (8 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+QUALITY_STATE=unknown
+```
+
+`quality-report.json` as written (`.specswarm/features/005-recover/quality-report.json`, committed with
+this section):
+
+```
+{
+  "overall_score": null,
+  "overall_state": "unknown",
+  "unknown_is": "unresolvable",
+  "unknown_why": "no component of this Python project could be measured: pytest is declared but could not be run on this machine",
+  "set": "no module could be scored (8 unscored)",
+  "modules_scored": 0,
+  "modules_total": 8,
+  "generated_at": "2026-10-04T05:14:26+00:00",
+  "generated_by": "/specswarm:analyze-quality",
+  "generated_by_version": "4.0.1-botbaubble.2.32.0"
+}
+```
+
+**Field results:**
+- **D85 held.** The report was read (`QR_READ=yes`), so the gate took the branch that says *the analysis
+  reported no number*, and it named the report's `overall_state='unknown'` and its set. It did **not**
+  say "nothing reported a score", and it did not repeat the old "was not produced" headline.
+- **D77 held** without a hand-set `FEATURE_DIR`: `quality-source` resolved
+  `.specswarm/features/005-recover/quality-report.json` from the branch `005-recover`.
+- **D72 held:** "What would change this" printed the report's `unknown_why`, and that re-running
+  analyze-quality will **not** change the result (`unknown_is: unresolvable`). No re-run was offered as
+  the remedy.
+- **D71 held:** `modules_scored: 0` beside `modules_total: 8` and "no module could be scored (8
+  unscored)". The false `modules_scored: 8` line relayed from 003's ship is gone.
+- **The gate is UNKNOWN and warns.** `min_quality_score: 0` (canonical form), `enforce_gates: false`.
+  Under this project's recorded choice the merge is not blocked. No number was produced, and none was
+  filled in by hand.
+- Not exercised: Step 5's `ship-summary-state` line (Step 4 was not run here).
