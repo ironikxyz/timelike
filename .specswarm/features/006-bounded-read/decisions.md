@@ -92,3 +92,4 @@ FLAGGED: read the top-level `target` as FILE over the data model's window `targe
 ASSUMED: the long-lines line is the last of JSON `lines`; the cut applies to the whole formatted line, number prefix included; sizes use 005's human format (confidence: medium)
 ABSENT: none of the verdict variants the contract writes as `…`; no singular wording
 Verification: 68 collected; ruff, format and mypy strict clean; all pass against T010 and T015
+SCOPE: in (1 changed files)

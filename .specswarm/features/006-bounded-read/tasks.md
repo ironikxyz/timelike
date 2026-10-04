@@ -49,7 +49,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 - [X] T007 [P] [US5] `tests/e2e/view-and-search-resolve-once-and-pass-conform.bats`: `type -a view` and
   `type -a search` each give exactly `/opt/timelike/bin/…`; `timelike-conform` passes on both; `timelike`'s
   tool list names both.
-- [ ] T008 [P] [US1, US2] `tests/unit/test_view.py`, from the contract: window rules, the colon split,
+- [X] T008 [P] [US1, US2] `tests/unit/test_view.py`, from the contract: window rules, the colon split,
   clipping and usage errors, the cut's figures and `more:` (including a window ending at the file's end),
   JSON `next == truncated.more`, binary types, an empty file, decoding and escape counts, the event.
 - [ ] T009 [P] [US3, US4] `tests/unit/test_search.py`, from the contract: the gitignore matcher's rules
