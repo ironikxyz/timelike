@@ -23,3 +23,12 @@ FLAGGED: none
 ABSENT: no new lint rule or tool version; nothing else in pyproject or the Makefile changed
 Verification: `git diff` shows only the six SHELLCHECK_FILES lines and the two Python list entries
 SCOPE: in (2 changed files)
+
+### T001: fixture tests/e2e/fixtures/bounded-read.sh (delegate A)
+**Started:** 2026-10-04T07:12+00:00 | **Completed:** 2026-10-04T09:25+00:00
+
+INHERITED: T001's content list and the contract (confidence: high)
+ASSUMED: content is built with seq, printf, awk and git only; the self-checks also use grep, od, tr, sort, wc and `git grep --untracked`, which judge the fixture, not the tools (confidence: high)
+FLAGGED: none
+ABSENT: no long hit line in the repo, so search's `long lines cut:` path is covered by the units only (T009), not by e2e
+Verification: run under dash on the host: big.txt 412 lines (16276 bytes), repo 262 hits in 10 files (12 searched), 25 + 5 ignored, 9 inside .git; the narrowing rule picks src (188 of 262) with no tie; a changed count makes the script exit 1 (delegate's check)
