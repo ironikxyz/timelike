@@ -343,3 +343,14 @@ FLAGGED: Makefile SHELLCHECK_FILES gains the three files, so make lint covers th
 ABSENT: not run — no Docker here (R10); the first run is the mentor's lane. FR-27, FR-28 and FR-39 are covered by units only, and SC-9 has no text-mode variant
 Verification: reviewed (the size formatter is run's algorithm; the verdict assertions match the contract); shellcheck clean; bats --count parses (delegate); gitleaks v8.30.1 over the three files: nothing, default and shared config (delegate); deny-list PASS
 SCOPE: out — Makefile (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T027: host lane — lint, units with coverage, make test-host, start-up
+**Started:** 2026-10-04T20:40Z | **Completed:** 2026-10-04T21:00Z
+
+INHERITED: T018–T026's files (confidence: high)
+FLAGGED: run --json true p95 rose from 78 ms to 98 ms on the host (the rule load: tomllib plus 18 regex compiles, about 20 ms) — left as is: under the 100 ms budget, which quality-standards sets for start-up (run --help: 78 ms, unaffected by the load); recorded for the mentor rather than optimised without a measurement in the image (confidence: medium)
+ASSUMED: the image's Python 3.14.7 behaves as the host's 3.12.3 for tomllib, re.ASCII and surrogateescape (confidence: high)
+ABSENT: the e2e on a host stand-in — not rebuilt this cycle (the scratchpad stand-in from 006 is gone after the clear); SC-8 and SC-9 need real --memory and --tmpfs anyway; all 16 new cells wait for the mentor's lane
+ABSENT: undo's 88% coverage — 005's module, unchanged by this cycle
+Verification: ruff check and format (61 files), mypy strict (21 files), shellcheck over every *.sh, *.bash, *.bats: clean; units with subprocess coverage: 1196 passed, 1 skipped (457 s); Python 95% overall (agentio 94%, run 92%); make test-host: passed (hook logic 29/29); start-up p95 run --help 78 ms, run --json true 98 ms (host, 40 runs, every exit asserted)
+SCOPE: none — no files outside the feature's artifacts changed

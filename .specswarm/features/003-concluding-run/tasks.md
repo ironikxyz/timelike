@@ -285,7 +285,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
 
 ### Polish
 
-- [ ] T027 Host lane: ruff, ruff format, mypy, shellcheck; units with coverage (90% bar); `make test-host`;
+- [X] T027 Host lane: ruff, ruff format, mypy, shellcheck; units with coverage (90% bar); `make test-host`;
   the new e2e on the host stand-in (advisory); `run --help` start-up. Results in `decisions.md`.
 - [ ] T028 `cycle-report.md` § Cycle 2, implement step 10, and `.specswarm/metrics.json`.
 
