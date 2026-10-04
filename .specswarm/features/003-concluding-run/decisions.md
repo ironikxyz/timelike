@@ -244,3 +244,17 @@ ABSENT: the 25 default rules Python's re cannot compile, and generic-api-key —
 ABSENT: no Docker here, so the image COPY is not built in this task — the mentor's lane builds it; a unit (T019) and an e2e cell (T021) check /etc/timelike/redaction.toml loads in the image
 Verification: field-by-field equality of regex, entropy, keywords, allowlists and description against the pinned defaults (script, scratch); gitleaks v8.30.1 over the history and over a planted scratch repository
 SCOPE: in (3 changed files)
+
+### T022: agentio — the rule set (load_redaction_rules, redact_text), the pass-through gate, Context.event_args
+**Started:** 2026-10-04T19:20Z | **Completed:** 2026-10-04T19:34Z
+
+INHERITED: the shared file and its format — from T018 (confidence: high)
+FLAGGED: the rule set lives in agentio, not in run — chose the contract module over run alone, because rule 15 is the contract's and a second tool redacting later (08's journal) must read the same set; the send says a rule in run alone would diverge (confidence: high)
+FLAGGED: the pass-through gate admits any cause when command_exit equals the exit — chose that over listing memory and disk, because the cause says why the command ended and the exit is still the command's; 001's contract already said later causes are added "without changing its shape" (confidence: high)
+FLAGGED: regexes compile with re.ASCII — chose ASCII over Python's default Unicode classes, because gitleaks runs Go RE2, where \w and \b are ASCII; a Unicode \w would widen what a rule matches (confidence: medium)
+ASSUMED: gitleaks takes the first non-empty capture group as the secret when secretGroup is unset — none of the 18 rules sets secretGroup, and each one's group 1 is the value (confidence: medium)
+ASSUMED: a FutureWarning from compiling a gitleaks regex must not reach stderr — compile warnings are suppressed for the rule load only (confidence: high)
+ABSENT: gitleaks' `paths` allowlists and `path` rules — output has no path; not applied, and none of the 18 needs them for a match
+ABSENT: environment-value matching — spec FR-34 decides patterns only
+Verification: ruff, ruff format, mypy strict clean; a generated token, AWS key id and 20-line PEM block redacted with the line count kept; low-entropy and EXAMPLE look-alikes not redacted; 200k lines in 0.09–0.24 s; tests/unit/test_agentio.py, test_conform*.py, test_run.py: 166 passed
+SCOPE: in (1 changed files)

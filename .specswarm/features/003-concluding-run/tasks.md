@@ -270,7 +270,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
 
 ### Implementation
 
-- [ ] T022 [US7] `tools/agentio/agentio.py`:
+- [X] T022 [US7] `tools/agentio/agentio.py`:
   - `RulesUnavailable`, `load_redaction_rules`, `RuleSet`, `redact_text`;
   - the pass-through gate (any `cause`, `command_exit == exit`);
   - `Context.event_args`.
