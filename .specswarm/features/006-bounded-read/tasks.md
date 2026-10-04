@@ -46,7 +46,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
   searched, the `narrow:` command returning fewer matches when run, and `more:` printing exactly the
   212 omitted hits.
 - [X] T006 [P] [US4] `tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats` (SC-4).
-- [ ] T007 [P] [US5] `tests/e2e/view-and-search-resolve-once-and-pass-conform.bats`: `type -a view` and
+- [X] T007 [P] [US5] `tests/e2e/view-and-search-resolve-once-and-pass-conform.bats`: `type -a view` and
   `type -a search` each give exactly `/opt/timelike/bin/…`; `timelike-conform` passes on both; `timelike`'s
   tool list names both.
 - [ ] T008 [P] [US1, US2] `tests/unit/test_view.py`, from the contract: window rules, the colon split,

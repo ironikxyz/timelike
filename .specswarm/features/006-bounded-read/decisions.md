@@ -82,3 +82,4 @@ ASSUMED: expected values come from the fixture inside the container (awk, sed, w
 FLAGGED: the conform cells check only view's and search's own lines, not conform's overall exit, so another tool's finding cannot fail this file; the brief named a conform cell in snapshot-refuses-…, which has none, so it was modelled on 001's conformance file (confidence: high)
 ABSENT: no image run here (no Docker, R10); the Docker lane decides
 Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
+SCOPE: in (1 changed files)
