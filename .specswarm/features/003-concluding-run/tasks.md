@@ -248,7 +248,7 @@ data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1,
 
 ### Tests first (from `contracts/run-cli.md` § Slice 1; delegated, disjoint files)
 
-- [ ] T019 [P] [US7] `tests/unit/test_agentio_redaction.py` and `tests/unit/test_redaction_rules.py`:
+- [X] T019 [P] [US7] `tests/unit/test_agentio_redaction.py` and `tests/unit/test_redaction_rules.py`:
   - the loader: valid, missing, unparsable, a bad tag or type, a non-compiling regex → `RulesUnavailable`;
   - the repository's file: 18 rules, unique ids, one redact tag each, `useDefault`;
   - `redact_text` per rule on generated values, entropy floors, allowlists, a multi-line private key

@@ -298,3 +298,14 @@ ABSENT: redaction of output written after the verdict by a detached child — no
 ABSENT: environment values as secrets — FR-34
 Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py, test_run.py, test_agentio_redaction.py, test_redaction_rules.py: 185 passed (the delegates' files are committed with T019/T020)
 SCOPE: out — tests/unit/conftest.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T019: tests/unit/test_agentio_redaction.py and test_redaction_rules.py (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:26Z
+
+INHERITED: contracts/run-cli.md § Slice 1 (agentio additions), spec FR-33 to FR-40, the rule file — from T018 and the Cycle 2 spec (confidence: high)
+FLAGGED: committed after T022, not before it — the delegate started from the contract, but T022 landed while it was writing, so its 107 tests were checked against existing code rather than defining it first; the delegate said so in its report. Test-first held for intent, not for order (confidence: high)
+ASSUMED (delegate): the rule file's secret self-check excuses the gcp example keys that the gcp rule's own allowlist lists — they match the regex and are gitleaks' own allowlisted samples (confidence: medium)
+FLAGGED (delegate): test_agentio.py::test_rev9_pass_through_exit_only_with_cause_command still passes (its case has command_exit None), but its name states the rule T022 replaced — left as written, raised for the cycle report (confidence: medium)
+ABSENT: two rules matching overlapping text, event_args getting agentio's flag-style redaction too, paths-only allowlists — the delegate found the contract silent; T026 states them
+Verification: reviewed (secret-shaped values built at run time; redact_text over both files finds nothing); 107 passed, five repeated runs (random values); ruff, format clean
+SCOPE: in (2 changed files)
