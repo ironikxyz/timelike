@@ -35,7 +35,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 
 ## Phase 2: Tests from the contract (delegated, before the tools)
 
-- [ ] T003 [P] [US1] `tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats`
+- [X] T003 [P] [US1] `tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats`
   (SC-1): exact lines 1–120 against the fixture, right alignment, the header scope, `more:` and its
   result (lines 121–240), the omission line's counts computed by the test, and a whole-file view (no
   omission line). `bash -c` and `bash -lc`.
