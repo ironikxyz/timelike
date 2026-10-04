@@ -116,3 +116,4 @@ FLAGGED: changed another feature's test: 005's outcome helper (`tests/unit/test_
 ASSUMED: verdicts, errors and data fields are not content and are not cut (revision 12 names file lines, hits and log lines) (confidence: high)
 ABSENT: no total byte bound per call (revision 6's bench question); 001's spec is not modified (the re-send: UNAUDITED at 11 and 12, the next 01 modify records both)
 Verification: all units 895 + the new ones; only the two 005 cases changed, both through the helper; the 005 and 003 e2e through the host stand-in show no new failure (the 4 type -a and 4 run cells need the image)
+SCOPE: in (3 changed files)

@@ -81,7 +81,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 ## Phase 6: Polish
 
 - [ ] T014 [P] `README.md`: a "view and search" section next to `snapshot and undo` (P3).
-- [ ] T015 FR-7, answered by **discovery revision 12** (re-send `05-rev1-20261004-085517`; this line was
+- [X] T015 FR-7, answered by **discovery revision 12** (re-send `05-rev1-20261004-085517`; this line was
   "HELD for Q3" until then): rule 13's line cut in JSON, in `tools/agentio/agentio.py` (`cut_lines`, and
   `Result.footer` so a tool's closing commands are never cut); 001's
   `contracts/output-contract.md` gains the both-modes sentence; spec FR-7 amended and D-12; the contract's
