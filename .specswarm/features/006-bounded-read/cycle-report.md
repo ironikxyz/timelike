@@ -250,3 +250,15 @@ in `.specswarm/metrics.json` → `006.project_measurements_not_scored`. The outp
 - ruff clean (58 files formatted); mypy strict: no issues in 21 files; shellcheck clean over every
   `*.sh`, `*.bash` and `*.bats`.
 - The publish deny-list read `pass` with the list read before every commit (7 entries, P1–P7 0/0).
+
+**Implement step 9b: decision log** (plugin `scope-tally` and `decision-tally`, 2.35.0, over 006's
+`tasks.md` and `decisions.md` after T016):
+
+```
+scope: planned=16 recorded=16 unplanned=0 unrecorded=0 in=15 out=1 none=0 unknown=0 flagged=9 flagged_out=0 other=7 other_out=1
+decisions: sections=16 flagged_sections=9 non_flagged_sections=7 sections_without_absent=0 flagged=17 assumed=15 deferred=0 absent=16 inherited=15 low_confidence=0 flagged_low_confidence=0
+```
+
+- `out=1` is T016's `.specswarm/metrics.json`: implement step 10 writes it, and `tasks.md` does not name it
+  (as for 005's T015).
+- 9 FLAGGED sections and 0 low-confidence entries, so this run gives the promotion bar nothing.
