@@ -479,3 +479,50 @@ decisions: sections=18 flagged_sections=9 non_flagged_sections=9 sections_withou
   T017 `out` (`FOR-MENTOR.md`), T018 `none`, T019 `out` (`.specswarm/metrics.json`, as for T015).
   3 FLAGGED sections with 5 FLAGGED entries; 0 low-confidence (two FLAGGED entries say `medium`).
 - `unrecorded=1` is still Cycle 1's T010 (recorded in T009's section).
+
+### Cycle 2 addendum — the mentor's Docker lane at `e50a82f` (2026-10-04)
+
+Source: `../bridge/history.md` 2026-10-04T04:32:39Z (lanes 005-c and 005-d), and the lane's own outputs
+in `tests/out/` (`summary.json`: `lane docker`, `git_sha e50a82f…`, exit 0) and `scan/out/`.
+`e50a82f` is `810b2c0` plus `reboot.md` only, and the tested HEAD is unchanged.
+
+- **`make test` (005-d): PASSED.** e2e 283/283 (0 not ok). All 44 cells of the five 005 files are `ok`,
+  matched by test name in `tests/out/e2e.tap`: records 4/4, restore 10/10, version control 4/4, size
+  cap 10/10, refusals 16/16 (the four `type -a` cells included). Units 894 passed + 1 skipped; Go pass.
+- **`make scan` (005-c, at `e50a82f`): PASS ×4** (agent, vanilla, bench-driver, adele), with CVE-2026-95619
+  baselined in the three Debian images. Deny-list PASS (7 entries, 270 files).
+
+**criteria_reestablished** (superseding Cycle 2's `unconfirmed` for the automated four; the Cycle 2
+section itself is unchanged):
+
+- `07 · "of the workspace and prints its identifier, file count and size"` — **executed
+  [`tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats`, 4/4, lane 005-d at `e50a82f`]**
+- `07 · "removes files created after it, and a dry run lists exactly those changes first"` — **executed
+  [`tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats`, 10/10, lane 005-d]**
+- `07 · "are unchanged by taking or restoring a snapshot"` — **executed
+  [`tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats`, 4/4, lane 005-d]**
+- `07 · "is refused or partial, and the verdict names what was excluded and why"` — **executed
+  [`tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`, 10/10, lane 005-d;
+  the second run's raise value of 300000, the bytes new to the store, held in the image]**
+- `07 · "restores it with one undo command _(traces to: D7)_"` — **unconfirmed**. Manual (D7): the
+  mentor's interview with the operator is next.
+
+Each citation still matches exactly one line of the send.
+
+**Provenance:** `audited_against` is now **`[1, 11]`**, computed by the installed `audit-append` block in
+**`scoped`** mode (appended `11`), with a row in `audit-log.md` completing the `none (deferred)` row.
+`prompt_revision`, `discovery_revision` and `source_prompt` are untouched.
+
+**reconcile_mode: `scoped`.** This differs from the `full` (2–11) that Cycle 2 said to expect. The
+operator asked for 11 to be appended. Revisions 2–10 did not change prompt 07, so they moved no
+criterion, and a membership test over criteria-changing revisions finds no hole there.
+
+**process_failures_recorded** (added by this addendum)
+- **I committed during the mentor's lane.** `e50a82f` (`reboot.md`) landed while lane 005-c's
+  `make test` was running at `810b2c0`. The agent images were stamped `810b2c0` and the bench images
+  `e50a82f`, so `bench/run.sh` refused the mixed stamps, and `speedup-bench.bats` setup failed (4 not
+  run). The mentor had to re-run it as 005-d. I had reported the cycle done and did not check for a
+  starting lane before that last commit. That breaks this instance's own rule: no commits during lane
+  runs.
+
+**not_verified** (still open): D7, the operator's demo.
