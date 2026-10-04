@@ -26,7 +26,7 @@ manifest (SC-3).
     directory in the way, unwritable, Codex's override);
   - `tools` (timelike and curated fields, `installed`, a malformed file);
   - the vanilla Dockerfile untouched.
-- [ ] T003 [P] [US1] [US2] [US3] e2e, each under `bash -c` and `bash -lc`:
+- [X] T003 [P] [US1] [US2] [US3] e2e, each under `bash -c` and `bash -lc`:
   - `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats` (SC-1,
     throwaways);
   - `tests/e2e/announcement-generated-from-manifests-missing-tool-fails.bats` (SC-2);

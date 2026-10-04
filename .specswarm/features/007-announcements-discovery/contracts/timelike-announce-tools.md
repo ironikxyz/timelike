@@ -71,3 +71,10 @@ then `exec "$@"`. The image's `ENTRYPOINT ["/opt/timelike/libexec/entrypoint"]`,
 - **`--status` and `--install` text:** one line per harness, `HARNESS: STATE[: REASON] — PATH`.
 - **The curated file's `v`** must be 1; any other value is malformed (exit 1).
 
+- **A placement's state and reason** are separate JSON fields: `state: "not placed"`, `reason: "…"`. The
+  text line joins them (`not placed: …`).
+- **Flags may follow the subcommand** (`timelike tools --text`, `timelike announce --check PATH`), as
+  argparse reads them.
+- **A failed `--check`** is a result on stdout (rule 10's outcomes are verdicts), exit 1, with `missing`
+  and `extra` in JSON. It is not a stderr error.
+- **`announce --json`'s `lines`** are the announcement's lines, the file's content line by line.

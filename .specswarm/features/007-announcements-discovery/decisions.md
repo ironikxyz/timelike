@@ -56,3 +56,15 @@ ASSUMED: no e2e test asserts the agent's home is empty or lists it (a grep over 
 ABSENT: an image build — no Docker here; the mentor's lane builds it
 Verification: the build step simulated on the host (fake /etc, the real tools, a scratch root of its own): write "23 lines, 8 tools"; check "all 8 installed tools are announced", exit 0; the scratch root received the tools' session directory (so the separate root is needed); 23 ≤ 60. A first attempt was blocked by Claude Code's removal safety check (an rm -rf of a variable inside sh -c); re-run without any removal, the scratch directory left in the scratchpad. That blocked attempt also cost a blank line in decisions.md (the helper had begun appending)
 SCOPE: in (1 changed files)
+
+### T003: e2e — SC-1 (on start, user level, workspace untouched), SC-2 (from manifests; a missing tool fails), SC-3 (the manifest) and P6 (delegated)
+**Started:** after 8b45fc2 (the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T20:00:14Z
+
+INHERITED: the contract and spec D-1; helpers.bash and the throwaway pattern (confidence: high)
+FLAGGED: SC-1 runs on fresh throwaway containers, so "on container start" is the image's real entrypoint; the existing-file case starts its own container whose first process writes a non-timelike ~/.claude/CLAUDE.md and then execs the image's ENTRYPOINT (read from the image) (confidence: high)
+FLAGGED: SC-1's workspace clause is asserted in the opposite sense (no CLAUDE.md/AGENTS.md created in the WORKDIR or a git repository, which stays clean) — spec D-1, FOR-MENTOR Item 19; the cells change if plan amends the criterion (confidence: medium)
+FLAGGED (delegate): the 1 s placement bound is measured from the daemon's container start time to the files' mtimes — assumes one clock (confidence: medium)
+ASSUMED: pgrep exists in the image (procps, Dockerfile line 31) and the command is PID 1's child under --init (confidence: high)
+ABSENT: --check's `extra:` and Codex's override end to end — units cover them
+Verification: reviewed; shellcheck clean; bats --count 6, 6, 6 (delegate); in-container scripts dry-run on the host with stand-ins, failure cases included (delegate); four contract gaps settled as built
+SCOPE: in (3 changed files)
