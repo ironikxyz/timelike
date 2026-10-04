@@ -1,0 +1,10 @@
+feature: 006-bounded-read
+completed_at: 2026-10-04T19:45:13+00:00
+mode: dispatch
+tasks: 24/24 in tasks.md (Cycle 1 T001–T016, Cycle 2 T017–T024), all ticked; no unplanned sections
+tests: UNKNOWN — the plugin's run_tests returned 2 (pytest declared, not installed for /usr/bin/python3); project_measured (host venv, pytest 8.4.2): 1259 passed, 1 skipped
+coverage: UNKNOWN — run_coverage printed unknown (rc 1); project_measured (coverage.py with subprocess coverage, host venv): 95% Python line and branch, against min_test_coverage 90
+lint: ruff 0.16.7 check and format over tools tests scan bench (62 files), mypy 2.4.0 strict (21 files), shellcheck 0.11.0 over every *.sh/*.bash/*.bats: clean
+decisions: sections=24 flagged_sections=15 non_flagged_sections=9 sections_without_absent=0 flagged=30 assumed=20 deferred=0 absent=25 inherited=23 low_confidence=0 flagged_low_confidence=0
+scope: planned=24 recorded=24 unplanned=0 unrecorded=0 in=22 out=1 none=1 unknown=0 flagged=15 flagged_out=0 other=9 other_out=1
+pause_file_written: no
