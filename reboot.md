@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04 ~20:45Z, before a clear. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
+**Snapshot:** 2026-10-04T23:18:40Z (read from the clock), before a clear. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
 `../bridge/dispatch/pause-06.md`, rule 9 (is `edit` mutating?), plan's choice by the send's own seam;
 not picked. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge
 nothing (the batch leaves its branches standing).
