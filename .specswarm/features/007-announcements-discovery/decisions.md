@@ -77,3 +77,14 @@ ASSUMED: the README is a place agents and operators read (P3); the announcement 
 ABSENT: the README's Status paragraph — it lists features by slice; 007 is added when the batch is reconciled
 Verification: shellcheck clean over the four new files; the README text matches the paths and commands as built
 SCOPE: in (2 changed files)
+
+### T008: host lane — lint, units with coverage, make test-host, timings
+**Started:** 2026-10-04T20:00:28Z | **Completed:** 2026-10-04T20:22:56Z
+
+INHERITED: T001–T007's files (confidence: high)
+FLAGGED: the first coverage run read 51% overall — not a measurement of the code: the new units install timelike into pytest `tl/` directories, which the scratch coverage rc did not map back to tools/bin, so each copy counted as its own partly covered file. Added the mapping and re-ran: 95% (an rc defect of this instance's, recorded in reboot.md's coverage recipe at the next reboot rewrite) (confidence: high)
+FLAGGED: `timelike tools` and `timelike announce` take about 680 ms p95 on the host, because each runs every tool's --agent-info (8 subprocesses) — acceptable for a manifest command; the entrypoint's `announce --install` reads one file (status p95 72 ms), so container start is not delayed by the generation (confidence: high)
+ASSUMED: the image's Python 3.14.7 behaves as the host's for subprocess and os.replace (confidence: high)
+ABSENT: the e2e — the delegate dry-ran its in-container scripts with stand-ins; the image and the entrypoint run only in the mentor's lane
+Verification: ruff check and format (63 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats and the entrypoint: clean; units with subprocess coverage: 1309 passed, 1 skipped (530 s); Python 95% overall, timelike 92%; make test-host: passed; p95 (host, 20 runs, exits asserted): timelike --help 76 ms, --json 69 ms, announce --status 72 ms, tools 688 ms, announce 675 ms
+SCOPE: none — no files outside the feature's artifacts changed
