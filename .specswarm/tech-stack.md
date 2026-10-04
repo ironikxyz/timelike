@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -64,13 +64,25 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
 > `status`). That is a contract shape, not a technology choice, and `stack.md` is unchanged (last
 > changed at `d606ed1`, revision 5). Revision 10 is appended to `governance_audited_against`: a
 > no-change audit is a recorded result.
+>
+> **Audited against discovery revision 11** (2026-10-04), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T00:24:17Z), § "What Changed In Those Revisions", and
+> `../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md` § Resolution.
+> **Amended:** `stack.md`'s Snapshots and P5 rows moved at plan `0f6e1ed` from a git shadow store to
+> a Python stdlib content-addressed store (git keeps only modes 644/755, turns nested repositories
+> into gitlinks, tracks no empty directories, and its index writes fire feature 01's hook
+> dispatcher). The git line said "snapshots, shadow store outside the workspace", which now
+> contradicts the stack, so it is amended as plan asked: git stays in the agent image as the agent's
+> own version control, and the snapshot store is named under Python. Rule 10's revision (state
+> locations) is a contract rule, not a technology choice. Revision 11 is appended to
+> `governance_audited_against`.
 
 # Tech Stack - Timelike
 
-**Version**: 1.3.0
-**Last Updated**: 2026-09-28
+**Version**: 1.3.1
+**Last Updated**: 2026-10-04
 **Auto-Generated**: No. Derived from `../bridge/governance-context.md` (stack option A, discovery
-revision 2; audited against revisions 3, 4 and 5)
+revision 2; audited against revisions 3 to 11, per the notes above)
 
 The language boundary follows P4. Everything the agent runs inside its environment is Python (plus
 Bash for the environment layer). The one component that reaches beyond it, Adele, is Go.
@@ -90,6 +102,10 @@ stream upgrades.
   - Notes: pinned to the current stable 3.14.x in `pins.env` (discovery revision 5, H9's "fix
     available"). uv-managed CPython at `/opt/timelike/python`, always run with `-I`, never the system
     Python (PEP 668 externally managed) or an agent venv. Fully annotated, `mypy --strict`
+  - Snapshots (feature 07; discovery revision 11, replacing a git shadow store): a stdlib
+    content-addressed store outside the workspace. Blobs are deduplicated by content across
+    snapshots, symlinks are stored as links, and it lives in the per-workspace state root from
+    07 slice 1
 - **Go** 1.23+ (Adele only)
   - Notes: `CGO_ENABLED=0`, static binary
 - **Bash** 5.x (environment layer)
@@ -120,8 +136,11 @@ stream upgrades.
 - **cgroup** v2 (resource budgets)
   - Notes: `memory.max`, `memory.events`, `cpu.max`, `pids.max` are the source of truth for budget
     verdicts
-- **git** 2.40+ (snapshots, shadow store outside the workspace)
-  - Notes: never touches the project's own `.git`
+- **git** 2.40+ (in the agent image: the agent's own version control, with feature 01's hook
+  dispatcher and system gitconfig)
+  - Notes: not the snapshot store (discovery revision 11). Feature 07's snapshots use the Python
+    stdlib content-addressed store (see Python), which runs no git command and never touches the
+    project's own `.git`
 - **fly.io** (provider, slice 0; Machines REST API v1)
   - Notes: called only by Adele. Per-app deploy token with explicit expiry
 - **Playwright** (web verification, slice 2; optional image layer)

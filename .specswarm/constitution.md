@@ -1,9 +1,30 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: none (1.4.2 stands; a no-change audit amends nothing)
+- Audit against discovery revision 11, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern 2026-10-04T00:24:17Z), § "What Changed In Those Revisions", and
+  ../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md § Resolution. Revision 11
+  appended to governance_audited_against: a no-change audit is a recorded result
+- What revision 11 moved: the Agent output contract's rule 10 is revised (two state locations, a
+  per-session scratch directory and a per-workspace state root outside the workspace; the
+  in-workspace project cache is withdrawn), and stack.md's Snapshots and P5 rows move from git to a
+  stdlib content-addressed store
+- Checked: no article restates rule 10's state locations or the project cache. H2 points at the
+  output contract rather than restating its rules (as at revision 10). P5 and T2 name no store
+  technology, and their text did not move (the ruling rests on both). H5 (stdlib-first) already
+  covers the stdlib store
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (per the evidence section)
+- HOW H1–H9: checked, unchanged
+- Dependent artifacts: tech-stack.md amended at this audit (its git line said "snapshots, shadow
+  store"; stack.md's Snapshots row now names the stdlib store); quality-standards.md audited, no
+  change (no gate restates rule 10). In-flight: 005-recover (07 s0) records revision 11 in its own
+  modify cycle; 001's contract wording for rule 10 changes in 07 slice 1
+- Deferred TODOs: none
+
 - Version change: 1.4.1 → 1.4.2 (PATCH: H2 names exit 4's two envelopes; a clarification)
 - Audit against discovery revision 10, amended. Source: ../bridge/governance-context.md
   (/mentor:regovern 2026-10-02T05:50:50Z), § "What Changed In Those Revisions", and

@@ -5,29 +5,62 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-03, before a context clear. **This repository is public**
+**Snapshot:** 2026-10-04, before a context clear (session loaded specswarm 2.27.0; **2.32.0 is
+installed now**, and its changes and any new upstream notes are unread). **This repository is public**
 (`ironikxyz/timelike`). `master` is the public lineage and tracks `public/main`:
-- `4662060` is **the first public commit**: one root, whose tree is `7e050fd`'s (`f1de497…`). It is
-  pushed to `public/main`.
-- `81fe8f3` is the cutover bookkeeping: FOR-MENTOR Item 16, the cycle report
-  `.specswarm/maintenance/publish-cutover/cycle-report.md`, and **`CLAUDE.md` rule 5, the push rule**.
-  The mentor discharged the cutover, and **`81fe8f3` is pushed** (`public/main`, 2026-10-03, on the
-  operator's OK). The `reboot.md` commits and Item 16's closure after it are local: push them only with
-  the next discharged work, on the operator's OK (rule 5).
-- The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`). It holds every hash cited in
-  `bridge/`, and it is also in the private, closed `timelike-history`. The old local branches are
-  unchanged. Before the cutover, the publish redaction merged at `47d1e62` and feature 004 at `6bcc1ec`;
-  both are discharged.
+- **`master` = `public/main` = `9522f55`**, the merge of 001 Cycle 7 (pushed 2026-10-03 on the
+  mentor's discharge and the operator's OK). Everything before it is pushed too (root `4662060`,
+  cutover bookkeeping `81fe8f3`). This `reboot.md` commit is local: it goes out with the next
+  discharged work, on the operator's OK (rule 5).
+- **`005-recover`** (local, HEAD `f83e984`, 18 commits from `9522f55`): feature 07 slice 0, `snapshot`
+  and `undo`. The mentor's lane at `f83e984`: `make test` passed (e2e 283/283, units 888 + 1 skipped,
+  Go). A re-run's `make scan` FAILED only on the new base-layer CVE-2026-95619 (scanner data, not code),
+  which the operator has since accepted (send below). **Not signed off.** D7 (demo) is unconfirmed until
+  the operator interview.
+- **Item 17 is answered**, by **discovery revision 11** (plan `0f6e1ed`; answer in
+  `../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md`):
+  - Q1: the stdlib store stands, with **four conditions**: cross-snapshot dedup; symlinks kept as links;
+    the cap applied after dedup; "taken" said only after a restorability check.
+  - Q2: rides 07 slice 1, as a per-workspace state root outside the workspace (rule 10's project cache
+    is struck).
+- The pre-publication lineage is **`archive/pre-publish`** (`7e050fd`), also in the closed, private
+  `timelike-history`.
 - Remotes: `public` (push and fetch); `history` (fetch-only, push URL `no-push`).
 - Commit identity, this repository only: `ironik.xyz <262467776+BotBauble@users.noreply.github.com>`.
-- FOR-MENTOR Items 1–16 are closed.
+- FOR-MENTOR Items 1–16 are closed. Item 17 is open until the revision-11 cycle closes it.
 
-## Next actions
+## Next actions (in this order; read both sends whole first)
 
-1. Done 2026-10-03: the cutover is discharged, `81fe8f3` is pushed, and Item 16 is closed.
-2. The next send: 07 s0, then 05 s0; 12 slice 1 carries Item 14's (b). New branches start from
-   this `master`.
-3. 001's spec is UNAUDITED at revision 10 until its next modify cycle.
+1. **`../bridge/active-prompt.md`** = **`../bridge/sends/07-rev11-20261004-030207.md`** (the
+   **corrected** re-send, 03:02Z; it supersedes `07-rev11-20261004-002459.md`, which was never built
+   from): 07 slice 0 at prompt and discovery revision 11. Its three corrections:
+   - modify needs the number: **`/specswarm:modify 005 --from-send bridge/sends/07-rev11-20261004-030207.md`**.
+     Under 2.32.0, modify reads a number only from a `modify/NNN` branch or a standalone three-digit
+     argument, so without `005` it asks on stdin and exits 1;
+   - the feature is **005**, never the prompt copy's `feature_number: "07"`;
+   - the governance audit is three edits: `constitution.md` through `/specswarm:constitution`, and
+     `tech-stack.md` and `quality-standards.md` by hand.
+
+   The **Cycle 2 heading names `07-rev11-20261004-030207.md`**. Upstream note: modify pads with
+   `printf %03d`, so `008` and `009` are read as octal (they give 000).
+   - A **governance audit 10 → 11** on `master` (all three files, with prose notes;
+     `tech-stack.md`'s git-for-snapshots note is amended), then merged into `005-recover`.
+   - **Plan's four Q1 conditions:** check each with evidence and build where unmet.
+     - Dedup holds across snapshots: `objects/` is by sha256.
+     - Symlinks are kept as links.
+     - **The cap is applied after dedup:** today the size cap counts each file's size, so check
+       whether content already in the store must be uncounted.
+     - **"Taken" only after a restorability check:** today "taken" follows the record write; a check
+       is needed.
+   - Revision 11 is recorded through the modify command above, on `005-recover`. Slice 0 is UNAUDITED, not superseded; the two new slice-1 criteria are carried,
+     not built. **Close Item 17**, and append **Cycle 2** to `005-recover/cycle-report.md`.
+2. **`../bridge/sends/maint-baseline-cve-2026-95619-20261004-024309.md`**: put the operator-accepted
+   CVE-2026-95619 into the three scan baselines (agent, vanilla, bench-driver; review_by 2026-12-27;
+   the note attributed to ironik.xyz) **on `master`**, with the governance audit, then merge into
+   `005-recover`. Follow CVE-2026-102010's entries (Item 12) as the model.
+3. **Then:** the mentor's lane and sign-off on `005-recover`, then ship from a session with 2.32.0
+   loaded (D85's field run), then merge and push only on the operator's OK.
+4. Later sends: 05 s0; 12 slice 1 carries Item 14's (b); 07 slice 1 carries Q2.
 
 ## Publishing recipes (2026-10-03)
 
@@ -198,6 +231,59 @@ Last result (host, 3.12, p95):
 - **Raising questions:** a FOR-MENTOR item with a stable heading. If an item conflicts with the send's
   instructions ("stop and raise it"), stop: don't specify on a reading plan has not confirmed (Item 9).
 
+### Feature 005 (recover, prompt 07): what later work inherits, and how it was built
+
+**The design** (spec D-1 to D-10; the contract is `contracts/recover-cli.md`):
+- **Files.** `tools/bin/snapshot` holds everything: the workspace rules, the store, the walk, the
+  planner, apply and verify, and both commands' entry points (`main`, `undo_main`, `UNDO_TOOL`).
+  `tools/bin/undo` is about 20 lines: it loads `snapshot` from its own realpath with `SourceFileLoader`
+  (R8). Tests and conform must install **both** into one bin dir.
+- **Workspace.** The nearest ancestor holding a `.git` entry (found with `lstat`, never git), else the
+  current directory. Refused at `/`, `$HOME` (and the passwd home), their ancestors, and when it would
+  contain the store.
+- **Store.** `<scratch root>/<session>/snapshots/<sha256(ws)[:16]>/`, holding `workspace`, `lock`
+  (flock, 10 s wait), `next`, `snaps/<id>.json` and `objects/<aa>/<sha256>` (0400, temp then rename).
+  `artefacts/` holds `Cut` lists.
+- **`.git` at any depth** is out of scope: never captured, removed or followed. `check_rel` refuses it,
+  and `_parent_checked` (lstat on every component) refuses to write through a symlink.
+- **Exclusions:** the per-file limit; the size cap, cutting the largest files first (ties by path);
+  non-regular files; unreadable files. The entry cap refuses (`more than <cap>`).
+  The variables are `TIMELIKE_SNAPSHOT_MAX_{BYTES,FILE_BYTES,ENTRIES}` (256 MiB / 64 MiB / 50,000;
+  `0` = none).
+- **Outcomes are verdicts:** a refusal, "no snapshot" and a failed verification are a `Result` on
+  stdout (`do instead:` line, `data.remedy`, exit 1 or 3), because conform's probes run in the home
+  directory in the image. Usage, lock and I/O stay stderr errors.
+- **`undo`:**
+  - With no ID it restores the newest snapshot that is **not** a safety snapshot (`before undo …`),
+    so it is idempotent (rule 7).
+  - `--yes` takes a safety snapshot, applies, then re-plans to verify.
+  - Without `--yes` it exits 4 with the envelope (plan bounded at the limit).
+  - Over the output limit, `--yes` and take output a `Cut` whose `more` is `sed -n` over an artefact,
+    never a re-run.
+
+**Recipes that worked:**
+- **e2e on the host with no Docker:** a scratchpad `docker` stand-in, and bats-core v1.14.0 cloned
+  into the scratchpad.
+  - `exec`: parse `-i`, `-t` and `-e K=V`, drop the container name, answer
+    `cat /opt/timelike/REVISION` with `$GIT_SHA`, then
+    `exec env COLUMNS=1000 HOME=<stand-in home> PATH=<tools with the shebang rewritten, no -I>:/usr/bin:/bin PYTHONPATH=tools/agentio …`.
+  - `inspect` and `image`: echo a name, or `$GIT_SHA`.
+  - `run` (used by `pyq`): skip the flags and the image, then `python3 "$@"`.
+  - Run as `PATH=<stub>:$PATH GIT_SHA=x AGENT_CONTAINER=x bats --tap <files>`, under
+    `setsid --wait timeout`. It found two real test bugs.
+  - It is advisory: no `/etc/gitconfig` layer, no dispatcher, host git and Python.
+- **Per-task commits:** a scratchpad `commit-task.sh TASK FLAGGED DECFILE MSG FILES…`. It appends the
+  decisions section, runs the deny-list check, commits, computes the SCOPE line with the installed
+  `scope-check` block, ticks the task, and amends. Write each task's decisions section to a file first.
+- **Delegates writing tests from the contract** before the tool exists, as in 003: 70 of 71 units passed
+  first time against the tool. A contract change made mid-task reached them by `SendMessage` to their
+  agent IDs.
+- **Coverage of tools run as subprocesses:** an rc with `include` for `tools/bin/<tool>` plus
+  `/tmp/pytest-of-*/**/<tool>`, and `COVERAGE_PROCESS_START` (the 001 recipe below). Result: 93%.
+- **specify's expansion pastes the arguments into double-quoted strings,** so a quoted argument such as
+  `"07 recover"` breaks the shell. Run its blocks from the installed file with `ARGUMENTS` as a
+  variable.
+
 ### Feature 004 (Adele): what later work inherits, and how it is built here
 
 **The design** (spec D-1 to D-9):
@@ -349,7 +435,7 @@ follow-up did.
 - **Not linked:** push-to-checkout, proc-receive, fsmonitor-watchman. Under `env -i`, hooks run
   unbounded (T4, revision 8). P2 then rests on `run` and the harness's timeout.
 
-### Plugin: specswarm (2.24.0 loaded since 2026-10-02; notes below date from 2.21–2.22)
+### Plugin: specswarm (2.32.0 installed 2026-10-04, unread; the last session ran 2.27.0; notes below date from 2.21–2.27)
 
 - The session loaded 2.21.0, which the send called 2.20.0. Say which version ran in the cycle report
   (lore Q002: a session keeps the version it loaded). 2.21.0 fixes build's Stop hook, but build is
@@ -408,6 +494,8 @@ follow-up did.
 | Image, env hook | `image/Dockerfile` (its `COPY tools/bin/` ships `run`), `image/rootfs/etc/timelike/shell-env.bash`, `compose.yaml`, `pins.env` |
 | Tests | `tests/unit` (pytest; `schema.py` is a stdlib schema subset that now has `maximum`), `tests/e2e` (bats), `tests/host`, `tests/run.sh` |
 | Scan gate | `scan/scan.sh`, `scan/evaluate.py`, `scan/baseline/*.json` |
-| Governance | `.specswarm/constitution.md` (1.4.2), `tech-stack.md`, `quality-standards.md`, all `[2..10]` (audited at `cb943d3`) |
+| Governance | `.specswarm/constitution.md` (1.4.2), `tech-stack.md`, `quality-standards.md`, all `[2..10]` (audited at `cb943d3`); **revision 11 unaudited** (next action 1) |
 | Metrics | `.specswarm/metrics.json` (`003`: plugin score unknown; project figures beside it). Scan baselines `scan/baseline/timelike-{agent,vanilla,bench-driver}.json`, all reviewed 2026-10-01 (80/79/51 entries after `09e2c0b`) |
-| Register to mentor | `FOR-MENTOR.md` (Items 1–16 closed) |
+| Sends for 07 | `../bridge/sends/07-rev1-20261003-013915.md` (Cycle 1, built as **005**) · `07-rev11-20261004-002459.md` (superseded, never built) · **`07-rev11-20261004-030207.md` (ACTIVE: revision 11, corrected; Cycle 2)** |
+| Feature 005 | `.specswarm/features/005-recover/`: spec (D-1..D-10), research R1–R9, data-model, `contracts/recover-cli.md`, tasks T001–T015, decisions, cycle-report § Cycle 1; code `tools/bin/snapshot`, `tools/bin/undo`; units `tests/unit/test_snapshot.py`, `test_undo.py`; e2e `tests/e2e/snapshot-*.bats`, `restore-*.bats`, `version-control-*.bats`, fixture `tests/e2e/fixtures/recover-repo.sh` |
+| Register to mentor | `FOR-MENTOR.md` (Items 1–16 closed; 17 open until the revision-11 cycle closes it) |
