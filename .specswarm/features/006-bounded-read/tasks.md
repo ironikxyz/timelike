@@ -18,7 +18,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Fixture `tests/e2e/fixtures/bounded-read.sh DIR`. It is `sh`-compatible and builds its
+- [X] T001 [P] Fixture `tests/e2e/fixtures/bounded-read.sh DIR`. It is `sh`-compatible and builds its
   content with `seq`, `printf` and `awk` only, never with the tools (P005):
   - `DIR/big.txt`: exactly 412 lines, each distinct (`line NNN: …`);
   - `DIR/small.txt`: 100 lines;

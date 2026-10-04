@@ -32,3 +32,4 @@ ASSUMED: content is built with seq, printf, awk and git only; the self-checks al
 FLAGGED: none
 ABSENT: no long hit line in the repo, so search's `long lines cut:` path is covered by the units only (T009), not by e2e
 Verification: run under dash on the host: big.txt 412 lines (16276 bytes), repo 262 hits in 10 files (12 searched), 25 + 5 ignored, 9 inside .git; the narrowing rule picks src (188 of 262) with no tie; a changed count makes the script exit 1 (delegate's check)
+SCOPE: in (1 changed files)
