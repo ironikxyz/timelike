@@ -66,7 +66,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
 
 ## Phase 4: User Stories 3 and 4 — `search`
 
-- [ ] T011 [US3, US4] `tools/bin/search` on agentio (contract § search): the walk (`.git` never,
+- [X] T011 [US3, US4] `tools/bin/search` on agentio (contract § search): the walk (`.git` never,
   symlinks not followed), the stdlib gitignore matcher (research R2), `re` with `-i`, `-F` and a compile
   error as usage, grouping, the cap with a `Cut`, the `narrow:` line, the saved hit list and its `sed`
   `more:`, zero and `--strict`, the time limit, large and binary skips.

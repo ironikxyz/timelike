@@ -139,3 +139,4 @@ FLAGGED: uncapped output shows file labels as lines in text only; JSON `lines` s
 ASSUMED: symlinks met in the walk are skipped (neither followed nor counted); a pruned ignored directory counts as one ignored entry; --timeout takes decimals, 0 = no limit (confidence: medium)
 ABSENT: no ripgrep (D-8); no context lines around hits; no -w
 Verification: 92 units pass; ruff, format, mypy strict clean; the search e2e files through the host stand-in pass
+SCOPE: in (1 changed files)
