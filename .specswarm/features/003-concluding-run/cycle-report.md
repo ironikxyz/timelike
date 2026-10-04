@@ -709,3 +709,16 @@ decisions: sections=27 flagged_sections=21 non_flagged_sections=6 sections_witho
 
   Both are explained in their sections.
 - No low-confidence entry, so no pause. No pause file was written.
+
+### Cycle 2 addendum — two corrections found in review (2026-10-04)
+
+1. **Composed timestamps.** The Started and Completed times in `decisions.md` T018–T028 were written by
+   me, not read from a clock (19:05Z to 21:15Z, while the clock read 19:13:57Z at the marker). The commit
+   times are the record, and `decisions.md` now carries a note saying so. This is the same defect the
+   mentor recorded upstream for specify's `created_at` (history 2026-10-04T06:27:32Z), here made by this
+   instance. **process_failures_recorded** gains it.
+2. **The marker's lint field named the wrong ruff version** ("0.14") when first written. It was
+   corrected to `ruff 0.16.7` (`ruff --version`) before the marker was committed. `marker-fields` passed
+   both before and after: it checks the field's presence, not its truth.
+
+`marker-fields` (installed block) over `.implement-complete`: clean, ten fields.

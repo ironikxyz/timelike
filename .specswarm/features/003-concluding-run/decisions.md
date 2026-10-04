@@ -366,3 +366,11 @@ ABSENT: demo_points_reached — the mentor derives it
 ABSENT: an audit-log row — modify row 4, nothing appended
 Verification: step 10 run from the installed blocks and library (output verbatim in the report); metrics.json gains 003-cycle-2 only (diff: additions); deny-list PASS
 SCOPE: in (1 changed files)
+
+## Note on Cycle 2's timestamps (correction, appended after T028)
+
+The **Started / Completed** times in the T018–T028 sections above were composed while writing each
+section, not read from a clock, and they are wrong: they run from 19:05Z to 21:15Z, while the clock
+(`date -Iseconds`) read 19:13:57Z when the marker was written. **The commit times are the record**
+(`git log --format=%cI`; T018 `86d0351` 18:49:28Z … T028 `3ea3385` 19:13:57Z, each the time of the
+task's final amend). The sections are left as written, append-only. This note supersedes their times.
