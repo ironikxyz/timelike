@@ -1,0 +1,38 @@
+#!/opt/timelike/python/bin/python3 -I
+"""undo — restore the workspace to a snapshot taken with `snapshot` (P5).
+
+`undo --dry-run` lists exactly what a restore would change. `undo --yes` restores the newest snapshot
+(or `undo ID --yes` a chosen one): it first snapshots the state it replaces, so the undo can itself be
+undone, then verifies the workspace against the snapshot before it says "restored" (H3). Without
+`--yes` it changes nothing and exits 4 with the confirmation envelope (rule 9).
+
+The implementation lives in `snapshot`, next to this file, so the two commands share one store and
+one set of path-safety checks (research R8: single files, no second copy to drift).
+"""
+
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+import sys
+from types import ModuleType
+
+import agentio
+
+
+def _load_snapshot() -> ModuleType:
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "snapshot")
+    loader = importlib.machinery.SourceFileLoader("timelike_snapshot", path)
+    spec = importlib.util.spec_from_loader("timelike_snapshot", loader)
+    if spec is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["timelike_snapshot"] = module
+    loader.exec_module(module)
+    return module
+
+
+if __name__ == "__main__":
+    snap = _load_snapshot()
+    agentio.run(snap.UNDO_TOOL, snap.undo_main, configure=snap.undo_configure)

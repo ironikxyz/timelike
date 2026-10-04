@@ -749,3 +749,50 @@ To https://github.com/ironikxyz/timelike.git
    4662060..81fe8f3  81fe8f3 -> main
 ```
 After `git fetch public`: `public/main` = `81fe8f379d8d`.
+
+## Item 17 — Feature 07 slice 0 (`005-recover`): the seams decided in the spec, for the mentor to confirm (not blocking)
+
+**Status:** closed 2026-10-04, on the corrected re-send `bridge/sends/07-rev11-20261004-030207.md`
+("close FOR-MENTOR **Item 17**"). Decisions 4 and 5 are answered by **discovery revision 11** (plan
+`0f6e1ed`); the answer of record is
+`../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md` § Resolution. See
+*Resolution* at the end of this item. Raised 2026-10-03 on `005-recover` (send
+`bridge/sends/07-rev1-20261003-013915.md`).
+Each is decided in `spec.md` § Decisions, with its reason. None changes the output contract or reads a
+criterion more narrowly, so I am building on them; each can be changed behind the two commands.
+
+1. **Rule 9 and "one undo command" (D-1): the envelope reading.** `undo` alone exits 4 with the
+   confirmation envelope (plan = the dry run). `undo --yes` is the one undo command, and the agent can run
+   it directly. Rule 9 stays whole.
+2. **The workspace (D-2):** the nearest ancestor holding `.git`, else the current directory, found
+   without running git. Refused at `/`, the home directory, their ancestors, and when it would contain
+   the store; the verdict says to change into the project directory. The image's `WORKDIR` is the home
+   directory, so a bare `snapshot` there is refused.
+3. **"Excluded" (D-3):** the per-file limit, the size cap's largest-first cut, non-regular files and
+   unreadable files, each named with its reason. **No** built-in list of cache or build directories.
+   Git-ignored files are captured like any other. `.git` is out of scope at every depth.
+4. **The store does not use git (D-5) — a departure from `tech-stack.md`'s note** ("git 2.40+
+   (snapshots, shadow store outside the workspace)"). A git store would lose permission bits other than
+   the exec bit, record nested repositories as gitlinks (their files uncaptured), and fire
+   `post-index-change` through 001's dispatcher. The store is a content-addressed copy store in stdlib
+   Python (H5) and runs no git command. **For plan:** confirm, or ask for git and accept those three.
+5. **Where snapshots live (D-7):** the session scratch directory, the only place rule 10 allows.
+   They survive a container restart, not a recreate, and are **per session**: peer agents cannot undo
+   each other's work, and a new `TIMELIKE_SESSION` starts empty. A cross-session store needs a state
+   location the contract lacks (rule 10's "project cache" is undefined anywhere in the repository).
+6. **An undo is undoable (D-10):** `undo --yes` snapshots the state it replaces first (reason
+   `before undo <id>`), the first non-`on demand` reason slice 1 extends.
+
+**Resolution (2026-10-04, Cycle 2 of `005-recover`).**
+- **Decision 4 (D-5), confirmed:** option (a), the stdlib content-addressed store, with four
+  conditions. Two held as built: cross-snapshot dedup, and symlinks as links. Two were built in Cycle 2:
+  the size cap now counts bytes new to the store, after dedup (FR-6), and "taken" now follows a
+  restorability check that reads the record back and re-hashes every object (FR-9). The evidence is in
+  `005-recover/cycle-report.md` § Cycle 2. `tech-stack.md`'s git note was amended at the governance
+  audit to revision 11 (`586e298`).
+- **Decision 5 (D-7), answered:** slice 0 stays as built, outside the workspace. Rule 10 now names a
+  per-workspace state root outside the workspace, and the project cache is withdrawn. That location,
+  and survival across sessions and recreation, ride 07 slice 1.
+- **Decisions 1, 2, 3 and 6:** no separate ruling was asked for or given. They stand as built (spec D-1
+  to D-3, D-10), and the item closes on the send's instruction. A later ruling on any of them would be
+  a new item.

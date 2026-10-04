@@ -192,6 +192,40 @@ run sh -c 'make 2>&1 | grep -v noise'  # shell syntax goes through a shell: run 
 - Slice 1 adds memory and disk causes, and secret redaction. Slice 2 adds log garbage collection and
   repeat detection.
 
+## snapshot and undo — wrong turns are recoverable
+
+Take a snapshot before a risky change; `undo` takes the workspace back to it:
+
+```bash
+snapshot -m "before the refactor"   # snapshot 3 taken: 245 files, 2.1 MiB (complete)
+undo --dry-run                      # exactly what a restore would change; changes nothing
+undo --yes                          # restore the newest snapshot (undo 3 --yes for a chosen one)
+snapshot list                       # this workspace's snapshots, newest first
+```
+
+- **`undo --yes` is the one undo command.** Without `--yes`, `undo` changes nothing and exits 4 with the
+  confirmation envelope; its `confirm` is your own command plus `--yes` (contract rule 9).
+- **Restored means verified.** After restoring, `undo` reads the workspace again and says "restored"
+  only when nothing differs from the snapshot. Before it changes anything it snapshots the state it is
+  about to replace, and names that snapshot, so an undo can itself be undone.
+- **The workspace** is the nearest directory upward that holds `.git`, else the current directory.
+  Your home directory, `/` and their ancestors are refused: change into the project directory first.
+- **What a snapshot holds:** every file, symlink and directory, whether git tracks it, ignores it or has
+  never seen it, with its permission bits. **Never anything inside a `.git`**, at any depth: history,
+  index, stash and hooks are the project's, and neither `snapshot` nor `undo` reads or writes them.
+- **Stored once.** Content is stored by its hash, so a repeated snapshot costs only what changed
+  (`stored_bytes` in `snapshot --json`). "Taken" is said only after the record and every stored file
+  it names are read back and re-hashed; otherwise the snapshot is not taken, and says why.
+- **Caps, stated rather than implied.** A snapshot adds at most 256 MiB of new content to the store
+  (`TIMELIKE_SNAPSHOT_MAX_BYTES`; content already stored counts as nothing), files up to 64 MiB each
+  (`TIMELIKE_SNAPSHOT_MAX_FILE_BYTES`), in a workspace of at most 50,000 entries
+  (`TIMELIKE_SNAPSHOT_MAX_ENTRIES`); `0` lifts a cap. Over the size cap the snapshot is **partial**: it
+  leaves out the largest new files first and names each one and why. `undo` leaves files that were
+  left out alone. Over the entry cap it is refused.
+- **Where they live:** in the session scratch directory (`/tmp/timelike/<session>/snapshots/`). They
+  survive a container restart, not a recreate, and each `TIMELIKE_SESSION` has its own.
+- Slice 1 adds automatic snapshots before destructive commands and a restorable trash.
+
 ## Speedup bench
 
 ```bash

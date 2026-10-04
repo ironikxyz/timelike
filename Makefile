@@ -63,6 +63,12 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/no-credential-held-by-adele-appears-in-agent.bats \
   tests/e2e/every-performed-request-recorded-in-ledger.bats \
   tests/e2e/adele-isolation-grant-file-and-extend-unreachable-from-agent.bats \
+  tests/e2e/fixtures/recover-repo.sh \
+  tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats \
+  tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats \
+  tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats \
+  tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats \
+  tests/e2e/snapshot-refuses-home-root-and-their-ancestors.bats \
   bench/run.sh
 PY_IN_IMAGE := docker run --rm -v "$(CURDIR)":/src:ro -w /src -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv \
   -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint bash timelike-agent:local -c
