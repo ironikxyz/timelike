@@ -139,7 +139,7 @@ commits per task, and the scope is the files each task names.
 
 ### Implementation
 
-- [ ] T019 [US6] `tools/bin/view`: `view DIR`, the overview (FR-24 to FR-31); the slice-0 units or e2e
+- [X] T019 [US6] `tools/bin/view`: `view DIR`, the overview (FR-24 to FR-31); the slice-0 units or e2e
   cells that asserted the directory refusal are updated in `tests/unit/test_view.py` and
   `tests/e2e/view-range-context-missing-file-and-binary.bats` if they assert it.
 - [ ] T020 [US7] `tools/bin/view`: `--anchors` (FR-32 to FR-35).

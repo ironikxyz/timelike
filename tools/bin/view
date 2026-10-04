@@ -15,10 +15,14 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import importlib.machinery
+import importlib.util
 import os
 import re
 import shlex
 import stat
+import sys
+from types import ModuleType
 from typing import Any
 
 import agentio
@@ -26,6 +30,16 @@ import agentio
 WINDOW = 120
 CONTEXT = 10
 SNIFF = 8192
+OVERVIEW_COUNT_CAP = 100_000  # entries counted per collapsed directory before "100000+" (spec FR-30)
+VCS_DIRS = frozenset({".git", ".hg", ".svn"})
+DEPENDENCY_DIRS = frozenset(
+    {"node_modules", "bower_components", "jspm_packages", "vendor", ".venv", "venv", "site-packages"}
+    | {"Pods", ".bundle", "elm-stuff"}
+)  # fmt: skip
+BUILD_DIRS = frozenset(
+    {"build", "dist", "target", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox"}
+    | {".nox", ".gradle", ".next", ".nuxt", ".cache", "coverage", ".terraform"}
+)  # fmt: skip
 _SPEC_RE = re.compile(r"^(.+):(\d+)(?:-(\d+))?$")
 # Rule 13, as agentio applies it, plus any ESC its pattern leaves behind: conform's C8 rejects a bare one.
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
@@ -50,6 +64,8 @@ TOOL = agentio.Tool(
         "view FILE:A-B          # lines A to B",
         "view FILE:N            # line N with 10 lines of context each side, N marked >",
         "view FILE --limit 0    # the whole file, when you mean it",
+        "view DIR               # overview in 200 lines; dependency, build and .git dirs collapsed",
+        "view --anchors FILE    # each line with a 6-hex anchor of its content (edit accepts N:anchor)",
         "a binary file prints its type and size, not its bytes; search finds text across files",
         "note: where vim is installed, its `view` is shadowed (/opt/timelike/bin is first on PATH)",
     ],
@@ -133,7 +149,11 @@ def clean(text: str) -> tuple[str, bool]:
 def configure(p: argparse.ArgumentParser) -> None:
     # Optional to argparse, required by main(): a required positional would make argparse refuse --help
     # and --agent-info before agentio handles them (the adele and snapshot pattern).
-    p.add_argument("file", nargs="?", metavar="FILE[:A-B|:N]", help="the file, with an optional range")
+    p.add_argument("file", nargs="?", metavar="FILE[:A-B|:N]|DIR", help="the file and range, or a directory")
+    p.add_argument("--anchors", action="store_true", help="show each line's anchor (6 hex of its sha256)")
+    p.add_argument(
+        "--no-ignore", dest="no_ignore", action="store_true", help="overview: list ignored entries"
+    )
     p.add_argument(
         "--columns",
         type=int,
@@ -153,6 +173,12 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         ctx.columns = args.columns  # discovery revision 12: reading long lines whole is an explicit request
     path, a, b, single = resolve(args.file)
     try:
+        if a is None and os.path.isdir(path):
+            if args.anchors:
+                raise agentio.UsageError(
+                    f"--anchors needs a file; {path} is a directory", f"view --anchors FILE, or view {path}"
+                )
+            return overview(ctx, path, not args.no_ignore)
         return show(ctx, path, a, b, single)
     except Outcome as o:
         return o.result(path)
@@ -193,6 +219,243 @@ def show(ctx: agentio.Context, path: str, a: int | None, b: int | None, single: 
             )
         f.seek(0)
         return window(ctx, f, path, abs_path, a, b, single)
+
+
+# ── the overview: view DIR (slice 1; spec FR-24 to FR-31, research R7, R8) ───────────────────────
+
+
+def _search() -> ModuleType:
+    """search's ignore rules, from the file beside this one: one implementation (as undo loads snapshot)."""
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "search")
+    try:
+        loader = importlib.machinery.SourceFileLoader("timelike_search", path)
+        spec = importlib.util.spec_from_loader("timelike_search", loader)
+        if spec is None:
+            raise ImportError(f"cannot load {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["timelike_search"] = module  # dataclasses look the module up by name
+        loader.exec_module(module)
+    except (OSError, ImportError) as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"cannot load the ignore rules from {path}: {e}",
+            "view needs timelike's search beside it; reinstall the tools",
+        ) from None
+    return module
+
+
+def _n(count: int, word: str, complete: bool = True) -> str:
+    return f"{count}{'' if complete else '+'} {word}{'' if count == 1 and complete else 's'}"
+
+
+class Node:
+    __slots__ = (
+        "bytes", "children", "collapse", "complete", "dirs", "expanded", "files", "kind", "name",
+        "path", "size", "target",
+    )  # fmt: skip
+
+    def __init__(self, name: str, path: str, kind: str) -> None:
+        self.name, self.path, self.kind = name, path, kind  # kind: dir | file | link | unreadable
+        self.size = 0
+        self.target = ""
+        self.children: list[Node] = []
+        self.collapse: str | None = None  # vcs | dependency | build | ignored | budget
+        self.expanded = False
+        self.files = self.dirs = self.bytes = 0  # everything below a directory, recursively
+        self.complete = True
+
+
+def _collapse_kind(name: str) -> str | None:
+    if name in VCS_DIRS:
+        return "vcs"
+    if name in DEPENDENCY_DIRS:
+        return "dependency"
+    if name in BUILD_DIRS or name.endswith(".egg-info"):
+        return "build"
+    return None
+
+
+def _count(node: Node) -> None:
+    """Count a collapsed directory: files, dirs and bytes below it, capped (FR-30); no symlink followed."""
+    stack = [node.path]
+    seen = 0
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                entries = list(it)
+        except OSError:
+            node.complete = False
+            continue
+        for e in entries:
+            seen += 1
+            if seen > OVERVIEW_COUNT_CAP:
+                node.complete = False
+                return
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    node.dirs += 1
+                    stack.append(e.path)
+                else:
+                    node.files += 1
+                    if e.is_file(follow_symlinks=False):
+                        node.bytes += e.stat(follow_symlinks=False).st_size
+            except OSError:
+                node.complete = False
+
+
+class _Walk:
+    def __init__(self, search: ModuleType, use_ignore: bool) -> None:
+        self.search = search
+        self.use_ignore = use_ignore
+        self.ignored_files = 0
+        self.unreadable = 0
+
+    def build(self, node: Node, rel: str, active: list[Any]) -> None:
+        if self.use_ignore:
+            text = self.search._read_text(os.path.join(node.path, ".gitignore"))
+            if text:
+                active = active + self.search.parse_ignore(text, rel)
+        try:
+            with os.scandir(node.path) as it:
+                entries = list(it)
+        except OSError:
+            node.kind = "unreadable"
+            node.complete = False
+            self.unreadable += 1
+            return
+        dirs: list[Node] = []
+        files: list[Node] = []
+        for e in entries:
+            child_rel = f"{rel}/{e.name}" if rel else e.name
+            child_path = os.path.join(node.path, e.name)
+            try:
+                is_link = e.is_symlink()
+                is_dir = not is_link and e.is_dir(follow_symlinks=False)
+            except OSError:
+                self.unreadable += 1
+                continue
+            ignored = self.use_ignore and self.search.ignored(active, child_rel, is_dir)
+            if is_dir:
+                child = Node(e.name, child_path, "dir")
+                kind = _collapse_kind(e.name)
+                if kind == "vcs" or (kind is None and ignored):
+                    kind = kind or "ignored"
+                if kind is not None:
+                    child.collapse = kind
+                    _count(child)
+                else:
+                    self.build(child, child_rel, active)
+                dirs.append(child)
+                node.dirs += 1 + child.dirs
+                node.files += child.files
+                node.bytes += child.bytes
+                node.complete = node.complete and child.complete
+                continue
+            if ignored:
+                self.ignored_files += 1
+                continue
+            child = Node(e.name, child_path, "link" if is_link else "file")
+            if is_link:
+                try:
+                    child.target = os.readlink(child_path)
+                except OSError:
+                    child.target = "?"
+            else:
+                try:
+                    child.size = e.stat(follow_symlinks=False).st_size
+                except OSError:
+                    child.size = 0
+            node.files += 1
+            node.bytes += child.size
+            files.append(child)
+        node.children = sorted(dirs, key=lambda n: n.name) + sorted(files, key=lambda n: n.name)
+
+
+def _fit(root: Node, budget: int) -> None:
+    """Expand breadth-first while each directory's entries fit the lines left (FR-29)."""
+    root.expanded = True
+    used = len(root.children)
+    queue = [c for c in root.children if c.kind == "dir" and c.collapse is None]
+    while queue:
+        d = queue.pop(0)
+        if budget == 0 or used + len(d.children) <= budget:
+            d.expanded = True
+            used += len(d.children)
+            queue.extend(c for c in d.children if c.kind == "dir" and c.collapse is None)
+        else:
+            d.collapse = "budget"
+
+
+def _lines(node: Node, depth: int, search: ModuleType, out: list[str], collapsed: list[Node]) -> None:
+    indent = "  " * depth
+    for c in node.children:
+        if c.kind == "file":
+            out.append(f"{indent}{c.name}  {human(c.size)}")
+        elif c.kind == "link":
+            out.append(f"{indent}{c.name} -> {c.target}")
+        elif c.kind == "unreadable":
+            out.append(f"{indent}{c.name}/  unreadable")
+        elif c.expanded:
+            out.append(f"{indent}{c.name}/")
+            _lines(c, depth + 1, search, out, collapsed)
+        else:
+            kind = c.collapse or "budget"
+            c.collapse = kind
+            expand = shlex.join(["view", search.display(c.path).rstrip("/") + "/"])
+            out.append(
+                f"{indent}{c.name}/  {_n(c.files, 'file', c.complete)}, {_n(c.dirs, 'dir', c.complete)}, "
+                f"{human(c.bytes)}; {kind} — expand: {expand}"
+            )
+            collapsed.append(c)
+
+
+def overview(ctx: agentio.Context, path: str, use_ignore: bool) -> agentio.Result:
+    search = _search()
+    root = Node(os.path.basename(os.path.normpath(path)), path, "dir")
+    walk = _Walk(search, use_ignore)
+    rules, frame = search.base_rules(os.path.realpath(path)) if use_ignore else ([], "")
+    walk.build(root, frame, rules)
+    _fit(root, ctx.limit)
+    lines: list[str] = []
+    collapsed: list[Node] = []
+    _lines(root, 0, search, lines, collapsed)
+
+    order = ("vcs", "dependency", "build", "ignored", "budget")
+    kinds = {k: sum(1 for c in collapsed if c.collapse == k) for k in order}
+    verdict = (
+        f"{_n(root.files, 'file', root.complete)}, {_n(root.dirs, 'dir', root.complete)}, "
+        f"{human(root.bytes)} under {path}"
+    )
+    if collapsed:
+        listed = ", ".join(f"{k} {n}" for k, n in kinds.items() if n)
+        verdict += f"; collapsed {len(collapsed)} ({listed})"
+    if walk.ignored_files:
+        verdict += f"; {_n(walk.ignored_files, 'ignored file')} not listed"
+    if walk.unreadable:
+        verdict += f"; {walk.unreadable} unreadable"
+    data = {
+        "overview": True,
+        "path": path,
+        "abs_path": os.path.realpath(path),
+        "files": root.files,
+        "dirs": root.dirs,
+        "bytes": root.bytes,
+        "ignored_files": walk.ignored_files,
+        "budget_lines": ctx.limit,
+        "collapsed": [
+            {
+                "path": search.display(c.path),
+                "kind": c.collapse,
+                "files": c.files,
+                "dirs": c.dirs,
+                "bytes": c.bytes,
+                "complete": c.complete,
+                "expand": shlex.join(["view", search.display(c.path).rstrip("/") + "/"]),
+            }
+            for c in collapsed
+        ],
+    }
+    return agentio.Result(path, "overview", verdict, lines=lines, data=data)
 
 
 def window(

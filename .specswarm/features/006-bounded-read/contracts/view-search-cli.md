@@ -186,7 +186,7 @@ src/
   main.py  2.1 KiB
   util/
     io.py  812 B
-node_modules/  10000 files, 1 dirs, 39.1 MiB; dependency — expand: view node_modules/
+node_modules/  10000 files, 1 dir, 39.1 MiB; dependency — expand: view node_modules/
 .git/  25 files, 9 dirs, 48.0 KiB; vcs — expand: view .git/
 README.md  1.2 KiB
 ```
@@ -197,7 +197,9 @@ README.md  1.2 KiB
   Counts are plain integers, and `100000+` past the cap. In a collapsed line, `files` and `dirs` count
   everything below the directory, recursively. `S` is the total size of regular files.
 - **The verdict's clauses:** `collapsed …` only when N > 0, kinds in FR-28's precedence order;
-  `I ignored files not listed` only when I > 0. Singulars are `1 file`, `1 dir`, `1 ignored file`.
+  `I ignored files not listed` only when I > 0.
+- **Singulars everywhere** (verdict and collapsed lines): `1 file`, `1 dir`, `1 ignored file`. FR-36's
+  plural fix applies to the overview from the start.
 - **Expand path:** relative to the current directory when the directory is below it, else absolute. It
   is shell-quoted when needed (`shlex.join`).
 - **JSON:** `tool`, `target` (DIR), `scope: "overview"`, `verdict`, `lines` (as text, each cut at

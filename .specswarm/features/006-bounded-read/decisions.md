@@ -180,3 +180,17 @@ FLAGGED: none
 ABSENT: no Docker lane (R10); no ship or merge (they wait for the lane, the D5 demo and the mentor's sign-off); no demo_points_reached; no Group A (no marker on this path)
 Verification: make test-host 1055 passed, 60/60, 29/29; coverage view 96%, search 93%, agentio 95%; ruff, mypy, shellcheck clean; implement step 10 run from the installed 2.35.0 blocks (unknown, warned); all five criterion citations match one send line each
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)
+
+### T019: view DIR — the overview (FR-24 to FR-31)
+**Started:** 2026-10-04T19:19:30Z | **Completed:** 2026-10-04T19:21:33Z
+
+INHERITED: search's ignore rules (D-5) and display() (P002) — loaded from tools/bin/search, as undo loads snapshot (005 R8) (confidence: high)
+FLAGGED: the overview is `view DIR`, replacing slice 0's directory refusal (FR-8, exit 2) — chose one name over a new tool, because discovery's own example is `view`, vim's `view .` lists a directory, and a new name must be discovered (P3); declared in spec § Slice 1 and impact-analysis (confidence: high)
+FLAGGED: the budget is rule 3's output cap in lines — chose the unit the contract already has (send seam 1), over bytes (revision 6 leaves a total byte bound to the bench) and entries (a third unit) (confidence: high)
+FLAGGED: breadth-first fit is greedy: a directory too large for the lines left is collapsed as `budget`, and later, smaller ones may still expand — the contract's "each one only if its entries fit the lines left" (confidence: medium)
+FLAGGED: singular forms everywhere in the overview (`1 dir`), changing the contract's own example — the carried plural fix applies from the start; both test delegates told (confidence: high)
+ASSUMED: a dependency directory is recognised by name (FR-28's list), not by content (R8) (confidence: medium)
+ABSENT: the 100,000 count cap is not reached by any fixture here — a unit would need a patched constant
+ABSENT: --no-ignore keeps .git collapsed, as specified; nothing lists inside .git
+Verification: ruff, format, mypy clean; a fixture repository (10,000-file node_modules, .git, build, an ignored file, a symlink): node_modules one line with its counts and expand command, symlink shown not followed, 1 ignored file counted; view node_modules/ expands breadth-first within 200 lines; tests/unit/test_view.py 2 expectations updated for FR-24 (declared), 160 passed with test_search.py
+SCOPE: in (2 changed files)
