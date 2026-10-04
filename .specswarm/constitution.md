@@ -1,9 +1,26 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: none (1.4.2 stands; a no-change audit amends nothing)
+- Audit against discovery revision 12, no change needed. Source: ../bridge/governance-context.md (/mentor:regovern 2026-10-04T08:54:45Z), § "What Changed In Those Revisions", and
+  ../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md § Q3.
+  Revision 12 appended to governance_audited_against: a no-change audit is a recorded result
+- What revision 12 moved: one clarification of the Agent output contract's rule 13. The line cut
+  applies in both modes; in JSON it cuts each content string a tool emits, with the same marker, and
+  carries the cut byte count as data. A long line is read whole only on explicit request
+- Checked: no article restates rule 13 (the line cut or ANSI stripping) as text-only or names a JSON
+  exemption. H2 points at the output contract rather than restating its rules (as at revisions 10 and
+  11). H3 and H4 do not mention output shape
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (per the evidence section)
+- HOW H1–H9: checked, unchanged
+- Dependent artifacts: tech-stack.md audited, no change (stack.md unchanged since 0f6e1ed);
+  quality-standards.md audited, no change (no gate restates rule 13). In flight: 006-bounded-read
+  (05 s0) carries the agentio change and 001's contract-text sentence in its cycle, not here
+- Deferred TODOs: none
+
 - Version change: none (1.4.2 stands; a no-change audit amends nothing)
 - Audit against discovery revision 11, no change needed. Source: ../bridge/governance-context.md
   (/mentor:regovern 2026-10-04T00:24:17Z), § "What Changed In Those Revisions", and

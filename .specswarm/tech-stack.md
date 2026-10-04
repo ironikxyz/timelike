@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -76,6 +76,13 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 > own version control, and the snapshot store is named under Python. Rule 10's revision (state
 > locations) is a contract rule, not a technology choice. Revision 11 is appended to
 > `governance_audited_against`.
+>
+> **Audited against discovery revision 12** (2026-10-04), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T08:54:45Z), § "What Changed In Those Revisions". **No change
+> needed:** revision 12 clarifies the output contract's rule 13 (the line cut applies in JSON too). That
+> is a contract rule, not a technology choice, and `stack.md` is unchanged (last changed at `0f6e1ed`,
+> revision 11). Revision 12 is appended to `governance_audited_against`: a no-change audit is a recorded
+> result.
 
 # Tech Stack - Timelike
 
