@@ -205,3 +205,4 @@ ASSUMED: the snapshot-time comparison (f83e984 vs now, on the host) is advisory 
 FLAGGED: none
 ABSENT: no Docker lane (R10); no ship or merge; no demo_points_reached; no Group A (no marker on this path); audited_against unchanged (T018)
 Verification: make test-host 895 passed, 60/60, 29/29; coverage 92% for the two tools; ruff, mypy, shellcheck clean; stand-in 40/44; implement step 10 from the installed 2.32.0 blocks (unknown, warned); all five criterion citations match one send line each (grep -cF)
+SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)

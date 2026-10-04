@@ -147,7 +147,7 @@ report, not as tasks here.
 - [X] T018 Provenance (modify Step 9): a `none (deferred)` row in `audit-log.md`. The `full` append
   (2–11) waits for the mentor's Docker lane to re-establish slice 0 on this cycle's commit, as in 001
   cycles 5 and 6.
-- [ ] T019 Host lane (ruff, mypy, shellcheck, `make test-host`, coverage for `snapshot`), the e2e stand-in,
+- [X] T019 Host lane (ruff, mypy, shellcheck, `make test-host`, coverage for `snapshot`), the e2e stand-in,
   and the cycle report § Cycle 2 (the send's block). Implement step 10 as the plugin reports it.
 
 **Order:** T016 → T017 → T018 → T019.
