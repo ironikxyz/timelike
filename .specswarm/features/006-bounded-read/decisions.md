@@ -53,3 +53,12 @@ FLAGGED: JSON `lines` of a missing file expected `[]`, where D-10 puts the `do i
 ABSENT: no image run here (no Docker, R10); the Docker lane decides
 Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
 SCOPE: in (1 changed files)
+
+### T005: e2e for SC-3, written from the contract before the tools (delegate A)
+**Started:** 2026-10-04T07:12+00:00 | **Completed:** 2026-10-04T09:25+00:00
+
+INHERITED: the contract, the T001 fixture, helpers.bash; the coordinator's mid-task corrections (revision 12's JSON cut, target_line, the narrowing rule, the shlex scope) (confidence: high)
+ASSUMED: expected values come from the fixture inside the container (awk, sed, wc, git ls-files as the search oracle), never from the tool (P004) (confidence: high)
+FLAGGED: none
+ABSENT: no image run here (no Docker, R10); the Docker lane decides
+Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
