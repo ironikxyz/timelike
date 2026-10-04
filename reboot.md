@@ -49,7 +49,9 @@ is public**:
      1, and no later prompt revision exists. No audit-log row is needed.
    - commit as `[006] cycle report § Cycle 1 addendum: …`, deny-list gated on `: PASS`. Check the history
      tail first: commit nothing while a lane runs.
-2. **Then:** the mentor's D5 capture and interview (record it as `observed by the operator` only from a
+2. **DONE 2026-10-04:** D5 observed (§ Cycle 1 addendum 2, `021f6fa`), and ship under 2.35.0 (§ Cycle 1
+   ship): gate UNKNOWN, warns. **Next: the mentor's hand merge, then a push on the operator's OK.** It was:
+   **Then:** the mentor's D5 capture and interview (record it as `observed by the operator` only from a
    history entry and its transcript), sign-off, ship under 2.35.0 (the 2.32.0 recipe below: unset
    `FEATURE_DIR`, quote the checkout path as `<repo>/`), a hand merge by the mentor, a push on the
    operator's OK.
