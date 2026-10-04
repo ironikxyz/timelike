@@ -9,7 +9,8 @@
   "review_notes": [
     "Reviewed 2026-09-29 by interview with the mentor instance (2026-09-29T02:42:14Z). Every finding (identifier, package, severity) is already in the reviewed agent baseline scan/baseline/timelike-agent.json; none has a stable fix. Highs accepted on their origin reasons without individual review. review_by aligned with the agent baseline.",
     "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T05:52:09Z), FOR-MENTOR Item 11: CVE-2026-72897, CVE-2026-84782 and CVE-2026-84784 (OpenSSL 3.5.7, High, no stable fix) accepted into all three baselines on the reason that timelike's images are TLS clients and run no TLS server, DTLS or QUIC service. review_by stays 2026-12-27, aligned across the three baselines. Revisit when Debian ships a fix. Entries applied by the code instance on that instruction, from scan/out baseline.proposed.json.",
-    "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T21:05:37Z and 21:09:43Z), FOR-MENTOR Item 12. CVE-2026-102010 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator: a narrow trigger (a specific libstdc++ API under attacker control), base layer, and timelike ships no C++ that uses it. The Item 11 OpenSSL entries (CVE-2026-72897, -84782, -84784) are removed: Debian fixed them in 3.5.7-1~deb13u3, which every image now carries (the agent through its apt install, vanilla and bench-driver through a targeted --only-upgrade, operator's option (b′)), so they match nothing. review_by stays 2026-12-27. Applied by the code instance on that instruction."
+    "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T21:05:37Z and 21:09:43Z), FOR-MENTOR Item 12. CVE-2026-102010 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator: a narrow trigger (a specific libstdc++ API under attacker control), base layer, and timelike ships no C++ that uses it. The Item 11 OpenSSL entries (CVE-2026-72897, -84782, -84784) are removed: Debian fixed them in 3.5.7-1~deb13u3, which every image now carries (the agent through its apt install, vanilla and bench-driver through a targeted --only-upgrade, operator's option (b′)), so they match nothing. review_by stays 2026-12-27. Applied by the code instance on that instruction.",
+    "Reviewed 2026-10-04 by interview with the mentor instance (bridge/history.md, 2026-10-04T02:43:09Z, operator-approved; bridge/sends/maint-baseline-cve-2026-95619-20261004-024309.md). CVE-2026-95619 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator, for the same reason as CVE-2026-102010: base layer, no Debian fix, and the trigger needs attacker-controlled sizes reaching C++ code, which timelike does not run. review_by stays 2026-12-27. Applied by the code instance on that instruction."
   ],
   "origins": {
     "base layer": "Essential packages of the pinned Debian trixie-slim base, the same 48 findings as the vanilla image's base-layer group; no fixed package in trixie or trixie-security. The driver holds the host's Docker socket by design (feature 002 RB6), which is root-equivalent on the host, so a local privilege escalation inside it gains nothing the socket does not already grant; its trust boundary is the operator, not the container. It runs only timelike-bench from the operator's own checkout, as the invoking uid; the untrusted input it reads (traces written by task containers) is parsed by Python, not by util-linux, acl or perl. Hardening noted, not required: the driver runs without --cap-drop ALL or no-new-privileges and keeps Debian's setuid binaries."
@@ -317,6 +318,24 @@
     },
     {
       "id": "CVE-2026-102010",
+      "package": "libstdc++6",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-95619",
+      "package": "gcc-14-base",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-95619",
+      "package": "libgcc-s1",
+      "severity": "high",
+      "origin": "base layer"
+    },
+    {
+      "id": "CVE-2026-95619",
       "package": "libstdc++6",
       "severity": "high",
       "origin": "base layer"
