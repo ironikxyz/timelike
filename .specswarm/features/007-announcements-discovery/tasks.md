@@ -14,7 +14,7 @@ manifest (SC-3).
 
 ## Phase 1: Setup
 
-- [ ] T001 `image/rootfs/etc/timelike/standard-tools.json`: the curated entries (spec FR-11, research R4).
+- [X] T001 `image/rootfs/etc/timelike/standard-tools.json`: the curated entries (spec FR-11, research R4).
 
 ## Phase 2: Tests first (from the contract; delegated)
 
