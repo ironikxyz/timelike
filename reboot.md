@@ -30,6 +30,9 @@ is public**:
      PASS ×4; deny-list PASS (7 entries, 291 files). The 10:24:00Z `reconcile` entry read § Cycle 1.
    - `tests/out/summary.json` (`git_sha` `99df450…`, exit 0) and `tests/out/e2e.tap`: match each 006
      file's `@test` names to `ok` lines by name (the 005 addendum's python recipe), per file.
+     The recipe: parse `tests/out/e2e.tap` lines `^(ok|not ok) \d+ (.*?)( # .*)?$` into name → status;
+     for each `tests/e2e/view-*.bats` and `search-*.bats`, collect `^@test "(.*?)"` names and count the
+     statuses (all `ok`, none `MISSING`).
    - `99df450..HEAD` is `reboot.md` only (check with `git diff --stat`); say so, as 005's addendum did.
    - criteria_reestablished, superseding Cycle 1's `unconfirmed` for the four automated ones, cited
      exactly as § Cycle 1 has them (backticks included; `grep -cF` = 1 against the send):
