@@ -83,3 +83,12 @@ FLAGGED: the conform cells check only view's and search's own lines, not conform
 ABSENT: no image run here (no Docker, R10); the Docker lane decides
 Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
 SCOPE: in (1 changed files)
+
+### T008: tests/unit/test_view.py, from the contract (delegate B)
+**Started:** 2026-10-04T07:12+00:00 | **Completed:** 2026-10-04T09:10+00:00
+
+INHERITED: test_snapshot.py's helpers (doc_of, text_of, said, stderr_error, human, write); agentio's Cut rendering for the footer order (confidence: high)
+FLAGGED: read the top-level `target` as FILE over the data model's window `target` (N), because agentio reserves `target`; this found the contract defect fixed in T012 (`target_line`) (confidence: high)
+ASSUMED: the long-lines line is the last of JSON `lines`; the cut applies to the whole formatted line, number prefix included; sizes use 005's human format (confidence: medium)
+ABSENT: none of the verdict variants the contract writes as `…`; no singular wording
+Verification: 68 collected; ruff, format and mypy strict clean; all pass against T010 and T015
