@@ -130,3 +130,84 @@ None.
 
 ### ❌ Prohibited Technologies (cannot use)
 None.
+
+---
+
+# Cycle 2 plan: slice 1 (memory, disk, redaction)
+
+**Branch:** `modify/003-slice-1` (from `master` `aa8127d`) · **Spec:** `spec.md` § Slice 1 · **Send:**
+`bridge/sends/03-rev1-20261004-183704.md` (prompt revision 1, discovery revision 12; dispatch 1 of 8) ·
+**specswarm:** 4.0.1-botbaubble.2.35.0 (`4ff8dcb`), the expanded command's cache path
+
+## Summary
+
+Three additions to `run`. Each one is a reading taken after the command ends, so the slice-0 running and
+concluding machinery is untouched:
+1. **Memory:** the cgroup v2 `oom_kill` count before and after, plus `memory.max` and `memory.peak`.
+2. **Disk:** `statvfs` of the scratch and workspace filesystems, plus the ENOSPC message in the log.
+3. **Redaction:** one gitleaks-format rule file, applied by agentio to the log (rewritten only when
+   something matched), the header and the event's arguments.
+
+The rule file is shared with `make scan`'s gitleaks step (`--config`). agentio's pass-through gate admits
+the new causes.
+
+## Technical Context
+
+| Item | Value |
+|---|---|
+| Language | Python 3.14.x (image), host lane 3.12 |
+| Dependencies | stdlib only. Added: `tomllib` (rule file; imported lazily, only when a rule set is loaded), `math` (entropy), `resource` (`getrusage`) |
+| Kernel interfaces | cgroup v2 `memory.events`, `memory.max`, `memory.peak` (research R16); `statvfs`, `/proc/self/mountinfo` (R17) |
+| New file | `image/rootfs/etc/timelike/redaction.toml` → `/etc/timelike/redaction.toml` (one `COPY` in `image/Dockerfile`) |
+| Scan | `scan/scan.sh` gitleaks step gains `--config /repo/image/rootfs/etc/timelike/redaction.toml`. Checked with the pinned binary: 0 findings before and after (R15) |
+| Testing | pytest units (`tests/unit/test_run.py`, `tests/unit/test_agentio_redaction.py` new, `tests/unit/test_redaction_rules.py` new); bats e2e, three new files, one per automated criterion, `bash -c` and `bash -lc`. The memory and disk cells use throwaway containers (`start_throwaway … --memory 96m --memory-swap 96m`, `--tmpfs`) |
+| Test data | Every secret-shaped value is generated at run time (`secrets`), never a literal in a tracked file, so `make scan`'s gitleaks (which blocks on any finding) stays at 0 |
+| Performance | No start-up cost: `tomllib` is imported only after the command ends, and only by `run`. One streaming pass over the log, skipped per block when no keyword occurs |
+| Unknowns | none left (R15–R19) |
+
+## Constitution Check
+
+| Principle | Check | Result |
+|---|---|---|
+| P1 Unaided completion | The memory verdict names the limit, so the agent knows to reduce memory or ask for more. The disk verdict names which filesystem to free | ✅ |
+| P2 Every call concludes | P2's own list names "memory kill, disk full". Both become named causes, and an unreadable source is `unknown`, never a guess | ✅ |
+| P3 Found where agents look | The redaction marker is rule 15's `[REDACTED:<type>]`; the rule ids are in `--agent-info` | ✅ |
+| P4 Reach only by grant | G9: output must not become a leak surface. The log is stored redacted, the header and event too; a missing rule set withholds output (fail closed) | ✅ |
+| P5 Wrong turns are recoverable | Not touched | n/a |
+| P6 Claims are measured | Not touched | n/a |
+| P7 Harness-agnostic | All in the tool; nothing in a harness file | ✅ |
+| H2 One output contract | Rule 15's helper is reused; the rule set enters agentio, not `run` alone; 001's contract text changes are declared | ✅ |
+| H3 Verify artifacts, not messages | The redaction result is checked on the log's bytes in the image, not on the verdict's count | ✅ |
+| H4 Non-interactive by construction | Unchanged | ✅ |
+| H5 Stdlib-first | `tomllib`, `math`, `resource`: stdlib | ✅ |
+| H7 Every acceptance criterion is a test | SC-8 to SC-10 one e2e file each; SC-11 Manual | ✅ |
+| H9 Sound supply chain | gitleaks' rule source is the pinned release tag; the binary used for checking was checksum-verified | ✅ |
+
+## Phase 0: Research
+
+`research.md` R15–R19 (appended).
+
+## Phase 1: Design
+
+- `data-model.md` § Slice 1: the three JSON `data` objects and the rule-set model.
+- `contracts/run-cli.md` § Slice 1: exit and cause rows, verdict additions, JSON, manifest, agentio API.
+- 001's `contracts/output-contract.md`: the pass-through paragraph and rule 15 (declared, `changed_other_features`).
+- `quickstart.md`: unchanged (it shows `run`'s use; slice 1 needs no new step).
+- Agent context file: none in this repository (no `.claude/context.md`), so the step is skipped.
+
+## Tech Stack Compliance Report (Cycle 2)
+
+Classified with the installed `tech-stack-classify` block (`lib/tech-stack-parser.sh`, 2.35.0):
+
+### ✅ Approved Technologies (already in stack)
+Python, cgroup (v2), gitleaks, bats-core, pytest. `tomllib`, `math` and `resource` are Python stdlib,
+covered by "stdlib only".
+
+### ➕ New Technologies (auto-added)
+None.
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None.

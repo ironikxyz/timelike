@@ -47,3 +47,23 @@ command and `full_output` = the log).
 ## Session event (unchanged shape)
 One line per invocation; `exit` = the real exit code (may be outside the six for `run` — schema
 amended, FR-22).
+
+---
+
+## Slice 1 (Cycle 2)
+
+**Rule set** (`/etc/timelike/redaction.toml`, gitleaks' format; loaded by `agentio.load_redaction_rules`):
+- `Rule`: `id`, `type` (from the one `redact:<type>` tag; one of rule 15's five), `regex` (compiled),
+  `keywords` (lower-cased), `entropy` (float or none), `allowlist` (compiled regexes over the secret).
+- `RuleSet`: `path`, `rules`, and `ids()` for the manifest. A load fails as a whole with
+  `RulesUnavailable(reason)`: never a partial set.
+
+**Result `data` additions** (`contracts/run-cli.md` § Slice 1):
+- `memory`: `state` (`read` | `unknown` | `not looked at`), `limit_bytes`, `peak_bytes`, `oom_kills`,
+  `command_max_rss_bytes`, `reason`.
+- `disk`: a list of `{role, path, mount, free_bytes, free_inodes, full}` for `workspace` and `scratch`;
+  empty when the command exited 0.
+- `redaction`: `state` (`applied` | `unavailable`), `counts` (type → n), `rules`, `log_rewritten`,
+  `reason`.
+
+No stored format changes: the log stays the command's output, redacted in place of each secret.
