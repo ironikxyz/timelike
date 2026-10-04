@@ -1,0 +1,252 @@
+# Cycle report — 006 bounded read and search (prompt 05)
+
+> Append-only. One `## Cycle N — <send>` section per send built to acceptance; later verification goes in
+> `### … addendum` sections. The mentor reads this file and never writes into it.
+
+## Cycle 1 — bridge/sends/05-rev1-20261004-085517.md
+
+**Written:** 2026-10-04. Not in dispatch mode. **specswarm 4.0.1-botbaubble.2.35.0** (`4ff8dcb`), the
+version this session loaded: every expanded command named the cache path `…/4.0.1-botbaubble.2.35.0`
+(lore Q002). The path is `.specswarm/features/006-bounded-read/cycle-report.md`, the one CLAUDE.md names
+too, so there is no second report.
+
+**Sequence.** `/specswarm:specify --from-send bridge/sends/05-rev1-20261004-061518.md` (the first send),
+then `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`. The re-send
+`05-rev1-20261004-085517.md` (discovery 12) arrived during implement and replaced the first one: not
+re-specified, as it said. Its governance audit ran on `master` and was merged in, and its FR-7 work
+became T015. On `006-bounded-read` from `master` `22eb8f9`. **Pushed nothing; not merged.** The lane,
+the D5 demo and the mentor's sign-off come first (CLAUDE.md rule 5).
+
+**The send's first-cycle-under-2.35.0 questions:**
+- **The directory specify allocated:** `006-bounded-read`, from the branch I created first. **D84
+  held**: specify said it took the name from the branch (`bounded-read`), not from the send's heading
+  (`bounded-read-search-slice-0`).
+- **The `$ARGUMENTS` expansion:** nothing broke. The only argument was
+  `--from-send bridge/sends/05-rev1-20261004-061518.md`, with no `"` in it, so the open case still has no
+  real occurrence.
+
+**Status in one line:** two new commands, `view` and `search`, and rule 13's line cut in JSON for every
+tool (agentio). The units, lint and the host lane pass. Nothing has run in the image yet.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/05-rev1-20261004-085517.md |
+| source_prompt | plan/.discover/prompts/05-bounded-read.md |
+| prompt_revision | 1 |
+| discovery_revision | 12 |
+| slice | 0 |
+
+The spec's own frontmatter records the send it was specified from (`source_send:
+bridge/sends/05-rev1-20261004-061518.md`, `discovery_revision: 11`), because specify ran from the first
+send. The prompt is the same file at the same revision (1), and the re-send's prompt copy is
+byte-identical to the first's, so `audited_against: [1]` is current against prompt revision 1.
+
+### Before implement finished: the re-send's governance audit, on `master`, then merged in
+
+**Discovery revision 11 → 12** (`e27075b`), done in a separate worktree of `master` so the two
+delegates reading the spec on this branch were not disturbed. Source: `../bridge/governance-context.md`
+(`/mentor:regovern` 2026-10-04T08:54:45Z). **All three files: no change needed.** No file restates rule 13
+as text-only or names a JSON exemption.
+- `constitution.md` was audited through `/specswarm:constitution` (2.35.0), and 1.4.2 stands.
+- `tech-stack.md` and `quality-standards.md` were audited by hand, each with a prose note.
+
+All three now read `[2, …, 12]`. Merged into `006-bounded-read` at `e7e6128`.
+
+### Group C — written by the code instance
+
+**delegations:** two general-purpose subagents, each with its own files and the brief "write from the
+contract, before the tools; do not commit; do not touch `tools/`, `.specswarm/`, `../bridge`, `../plan`;
+report decisions as INHERITED / ASSUMED / FLAGGED / ABSENT".
+1. **The fixture and the five e2e files (T001, T003–T007).** It was told twice, mid-task, about
+   revision 12's JSON cut, then `target_line`, the narrowing rule and the shlex scope.
+   - It checked its own tests against a scratch stand-in of the contract, broken 17 ways; each break was
+     caught by the check it targets.
+   - One expectation was wrong (SC-2's missing-file JSON `lines`) and is corrected in T013.
+2. **The units (T008, T009).** It found two defects in my contract:
+   - the window's JSON field `target`, which rule 12 reserves (now `target_line`);
+   - a narrowing example contradicting the rule.
+
+   It also found one bug in its own helper (`expected_groups`, fixed in T012).
+
+**criteria_reestablished**
+
+Nothing has run in the image (no Docker here, R10), so every criterion is `unconfirmed` until the
+mentor's lane. The host lane and the stand-in below are advisory.
+
+- `05 · "with right-aligned line numbers, a header naming the file and range out of 412"` — **unconfirmed**
+  (Docker lane pending; `tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats`)
+- `05 · "and a missing file (exit 3) each behave as specified; a binary file prints its type and size"` —
+  **unconfirmed** (Docker lane pending; `tests/e2e/view-range-context-missing-file-and-binary.bats`)
+- `05 · "shows 50, grouped by file, with a footer stating the 212 omitted and a concrete way to narrow"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats`)
+- `05 · "and exits 1 only in strict mode _(traces to: P2)_"` — **unconfirmed** (Docker lane pending;
+  `tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats`)
+- `05 · "each result ending with the exact command to narrow or continue _(traces to: D5)_"` —
+  **unconfirmed**. Manual (D5): the mentor captures the exchange in `timelike-agent` and interviews the
+  operator after the lane.
+
+Each citation matches exactly one line of this send (`grep -cF` = 1 for all five). The SC-4 citation
+carries its trace marker, because the bare sentence is also the send's line 86.
+
+**reconcile_mode:** `full`. This is a new spec generated from prompt revision 1 in whole, with
+`audited_against` seeded `[1]`. The two slice-1 criteria are out of scope and are neither built nor
+claimed.
+
+**The six seams, as built** (spec § Decisions; FOR-MENTOR Item 18 Q1 and Q2 closed at `79f245e`, Q3
+answered by discovery revision 12):
+1. **D-1, rule 1:** JSON stays the default under a pipe. **The D5 demo's agent sees JSON by default.**
+   Its `lines` are the numbered lines text mode prints, with `start`, `end`, `total`, `target_line` and
+   `next` as data.
+2. **D-2, a window and rule 3 (Q1 (a)):** a partial window is a `Cut`. Its full output is the file
+   itself, and `more:` is the next window. A whole-file view has no omission line.
+3. **D-3, hits and lines (Q2 (a)):** one line per hit, so the omission line's lines are the omitted
+   hits. The `narrow:` line comes last in the body, and `more:` is `sed -n` over a saved hit list.
+4. **D-4, strict:** zero matches exits 1 only with `--strict`. It is declared in the manifest, and the
+   verdict says `no match (strict)`.
+5. **D-5, ignore files:** read in the standard library from the repository's root down, plus
+   `.git/info/exclude`. **No git command runs**, because 001's layer pins `core.hooksPath` and the
+   pager, not `core.fsmonitor`. The limits: no `core.excludesFile`, and no knowledge of which files are
+   tracked.
+6. **D-6, names:** `view` (discovery's own P3 example; vim's alias, but the image has no vim) and
+   `search`. Both are announced automatically: `timelike` lists `/opt/timelike/bin`
+   (`tools/bin/timelike:45`), with no change to `image/` or `tools/bin/timelike`.
+
+**FR-7 under discovery revision 12 (D-12, T015).** Rule 13's line cut now applies to JSON's content
+strings, implemented in `agentio`:
+- each string in `lines` longer than `COLUMNS` is cut with ` …[cut N bytes]`, and `cut_lines: [{index,
+  cut_bytes}]` carries the bytes cut;
+- `view --columns N` sets the width per call, and `--columns 0` reads lines whole, the explicit request;
+- the closing lines name that request: `long lines cut: K; read them whole with: view FILE:S-E --columns
+  0`, and in `search`, `… read one whole with: view FILE:LINE --columns 0` before `narrow:`;
+- **`Result.footer`** keeps a tool's own closing commands uncut in both modes. A cut command cannot be run,
+  and T008's `COLUMNS=40` case showed the `long lines cut:` line itself being cut.
+
+**001's contract text** gains rule 13's both-modes sentence (`contracts/output-contract.md`), declared, as
+the re-send asks. 001's spec is not modified.
+
+**not_verified**
+- **Everything in the image:**
+  - the five e2e files (60 cells);
+  - conform over `view` and `search` in the image;
+  - `type -a` for both names, and `timelike`'s list (it needs `/opt/timelike/REVISION`);
+  - Python 3.14.7 (the host is 3.12.3).
+- **The host stand-in is not image evidence.** 006: 52 of 60 ok, and the 8 others are image-only
+  (4 `type -a`, 4 `timelike` list). 005 and 003 after the agentio change: 60 of 70 ok, and the 10 others
+  are image-only (6 `type -a`, plus 4 `run` cells whose fixture calls `/opt/timelike/python`).
+- **Other features' e2e in the image after the agentio change:**
+  - `run` (003) captured-output lines over 200 characters are now cut in JSON;
+  - `adele`, `timelike-conform` and `timelike-bench` JSON `lines` likewise.
+
+  The units pass (1055). The image lanes decide.
+- **Search speed in the image:** measured on the host only (research R1, 51–255 MB/s).
+- **A window ending at the file's end:** its `more:` is the window before. Q1 answered `more:` for a
+  window with lines after it. This case is my extension, tested by the units only.
+- **D5 (the demo):** unconfirmed until the mentor's capture and interview.
+
+**changed_other_features**
+- **`tools/agentio/agentio.py` (001's module), every tool that uses it** (`run`, `snapshot`, `undo`,
+  `adele`, `timelike`, `timelike-conform`, `timelike-bench`):
+  - JSON `lines` longer than `COLUMNS` are cut, with `cut_lines`;
+  - `cut_lines` is a reserved key;
+  - `Context.columns` and `Result.footer` are additive.
+
+  Verdicts, errors and data fields are not cut. For example, 005's `data.remedy`, `snapshot`'s
+  `excluded` list and `undo`'s `plan` data are carried whole.
+- **005's `tests/unit/test_snapshot.py`:** the outcome helper now expects the cut `do instead:` line
+  when the remedy is over 200 characters (pytest's long temp paths). Two 005 tests ran through it; both
+  pass. No other test of any feature changed.
+- **001's `contracts/output-contract.md`:** rule 13's both-modes sentence.
+- **Shared files:**
+  - `pyproject.toml`: ruff and mypy lists;
+  - `Makefile`: `SHELLCHECK_FILES`;
+  - `README.md`: a new section.
+
+**process_failures_recorded**
+1. **Two defects in my own contract,** found by the unit delegate writing from it:
+   - the window's JSON field `target` collides with rule 12's reserved key, and the first `view` crashed
+     on every window;
+   - the narrowing example (`src/engine`, 148) contradicted the narrowing rule (`src`, 188).
+
+   Both are corrected in the contract (T012), and the e2e delegate was told before it finished.
+2. **A design gap that revision 12 exposed:** a tool's own closing command lines were cut along with
+   content. That was found by a test (`COLUMNS=40`) and fixed in agentio (`Result.footer`, T015).
+3. **Two test bugs from the delegates,** each corrected under its own task and recorded:
+   - SC-2's JSON `lines` expectation (T013);
+   - `expected_groups` (T012).
+4. **A premise that did not hold:** the operator's message and the re-send both said `research.md` and
+   `data-model.md` were uncommitted. Both had been committed at `c5be120`. The only uncommitted file was
+   the unfinished `tools/bin/view`, which I did not commit as plan work.
+5. **A data-model line contradicted FR-6** (`--limit 0` with no range). FR-6 is right, and the data model
+   is corrected (T012).
+
+**retired_prompts_seen:** `bridge/sends/05-rev1-20261004-061518.md`, which this send superseded. The spec
+was generated from it, and the same prompt at the same revision is in both sends; the build continued
+under this one.
+
+### Implement step 10 — quality validation (specswarm 2.35.0), as the library reported it
+
+```
+🧪 Running Quality Validation
+=============================
+- Detector:
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+- run_tests pytest: rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+- parse_test_results: total=unknown passed=unknown failed=unknown skipped=unknown
+- run_coverage pytest: unknown (rc 1)
+- step 10e: browser test framework: none (no package.json)
+- quality-components: QC_BROWSER_STATE=not-applicable:no web project detected, so there is nothing to drive a browser over
+                      QC_BUNDLE_STATE=unavailable:lib/bundle-size-monitor.sh is not present in this install
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**. With `block_merge_on_failure: false` and `min_quality_score: 0`, it warns and
+does not halt. No component was filled in by hand. The project's own figures are recorded **beside** it
+in `.specswarm/metrics.json` → `006.project_measurements_not_scored`. The output is verbatim.
+
+**Host lane** (advisory; scratch venv, Python 3.12.3):
+- `make test-host`: **1055 passed** (192 s); env layer 60/60; hook logic 29/29.
+- This feature's units: 160 passed (68 `view`, 92 `search`).
+- Coverage, line and branch, with subprocesses included: `view` 96%, `search` 93%, `agentio` 95%;
+  together **94%**.
+- ruff clean (58 files formatted); mypy strict: no issues in 21 files; shellcheck clean over every
+  `*.sh`, `*.bash` and `*.bats`.
+- The publish deny-list read `pass` with the list read before every commit (7 entries, P1–P7 0/0).

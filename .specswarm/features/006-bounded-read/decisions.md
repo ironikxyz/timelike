@@ -170,3 +170,12 @@ FLAGGED: none
 ABSENT: no harness context file inside the image announces them (none exists yet, as for 005)
 Verification: each example's output text checked against the contract and the units (the binary line's size format, the narrow line, the strict exit)
 SCOPE: in (1 changed files)
+
+### T016: host lane, coverage, implement step 10, cycle report § Cycle 1, metrics entry
+**Started:** 2026-10-04T10:20+00:00 | **Completed:** 2026-10-04T10:45+00:00
+
+INHERITED: T001–T015 and their verification (confidence: high)
+ASSUMED: every criterion is unconfirmed until the Docker lane runs on this branch; the host lane and the stand-in are advisory (as in 001, 003 and 005) (confidence: high)
+FLAGGED: none
+ABSENT: no Docker lane (R10); no ship or merge (they wait for the lane, the D5 demo and the mentor's sign-off); no demo_points_reached; no Group A (no marker on this path)
+Verification: make test-host 1055 passed, 60/60, 29/29; coverage view 96%, search 93%, agentio 95%; ruff, mypy, shellcheck clean; implement step 10 run from the installed 2.35.0 blocks (unknown, warned); all five criterion citations match one send line each
