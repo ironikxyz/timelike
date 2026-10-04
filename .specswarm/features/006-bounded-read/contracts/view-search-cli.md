@@ -10,9 +10,14 @@ Both follow 001's output contract (`.specswarm/features/001-agent-shell-baseline
 results on stdout, with the header, the verdict, `do instead: <remedy>` as the first line where there is a
 remedy, and `data.remedy`. Usage errors are exit 2 on stderr.
 
-**Not yet settled:** a line longer than `COLUMNS` in **JSON** (spec FR-7, FOR-MENTOR Item 18 Q3, with
-plan). Until it is answered, JSON carries lines as agentio does today (whole), and no test pins that
-behaviour. Text mode cuts at `COLUMNS` with `…[cut N bytes]` (rule 13), as for every tool.
+**Long lines, both modes** (discovery revision 12; spec FR-7, D-12). A string in `lines` longer than
+`COLUMNS` (env, default 200) is cut to `COLUMNS` characters plus ` …[cut N bytes]` (N = UTF-8 bytes
+removed) in text **and** JSON. JSON then carries `cut_lines: [{"index": i, "cut_bytes": N}, …]`, indexes
+into `lines`, and the key is absent when nothing was cut. Verdicts, errors and data fields are not cut.
+`view --columns N` sets the width for one call (`0` = no cut). The closing lines name the explicit request:
+- `view`: last body line `long lines cut: K; read them whole with: view FILE:S-E --columns 0`;
+- `search`: `long lines cut: K; read one whole with: view FILE:LINE --columns 0` (the first cut hit),
+  immediately before `narrow:` (or last when there is no `narrow:`).
 
 ## `view`
 
@@ -20,6 +25,7 @@ behaviour. Text mode cuts at `COLUMNS` with `…[cut N bytes]` (rule 13), as for
 view FILE            the first window (lines 1-120), or the whole file if it has 120 lines or fewer
 view FILE:A-B        lines A to B
 view FILE:N          line N with 10 lines of context each side, N marked with >
+  --columns N        cut lines at N characters for this call (default COLUMNS; 0 = whole lines)
 ```
 
 Manifest: `mutating: false`, `destructive: false`, `probe: ["/etc/os-release"]`. Exit codes: `0` ok,

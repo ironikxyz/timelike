@@ -122,7 +122,14 @@ def outcome(r: Proc, code: int, scope: str) -> dict[str, Any]:
     d = doc_of(r)
     assert list(d)[:3] == ["tool", "target", "scope"] and d["scope"] == scope, d
     assert d["exit"] == code
-    assert d["lines"][0] == f"do instead: {d['remedy']}", d
+    # Discovery revision 12: rule 13's line cut applies in JSON too, so a remedy line longer than COLUMNS
+    # (200 by default; pytest's temp paths make the store's long) is cut with the marker, while
+    # data.remedy, a data field, carries it whole.
+    want = f"do instead: {d['remedy']}"
+    if len(want) > 200:
+        want = f"{want[:200]} …[cut {len(want[200:].encode())} bytes]"
+        assert {"index": 0, "cut_bytes": len(f"do instead: {d['remedy']}"[200:].encode())} in d["cut_lines"]
+    assert d["lines"][0] == want, d
     return d
 
 

@@ -105,3 +105,14 @@ ASSUMED: .gitignore files count in files_searched (hidden files are searched); a
 ABSENT: the exact zero-match verdict tail; whether a root .gitignore above a searched subdirectory applies (T011 applies it, as git does)
 Verification: 92 collected; ruff, format and mypy strict clean
 SCOPE: in (1 changed files)
+
+### T015: FR-7 under discovery revision 12 — rule 13's line cut in JSON, in agentio
+**Started:** 2026-10-04T09:00+00:00 | **Completed:** 2026-10-04T09:40+00:00
+
+INHERITED: discovery revision 12 (Q3 (a)) and the re-send `05-rev1-20261004-085517` ("the fix belongs in agentio"); T008/T009 written against it after the coordinator's message (confidence: high)
+FLAGGED: JSON carries the cut as `cut_lines: [{index, cut_bytes}]` beside `lines`, over a per-string object, because `lines` stays a list of strings for every existing consumer; `cut_lines` is a reserved key (confidence: high)
+FLAGGED: added `Result.footer` (a count of trailing body lines that are the tool's own closing commands) so those lines are never cut in either mode; without it the `long lines cut:` and `narrow:` commands are cut themselves when COLUMNS is small or a path is long, and a cut command cannot be run (found by T008's COLUMNS=40 case) (confidence: high)
+FLAGGED: changed another feature's test: 005's outcome helper (`tests/unit/test_snapshot.py`) asserted JSON `lines[0]` equals the full `do instead:` remedy; under pytest's long temp paths that line exceeds 200 characters and is now cut in JSON as text already cut it, while `data.remedy` carries it whole; the helper now expects the cut form (confidence: high)
+ASSUMED: verdicts, errors and data fields are not content and are not cut (revision 12 names file lines, hits and log lines) (confidence: high)
+ABSENT: no total byte bound per call (revision 6's bench question); 001's spec is not modified (the re-send: UNAUDITED at 11 and 12, the next 01 modify records both)
+Verification: all units 895 + the new ones; only the two 005 cases changed, both through the helper; the 005 and 003 e2e through the host stand-in show no new failure (the 4 type -a and 4 run cells need the image)

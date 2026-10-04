@@ -70,6 +70,14 @@ rule-12 header.
 
 - The default cap is **200 lines** (`--limit N` overrides, and so does `TIMELIKE_OUTPUT_LIMIT`). Lines
   are cut at `COLUMNS` (default 200) with the marker ` …[cut N bytes]`.
+- **The line cut applies in both modes** *(discovery revision 12, clarification; written into this
+  contract by feature 006's cycle, declared)*. In JSON, each content string a tool emits in `lines` (a
+  file line, a hit, a log line) is cut at `COLUMNS` with the same marker, and the object carries the
+  bytes cut as data: `"cut_lines": [{"index": i, "cut_bytes": N}, …]`, indexes into `lines`, present only
+  when something was cut. The serialised JSON stays valid. Verdicts, errors and data fields are not
+  content and are not cut. Reading a long line whole is an explicit request: a tool may offer it per
+  call (`view --columns 0`). Whether a call should also be bounded in total bytes stays a bench question
+  (revision 6).
 - Order when capped:
   1. header
   2. verdict line

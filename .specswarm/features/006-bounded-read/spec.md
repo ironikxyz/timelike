@@ -83,10 +83,11 @@ the verdict says *no match (strict)*, so it cannot be mistaken for a failure.
 - **FR-6** `--limit N` (rule 3's output cap, in lines; default 200) bounds any window: a range longer than
   the cap shows the first N lines of it, as a cut. `--limit 0` lifts the cap, which is how the agent asks
   for a whole large file.
-- **FR-7** A line longer than the terminal width is cut in text mode at `COLUMNS` with
-  `…[cut N bytes]` (rule 13, as every timelike tool does). **JSON: pending Q3** (FOR-MENTOR Item 18;
-routed to plan). The mentor recommends that JSON follows text (the same cut, with the full length as
-data); as first written, JSON carried the line whole. Not built until plan answers.
+- **FR-7** A line longer than the terminal width (`COLUMNS`, default 200) is cut at `COLUMNS` with
+  `…[cut N bytes]` **in both modes** (rule 13). In JSON the cut byte count is carried as data
+  (`cut_lines`). `--columns N` changes the width for one call, and `--columns 0` reads lines whole: the
+  explicit request. When a window has cut lines, the last body line gives that exact command. *(Amended
+  in place, declared: discovery revision 12, D-12. As first written, JSON carried the line whole.)*
 
 ### `view`: what it refuses or reports instead of content
 
@@ -268,6 +269,17 @@ and D-3's narrowing line sit closest to rule 3's wording, so they are raised in 
 the reading recommended here. The parts of 05 that do not depend on them are built first. D-1, D-4, D-5 and
 D-6 change no contract and read no criterion more narrowly. They are listed in the same item for the
 mentor to see, not to wait on.
+
+**D-12 · Long lines in both modes (discovery revision 12, Q3 answered (a)).** Rule 13's cut applies to
+JSON's content strings too, so a window is bounded at about 120 × 200 characters in either mode. The
+fix is in `agentio`, so every tool inherits it: in JSON each string in `lines` longer than `COLUMNS` is
+cut with the same marker, and the object carries `cut_lines: [{index, cut_bytes}]`. Verdicts, errors
+and data fields (paths, ids, counts) are not content and are not cut. A tool may set the width for one
+call: `view --columns N` (0 = whole lines), which is the explicit request revision 12 names. The closing
+lines name it: `view` adds `long lines cut: K; read them whole with: view FILE:S-E --columns 0` as its
+last body line, and `search` adds `long lines cut: K; read one whole with: view FILE:LINE --columns 0`
+just before its `narrow:` line. This narrows no criterion. Other tools' JSON changes with it
+(`changed_other_features`).
 
 ## Out of scope (slice 0)
 
