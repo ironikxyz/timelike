@@ -169,3 +169,4 @@ ASSUMED: the README is where this project announces tools (003's and 005's decis
 FLAGGED: none
 ABSENT: no harness context file inside the image announces them (none exists yet, as for 005)
 Verification: each example's output text checked against the contract and the units (the binary line's size format, the narrow line, the strict exit)
+SCOPE: in (1 changed files)
