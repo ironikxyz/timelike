@@ -72,3 +72,4 @@ ASSUMED: expected values come from the fixture inside the container (awk, sed, w
 FLAGGED: none
 ABSENT: no image run here (no Docker, R10); the Docker lane decides
 Verification: shellcheck clean; the delegate ran every check against a scratch stand-in of the contract and broke it 17 ways, each caught by its target check; host docker stand-in (T013) run separately
+SCOPE: in (1 changed files)

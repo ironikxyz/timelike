@@ -45,7 +45,7 @@ Delegates working on their own files write the tests from the CLI contract **bef
   (SC-3): 50 hits grouped by file, 262 and 212 stated, ignored matches not counted, `.git` never
   searched, the `narrow:` command returning fewer matches when run, and `more:` printing exactly the
   212 omitted hits.
-- [ ] T006 [P] [US4] `tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats` (SC-4).
+- [X] T006 [P] [US4] `tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats` (SC-4).
 - [ ] T007 [P] [US5] `tests/e2e/view-and-search-resolve-once-and-pass-conform.bats`: `type -a view` and
   `type -a search` each give exactly `/opt/timelike/bin/…`; `timelike-conform` passes on both; `timelike`'s
   tool list names both.
