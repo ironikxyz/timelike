@@ -174,3 +174,13 @@ ASSUMED: undo's safety snapshot goes through the same check, and a failure there
 ABSENT: no change to the walk, the plan, apply or the lock; no record version bump (readers require neither new field)
 Verification: units 78 passed (72 + 6 new; 1 changed for the cap's unit); ruff, ruff format, mypy clean; the five 005 e2e files through the host stand-in 40/44 (the 4 being the image-only type -a cells, as in Cycle 1), SC-4's raise value 300000 included
 SCOPE: in (5 changed files)
+
+### T017: spec § Revision 11, D-5 and D-7 confirmed, Item 17 closed (Cycle 2)
+**Started:** 2026-10-04T03:20+00:00 | **Completed:** 2026-10-04T03:22+00:00
+
+INHERITED: the prompt diff between the rev-1 and rev-11 sends (additions only); plan's resolution in ../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md (confidence: high)
+ASSUMED: the constraint's slice-0 part is "outside the workspace, never inside it or its .git", which holds as built; the rest is slice 1's (the send's reading, confirmed by plan's "Slice 0 stays as built") (confidence: high)
+ASSUMED: "carried" means recorded in the spec with their slice marker and not built (confidence: high)
+FLAGGED: Item 17's decisions 1, 2, 3 and 6 had no separate ruling; the item closes on the send's instruction with those standing as built, said in the item (confidence: medium)
+ABSENT: no criterion text of slice 0 changed; SC-1 to SC-5 untouched
+Verification: the constraint and both criteria are quoted from the send word for word (checked by substring match with whitespace normalised, since the spec wraps lines)

@@ -277,6 +277,14 @@ snapshots, so it is **raised in FOR-MENTOR Item 17** for plan to confirm. It is 
 no contract and no criterion, and the store sits behind the two commands, so it can be replaced without
 changing them.
 
+*(Cycle 2.)* **Confirmed by discovery revision 11** (plan `0f6e1ed`;
+`../bridge/feedback/07-20261003-022613-snapshot-store-and-persistence.md` § Resolution, option (a)).
+`stack.md`'s Snapshots row now names this store, and plan adds a fourth reason against git: it tracks
+no empty directories. Plan's four conditions, as checked in Cycle 2: blobs deduplicated by content
+across snapshots (met as built); symlinks stored as links, never followed (met as built); the size cap
+counted after deduplication (built in Cycle 2, FR-6); "taken" only after a restorability check (built
+in Cycle 2, FR-9). The evidence is in `cycle-report.md` § Cycle 2.
+
 **D-6 · Names (P3).** `snapshot` and `undo`: the words an agent uses for the act, and the words
 coding-agent harnesses use for the same idea. Neither exists in the image (no Debian package installs
 either). `undo` restores; `snapshot` takes and lists. Restore lives on `undo` alone, so the destructive
@@ -293,6 +301,12 @@ Consequences, stated rather than hidden:
 A cross-session or cross-container store would need a state location the contract does not have yet
 (rule 10's "project cache" is undefined). Not built in slice 0; noted in Item 17.
 
+*(Cycle 2.)* **Confirmed by discovery revision 11.** Rule 10 now has two state locations: the
+per-session scratch directory and a per-workspace state root outside the workspace; the in-workspace
+project cache is withdrawn. Plan: *"Slice 0 stays as built. D-7's location is already outside the
+workspace."* The state root, its volume, sharing between agents, purging by size and age, and the
+restore-snapshots-first criterion all ride slice 1.
+
 **D-8 · The caps.** Per snapshot: a size cap on stored content, a per-file limit, and an entry cap on the
 walk. Defaults are set from a measured workspace in plan (research), each with its environment variable.
 Beyond the size cap the snapshot is **partial** (FR-6), not refused, because a partial snapshot of the
@@ -306,11 +320,33 @@ deterministic. Listing is newest first, bounded by the output cap, with times on
 so the agent can go back if it restored the wrong snapshot. This is the first use of a non-`on demand`
 reason, which slice 1 extends.
 
+## Revision 11 (Cycle 2, send `bridge/sends/07-rev11-20261004-030207.md`)
+
+Prompt 07 moved from revision 1 to 11 under this spec. Revision 11 **added** one constraint and two
+slice-1 criteria; it removed and reworded nothing (the prompt copies in `07-rev1-20261003-013915.md`
+and this send differ only by those additions, the revision note and the frontmatter). Nothing this
+body says became false, so the spec is not superseded. Recorded here, declared:
+
+- **The constraint**, verbatim: *"Recovery state is kept per workspace, not per session, in the state
+  root of feature 01's rule 10: it survives a new session, a container restart and a container
+  recreate, and every agent working in the workspace can list and restore it; each snapshot records the
+  session and agent that took it (P5; T2 bounds it by size and age)."* Its slice-0 part, that recovery
+  state is kept outside the workspace and never inside it or its `.git`, holds as built (FR-23, D-7).
+  The rest (per workspace, surviving sessions and recreation, shared, attributed, purged) is slice 1's.
+- **Two criteria, carried, not built** (slice 1; out of scope for this send):
+  - *"A snapshot taken in one session is listed and restorable from a new session, and after the
+    agent's container is recreated"* *(slice 1)*;
+  - *"A restore first snapshots the workspace, so the restore itself can be undone, and its verdict
+    names that snapshot"* *(slice 1)*. D-10 already does this for `undo --yes` (FR-19, the verdict
+    names `S`); slice 1 makes it a criterion and is not extended here.
+- **Plan's conditions on the store** (D-5) are checked in Cycle 2: two held as built, two were built
+  (FR-6, FR-9).
+
 ## Out of scope (slice 0)
 
 Automatic snapshots before destructive commands, scheduled snapshots, the restorable trash, store
 pruning by age or size, and incident replays (slices 1 and 2). Restoring file times or ownership. A
-cross-session store.
+cross-session store (slice 1's per-workspace state root, discovery revision 11).
 
 ## Assumptions
 
