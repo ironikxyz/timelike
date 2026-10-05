@@ -83,3 +83,13 @@ ASSUMED: an entry without an agent may carry `agent: null` in JSON; FR-10's `-` 
 ABSENT: tty and pty cells (journal is a reader for pipes and terminals alike; the criteria name no terminal mode)
 Verification: shellcheck -x clean over the five files. Host stand-in (advisory): as committed, only the manifest cells pass — the host has no /etc/timelike/redaction.toml (the journal withholds every command, failing closed), no hook (no shell entries) and the stand-in's own PATH (type -a). In a scratch copy whose helpers.bash supplied the rules file, the hook and the trap file: SC-1 4/4, SC-3 2/2, SC-4 bash -c, the manifest 2/2 pass; what remained failing was only the `bash -lc` style (the stub runs -lc as -c) and the `type -a` path — image-only by design. Nothing of the dry runs was left in /tmp
 SCOPE: in (5 changed files)
+
+### T006: pyproject (ruff, mypy lists), Makefile (shellcheck list: journal-exit.bash and the e2e files), README (a journal section)
+**Started:** 2026-10-05T08:35:15Z | **Completed:** 2026-10-05T08:35:29Z
+
+INHERITED: tools/bin/journal — from T005; journal-exit.bash — from T002; the e2e files — from T004 (confidence: high)
+FLAGGED: committed after T004, so the Makefile never names a file the tree lacks (as in 008) (confidence: high)
+ASSUMED: the README's limits are the manifest's `not_captured` plus root's shells (T002's EUID rule) (confidence: high)
+ABSENT: an announcement change — 007's generator lists `journal` from its --agent-info summary
+Verification: ruff and format clean (67 files); mypy strict over the project's 23 files; shellcheck over the Makefile's SHELLCHECK_FILES (56, every one present)
+SCOPE: in (3 changed files)

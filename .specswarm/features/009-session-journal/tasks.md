@@ -66,7 +66,7 @@
   - `--ledger` (R4);
   - redaction (R5);
   - the refusals.
-- [ ] T006 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: `journal-exit.bash`
+- [X] T006 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: `journal-exit.bash`
   and the e2e files), `README.md` (a journal section).
 
 ## Phase 4: Polish
