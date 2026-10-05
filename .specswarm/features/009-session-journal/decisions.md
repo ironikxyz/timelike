@@ -93,3 +93,20 @@ ASSUMED: the README's limits are the manifest's `not_captured` plus root's shell
 ABSENT: an announcement change — 007's generator lists `journal` from its --agent-info summary
 Verification: ruff and format clean (67 files); mypy strict over the project's 23 files; shellcheck over the Makefile's SHELLCHECK_FILES (56, every one present)
 SCOPE: in (3 changed files)
+
+### T007: host lane — lint, units with coverage, make test-host, conformance, the e2e stand-in, start-up; journal's internals tested in process
+**Started:** 2026-10-05T08:35:40Z | **Completed:** 2026-10-05T08:54:36Z
+
+INHERITED: every earlier task's files (confidence: high)
+FLAGGED: tools/bin/journal was at 89% in the traced run; 15 in-process tests were added to tests/unit/test_journal.py (malformed records of each shape, an old event with only `ts`, a cut shell line, an extended ledger row, `first_word`'s six cases, `_more`'s flags, three usage errors, an oversized and an absent ledger, redaction failing closed, an unreadable scratch root, an artefact that cannot be saved) — all passed first time; journal 99% from its own tests (confidence: high)
+FLAGGED: the host stand-in's docker stub (scratchpad only) now passes TIMELIKE_REDACTION_RULES, BASH_ENV and TIMELIKE_JOURNAL_EXIT to `exec`, so the stand-in runs with the rules file and the hook as the image does; 008's edit files still give 26/28 under it (the two type -a cells) (confidence: high)
+ASSUMED: stdin from /dev/null for every host run that starts bash: with a socket on stdin, Debian bash skips BASH_ENV (T005's host observation) (confidence: high)
+ABSENT: the Docker lane — the mentor's, after the batch
+Verification:
+- traced units (venv Python 3.12.3, pytest 8.4.2): 1451 passed, 1 skipped, 722 s, before the 15 internals tests; coverage TOTAL 95% (agentio 94%, edit 96%, journal 89% → 99% after them, measured from test_journal.py)
+- make test-host: passed (units 1467 untraced; files 60/60; hook logic 44/44)
+- lint: ruff check and format (67 files), mypy strict (23 files), shellcheck over the Makefile's 56 files: clean
+- conformance on the host, all 10 tools: pass
+- e2e host stand-in (advisory): journal files 16 cells — SC-1 4/4, SC-3 2/2, FR-14 2/2, SC-4 bash -c ok; not ok: every bash -lc style check (the stub runs -lc as -c: SC-2 ×4 including the -lc command inside the -c cells, SC-4 -lc) and the 2 type -a cells — image-only by design
+- start-up on the host, 20 runs each, every exit asserted 0: `journal --help` p50 66 / p95 67 ms; `journal --json` (the probe) p50 80 / p95 86 ms
+SCOPE: in (1 changed files)

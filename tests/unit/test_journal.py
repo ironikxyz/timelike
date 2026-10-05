@@ -936,3 +936,128 @@ def test_journal_event_carries_the_new_fields(lab: Lab) -> None:
     assert ev["agent"] == "a9"
     assert ev["ppid"] == os.getpid()
     assert abs(ev["t_ms"] - time.time() * 1000) < 60_000
+
+
+# ── internals, in process: parsing edges and refusals a fixture rarely reaches (T007, coverage) ───
+
+
+def _journal_module() -> Any:
+    import importlib.machinery
+    import importlib.util
+
+    loader = importlib.machinery.SourceFileLoader("timelike_journal_under_test", str(JOURNAL))
+    spec = importlib.util.spec_from_loader("timelike_journal_under_test", loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+JM = _journal_module()
+
+
+def test_record_parsers_reject_malformed_records() -> None:
+    assert JM.tool_entry({"tool": 1, "args": [], "exit": 0, "duration_ms": 1}, 0) is None
+    assert JM.tool_entry({"tool": "x", "args": [], "exit": 0, "duration_ms": 1}, 0) is None  # no time at all
+    assert JM.tool_entry({"tool": "x", "args": [], "exit": 0, "duration_ms": 1, "ts": "yesterday"}, 0) is None
+    old = JM.tool_entry(
+        {"tool": "x", "args": ["a"], "exit": 0, "duration_ms": 1000, "ts": "2026-10-05T06:00:00Z"}, 0
+    )
+    assert old is not None and old.end - old.start == 1000 and old.command == "x a"  # ts (seconds) as the end
+    assert JM.shell_entry({"kind": "other"}, 0) is None
+    assert JM.shell_entry({"kind": "shell", "cmd": "x", "exit": 0, "start_us": 1}, 0) is None
+    cut = JM.shell_entry(
+        {"kind": "shell", "cmd": "y" * 4096, "cut_bytes": 9, "exit": 0, "start_us": 1000, "end_us": 2000}, 0
+    )
+    assert cut is not None and cut.command.endswith(" …[cut 9 bytes]")
+    assert JM.ledger_entry({"at": "nope", "outcome": "performed", "session": "s"}, 0) is None
+    ext = JM.ledger_entry(
+        {"id": 3, "at": "2026-10-05T06:00:00Z", "outcome": "extended", "session": "operator", "grant": "demo",
+         "limit_name": "ports", "needed": "22"},
+        0,
+    )  # fmt: skip
+    assert ext is not None and ext.command == "extend demo ports 22" and ext.exit == "extended"
+
+
+@pytest.mark.parametrize(
+    ("cmd", "want"),
+    [
+        ("snapshot", "snapshot"),
+        ("exec env A=1 B=2 2>/dev/null /opt/timelike/bin/run -- true", "run"),
+        ("time command view x", "view"),
+        ("A=1", None),
+        ("echo 'unterminated", None),
+        ("# only a comment", None),
+    ],
+)
+def test_first_word(cmd: str, want: str | None) -> None:
+    assert JM.first_word(cmd) == want
+
+
+def test_more_keeps_the_selection_flags() -> None:
+    import argparse
+
+    ns = argparse.Namespace(session=None, all_sessions=True, agent="a1", ledger="/x.json", n=None)
+    assert JM._more(ns, 20) == "journal --all --all-sessions --agent a1 --ledger /x.json"
+    ns = argparse.Namespace(session="s", all_sessions=False, agent=None, ledger="-", n=5)
+    assert JM._more(ns, 5) == "journal -n 25 --session s"
+
+
+@pytest.mark.parametrize(
+    ("args", "words"),
+    [
+        (["-n", "0"], "N must be 1 or more"),
+        (["--agent", "has space"], "is not an agent id"),
+        (["--session", "s", "--all-sessions"], "exclusive"),
+    ],
+)
+def test_usage_errors(lab: Lab, args: list[str], words: str) -> None:
+    r = journal(lab, "--json", *args)
+    assert r.returncode == 2 and words in r.stderr, said(r)
+
+
+def test_ledger_too_large_and_unreadable(lab: Lab, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(JM, "MAX_LEDGER_BYTES", 10)
+    big = lab.tmp / "big.json"
+    big.write_text("[" + ",".join(["{}"] * 20) + "]")
+    with pytest.raises(JM.Outcome) as e:
+        JM.read_ledger(str(big))
+    assert "too large" in e.value.verdict
+    with pytest.raises(JM.Outcome) as e:
+        JM.read_ledger(str(lab.tmp / "absent.json"))
+    assert e.value.code == 1 and "cannot read the ledger" in e.value.verdict
+
+
+def test_redaction_fails_closed(lab: Lab, monkeypatch: pytest.MonkeyPatch) -> None:
+    tool(lab, "work", "run", "--", "true")
+    r = journal(lab, "--json", "--all", "--session", "work")
+    assert r.returncode == 0
+    env = lab.env("reader", None, TIMELIKE_REDACTION_RULES=str(lab.tmp / "no-rules.toml"))
+    r = subprocess.run(
+        [sys.executable, str(JOURNAL), "--json", "--all", "--session", "work"],
+        cwd=str(lab.ws), env=env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+    )  # fmt: skip
+    d = doc_of(r)
+    assert r.returncode == 0
+    assert all(e["command"] == "[withheld: redaction rules unavailable]" for e in d["entries"])
+    assert "commands withheld: redaction rules unavailable" in d["verdict"]
+
+
+def test_an_unreadable_scratch_root_lists_no_sessions(lab: Lab) -> None:
+    lab.scratch.mkdir()
+    lab.scratch.chmod(0o000)
+    try:
+        r = journal(lab, "--json", "--all-sessions")
+    finally:
+        lab.scratch.chmod(0o700)
+    if os.geteuid() == 0:
+        pytest.skip("root reads a mode-000 directory")
+    assert r.returncode == 0 and doc_of(r)["sessions"] == [], said(r)
+
+
+def test_an_artefact_that_cannot_be_saved_is_named(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class Ctx:
+        def scratch(self) -> Path:
+            raise PermissionError(13, "Permission denied")
+
+    assert JM.save(Ctx(), ["x"]).startswith("(not saved: ")
