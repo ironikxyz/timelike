@@ -5,10 +5,11 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-05T08:56:07Z (read from the clock). **Dispatch batch `20261004-183704` resumed** after pause-06
-(answered by discovery revision 13). **06 s0 done** on `008-edit` (`62d1820`); **08 s1 done** on
-`009-session-journal` (`d27bec7`). Next: 09 s1. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is
-public**; push nothing, merge nothing (the batch leaves its branches standing).
+**Snapshot:** 2026-10-05T09:06:07Z (read from the clock). **Dispatch batch `20261004-183704` PAUSED at prompt 09** (services):
+`../bridge/dispatch/pause-09.md`, cause 4 (a FLAGGED decision outside tasks.md's scope: the agentio
+`takes_command` change, T003 `ac9c55f`). Readings: (a) accept, (b) revert and take options before NAME,
+(c) other. 06 s0 done (`008-edit`, `62d1820`); 08 s1 done (`009-session-journal`, `d27bec7`). specswarm
+2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge nothing.
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -19,7 +20,9 @@ public**; push nothing, merge nothing (the batch leaves its branches standing).
    schema, conform C2, 001's contracts; `undo` confirm_protocol=True.
 5. `009-session-journal` — 08 s1 done (`d27bec7`): `journal`; agentio event + agent/ppid/t_ms/ref; the
    shell record (EXIT trap from 001's hook, `/etc/timelike/journal-exit.bash`, COPY after the last RUN).
-6. Not started: 09 s1 (`010-services-interactive`: its seam 1 is ANSWERED by
+6. `010-services-interactive` — 09 s1 **paused** after T003 (`ac9c55f`): `services` built; T001/T002
+   (delegated tests) uncommitted in the tree; T004–T006 not started. Resume per pause-09's answer.
+7. Not started: 09 s1 (`010-services-interactive`: its seam 1 is ANSWERED by
    revision 13 — start/stop-own not confirmed, stop-other/--all confirmed; do not pause), 10 s1
    (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
 
