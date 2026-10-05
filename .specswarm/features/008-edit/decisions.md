@@ -71,3 +71,14 @@ ASSUMED: argv text reaches the file as the shell passed its bytes (`os.fsencode`
 ABSENT: a hook to force a concurrent change in a test — the re-read-and-compare runs on every write but no unit forces the race; an extended-attribute or ACL copy (stdlib only, R5); several edits in one call (slice 0 scope)
 Verification: tests/unit/test_edit.py (T004's 57) all pass against this tool; 14 failed on the first run, settled as tool deviations from the contract (12: wording of four verdicts, line_ending at level 1, the endings note, the 16 MiB phrase, the undecodable-bytes note, the dry-run verb, the probe) or test errors (2: BOM display, probe value), each recorded under T004; host conformance over all 9 tools: pass (edit included); timings on the host: the probe 81–84 ms, a no-match over 20,000 lines 254 ms, a near-miss 151 ms; ruff, format and mypy (strict) clean
 SCOPE: in (1 changed files)
+
+### T004: tests/unit/test_edit.py (delegated); 14 first-run failures settled
+**Started:** delegated,_written_after_9294a5a_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-05T05:07:14Z
+
+INHERITED: the contract (contracts/edit-cli.md, amended once while it worked: the diff in `lines`, endings in the verdict), research R2–R8, and test_view.py's and test_snapshot.py's harness (confidence: high)
+FLAGGED: written blind to the tool, from the contract; it ran only after T006 landed. 14 of 57 failed on the first run: 12 were tool deviations from the contract, fixed in tools/bin/edit (four verdicts carried an extra "; nothing written" or a level phrase the contract does not give, `line_ending` was null at level 1, the endings note did not fire for LF inserted into a CRLF line, "16.0 MiB" for "16 MiB", the "N undecodable bytes kept" note was missing, the dry run said "would edited", the probe); 2 were test errors, fixed here (a BOM shows in the numbered lines as `view` shows it — checked against `view`; the probe value after R7's correction) (confidence: high)
+FLAGGED: the delegate's contract finding — the probe `ID=` also occurs inside `VERSION_ID=`, so it would exit 3 — was right, and changed R7 and the tool (confidence: high)
+ASSUMED: the delegate's settlements of contract ambiguity are kept as written: the scope's shape only (`lines S-E of T`), exact verdicts only on multi-line edits, similarity within 0.01 of its own SequenceMatcher (confidence: medium)
+ABSENT: a forced concurrent change, the 5 s deadline itself, an owner that cannot be kept (needs a second uid), the `line endings` / `trailing whitespace` candidate differences (unreachable: such a window matches at level 2), and `--limit` cutting the diff — named by the delegate as not tested
+Verification: 57 passed; ruff and format clean
+SCOPE: in (1 changed files)

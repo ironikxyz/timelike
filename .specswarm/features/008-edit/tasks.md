@@ -39,7 +39,7 @@ Conventions are as in 003–007:
 
 ## Phase 2: Tests first (from the contract; delegated)
 
-- [ ] T004 [P] [US1] [US2] [US3] [US4] `tests/unit/test_edit.py`, per research R8: the levels and
+- [X] T004 [P] [US1] [US2] [US3] [US4] `tests/unit/test_edit.py`, per research R8: the levels and
   uniqueness, the indentation inference, line endings, candidates (ranking, floor, overlap, deadline),
   the atomic write (concurrent change, unwritable, symlink, hard link, mode, owner), BOM and non-UTF-8,
   and the usage and refusal cases. Text and JSON shapes come from `contracts/edit-cli.md`.
