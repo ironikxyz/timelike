@@ -69,6 +69,7 @@ TOOL = agentio.Tool(
         agentio.EXIT_USAGE: "usage, or a cap variable that is not a number",
     },
     manifest_extra=lambda: {"caps": {k: DEFAULT_CAPS[k] for k in sorted(DEFAULT_CAPS)}},
+    event_ref=("snapshot", "id"),  # the session journal's pointer (feature 009)
 )
 
 UNDO_TOOL = agentio.Tool(
@@ -84,6 +85,7 @@ UNDO_TOOL = agentio.Tool(
     ],
     mutating=True,
     confirm_protocol=True,  # discovery revision 13, case 1: "everything since" is not named exactly
+    event_ref=("snapshot", "id"),
     destructive=True,
     probe=("--dry-run",),
     exit_codes={

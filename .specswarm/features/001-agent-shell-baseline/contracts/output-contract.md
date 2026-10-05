@@ -173,6 +173,11 @@ event's arguments redacted (`Context.event_args`).
 - **Failure to write the event is swallowed.** The tool's result and exit code are unchanged (FR-11).
   With `--verbose`, a warning goes to stderr.
 - The event is written **after** the result, and it records the real exit code.
+- **Optional fields (feature 009, the session journal; changed in feature 009):** `t_ms` (the end, epoch
+  ms), `ppid`, `agent` (`TIMELIKE_AGENT`, when valid) and `ref`, the tool's pointer from its own result
+  data (`Tool(event_ref=(kind, key))`: `run` → `{"log": path}`, `snapshot` and `undo` →
+  `{"snapshot": id}`). A line without them is valid. The journal reads this file and the session's
+  `shell.jsonl` (feature 009's own record of `bash -c` / `bash -lc` commands); it writes neither.
 
 ## Never (rule 4)
 

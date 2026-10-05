@@ -91,6 +91,7 @@ TOOL = agentio.Tool(
         agentio.EXIT_TIMEOUT: "timeout: run's own limit fired, and the command's whole tree was stopped",
     },
     manifest_extra=lambda: _manifest(),
+    event_ref=("log", "log"),  # the session journal's pointer (feature 009)
 )
 
 

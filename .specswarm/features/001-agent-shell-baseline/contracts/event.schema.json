@@ -14,6 +14,10 @@
     "duration_ms": { "type": "integer", "minimum": 0 },
     "session": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$" },
     "ts": { "type": "string", "format": "date-time", "description": "Wall-clock time. Written to the log always: rule 11 governs tool OUTPUT, not the event log" },
-    "pid": { "type": "integer" }
+    "pid": { "type": "integer" },
+    "t_ms": { "type": "integer", "minimum": 0, "description": "The end, in epoch milliseconds (feature 009, the session journal's order). Optional; ts keeps its form" },
+    "ppid": { "type": "integer", "description": "The tool's parent process: links a tool to the shell command that ran it (feature 009). Optional" },
+    "agent": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$", "description": "TIMELIKE_AGENT, when set and valid (feature 009: entries separable by agent). Optional" },
+    "ref": { "type": "object", "additionalProperties": false, "properties": { "log": { "type": "string" }, "snapshot": { "type": "integer" } }, "description": "The tool's pointer from its own result data, one key naming its kind: {\"log\": path} (run) or {\"snapshot\": id} (snapshot, undo). Declared by Tool(event_ref=...) (feature 009). Optional" }
   }
 }

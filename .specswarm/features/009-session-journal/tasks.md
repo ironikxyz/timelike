@@ -19,7 +19,7 @@
 
 ## Phase 1: Foundational — the writers
 
-- [ ] T001 [US0] [US1] [US4] `tools/agentio/agentio.py`: the event's `agent`, `ppid`, `t_ms`, and `ref`
+- [X] T001 [US0] [US1] [US4] `tools/agentio/agentio.py`: the event's `agent`, `ppid`, `t_ms`, and `ref`
   from `Tool(event_ref=(kind, key))` (data-model § Tool event). Declare `event_ref` in `tools/bin/run`
   (`log`) and `tools/bin/snapshot` (`snapshot`, `id`, for both `snapshot` and `undo`). Update 001's
   `contracts/event.schema.json` (optional fields) and `contracts/output-contract.md` § Session event.
