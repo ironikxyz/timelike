@@ -110,3 +110,14 @@ Verification:
 - e2e host stand-in (advisory): journal files 16 cells — SC-1 4/4, SC-3 2/2, FR-14 2/2, SC-4 bash -c ok; not ok: every bash -lc style check (the stub runs -lc as -c: SC-2 ×4 including the -lc command inside the -c cells, SC-4 -lc) and the 2 type -a cells — image-only by design
 - start-up on the host, 20 runs each, every exit asserted 0: `journal --help` p50 66 / p95 67 ms; `journal --json` (the probe) p50 80 / p95 86 ms
 SCOPE: in (1 changed files)
+
+### T008: cycle-report.md § Cycle 1, implement step 10, .specswarm/metrics.json, the marker
+**Started:** 2026-10-05T08:54:50Z | **Completed:** 2026-10-05T08:55:41Z
+
+INHERITED: every task's record; step 10's output (byte-identical to 008's); the host-lane figures — from T007 (confidence: high)
+FLAGGED: step 10's output is cited as identical to 008 § Cycle 1's (a diff of the two runs) rather than pasted again — the same library, the same project, the same exclusions (confidence: medium)
+FLAGGED: every criterion `unconfirmed`; the stand-in results are reported beside the citations and change no mode; SC-4's citation names its condition (TIMELIKE_AGENT or a session per agent) (confidence: high)
+ASSUMED: `delegations: []` — the test writers were subagents (confidence: high)
+ABSENT: `demo_points_reached` (the mentor derives it); a lane result
+Verification: five citations, each `grep -cF` = 1 in the send; tallies from the installed blocks; metrics.json gains only the 009 entry
+SCOPE: in (1 changed files)
