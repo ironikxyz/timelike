@@ -56,3 +56,18 @@ ASSUMED: 001's spec.md is not modified: it is UNAUDITED at 11–13 with no crite
 ABSENT: a change to `confirm-envelope.schema.json` — the envelope itself is unchanged; only which tools may print it
 Verification: the schema parses as JSON; test_agentio.py (which validates manifests against it, the new edit-shaped one included) 72 passed. Host conformance over all 8 shipped tools (installed with the venv interpreter, scratchpad conform-all.sh): pass — undo with confirm_protocol true, the others false
 SCOPE: in (3 changed files)
+
+### T006: tools/bin/edit — three match levels, the file's conventions, atomic write, after-view, dry run, candidates
+**Started:** 2026-10-05T05:02:18Z | **Completed:** 2026-10-05T05:06:54Z
+
+INHERITED: `confirm_protocol=False` and the manifest's `dry_run` — from T001; C2's rule for that shape — from T002; the contract, research R2–R7 and data-model (confidence: high)
+FLAGGED: level 2 is a substring search over the file with endings as LF and trailing whitespace stripped, mapped back per line (so a fragment inside a line still matches); level 3 is whole lines only — chose that split because indentation tolerance means nothing mid-line (R2) (confidence: high)
+FLAGGED: a uniform base dedent is NOT tolerated (agent's lines at levels 0/1/0 against the file's 1/2/1): FR-3 asks for one consistent unit mapping per line level, and a base offset would be a wider, undeclared tolerance. Seen in a host smoke run of D6's shape: the refusal shows the region as the nearest candidate with difference "indentation", and the edit with the indentation as `view` shows it applies, CRLF and tabs kept (od -c). For the D6 demo: an agent that copies with its base indentation succeeds first time; one that dedents gets the candidate (confidence: medium)
+FLAGGED: `--old == --new` answers "no change" before uniqueness is checked — nothing is written either way; and the probe uses `PRETTY_NAME=` (the contract's `ID=` also occurs inside `VERSION_ID=`: found by the T004 delegate from the contract). R7 and the contract amended (confidence: high)
+FLAGGED: the dry-run diff is the body (`lines`), not a `data.diff` copy; an ending-only change is a verdict addition (`line endings: X → Y`), not a tag in the diff — contract amended before the delegates wrote assertions (confidence: high)
+FLAGGED: the owner is kept by fchown, and when that is not permitted the edit is refused (exit 1) rather than written with a changed owner (R5) (confidence: medium)
+ASSUMED: a BOM shows in the numbered lines as `view` shows it (checked: `view --text` on a BOM file prints the bytes EF BB BF before line 1's text) (confidence: high)
+ASSUMED: argv text reaches the file as the shell passed its bytes (`os.fsencode`, surrogateescape) (confidence: high)
+ABSENT: a hook to force a concurrent change in a test — the re-read-and-compare runs on every write but no unit forces the race; an extended-attribute or ACL copy (stdlib only, R5); several edits in one call (slice 0 scope)
+Verification: tests/unit/test_edit.py (T004's 57) all pass against this tool; 14 failed on the first run, settled as tool deviations from the contract (12: wording of four verdicts, line_ending at level 1, the endings note, the 16 MiB phrase, the undecodable-bytes note, the dry-run verb, the probe) or test errors (2: BOM display, probe value), each recorded under T004; host conformance over all 9 tools: pass (edit included); timings on the host: the probe 81–84 ms, a no-match over 20,000 lines 254 ms, a near-miss 151 ms; ruff, format and mypy (strict) clean
+SCOPE: in (1 changed files)

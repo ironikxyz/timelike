@@ -55,7 +55,7 @@ Conventions are as in 003–007:
 
 ## Phase 3: Implementation (US1–US4: one tool)
 
-- [ ] T006 [US1] [US2] [US3] [US4] `tools/bin/edit`:
+- [X] T006 [US1] [US2] [US3] [US4] `tools/bin/edit`:
   - reading and the refusals (R5);
   - the three levels (R2) and the file's conventions (R3);
   - the atomic write with the concurrent-change check (R5);

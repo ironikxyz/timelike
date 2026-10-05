@@ -23,7 +23,7 @@ edit FILE --old TEXT --new TEXT --dry-run   print the unified diff; write nothin
 | `dry_run` | `true` |
 | `reads_stdin` | `false` (rule 4: TEXT is an argument) |
 | `envelopes` | `[]` |
-| `probe` | `["/etc/os-release", "--old", "ID=", "--new", "ID=", "--dry-run"]` (no change; R7) |
+| `probe` | `["/etc/os-release", "--old", "PRETTY_NAME=", "--new", "PRETTY_NAME=", "--dry-run"]` (no change; R7) |
 | `exit_codes` | `0` edited, or nothing to do · `1` refused: binary, unwritable, too large, changed since read, owner cannot be kept · `2` usage · `3` no such file, no match, or more than one match |
 | extra | `levels: ["exact", "line endings", "indentation"]`, `context: 3`, `candidates: 3`, `candidate_floor: 0.5` |
 
@@ -51,7 +51,7 @@ confirm.
 
 ```
 edit: src/app.py [lines 41-43 of 121]
-verdict: edited lines 42-43 of 121 (matched ignoring line endings and indentation: 4 spaces = 1 tab)
+verdict: edited lines 42-43 of 121 (matched ignoring line endings and indentation (4 spaces = 1 tab))
  39      def run(self):
  40          x = self.load()
  41          if x:
@@ -72,7 +72,9 @@ verdict: edited lines 42-43 of 121 (matched ignoring line endings and indentatio
 - **Verdict additions**, appended with `; `:
   - `via symlink to <real path>`;
   - `hard link broken (N links)`;
-  - `N undecodable bytes kept`.
+  - `N undecodable bytes kept`;
+  - `line endings: N CRLF → N LF` (or the like), when the edit changes endings in the region (possible
+    only at level 1, where `--new` is inserted as given).
 - **JSON data:**
   - `path`, `abs_path`;
   - `level` (`exact` | `line_endings` | `indentation`), and `mapping` (`{"agent": "4 spaces", "file":
@@ -99,12 +101,15 @@ verdict: dry run: would edit lines 42-43 of 121 (matched exactly); nothing writt
  …
 ```
 
-- **The diff:** a unified diff (`difflib.unified_diff`, 3 lines of context, `lineterm=""`). Line endings
-  are not shown, except that a line whose only change is its ending ends with ` [CRLF→LF]`, and the like.
-- **JSON:** `dry_run: true`, `diff` (the lines), `sha256_before`, and `sha256_after: null`, along with the
-  edited outcome's fields except `changed` (false).
-- **Bound:** the diff is body output, cut by rule 3 at `--limit`. The omission line's full output is a
-  diff file in the session scratch dir, as `run` does.
+- **The diff:** a unified diff (`difflib.unified_diff` over the lines' text without their endings, 3
+  lines of context, `lineterm=""`, labels `a/FILE` and `b/FILE`). Line endings are not shown in the diff.
+  When the edit changes any line ending in the region, the verdict adds `line endings: N CRLF → N LF`
+  (or the like), so an ending-only change is never silent.
+- **JSON:** the diff is `lines` (the body; not repeated in `data`). `data` carries `dry_run: true`,
+  `sha256_before`, `sha256_after: null` and `changed: false`, with the edited outcome's other fields
+  (`level`, `mapping`, `start`, `end`, `total`, `match_start`, `match_end`, `line_ending`).
+- **Bound:** the diff is body output, cut by rule 3 at `--limit` by agentio, which saves the whole output
+  as an artefact in the session scratch dir and names it as the full output.
 
 ### More than one match (exit 3)
 

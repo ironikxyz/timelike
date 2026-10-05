@@ -180,7 +180,10 @@ The tolerance has to be exact, or "unique match" cannot be decided.
 
 ## R7 · Conformance probe
 
-- **Decision:** `probe = ("/etc/os-release", "--old", "ID=", "--new", "ID=", "--dry-run")`.
+- **Decision:** `probe = ("/etc/os-release", "--old", "PRETTY_NAME=", "--new", "PRETTY_NAME=", "--dry-run")`.
+  - **Corrected during T006:** the first choice, `ID=`, also occurs inside `VERSION_ID=`. The test
+    delegate found it from the contract. `--old == --new` now answers `no change` before uniqueness is
+    asked, since nothing is written either way, and the probe uses a key that occurs once.
   - It is read-only twice over: `--old` equals `--new`, so there is nothing to do (exit 0, `no change`).
     `--dry-run` writes nothing in any case.
   - It ends in one session event.
