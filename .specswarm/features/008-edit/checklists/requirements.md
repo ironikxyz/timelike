@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — **one remains, by instruction**: FR-12 (rule 9), plan's choice per the send; pause file `../bridge/dispatch/pause-06.md`
+- [x] No [NEEDS CLARIFICATION] markers remain — FR-12 (rule 9) was left open by instruction (pause file `../bridge/dispatch/pause-06.md`) and is now decided by discovery revision 13 (not confirmed)
 - [x] Requirements are testable and unambiguous (except FR-12)
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)

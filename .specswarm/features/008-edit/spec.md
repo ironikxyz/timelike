@@ -1,7 +1,7 @@
 ---
 parent_branch: master
 feature_number: "008"
-status: Paused (rule 9 seam: plan's choice, pause-06)
+status: In Progress
 created_at: 2026-10-04T20:25:19+00:00
 source_prompt: plan/.discover/prompts/06-edit.md
 source_send: bridge/sends/06-rev1-20261004-183704.md
@@ -30,9 +30,9 @@ bash-only). `edit` is the harness-independent write half of the loop (P1, P7):
 
 Slice 1 (not built here) accepts `view --anchors`'s `N:hhhhhh` and refuses edits that break a file's syntax.
 
-**One seam is not decided here, by instruction: rule 9** (FR-12, [NEEDS CLARIFICATION]). The send says the
-choice is plan's, and that a pause file is to name both readings without picking. It is written as
-`../bridge/dispatch/pause-06.md`. Everything else in this spec is decided.
+**Rule 9 was not decided here, by instruction** (send seam 1): the choice was plan's, so this instance
+wrote `../bridge/dispatch/pause-06.md` naming both readings. Plan answered with discovery revision 13:
+`edit` is not confirmed (FR-12). Every seam in this spec is now decided.
 
 ## User Scenarios
 
@@ -119,25 +119,34 @@ choice is plan's, and that a pause file is to name both readings without picking
   writes nothing. JSON carries `diff` (the lines) and the file's SHA-256, unchanged.
 
 ### Contract
-- **FR-10** `edit` follows the output contract: header, verdict, `--json`, exit codes 0, 1, 2, 3 (and 4 if
-  FR-12 so decides), and one session event per call.
+- **FR-10** `edit` follows the output contract: header, verdict, `--json`, exit codes 0, 1, 2, 3 (never
+  4: FR-12), and one session event per call.
 - **FR-11** Outcomes are verdicts on stdout (as 005 and 006): no match, several matches, a missing file.
   Usage errors go to stderr.
 
-### Rule 9 — NOT DECIDED (send seam 1; pause file `../bridge/dispatch/pause-06.md`)
-- **FR-12** [NEEDS CLARIFICATION: Is `edit` a "mutating" tool under rule 9 ("mutating without `--yes` exits
-  4 with a JSON envelope naming the plan and the confirm command")? Plan's choice, per the send. The two
-  readings:
-  - **(a) Mutating, rule 9 whole:** without `--yes`, `edit` exits 4 with the confirmation envelope (the
-    plan is the unified diff, and `confirm` is the same command plus `--yes`). Every edit then takes two
-    calls, or the agent learns to always pass `--yes`. Precedent: 005's `undo` (exit 4, then `--yes`).
-  - **(b) Not mutating in rule 9's sense:** an edit applies at once, and `--dry-run` (rule 8) is the look
-    before. That serves P1 (one call), and reads rule 9 narrowly, for example as "destructive or beyond
-    what the agent named", which is a contract-scope question.]
-
-  **What depends on it:** every slice-0 criterion's invocation (with or without `--yes`), the manifest's
-  `mutating` flag, conform's C-checks on confirmation, and the D6 demo's "on the first attempt". Nothing
-  is implemented until plan answers.
+### Rule 9 — decided by plan: not confirmed (discovery revision 13; pause-06 answered)
+- **FR-12** `edit` is **not confirmed** under rule 9. It declares `mutating: true` and
+  **`confirm_protocol: false`**: an edit applies in one call, never exits 4 with a confirmation envelope,
+  and does not accept `--yes`. Rule 8 still binds it, since it overwrites: `--dry-run` (FR-9) is the look
+  before.
+  - **The ruling:** discovery **revision 13** (plan `394c33e`), a clarification, answer (b) to pause-06's
+    question. Rule 9 binds a change whose scope the arguments do not name exactly, that touches another
+    agent's or session's work, or that cannot be reversed from what the tool shows. A change to a target
+    named exactly, applied whole or not at all, that shows what it changed, is not confirmed. `edit` is
+    that case: the agent names the file and the text (FR-3, FR-4), the write is atomic (FR-7), and the
+    after-view shows the edited region (FR-8).
+  - **Where the answer is:** `../bridge/feedback/batch-20261004-232148-rule9-scope-and-workspace-context-file.md`
+    § Resolution (Q1), delivered through `../bridge/dispatch/code-track.md` § Resume after pause-06. The
+    question was `../bridge/dispatch/pause-06.md`, written by this instance at 2026-10-04T20:25:38Z and
+    deleted by the mentor beside its answer.
+  - **What this cycle also builds, outside 008 (code-track § Resume after pause-06):** 001's
+    `agent-info.schema.json` gains `confirm_protocol` (restored, report 03 Appendix B); `agentio`
+    honours `--yes` only when `confirm_protocol` is true; `timelike-conform` adds a check that
+    `confirm_protocol: false` with an overwriting or removing tool requires `dry_run: true`; 001's
+    output contract gains rule 9's clarifying sentence. `undo` (005) stays confirmed (its scope is
+    "everything since"), so it declares `confirm_protocol: true`. All of it goes in the cycle report's
+    `changed_other_features`.
+  - **D6's "on the first attempt"** is the first call: no envelope comes between the agent and the edit.
 
 ## Success Criteria
 
@@ -168,7 +177,7 @@ under `bash -c` and `bash -lc`, with every byte-identical claim checked by a has
 
 | Point | Decision |
 |---|---|
-| Rule 9 | **Not decided: plan's** (FR-12, pause-06) |
+| Rule 9 | **Not confirmed**: `mutating: true`, `confirm_protocol: false`; `--dry-run` binds (FR-12, revision 13) |
 | Atomicity | Temp file beside, mode and owner kept, rename; hash-checked against a concurrent change (FR-7) |
 | Tolerance | Three levels, first that matches decides; uniqueness at that level (FR-3, FR-4) |
 | Candidates | Same-length windows by similarity, top 3, floor 0.5, with the difference named (FR-5) |
