@@ -69,7 +69,7 @@ Conventions are as in 003–007:
 
 ## Phase 4: Polish
 
-- [ ] T008 Host lane: lint (ruff, mypy, shellcheck), units with coverage (90%), `make test-host`,
+- [X] T008 Host lane: lint (ruff, mypy, shellcheck), units with coverage (90%), `make test-host`,
   `timelike-conform` over `tools/bin`, and start-up timings. Results in `decisions.md`.
 - [ ] T009 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
 

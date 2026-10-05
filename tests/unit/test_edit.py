@@ -813,3 +813,232 @@ def test_one_event_per_invocation(lab: Lab) -> None:
     for ev in evs:
         assert (ev["tool"], ev["session"]) == ("edit", SESSION)
         assert schema.errors(ev, event_schema) == []
+
+
+# ── internals, in process: the paths a subprocess cannot force (T008, coverage of tools/bin/edit) ─────
+
+
+def _edit_module() -> Any:
+    import importlib.machinery
+    import importlib.util
+
+    path = str(Path(__file__).resolve().parents[2] / "tools" / "bin" / "edit")
+    loader = importlib.machinery.SourceFileLoader("timelike_edit_under_test", path)
+    spec = importlib.util.spec_from_loader("timelike_edit_under_test", loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+EM = _edit_module()
+
+
+def _apply(raw: bytes, old: bytes, new: bytes) -> tuple[bytes, str]:
+    """The tool's own pipeline minus I/O: find one match, convert --new, splice (as edit() does)."""
+    lines = EM.split_lines(raw)
+    found, _ = EM.find(raw, lines, old)
+    assert len(found) == 1, found
+    m = found[0]
+    insert, _ = EM.convert_new(new, m, lines)
+    end = m.byte_end
+    if m.drop_last_newline and not new.endswith((b"\n", b"\r")):
+        last = lines[EM.line_of(lines, max(m.byte_start, m.byte_end - 1))]
+        end = last.start + len(last.content) + len(last.ending)
+    return raw[: m.byte_start] + insert + raw[end:], m.level
+
+
+def test_level_2_match_ending_mid_line_keeps_the_rest_of_that_line() -> None:
+    after, level = _apply(b"a = 1\r\nb = 2 + 3\r\n", b"a = 1\nb = 2", b"a = 9\nb = 8")
+    assert (after, level) == (b"a = 9\r\nb = 8 + 3\r\n", "line_endings")
+
+
+def test_level_2_old_ending_in_a_newline_takes_the_whole_ending() -> None:
+    after, level = _apply(b"x\r\ny  \r\nz\r\n", b"x\ny\n", b"X\nY\n")
+    assert (after, level) == (b"X\r\nY\r\nz\r\n", "line_endings")
+
+
+def test_level_3_old_with_trailing_newline_new_without_joins_nothing() -> None:
+    raw = b"\tif a:\n\t\tb()\nc()\n"
+    after, level = _apply(raw, b"    if a:\n        b()\n", b"    if a:\n        d()\n")
+    assert (after, level) == (b"\tif a:\n\t\td()\nc()\n", "indentation")
+    after, _ = _apply(raw, b"    if a:\n        b()\n", b"    if a:\n        d()")
+    assert after == b"\tif a:\n\t\td()c()\n"  # --new without the newline --old had: the ending goes too
+
+
+def test_a_file_with_no_line_ending_and_its_common_ending() -> None:
+    lines = EM.split_lines(b"only")
+    assert [(x.content, x.ending) for x in lines] == [(b"only", b"")]
+    assert EM.common_ending(lines) == b"\n"
+    assert EM.common_ending(EM.split_lines(b"a\r\nb\r\nc\n")) == b"\r\n"
+    assert EM.region_ending([], 0) == b"\n"
+    after, level = _apply(b"\tone", b"    one", b"    two\n    three")
+    assert (after, level) == (b"\ttwo\n\tthree", "indentation")
+
+
+@pytest.mark.parametrize(
+    ("pairs", "want"),
+    [
+        ([(b"    ", b"\t"), (b"        ", b"\t\t")], (("space", 4), ("tab", 1))),
+        ([(b"\t", b"    ")], (("tab", 1), ("space", 4))),
+        ([(b"  ", b"\t")], (("space", 2), ("tab", 1))),
+        ([(b"    ", b"\t"), (b"\t", b"\t")], None),  # the agent mixes its own units
+        ([(b"    ", b"\t"), (b"  ", b"  ")], None),  # the file mixes tabs and spaces across lines
+        ([(b" \t", b"\t ")], None),  # a mixed lead that differs
+        ([(b" \t", b" \t"), (b"    ", b"\t")], (("space", 4), ("tab", 1))),  # identical mixed lead skipped
+        ([(b"    ", b"")], None),  # indented against a file line at level 0
+        ([(b"", b"\t")], None),  # the agent dedented one line only
+        ([(b"   ", b"\t\t")], None),  # 3 spaces over 2 levels is no whole unit
+        ([(b"    ", b"    ")], None),  # identity: level 2's business
+        ([(b"", b"")], None),
+    ],
+)
+def test_infer_mapping(pairs: list[tuple[bytes, bytes]], want: Any) -> None:
+    assert EM.infer_mapping(pairs) == want
+
+
+def test_find_indentation_edge_cases() -> None:
+    lines = EM.split_lines(b"\ta\n\tb\n")
+    assert EM.find_indentation(lines, b"\n\n") == []  # nothing to anchor on
+    assert EM.find_indentation(lines, b"    a\n    b\n    c") == []  # longer than the file
+    assert EM.find_indentation(EM.split_lines(b"\tb\n\ta\n"), b"    a\n    b") == []  # runs off the end
+    assert EM.find_line_endings(lines, b"") == []
+
+
+def test_reindent_keeps_lines_not_in_the_agents_unit() -> None:
+    mapping = (("space", 4), ("tab", 1))
+    assert EM.reindent(b"x", mapping) == b"x"
+    assert EM.reindent(b"  x", mapping) == b"  x"  # less than one unit: kept as given
+    assert EM.reindent(b"      x", mapping) == b"\t  x"  # one unit and an alignment remainder
+    m = EM.Match("indentation", 0, 0)
+    with pytest.raises(ValueError, match="carries its mapping"):
+        EM.level_phrase(m)
+    assert EM.unit_phrase(("tab", 2)) == "2 tabs"
+
+
+def test_candidates_deadline_and_empty_file() -> None:
+    import time
+
+    assert EM.candidates([], b"x", time.monotonic() + 5) == ([], 0, False)
+    lines = EM.split_lines(b"".join(b"line %d\n" % i for i in range(3000)))
+    cands, searched, limited = EM.candidates(lines, b"line 1500x", time.monotonic() - 1)
+    assert (searched, limited) == (0, True)
+    out = EM.no_match("f", cands, searched, limited, 3000, ["exact"])
+    assert out.verdict.endswith("; candidates searched in lines 1-0 of 3000 (time limit)")
+
+
+def test_candidate_differences() -> None:
+    win = EM.split_lines(b"a\r\nb\r\n")
+    assert EM.difference(win, [b"a", b"b"]) == "line endings"
+    assert EM.difference(EM.split_lines(b"a  \nb\n"), [b"a", b"b"]) == "trailing whitespace"
+    assert EM.difference(EM.split_lines(b"\ta\n"), [b"    a"]) == "indentation"
+    assert EM.difference(EM.split_lines(b"a\nb\n"), [b"a"]) == "length differs"
+
+
+def test_endings_note_and_undecodable_count() -> None:
+    assert EM._endings_note(b"", b"x\ny", b"\r\n") == "line endings: CRLF → 1 LF"
+    assert EM._endings_note(b"a\r\n", b"b\n", b"\r\n") == "line endings: 1 CRLF → 1 LF"
+    assert EM._endings_note(b"", b"x\r\n", b"\r\n") is None
+    assert EM.undecodable(b"ok") == 0
+    assert EM.undecodable(b"a\xffb\xfe\xfd") == 3
+    assert EM.human(3 * 1024**3) == "3.0 GiB"
+
+
+def _stat_of(p: Path) -> Any:
+    return os.stat(p)
+
+
+def test_write_atomic_refuses_a_concurrent_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p = tmp_path / "f.txt"
+    p.write_bytes(b"one\n")
+    st = _stat_of(p)
+    monkeypatch.setattr(EM, "_reread", lambda real: b"someone else wrote this\n")
+    with pytest.raises(EM.Outcome) as e:
+        EM.write_atomic(str(p), str(p), st, b"one\n", b"two\n")
+    assert e.value.code == 1 and "changed while editing" in e.value.verdict
+    assert p.read_bytes() == b"one\n"
+    assert [x.name for x in tmp_path.iterdir()] == ["f.txt"]  # the temp file is gone
+
+
+def test_write_atomic_refuses_when_the_owner_cannot_be_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno as errno_mod
+
+    p = tmp_path / "f.txt"
+    p.write_bytes(b"one\n")
+    st = os.stat_result((*tuple(_stat_of(p))[:4], 4242, *tuple(_stat_of(p))[5:]))  # another uid
+
+    def deny(fd: int, uid: int, gid: int) -> None:
+        raise PermissionError(errno_mod.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(EM.os, "fchown", deny)
+    with pytest.raises(EM.Outcome) as e:
+        EM.write_atomic(str(p), str(p), st, b"one\n", b"two\n")
+    assert e.value.code == 1 and "cannot keep" in e.value.verdict and "uid 4242" in e.value.verdict
+    assert p.read_bytes() == b"one\n"
+    assert [x.name for x in tmp_path.iterdir()] == ["f.txt"]
+
+    def other_error(fd: int, uid: int, gid: int) -> None:
+        raise OSError(errno_mod.EIO, "I/O error")
+
+    monkeypatch.setattr(EM.os, "fchown", other_error)
+    with pytest.raises(EM.Outcome) as e:
+        EM.write_atomic(str(p), str(p), st, b"one\n", b"two\n")
+    assert "cannot write" in e.value.verdict
+    assert p.read_bytes() == b"one\n"
+
+
+def test_write_atomic_refuses_when_no_temp_file_can_be_made(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    p = tmp_path / "f.txt"
+    p.write_bytes(b"one\n")
+
+    def no_temp(**kw: Any) -> Any:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(EM.tempfile, "mkstemp", no_temp)
+    with pytest.raises(EM.Outcome) as e:
+        EM.write_atomic(str(p), str(p), _stat_of(p), b"one\n", b"two\n")
+    assert "cannot write beside" in e.value.verdict and p.read_bytes() == b"one\n"
+
+
+def test_write_atomic_survives_a_directory_it_cannot_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    p = tmp_path / "f.txt"
+    p.write_bytes(b"one\n")
+    real_open = os.open
+
+    def no_dir_open(path: Any, flags: int, *a: Any) -> int:
+        if str(path) == str(tmp_path):
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, flags, *a)
+
+    monkeypatch.setattr(EM.os, "open", no_dir_open)
+    EM.write_atomic(str(p), str(p), _stat_of(p), b"one\n", b"two\n")
+    assert p.read_bytes() == b"two\n"  # the rename happened; only the directory sync was skipped
+
+
+def test_read_target_refusals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
+    with pytest.raises(EM.Outcome) as e:
+        EM.read_target(str(fifo))
+    assert "not a regular file" in e.value.verdict
+    monkeypatch.setattr(
+        EM.os, "stat", lambda p: (_ for _ in ()).throw(PermissionError(13, "Permission denied"))
+    )
+    with pytest.raises(EM.Outcome) as e:
+        EM.read_target(str(tmp_path / "x"))
+    assert e.value.code == 1 and "cannot read" in e.value.verdict
+
+
+def test_binary_type_falls_back_when_view_is_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p = tmp_path / "b.bin"
+    p.write_bytes(b"\x7fELF\x00\x01")
+    monkeypatch.setattr(EM, "_view", lambda: None)
+    with pytest.raises(EM.Outcome) as e:
+        EM.read_target(str(p))
+    assert e.value.verdict.startswith("binary file: data, ")

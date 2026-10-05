@@ -104,3 +104,19 @@ ASSUMED: the README's examples are the tool's real phrasing (checked against the
 ABSENT: a Status bullet for 006/007/008 — the Status section lists features 001–004 only; bringing it up to date is not this task's
 Verification: ruff and format clean; mypy (project config, now 22 files with edit) clean; shellcheck over the whole SHELLCHECK_FILES list clean, every listed file present
 SCOPE: in (9 changed files)
+
+### T008: host lane — lint, units with coverage, make test-host, conformance, start-up; edit's internals tested in process
+**Started:** 2026-10-05T05:44:49Z | **Completed:** 2026-10-05T05:58:07Z
+
+INHERITED: every earlier task's files; the coverage rc of reboot.md with 007's `tl/` path (confidence: high)
+FLAGGED: tools/bin/edit was at 85% in the first traced run (the merge bar is 90% per language, which the total met at 94%). 27 in-process tests were added to tests/unit/test_edit.py for paths a subprocess cannot force — a concurrent change (`_reread` patched), an owner that cannot be kept (`fchown` raising EPERM, and another errno), no temp file possible, a directory that cannot be synced, a FIFO, an unreadable stat, view absent for the binary type, the candidate deadline (a deadline already past), `infer_mapping`'s twelve cases, level 2 ending mid-line and on a newline, level 3 with and without --new's final newline, a file with no line ending — and for the tool's own correctness, not the figure: all passed first time, so no tool change (confidence: high)
+FLAGGED: T007's SCOPE line says "9 changed files": its start was recorded at e3deffc, before T005's commit, so its range included T005's six e2e files. T007 itself changed pyproject.toml, Makefile and README.md (`git diff --name-only 38d5b77 a5d2b0e`); all in scope either way. The record is left as written (append-only) and corrected here (confidence: high)
+ASSUMED: the host stand-in run of the e2e files (T005) is advisory evidence for the files' logic only, never for the image (confidence: high)
+ABSENT: the Docker lane (make test, make scan) — no daemon here; the mentor's lane after the batch
+Verification:
+- units under coverage (venv Python 3.12.3, pytest 8.4.2): 1405 passed, 1 skipped, 524 s; coverage line and branch: TOTAL 95%; tools/bin/edit 96%, agentio 94%, timelike-conform 93%, snapshot 92%
+- make test-host: passed (units 1406 passed untraced; files 60/60; hook logic 29/29)
+- lint: ruff 0.16.7 check and format (65 files) clean; mypy 2.4.0 strict over the project's 22 files clean; shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (50 files, every one present) clean
+- conformance on the host (all 9 tools installed with the venv interpreter): pass, edit included
+- start-up on the host, 20 runs each, every exit asserted 0: `edit --help` p50 79 / p95 82 ms; the probe (`--dry-run`, no change) p50 79 / p95 81 ms; budget < 100 ms p95
+SCOPE: in (1 changed files)
