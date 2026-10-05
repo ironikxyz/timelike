@@ -24,7 +24,7 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria — FR-12 waits for plan
+- [x] All functional requirements have clear acceptance criteria — FR-12 decided by discovery revision 13 (not confirmed); checked by the contract e2e file (manifest: mutating true, confirm_protocol false, dry_run true; --yes is exit 2), tasks T005
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
