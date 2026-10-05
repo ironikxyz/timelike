@@ -47,7 +47,7 @@
   - unreadable lines and records;
   - stdin only with `--ledger -`;
   - the manifest.
-- [ ] T004 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`, with the test's own
+- [X] T004 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`, with the test's own
   `TIMELIKE_SESSION` and `TIMELIKE_AGENT`:
   - `tests/e2e/journal-lists-every-tool-invocation-in-order-with-pointer.bats` (SC-1)
   - `tests/e2e/journal-shell-commands-outside-tools-with-exit-codes.bats` (SC-2)

@@ -71,3 +71,15 @@ ASSUMED: left unpinned by the delegate, deliberately: a nested child's JSON styl
 ABSENT: the `password` type (no rule in redaction.toml carries it), a PEM in a command line, clock ties, pid reuse — named by the delegate as not tested
 Verification: 43 passed; ruff and format clean
 SCOPE: in (1 changed files)
+
+### T004: e2e (delegated) — SC-1 to SC-4 and the name and manifest, 16 cells; dry-run on the host stand-in
+**Started:** delegated,_written_after_b420e1d_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-05T08:34:56Z
+
+INHERITED: the contract and the real writers; helpers.bash; 008's files as the model (confidence: high)
+FLAGGED: every cell has its own session (`j<N>-<run id>-<check>-<style>`, the run id from the file's container_tmpdir) and first checks it has no records — no cell reads another's, the lesson of lane batch-a (confidence: high)
+FLAGGED: SC-4's overlap is made, not hoped for: a runner-side gate puts a2's s1 work inside a1's, and the overlap is asserted (confidence: high)
+FLAGGED: SC-3 uses 30 invocations (the spec's SC-3), and the earlier tail is checked field by field against the `more:` command's own output (confidence: high)
+ASSUMED: an entry without an agent may carry `agent: null` in JSON; FR-10's `-` is the text display (confidence: medium)
+ABSENT: tty and pty cells (journal is a reader for pipes and terminals alike; the criteria name no terminal mode)
+Verification: shellcheck -x clean over the five files. Host stand-in (advisory): as committed, only the manifest cells pass — the host has no /etc/timelike/redaction.toml (the journal withholds every command, failing closed), no hook (no shell entries) and the stand-in's own PATH (type -a). In a scratch copy whose helpers.bash supplied the rules file, the hook and the trap file: SC-1 4/4, SC-3 2/2, SC-4 bash -c, the manifest 2/2 pass; what remained failing was only the `bash -lc` style (the stub runs -lc as -c) and the `type -a` path — image-only by design. Nothing of the dry runs was left in /tmp
+SCOPE: in (5 changed files)
