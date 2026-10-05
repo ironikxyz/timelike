@@ -94,3 +94,13 @@ ASSUMED: the delegate's settlements are kept: a one-line verdict in either form,
 ABSENT: tty and pty cells — edit is a non-interactive file tool and the criteria name no terminal mode; the contract's rule-1 JSON default under a pipe is what the notty cells exercise
 Verification: shellcheck -x clean over the six files; 28 @tests; host stand-in 26/28 as above; no test directory left under /tmp after the run
 SCOPE: in (6 changed files)
+
+### T007: pyproject (ruff, mypy lists), Makefile (shellcheck list), README (an edit section)
+**Started:** 2026-10-05T05:07:23Z | **Completed:** 2026-10-05T05:44:37Z
+
+INHERITED: tools/bin/edit — from T006; the six e2e files — from T005 (confidence: high)
+FLAGGED: committed after T005 rather than with T006, so the Makefile never names a file the tree lacks (confidence: high)
+ASSUMED: the README's examples are the tool's real phrasing (checked against the host runs in T006: "edited lines 3-6 of 8 (matched ignoring line endings and indentation (4 spaces = 1 tab))") (confidence: high)
+ABSENT: a Status bullet for 006/007/008 — the Status section lists features 001–004 only; bringing it up to date is not this task's
+Verification: ruff and format clean; mypy (project config, now 22 files with edit) clean; shellcheck over the whole SHELLCHECK_FILES list clean, every listed file present
+SCOPE: in (9 changed files)

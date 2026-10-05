@@ -64,7 +64,7 @@ Conventions are as in 003–007:
   - the candidates (R4).
 
   Output per `contracts/edit-cli.md`.
-- [ ] T007 `pyproject.toml` (the mypy and ruff lists), `Makefile` (`SHELLCHECK_FILES` gains the e2e files),
+- [X] T007 `pyproject.toml` (the mypy and ruff lists), `Makefile` (`SHELLCHECK_FILES` gains the e2e files),
   and `README.md` (an `edit` section).
 
 ## Phase 4: Polish
