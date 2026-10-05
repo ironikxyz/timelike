@@ -22,9 +22,7 @@ Read this first after a context clear. It is a snapshot. The artifacts it points
    shell record (EXIT trap from 001's hook, `/etc/timelike/journal-exit.bash`, COPY after the last RUN).
 6. `010-services-interactive` — 09 s1 **paused** after T003 (`ac9c55f`): `services` built; T001/T002
    (delegated tests) uncommitted in the tree; T004–T006 not started. Resume per pause-09's answer.
-7. Not started: 09 s1 (`010-services-interactive`: its seam 1 is ANSWERED by
-   revision 13 — start/stop-own not confirmed, stop-other/--all confirmed; do not pause), 10 s1
-   (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
+7. Not started: 10 s1 (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
 
 **`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
 Resume section). Unpushed, not cleared.
