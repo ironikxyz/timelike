@@ -59,3 +59,15 @@ Host observations, not defects:
 - A fake token of a repeated pattern (low entropy) is not redacted: the gitleaks rule's entropy floor excludes it, as for `run`'s redaction (feature 003); a random one is ([REDACTED:token], smoke run).
 Verification: tests/unit/test_journal.py (T003's 43) all pass; 40 passed on the first run, 3 settled (1 tool fix: JSON lines undecorated, per the contract; 2 test errors: rule 2's uncut ending, rule 3's section label before the cut); a host smoke run with real `bash -c` / `bash -lc` and the hook: collapse, nesting, the tail's cut, `more:`, the artefact, the agent filter; mypy strict and ruff clean; host conformance: 10 tools pass
 SCOPE: in (1 changed files)
+
+### T003: tests/unit/test_journal.py (delegated, from the contract): 43 cases; 3 first-run failures settled
+**Started:** delegated,_written_after_b420e1d_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-05T06:24:27Z
+
+INHERITED: the contract, data-model and research; the real writers (T001's event fields, T002's trap) for fixtures (confidence: high)
+FLAGGED: fixtures by running the real tools and real `bash -c` / `bash -lc` with the hook; inside shells a tool is reached through a two-line `sh` shim that `exec`s the repository's tool, so the pid the shell forked is the tool's and its event's ppid is the shell's pid, as in the image (confidence: high)
+FLAGGED: three contract inconsistencies the delegate found, settled in the contract and spec: an unreadable events/shell record is exit 0 and named (the refusal table over the manifest's wording); FR-7's `start_ms` is `start_us` (the record's real field); verdict counts are of the entries shown (confidence: high)
+FLAGGED: two of its assertions were wrong against 001's contract and were corrected here, not in the tool: uncut text ends on its last entry (rule 2, revision 6), and a cut opens with rule 3's section label (confidence: high)
+ASSUMED: left unpinned by the delegate, deliberately: a nested child's JSON style, an agentless entry's agent value, the scope when a session holds fewer entries than the tail (confidence: medium)
+ABSENT: the `password` type (no rule in redaction.toml carries it), a PEM in a command line, clock ties, pid reuse — named by the delegate as not tested
+Verification: 43 passed; ruff and format clean
+SCOPE: in (1 changed files)

@@ -37,7 +37,7 @@
 
 ## Phase 2: Tests first (from the contract; delegated)
 
-- [ ] T003 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_journal.py`. Fixtures come from running
+- [X] T003 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_journal.py`. Fixtures come from running
   the real tools and `bash -c` with the hook under a temporary scratch root (P005). Cover:
   - order and linking (collapse, nesting);
   - the tail and its cut;
