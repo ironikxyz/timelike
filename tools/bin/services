@@ -1,0 +1,872 @@
+#!/opt/timelike/python/bin/python3 -I
+"""services — start the agent's own long-running processes, know when they are ready, stop them whole (P2).
+
+`services start NAME --port N -- CMD…` returns once 127.0.0.1:N accepts connections, or once the service
+has died (with its last log lines), or at its time limit (stopped, unless --keep). `services stop NAME`
+ends every process of the service's tree and checks that none remains. `services list` shows state, port
+and uptime, and marks the dead; `services logs NAME` the log's tail.
+
+No daemon: a file registry in the session scratch records what was started (rule 10). A service's tree is
+found by an inherited marker (TIMELIKE_SERVICE=<session>/<name>/<instance>), by the processes holding its
+log for writing, and by its process group, so a process that re-parents or calls setsid is still found
+(research R1). The stop sweep is run's (feature 003), loaded from the file beside this one.
+
+Rule 9 (discovery revision 13): `start` and `stop` of this session's service are not confirmed (`stop`
+has --dry-run, and its verdict names the command that starts the service again); `stop --session S`
+(another session's) and `stop --all` are, with --yes.
+
+Design: .specswarm/features/010-services-interactive/ (spec, research R1-R8, data-model.md,
+contracts/services-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import secrets
+import shlex
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+from collections.abc import Iterable
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+import agentio
+
+MARKER = "TIMELIKE_SERVICE"
+READY_TIMEOUT_S = 60.0
+LOG_TAIL = 20
+LOGS_DEFAULT = 50
+POLL_S = 0.05
+ALIVE_SETTLE_S = 0.5
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+TOOL = agentio.Tool(
+    name="services",
+    target="session",
+    summary="start, list, read and stop your long-running processes; start returns when ready or dead",
+    usage=[
+        "services start NAME --port N -- CMD ARG…  # returns when 127.0.0.1:N accepts, or it died",
+        "services start NAME --ready-log REGEX -- CMD  # ready when a log line matches",
+        "services list                             # state, port, uptime; died ones marked",
+        "services logs NAME [-n N]                 # the log's last lines",
+        "services stop NAME [--dry-run]            # every process of its tree; checks none remains",
+        "services stop NAME --session S --yes      # another session's service (confirmed)",
+        "services stop --all --yes                 # every service of this session (confirmed)",
+        "not ready within --timeout (60 s): exit 124 and stopped, unless --keep",
+    ],
+    mutating=True,
+    confirm_protocol=True,
+    destructive=True,
+    takes_command=True,
+    probe=("list",),
+    exit_codes={
+        agentio.EXIT_OK: "ok",
+        agentio.EXIT_FAILURE: "died, refused, or processes survived a stop",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such service",
+        agentio.EXIT_CONFIRM: "confirmation required: rerun with --yes",
+        agentio.EXIT_TIMEOUT: "not ready in time",
+    },
+    manifest_extra=lambda: {
+        "ready_timeout_s": READY_TIMEOUT_S,
+        "log_tail": LOG_TAIL,
+        "registry": "<scratch>/<session>/services/registry.json",
+        "marker": MARKER,
+    },
+    event_ref=("log", "log"),
+)
+
+
+class Outcome(Exception):
+    def __init__(
+        self,
+        code: int,
+        target: str,
+        scope: str,
+        verdict: str,
+        lines: list[str] | None = None,
+        data: dict[str, Any] | None = None,
+        remedy: str | None = None,
+    ) -> None:
+        super().__init__(verdict)
+        self.code, self.target, self.scope, self.verdict = code, target, scope, verdict
+        self.lines, self.data, self.remedy = list(lines or []), dict(data or {}), remedy
+
+    def result(self) -> agentio.Result:
+        lines = [*self.lines, f"do instead: {self.remedy}"] if self.remedy else self.lines
+        data = {**self.data, "remedy": self.remedy} if self.remedy else self.data
+        return agentio.Result(self.target, self.scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+# ── run's process helpers, from the file beside this one (research R2) ─────────────────────────
+
+
+def _run() -> ModuleType:
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "run")
+    try:
+        loader = importlib.machinery.SourceFileLoader("timelike_run", path)
+        spec = importlib.util.spec_from_loader("timelike_run", loader)
+        if spec is None:
+            raise ImportError(f"cannot load {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["timelike_run"] = module
+        loader.exec_module(module)
+    except (OSError, ImportError, SyntaxError) as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, f"cannot load run's process helpers from {path}: {e}", "reinstall the tools"
+        ) from None
+    return module
+
+
+# ── the registry (research R5) ─────────────────────────────────────────────────────────────────
+
+
+def svc_dir(root: Path, session: str) -> Path:
+    return root / session / "services"
+
+
+class Registry:
+    """One session's registry.json, read-modify-written under flock, temp and rename."""
+
+    def __init__(self, root: Path, session: str) -> None:
+        self.dir = svc_dir(root, session)
+        self.path = self.dir / "registry.json"
+        self.session = session
+
+    def read(self) -> dict[str, dict[str, Any]]:
+        try:
+            doc = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return {}
+        entries = doc.get("services") if isinstance(doc, dict) else None
+        return {k: v for k, v in (entries or {}).items() if isinstance(v, dict)}
+
+    @contextlib.contextmanager
+    def locked(self) -> Any:
+        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd = os.open(self.dir / "registry.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
+
+    def write(self, entries: dict[str, dict[str, Any]]) -> None:
+        tmp = self.dir / f".registry.{os.getpid()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"v": 1, "services": entries}, f, indent=1, sort_keys=True)
+        os.replace(tmp, self.path)
+
+    def update(self, name: str, entry: dict[str, Any] | None) -> None:
+        with self.locked():
+            entries = self.read()
+            if entry is None:
+                entries.pop(name, None)
+            else:
+                entries[name] = entry
+            self.write(entries)
+
+
+def sessions(root: Path) -> list[str]:
+    try:
+        return sorted(d.name for d in os.scandir(root) if d.is_dir() and _NAME_RE.match(d.name))
+    except OSError:
+        return []
+
+
+# ── processes (research R1, R2) ────────────────────────────────────────────────────────────────
+
+
+def _stat(pid: int) -> tuple[str, int] | None:
+    """(state, pgid) from /proc/<pid>/stat."""
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(errors="replace")
+    except OSError:
+        return None
+    right = raw.rfind(")")
+    fields = raw[right + 2 :].split()
+    try:
+        return fields[0], int(fields[2])
+    except (IndexError, ValueError):
+        return None
+
+
+def markers() -> dict[int, str]:
+    """Every process the caller can read whose environment carries the marker: pid → its value."""
+    found: dict[int, str] = {}
+    prefix = MARKER.encode() + b"="
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/environ", "rb") as f:
+                env = f.read()
+        except OSError:
+            continue
+        for item in env.split(b"\0"):
+            if item.startswith(prefix):
+                found[int(name)] = item[len(prefix) :].decode(errors="replace")
+                break
+    return found
+
+
+def members(entry: dict[str, Any], run: ModuleType, marked: dict[int, str] | None = None) -> dict[int, str]:
+    """The service's live tree: marker ∪ log writers ∪ process group, minus this process and zombies."""
+    value = f"{entry.get('session')}/{entry.get('name')}/{entry.get('instance')}"
+    marked = markers() if marked is None else marked
+    pids = {p for p, v in marked.items() if v == value}
+    log = entry.get("log")
+    if isinstance(log, str):
+        pids |= run.log_writers(Path(log))
+    pgid = entry.get("pgid")
+    table = run.proc_table()
+    if isinstance(pgid, int) and pgid > 1:
+        for pid in table:
+            st = _stat(pid)
+            if st is not None and st[1] == pgid:
+                pids.add(pid)
+    pids.discard(os.getpid())
+    out: dict[int, str] = {}
+    for pid in pids:
+        row = table.get(pid)
+        if row is not None and row[1] != "Z":
+            out[pid] = row[2]
+    return out
+
+
+def stop_tree(entry: dict[str, Any], run: ModuleType) -> list[tuple[int, str]]:
+    """run's sweep (003 R4) over this member set: TERM, grace, freeze and KILL, re-scan."""
+
+    def live() -> dict[int, str]:
+        run.reap()
+        return members(entry, run)
+
+    run.signal_all(live(), signal.SIGTERM)
+    deadline = time.monotonic() + run.TERM_GRACE_S
+    while time.monotonic() < deadline:
+        if not live():
+            return []
+        time.sleep(run.POLL_S)
+    frozen: set[int] = set()
+    for _ in range(run.FREEZE_ROUNDS):
+        new = set(live()) - frozen
+        if not new:
+            break
+        run.signal_all(new, signal.SIGSTOP)
+        frozen |= new
+    run.signal_all(frozen, signal.SIGKILL)
+    run.signal_all(frozen, signal.SIGCONT)
+    deadline = time.monotonic() + run.KILL_WINDOW_S
+    left = live()
+    while left and time.monotonic() < deadline:
+        run.signal_all(left, signal.SIGKILL)
+        run.signal_all(left, signal.SIGCONT)
+        time.sleep(run.POLL_S)
+        left = live()
+    return sorted(left.items())
+
+
+# ── ports (research R3, R4) ────────────────────────────────────────────────────────────────────
+
+
+def accepts(port: int) -> bool:
+    for host in ("127.0.0.1", "::1"):
+        try:
+            with socket.create_connection((host, port), timeout=0.2):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def listeners(port: int) -> set[int]:
+    """Socket inodes listening on the port (state 0A), from /proc/net/tcp and tcp6."""
+    inodes: set[int] = set()
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            rows = Path(table).read_text().splitlines()[1:]
+        except OSError:
+            continue
+        for row in rows:
+            f = row.split()
+            if len(f) > 9 and f[3] == "0A" and int(f[1].rsplit(":", 1)[1], 16) == port:
+                inodes.add(int(f[9]))
+    return inodes
+
+
+def socket_owner(inodes: set[int]) -> tuple[int, str] | None:
+    wanted = {f"socket:[{i}]" for i in inodes}
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            fds = os.listdir(f"/proc/{name}/fd")
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                if os.readlink(f"/proc/{name}/fd/{fd}") in wanted:
+                    raw = Path(f"/proc/{name}/cmdline").read_bytes()
+                    return int(name), " ".join(x.decode(errors="replace") for x in raw.split(b"\0") if x)
+            except OSError:
+                continue
+    return None
+
+
+# ── logs ───────────────────────────────────────────────────────────────────────────────────────
+
+
+def tail(log: Path, n: int) -> tuple[list[str], int]:
+    """The last n lines of the log, and the total line count."""
+    try:
+        text = log.read_bytes().decode("utf-8", "replace")
+    except OSError:
+        return [], 0
+    lines = text.splitlines()
+    return lines[-n:] if n else lines, len(lines)
+
+
+class Redactor:
+    def __init__(self) -> None:
+        self.rules: agentio.RuleSet | None = None
+        self.why: str | None = None
+        try:
+            self.rules = agentio.load_redaction_rules(agentio.redaction_rules_path())
+        except agentio.RulesUnavailable as e:
+            self.why = str(e)
+
+    def lines(self, lines: Iterable[str]) -> list[str]:
+        if self.rules is None:
+            return ["[log lines withheld: redaction rules unavailable]"]
+        return [agentio.redact_text(x, self.rules)[0] for x in lines]
+
+
+# ── the command ────────────────────────────────────────────────────────────────────────────────
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("action", nargs="?", metavar="start|stop|list|logs")
+    p.add_argument("name", nargs="?", metavar="NAME")
+    p.add_argument("--port", type=int, metavar="N", help="start: ready when 127.0.0.1:N accepts")
+    p.add_argument(
+        "--ready-log", dest="ready_log", metavar="REGEX", help="start: ready when a log line matches"
+    )
+    p.add_argument(
+        "--timeout", type=float, metavar="S", help=f"start: readiness limit (default {READY_TIMEOUT_S:g} s)"
+    )
+    p.add_argument("--keep", action="store_true", help="start: leave it running when not ready in time")
+    p.add_argument("--cwd", metavar="DIR", help="start: working directory")
+    p.add_argument("--session", metavar="S", help="stop/logs: another session's service")
+    p.add_argument("--all", action="store_true", help="stop: every service of this session")
+    p.add_argument("--all-sessions", dest="all_sessions", action="store_true", help="list: every session")
+    p.add_argument("-n", dest="n", type=int, metavar="N", help=f"logs: last N lines (default {LOGS_DEFAULT})")
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    action = args.action
+    if action not in ("start", "stop", "list", "logs"):
+        raise agentio.UsageError(
+            f"unknown action {action!r}" if action else "services needs an action",
+            "services start NAME --port N -- CMD | services list | services logs NAME | services stop NAME",
+        )
+    if action != "start" and args.command:
+        raise agentio.UsageError(f"`--` and a command belong to start, not {action}", "services --help")
+    if args.name is not None and not _NAME_RE.match(args.name):
+        raise agentio.UsageError(
+            f"{args.name!r} is not a service name", "1-64 characters from [A-Za-z0-9._-]"
+        )
+    if args.session is not None and not _NAME_RE.match(args.session):
+        raise agentio.UsageError(
+            f"--session {args.session!r} is not a session id", "see services list --all-sessions"
+        )
+    root = agentio.scratch_root()
+    try:
+        if action == "start":
+            return start(args, ctx, root)
+        if action == "stop":
+            return stop(args, ctx, root)
+        if action == "list":
+            return listing(args, ctx, root)
+        return logs(args, ctx, root)
+    except Outcome as o:
+        return o.result()
+
+
+# ── start (FR-1 to FR-4) ───────────────────────────────────────────────────────────────────────
+
+
+def holder(port: int, root: Path, run: ModuleType, marked: dict[int, str]) -> dict[str, Any] | None:
+    for s in sessions(root):
+        for name, entry in Registry(root, s).read().items():
+            if entry.get("port") == port:
+                live = members(entry, run, marked)
+                if live:
+                    return {"name": name, "session": s, "pid": entry.get("pid") or min(live)}
+    inodes = listeners(port)
+    if inodes or accepts(port):
+        owner = socket_owner(inodes) if inodes else None
+        return {"pid": owner[0], "command": owner[1]} if owner else {"pid": None, "command": None}
+    return None
+
+
+def start(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.Result:
+    name, command = args.name, list(args.command)
+    if not name or not command:
+        raise agentio.UsageError("start needs NAME and `-- CMD`", "services start NAME --port N -- CMD ARG…")
+    if args.port is not None and not 0 < args.port < 65536:
+        raise agentio.UsageError(f"--port {args.port} is not a port", "a number from 1 to 65535")
+    pattern = None
+    if args.ready_log is not None:
+        try:
+            pattern = re.compile(args.ready_log)
+        except re.error as e:
+            raise agentio.UsageError(
+                f"--ready-log is not a regular expression: {e}", "quote it for the shell"
+            ) from None
+    limit = READY_TIMEOUT_S if args.timeout is None else args.timeout
+    if limit <= 0:
+        raise agentio.UsageError(f"--timeout {limit:g} must be above 0", "seconds, e.g. --timeout 30")
+    session = ctx.session
+    run = _run()
+    reg = Registry(root, session)
+    marked = markers()
+    old = reg.read().get(name)
+    if old is not None:
+        live = members(old, run, marked)
+        if live:
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                name,
+                "refused",
+                f"{name} is already running in session {session} (pid {old.get('pid') or min(live)}); "
+                "stop it first or use another name",
+                data={"name": name, "session": session, "pid": old.get("pid")},
+                remedy=shlex.join(["services", "stop", name]),
+            )
+    if args.port is not None:
+        held = holder(args.port, root, run, marked)
+        if held is not None:
+            if "name" in held:
+                who = f"service {held['name']} in session {held['session']}, pid {held['pid']}"
+            elif held["pid"] is not None:
+                who = f"pid {held['pid']} ({held['command']})"
+            else:
+                who = "a process the agent cannot see"
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                name,
+                "refused",
+                f"port {args.port} is held by {who}; nothing started",
+                data={"name": name, "session": session, "port": args.port, "holder": held},
+            )
+    exe = command[0]
+    if os.sep not in exe and shutil.which(exe) is None:
+        raise Outcome(agentio.EXIT_FAILURE, name, "refused", f"cannot start {name}: {exe} not found")
+    cwd = args.cwd or os.getcwd()
+    instance = secrets.token_hex(4)
+    reg.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    log = reg.dir / f"{name}.log"
+    fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC, 0o600)
+    env = dict(os.environ)
+    env[MARKER] = f"{session}/{name}/{instance}"
+    started = time.time()
+    try:
+        proc = subprocess.Popen(  # starting the agent's service is the tool's purpose
+            command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=fd, stderr=fd, start_new_session=True
+        )
+    except FileNotFoundError:
+        raise Outcome(
+            agentio.EXIT_FAILURE, name, "refused", f"cannot start {name}: {exe} not found"
+        ) from None
+    except PermissionError:
+        raise Outcome(
+            agentio.EXIT_FAILURE, name, "refused", f"cannot start {name}: {exe} not executable"
+        ) from None
+    except OSError as e:
+        raise Outcome(
+            agentio.EXIT_FAILURE, name, "refused", f"cannot start {name}: {e.strerror or e}"
+        ) from None
+    finally:
+        os.close(fd)
+    entry: dict[str, Any] = {
+        "name": name,
+        "session": session,
+        "instance": instance,
+        "command": command,
+        "cwd": cwd,
+        "port": args.port,
+        "ready": "port" if args.port is not None else "log" if pattern else "none",
+        "ready_log": args.ready_log,
+        "pid": proc.pid,
+        "pgid": proc.pid,
+        "log": str(log),
+        "started_at": started,
+        "ready_s": None,
+        "exit": None,
+        "signal": None,
+    }
+    reg.update(name, entry)
+    return wait_ready(ctx, entry, proc, pattern, limit, args.keep, reg, run)
+
+
+def _died_words(proc: subprocess.Popen[bytes]) -> tuple[str, int | None, str | None]:
+    rc = proc.returncode
+    if rc is None:
+        return "its processes ended", None, None
+    if rc < 0:
+        sig = signal.Signals(-rc).name if -rc in signal.Signals._value2member_map_ else str(-rc)
+        return f"killed by {sig}", None, sig
+    return f"exit {rc}", rc, None
+
+
+def wait_ready(
+    ctx: agentio.Context,
+    entry: dict[str, Any],
+    proc: subprocess.Popen[bytes],
+    pattern: re.Pattern[str] | None,
+    limit: float,
+    keep: bool,
+    reg: Registry,
+    run: ModuleType,
+) -> agentio.Result:
+    name, log = entry["name"], Path(entry["log"])
+    began = time.monotonic()
+    deadline = began + limit
+    port = entry["port"]
+    red = Redactor()
+    while True:
+        elapsed = time.monotonic() - began
+        exited = proc.poll() is not None
+        if port is not None and accepts(port):
+            break
+        if pattern is not None and any(pattern.search(x) for x in tail(log, 0)[0]):
+            break
+        if port is None and pattern is None and elapsed >= ALIVE_SETTLE_S and not exited:
+            break
+        if exited and not members(entry, run):
+            words, rc, sig = _died_words(proc)
+            entry.update(exit=rc, signal=sig, ended_at=time.time())
+            reg.update(name, entry)
+            lines, total = tail(log, LOG_TAIL)
+            shown = red.lines(lines)
+            return Outcome(
+                agentio.EXIT_FAILURE,
+                name,
+                "died",
+                f"{name} died before ready ({words}) after {elapsed:.1f} s; last {len(lines)} of {total} log lines below",
+                lines=shown,
+                data={**_public(entry), "seconds": round(elapsed, 2), "tail": shown},
+                remedy=shlex.join(["services", "logs", name]),
+            ).result()
+        if time.monotonic() >= deadline:
+            what = (
+                f"port {port} not accepting"
+                if port is not None
+                else f"no log line matched /{pattern.pattern}/"
+                if pattern is not None
+                else "not alive"
+            )
+            lines, total = tail(log, LOG_TAIL)
+            shown = red.lines(lines)
+            if keep:
+                state = "left running (--keep)"
+            else:
+                survivors = stop_tree(entry, run)
+                proc.poll()
+                reg.update(name, None)
+                state = "stopped" if not survivors else f"stopped, but {len(survivors)} processes remain"
+            return Outcome(
+                agentio.EXIT_TIMEOUT,
+                name,
+                "not ready",
+                f"{name} not ready after {limit:g} s: {what}; {state}"
+                + ("" if keep else " (use --keep to leave it running)")
+                + f"; last {len(lines)} of {total} log lines below",
+                lines=shown,
+                data={**_public(entry), "seconds": round(time.monotonic() - began, 2), "tail": shown},
+                remedy=shlex.join(["services", "logs", name]),
+            ).result()
+        time.sleep(POLL_S)
+    seconds = round(time.monotonic() - began, 2)
+    entry["ready_s"] = seconds
+    reg.update(name, entry)
+    how = {
+        "port": f"port {port} accepting",
+        "log": f"log line matched /{entry['ready_log']}/",
+    }.get(entry["ready"])
+    where = f"registered in session {entry['session']} (the scratch is disposable: rule 10)"
+    if how is None:
+        verdict = (
+            f"{name} started: pid {entry['pid']}, readiness not checked (no --port or --ready-log), "
+            f"log {log} ({seconds:.1f} s); {where}"
+        )
+        scope = "started"
+    else:
+        verdict = f"{name} ready: pid {entry['pid']}, {how}, log {log} ({seconds:.1f} s); {where}"
+        scope = "ready"
+    return agentio.Result(name, scope, verdict, data={**_public(entry), "seconds": seconds})
+
+
+def _public(entry: dict[str, Any]) -> dict[str, Any]:
+    keys = ("name", "session", "pid", "pgid", "port", "ready", "log", "signal")
+    return {**{k: entry.get(k) for k in keys}, "exit_status": entry.get("exit")}  # `exit` is agentio's
+
+
+def restart_command(entry: dict[str, Any]) -> str:
+    cmd = ["services", "start", entry["name"]]
+    if entry.get("port") is not None:
+        cmd += ["--port", str(entry["port"])]
+    if entry.get("ready_log"):
+        cmd += ["--ready-log", entry["ready_log"]]
+    return shlex.join([*cmd, "--", *entry.get("command", [])])
+
+
+# ── stop (FR-5 to FR-7) ────────────────────────────────────────────────────────────────────────
+
+
+def stop(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.Result:
+    run = _run()
+    session = args.session or ctx.session
+    reg = Registry(root, session)
+    entries = reg.read()
+    if args.all:
+        if args.name or args.session:
+            raise agentio.UsageError("--all stops every service of this session", "services stop --all --yes")
+        chosen = sorted(entries)
+    else:
+        if not args.name:
+            raise agentio.UsageError("stop needs NAME (or --all)", "services list")
+        if args.name not in entries:
+            raise Outcome(
+                agentio.EXIT_NOT_FOUND,
+                args.name,
+                "not found",
+                f"no service {args.name} in session {session}",
+                data={"name": args.name, "session": session},
+                remedy="services list" + (f" --all-sessions" if args.session else ""),
+            )
+        chosen = [args.name]
+    marked = markers()
+    plan = {n: members(entries[n], run, marked) for n in chosen}
+    target = "all" if args.all else args.name
+    confirmed = args.all or (args.session is not None and args.session != ctx.session)
+    if args.dry_run:
+        lines = [
+            f"{n}: {', '.join(f'{p} ({c})' for p, c in sorted(m.items())) or 'no process'}"
+            for n, m in plan.items()
+        ]
+        count = sum(len(m) for m in plan.values())
+        return agentio.Result(
+            target,
+            "dry run",
+            f"would stop {', '.join(chosen) or 'nothing'}: {_n(count, 'process')}; nothing signalled",
+            lines=lines,
+            data={"session": session, "plan": {n: sorted(m) for n, m in plan.items()}},
+        )
+    if confirmed and not args.yes:
+        why = (
+            "every service of this session"
+            if args.all
+            else f"session {session}'s service, not this session's"
+        )
+        return agentio.confirm_required(
+            ctx,
+            target=target,
+            scope=f"stop {why}",
+            plan=[
+                f"stop {n} in session {session}: pids {', '.join(map(str, sorted(m))) or 'none'}"
+                for n, m in plan.items()
+            ],
+        )
+    results: list[str] = []
+    stopped: dict[str, list[int]] = {}
+    survivors: dict[str, list[tuple[int, str]]] = {}
+    for n in chosen:
+        entry = entries[n]
+        if not plan[n]:
+            ended = f"exit {entry['exit']}" if entry.get("exit") is not None else "exit unknown"
+            results.append(f"{n} had already ended ({ended}); entry removed")
+            reg.update(n, None)
+            stopped[n] = []
+            continue
+        left = stop_tree(entry, run)
+        stopped[n] = sorted(plan[n])
+        if left:
+            survivors[n] = left
+            results.append(
+                f"{n}: {_n(len(left), 'process')} remain after SIGKILL: "
+                + ", ".join(f"{p} ({c})" for p, c in left)
+            )
+        else:
+            reg.update(n, None)
+            results.append(
+                f"{n} stopped: {_n(len(plan[n]), 'process')} ({', '.join(map(str, sorted(plan[n])))}), none remains; "
+                f"start again: {restart_command(entry)}"
+            )
+    data = {
+        "session": session,
+        "pids": stopped,
+        "survivors": {n: [p for p, _ in v] for n, v in survivors.items()},
+        "restart": {n: restart_command(entries[n]) for n in chosen},
+        "removed": [n for n in chosen if n not in survivors],
+    }
+    if len(chosen) == 1:
+        data["log"] = entries[chosen[0]].get("log")
+    if not chosen:
+        return agentio.Result(
+            target, "stopped", f"no services in session {session}; nothing stopped", data=data
+        )
+    scope = "survivors" if survivors else "stopped"
+    verdict = results[0] if len(results) == 1 else f"{len(chosen)} services: " + "; ".join(results)
+    return agentio.Result(
+        target,
+        scope,
+        verdict,
+        lines=results if len(results) > 1 else [],
+        data=data,
+        exit=agentio.EXIT_FAILURE if survivors else agentio.EXIT_OK,
+    )
+
+
+# ── list and logs (FR-8, FR-9) ─────────────────────────────────────────────────────────────────
+
+
+def _n(count: int, word: str) -> str:
+    return f"{count} {word}" + ("" if count == 1 else "es" if word.endswith("s") else "s")
+
+
+def _age(seconds: float) -> str:
+    s = int(seconds)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}h{m:02d}m{sec:02d}s" if h else f"{m}m{sec:02d}s" if m else f"{sec}s"
+
+
+def listing(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.Result:
+    run = _run()
+    scope_sessions = sessions(root) if args.all_sessions else [ctx.session]
+    marked = markers()
+    now = time.time()
+    rows: list[dict[str, Any]] = []
+    known: set[str] = set()
+    for s in scope_sessions:
+        for name, entry in sorted(Registry(root, s).read().items()):
+            known.add(f"{s}/{name}/{entry.get('instance')}")
+            live = members(entry, run, marked)
+            started = entry.get("started_at")
+            state = "running" if live else "died"
+            uptime = round(now - started, 1) if live and isinstance(started, (int, float)) else None
+            ran = (
+                entry.get("ended_at", 0) - started if not live and entry.get("ended_at") and started else None
+            )
+            rows.append(
+                {
+                    "name": name,
+                    "session": s,
+                    "state": state,
+                    "port": entry.get("port"),
+                    "pid": entry.get("pid"),
+                    "uptime_s": uptime,
+                    "ran_s": round(ran, 1) if ran is not None else None,
+                    "exit": entry.get("exit"),
+                    "signal": entry.get("signal"),
+                    "command": shlex.join(entry.get("command", [])),
+                    "log": entry.get("log"),
+                }
+            )
+    seen: set[str] = set()
+    for pid, value in sorted(marked.items()):
+        s, _, rest = value.partition("/")
+        if s not in scope_sessions or value in known or value in seen:
+            continue
+        seen.add(value)
+        name = rest.partition("/")[0]
+        rows.append(
+            {
+                "name": name, "session": s, "state": "unlisted", "port": None, "pid": pid, "uptime_s": None,
+                "ran_s": None, "exit": None, "signal": None, "command": None, "log": None,
+            }
+        )  # fmt: skip
+    counts = {k: sum(r["state"] == k for r in rows) for k in ("running", "died", "unlisted")}
+    where = "all sessions" if args.all_sessions else f"session {ctx.session}"
+    verdict = f"{len(rows)} service{'s' if len(rows) != 1 else ''} in {where}: " + ", ".join(
+        f"{v} {k}" for k, v in counts.items() if v or k != "unlisted"
+    )
+    lines: list[str] = []
+    for r in rows:
+        label = f"[{r['session']}] " if args.all_sessions else ""
+        port = str(r["port"]) if r["port"] is not None else "—"
+        if r["state"] == "running":
+            tail_ = f"pid {r['pid']}   up {_age(r['uptime_s'] or 0)}   {r['command']}"
+        elif r["state"] == "died":
+            how = (
+                f"exit {r['exit']}"
+                if r["exit"] is not None
+                else f"signal {r['signal']}"
+                if r["signal"]
+                else "exit unknown"
+            )
+            ran = f"ran {_age(r['ran_s'])}" if r["ran_s"] is not None else "—"
+            tail_ = f"{how}   {ran}   {r['command']}"
+        else:
+            tail_ = f"pid {r['pid']}   (a marker process with no registry entry: its records were cleared)"
+        lines.append(f"{label}{r['name']:<12} {r['state']:<9} port {port:<6} {tail_}")
+    target = "all sessions" if args.all_sessions else ctx.session
+    return agentio.Result(
+        target, f"{len(rows)} services", verdict, lines=lines, data={"services": rows, "counts": counts}
+    )
+
+
+def logs(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.Result:
+    if not args.name:
+        raise agentio.UsageError("logs needs NAME", "services list")
+    session = args.session or ctx.session
+    entry = Registry(root, session).read().get(args.name)
+    if entry is None:
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            args.name,
+            "not found",
+            f"no service {args.name} in session {session}",
+            remedy="services list",
+        )
+    n = LOGS_DEFAULT if args.n is None else args.n
+    if n < 1:
+        raise agentio.UsageError(f"-n {n} must be 1 or more", "services logs NAME -n 50")
+    log = Path(entry["log"])
+    lines, total = tail(log, n)
+    red = Redactor()
+    shown = red.lines(lines)
+    verdict = f"last {len(lines)} of {total} log lines of {args.name} ({log})"
+    if red.why:
+        verdict += f"; withheld: redaction rules unavailable ({red.why})"
+    data = {"name": args.name, "session": session, "log": str(log), "total": total, "shown": len(lines)}
+    if len(lines) < total:
+        whole = tail(log, 0)[0]
+        omitted_bytes = sum(len(x.encode()) + 1 for x in whole[: total - len(lines)])
+        cut = agentio.Cut(
+            [(f"last {len(lines)} of {total}", shown)],
+            total - len(lines),
+            omitted_bytes,
+            str(log),
+            shlex.join(["services", "logs", args.name, "-n", str(total)]),
+        )
+        return agentio.Result(args.name, f"last {len(lines)} of {total}", verdict, data=data, cut=cut)
+    return agentio.Result(args.name, f"{total} lines", verdict, lines=shown, data=data)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

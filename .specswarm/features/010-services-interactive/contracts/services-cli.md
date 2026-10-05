@@ -48,7 +48,7 @@ services logs NAME [-n N] [--session S]
 - **The died and not-ready bodies** are the log's tail (redacted), with `do instead:` naming
   `services logs NAME`.
 - **JSON data:** `name`, `session`, `pid`, `pgid`, `port`, `ready` (`port` | `log` | `none` | null), `log`,
-  `seconds`, `exit` / `signal` (died), `tail` (died or not ready), `holder` (refused: `{name, session, pid}`
+  `seconds`, `exit_status` / `signal` (died; `exit` is agentio's own key), `tail` (died or not ready), `holder` (refused: `{name, session, pid}`
   or `{pid, command}`).
 
 ## stop

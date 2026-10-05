@@ -48,7 +48,7 @@
 
 ## Phase 2: Implementation
 
-- [ ] T003 [US1] [US2] [US3] [US4] [US5] `tools/bin/services`, per `contracts/services-cli.md`:
+- [X] T003 [US1] [US2] [US3] [US4] [US5] `tools/bin/services`, per `contracts/services-cli.md`:
   - `start`: marker, new session, log, readiness, died and not ready, holders, names;
   - `stop`: tree by marker ∪ log writers ∪ group, with `run`'s sweep loaded from `tools/bin/run` (R2),
     `--dry-run`, and confirmation for `--session` and `--all`;
