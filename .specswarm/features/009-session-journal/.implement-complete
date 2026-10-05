@@ -1,0 +1,10 @@
+feature: 009-session-journal
+completed_at: 2026-10-05T08:55:54+00:00
+mode: dispatch
+tasks: 8/8 in tasks.md (T001–T008), all ticked; no unplanned sections
+tests: UNKNOWN — the plugin's run_tests returned 2 (pytest declared, not installed for /usr/bin/python3); project_measured (host venv, pytest 8.4.2): 1467 passed (make test-host); host hook lane 44/44
+coverage: UNKNOWN — run_coverage printed unknown (rc 1); project_measured (coverage.py with subprocess coverage, host venv): 95% Python line and branch (journal 99% from its tests), against min_test_coverage 90
+lint: ruff 0.16.7 check and format over tools tests scan bench (67 files), mypy 2.4.0 strict (23 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (56 files): clean
+decisions: sections=8 flagged_sections=8 non_flagged_sections=0 sections_without_absent=0 flagged=22 assumed=8 deferred=0 absent=8 inherited=7 low_confidence=0 flagged_low_confidence=0
+scope: planned=8 recorded=8 unplanned=0 unrecorded=0 in=8 out=0 none=0 unknown=0 flagged=8 flagged_out=0 other=0 other_out=0
+pause_file_written: no
