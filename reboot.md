@@ -5,29 +5,33 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-04T23:18:40Z (read from the clock), before a clear. **Dispatch batch `20261004-183704` is PAUSED at prompt 06** (edit):
-`../bridge/dispatch/pause-06.md`, rule 9 (is `edit` mutating?), plan's choice by the send's own seam;
-not picked. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge
-nothing (the batch leaves its branches standing).
+**Snapshot:** 2026-10-05T06:00:07Z (read from the clock). **Dispatch batch `20261004-183704` resumed** after pause-06
+(answered by discovery revision 13: `edit` not confirmed; code-track § Resume after pause-06). **06 s0 done**
+on `008-edit` (`62d1820`). Next: 08 s1. specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**;
+push nothing, merge nothing (the batch leaves its branches standing).
 
-**The stack** (each cut from the previous; nothing merged; `master` = `public/main` = `aa8127d`):
-1. `modify/003-slice-1` — 03 s1 done (`4857215`): memory/disk causes, redaction (shared gitleaks rule file).
-2. `modify/006-slice-1` — 05 s1 done (`eb5c8e2`): `view DIR` overview, `view --anchors`, plurals.
-3. `007-announcements-discovery` — 04 s0 done (`60f0d73`): announcement, entrypoint, `timelike tools`.
-   FOR-MENTOR Item 19 (SC-1's workspace part, narrowed by the seam).
-4. `008-edit` — 06 s0 **paused** (`e0605cc`): spec only, FR-12 open. HEAD is here.
-5. Not started: 08 s1 (`009-session-journal`), 09 s1 (`010-services-interactive`; its seam 1 is the
-   batch's other named pause), 10 s1 (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
+**The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
+1. `modify/003-slice-1` — 03 s1 done (`4857215`).
+2. `modify/006-slice-1` — 05 s1 done (`eb5c8e2`).
+3. `007-announcements-discovery` — 04 s0 done (`60f0d73`), then lane batch-a's fix `449cb29` (SC-2's
+   check_check_passes: one copy per cell; 007 § Cycle 1 Addendum 1).
+4. `008-edit` — 06 s0 done (`62d1820`), rebased onto `449cb29`. `edit`; `confirm_protocol` in agentio,
+   schema, conform C2, 001's contracts; `undo` confirm_protocol=True.
+5. Not started: 08 s1 (`009-session-journal`), 09 s1 (`010-services-interactive`: its seam 1 is ANSWERED by
+   revision 13 — start/stop-own not confirmed, stop-other/--all confirmed; do not pause), 10 s1
+   (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
 
-Each done feature: cycle report § Cycle N (dispatch; Group A from `.implement-complete`), marker
-committed, metrics entry (`003-cycle-2`, `006-cycle-2`, `007`). All criteria `unconfirmed` until the
-mentor's lane after the batch.
+**`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
+Resume section). Unpushed, not cleared.
+
+Each done feature: cycle report § Cycle N, marker committed, metrics entry (`003-cycle-2`, `006-cycle-2`,
+`007`, `008`). All criteria `unconfirmed` until the mentor's lane after the batch. Remaining cycle reports'
+Group B copies `discovery_revision: 12` and says in prose the cycle was built under revision 13.
 
 ## Next actions
 
-1. **Wait for the answer to pause-06** (beside it, or in `bridge/feedback/`). Then record it in
-   `008-edit` spec FR-12, run plan → tasks → implement --dispatch for 06, and continue with 08 s1 …
-   11 s1 from `bridge/dispatch/code-track.md`, each branch cut from the previous.
+1. **Continue the batch:** 08 s1, 09 s1, 10 s1, 11 s1 from `bridge/dispatch/code-track.md`, each branch
+   cut from the previous (09 from 009-…, etc.). Re-read the code-track header and § Resume between features.
 2. The mentor's lane after the batch, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
    (`human-track.md`), hand merges, pushes on the operator's OK.
 
@@ -35,12 +39,22 @@ mentor's lane after the batch.
 - **Expanded command text is not safe to run.** 2.35.0's implement expansion turns awk's `$0` into
   the argument. specify's pastes a quoted description into double quotes. Run every block from the
   installed file (awk the `# >>> name` … `# <<< name` range), with `ARGUMENTS` as a variable.
-- **`commit-task.sh FEATURE_DIR TASK FLAGGED DECFILE MSG FILES…`:** appends DECFILE (with `@START@` and
-  `@END@` filled from the clock: run `start.sh TASK` at a task's start), gates on the deny-list,
-  commits, computes SCOPE with the installed `scope-check` block (under `set +euo pipefail`; it is not
-  written for -e), ticks the task, and amends.
-- **`write-marker.sh FEATURE_DIR TASKS TESTS COVERAGE LINT`:** the ten fields, with the tallies from the
-  installed blocks, then `marker-fields` (prints MARKER-CLEAN).
+- **`FEATURE=NNN-slug commit-task.sh TASK DECFILE MSG FILES…`:** appends DECFILE (`@START@`/`@END@` from
+  `start-TASK`, written by `start.sh TASK`: the clock and HEAD) to decisions.md, gates on the deny-list
+  (refuses to commit unless PASS), commits only the named FILES plus decisions.md, computes SCOPE with the
+  installed `scope-check` block (under `set +euo pipefail`), ticks the task, and amends. A delegated
+  task's start file is written by hand (one token, then HEAD), so its range is its own files only.
+- **Every block needs `CLAUDE_PLUGIN_ROOT`** set to the cache path when run outside the expansion
+  (`tech-stack-classify`, `tech-stack-taskscan`, `quality-scale`); without it they report their library
+  absent, which is false.
+- **The marker:** write the ten fields by hand with the tallies from the installed `scope-tally` and
+  `decision-tally` blocks (after T009's section), then the `marker-fields` block (MARKER-CLEAN).
+- **Host e2e stand-in** (advisory, never image evidence): bats-core v1.11.1 cloned into the scratchpad,
+  and `stub/docker` running `exec` locally against `cbin/` (tools/bin with the venv shebang, made by
+  `conform-all.sh`), mapping the image's interpreter to the venv's and `bash -lc` to `bash -c`. Run:
+  `PATH=$S/stub:$PATH GIT_SHA=host $S/bats/bin/bats tests/e2e/<files>`. `type -a` cells fail by design.
+- **Host conformance:** `conform-all.sh` installs every tools/bin tool with the venv interpreter and runs
+  timelike-conform over them (test_conform.py covers only timelike and timelike-conform).
 - **Step 10:** `step10.sh` runs the installed `quality-components`, `quality-scale` and
   `unmeasured-explains-itself` blocks. Its output so far is identical each time (unknown, warned).
 - **Coverage rc:** add `/tmp/pytest-of-*/*/*/tl/` to `[paths] bin` (007's announce tests install
@@ -50,25 +64,12 @@ mentor's lane after the batch.
   contract as built.
 - **Never compose a time:** read it with `date` (memory: read-times-from-clock).
 
-**Resuming 06 after pause-06 is answered:**
-- Read the answer where plan put it: beside the question in `../bridge/dispatch/pause-06.md`, or in a
-  `../bridge/feedback/` file. Check that `pause-06.md` is gone, which is the mentor's resume signal.
-- Record the answer in `.specswarm/features/008-edit/spec.md` FR-12: replace the [NEEDS CLARIFICATION]
-  and set `status: In Progress`. Cite where the answer is.
-- Then run `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement --dispatch`. Every other seam
-  is decided in the spec:
-  - atomic write and hash checks;
-  - three matching levels: exact, line endings, indentation mapping;
-  - three nearest candidates, at a 0.5 floor;
-  - the name `edit`, with a `type -a` cell (Debian's mailcap would install `/usr/bin/edit`);
-  - flags, not stdin.
-- Its cycle report is new: `.specswarm/features/008-edit/cycle-report.md`, `## Cycle 1 — bridge/sends/06-rev1-20261004-183704.md`.
-  Say the batch paused, and that `pause-06.md` was written by this instance.
-- **The other named pause is 09 s1's seam 1** (services: rules 8 and 9). Read its block before
-  specifying it.
+**06 is done** (`008-edit` § Cycle 1). Its leftovers for the batch's final report: the D6 observation
+(a uniform dedent is not tolerated; the candidate says "indentation"), and the process failures in its
+§ Cycle 1 (one ungated commit amended locally, the probe, CLAUDE_PLUGIN_ROOT).
 
 **Open items from this batch, for the batch's final report:**
-- **FOR-MENTOR Item 19:** 04's SC-1 workspace part, narrowed by the send's seam; routed to plan.
+- **FOR-MENTOR Item 19:** closed (revision 13, user level only). Item 18 Q3 closed (revision 12).
 - **Plugin observations to relay (2.35.0):** implement's expansion clobbers awk's `$0`; specify's
   expansion breaks on a quoted description (the stray quote is in the description; an unquoted `&`
   would background part of the line). That is the send's `$ARGUMENTS` question, answered with a real case.
