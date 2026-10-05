@@ -18,7 +18,7 @@ Conventions are as in 003–007:
 
 ## Phase 1: Foundational — rule 9 at revision 13 (outside 008; blocks `edit`'s manifest)
 
-- [ ] T001 [US0] `tools/agentio/agentio.py` and `tools/bin/snapshot` (R1, data-model § Manifest fields):
+- [X] T001 [US0] `tools/agentio/agentio.py` and `tools/bin/snapshot` (R1, data-model § Manifest fields):
   - `Tool(confirm_protocol=None)`, where `None` means the same as `mutating`; true without `mutating` is
     a `ValueError`;
   - `--yes` in the parser, exit 4 in `codes()`, and `confirmation_required` in `envelopes()`, only when
