@@ -154,7 +154,8 @@ and sees every run, snapshot and grant use in order, each with its session.
   - `ppid`: the tool's parent process;
   - `ref`: a tool's pointer, `{"log": path}` or `{"snapshot": id}`, taken from the result's own data by a
     key the tool declares (`run`: `log`; `snapshot` and `undo`: the snapshot id);
-  - `ts` keeps its form and gains milliseconds.
+  - `t_ms`: the end in epoch milliseconds, beside `ts`, which keeps its form (plan R2: 001's tests and
+    conform C7 read `ts`).
 
   `event.schema.json` gains them as optional. Old events without them stay valid and are read.
 - **FR-7** **The shell record:**
@@ -193,15 +194,13 @@ and sees every run, snapshot and grant use in order, each with its session.
   Without `--ledger`, `adele` tool events are the grant entries.
 
 ### Secrets
-- **FR-12** The journal never prints a raw secret (P4):
-  - the hook applies `agentio`'s argument redaction (a `KEY=value` or `--flag=value` whose key names a
-    secret) before writing;
-  - the journal applies rule 15's full rule set (the shared redaction rules) to every command line and
-    path it prints.
+- **FR-12** The journal never prints a raw secret (P4). It applies rule 15's full rule set (the shared
+  redaction rules) to every command line and path it prints.
 
-  A secret that only the full rule set catches is stored in the agent's own `0700` scratch, as the
-  agent's shell history would hold it. It is redacted on every read. The tests check the output, never
-  the stored bytes alone.
+  The hook, being builtins only, cannot apply them. The command line is stored in the agent's own `0700`
+  scratch, as the agent's shell history would hold it, and is redacted on every read. A second, bash
+  implementation of the rules would drift from the first (plan R5; amended at plan, from a hook-side
+  argument redaction). The tests check the output.
 
 ### Contract
 - **FR-13** The name is **`journal`**, the habit of `journalctl` and the systemd journal (P3). `history`
@@ -252,7 +251,7 @@ container (P005), never by writing records by hand.
 | Name | `journal` (FR-13) |
 | Tail | 20 entries, oldest first; `--all`, `-n N` (FR-4) |
 | Order | Start time to the millisecond (FR-3) |
-| Secrets | Hook-side argument redaction, read-side full rule set (FR-12) |
+| Secrets | Read-side, rule 15's full rule set; nothing redacted in the hook (FR-12, plan R5) |
 
 ## Out of scope (slice 1)
 
