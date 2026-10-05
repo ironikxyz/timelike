@@ -58,7 +58,7 @@
 
 ## Phase 3: Implementation
 
-- [ ] T005 [US1] [US2] [US3] [US4] [US5] `tools/bin/journal`, per `contracts/journal-cli.md`:
+- [X] T005 [US1] [US2] [US3] [US4] [US5] `tools/bin/journal`, per `contracts/journal-cli.md`:
   - reading the records;
   - order and linking (R3);
   - the entries;

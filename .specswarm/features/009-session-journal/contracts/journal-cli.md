@@ -50,6 +50,7 @@ journal --ledger FILE|-         merge `adeled ledger --json` rows as grant entri
 ```
 journal: s1 [last 20 of 34]
 verdict: 20 of 34 entries in session s1 (14 tools, 5 shell, 1 grant)
+── last 20 of 34 ──
 ── 2026-10-05 ──
 06:10:01.204  tool   bash -c  snapshot                         exit 0     0.41 s  snapshot 3
 06:10:02.880  tool   bash -lc run -- make test                 exit 2    12.07 s  log /tmp/timelike/s1/run/…
@@ -65,7 +66,9 @@ exit: 0
 
 - **Columns:** time (UTC, ms), kind, style (`bash -c`, `bash -lc`, or blank), command, exit, duration,
   pointer.
-- **Date line:** a `── YYYY-MM-DD ──` line opens the output and appears again where the date changes.
+- **Date line:** a `── YYYY-MM-DD ──` line opens the entries and appears again where the date changes.
+  A cut tail is preceded by rule 3's section label (`── last N of T ──`), as `agentio` prints every cut.
+  Uncut output ends on its last entry (rule 2): the closing `more:`/`exit:` lines come only with a cut.
 - **Labels:** with `--all-sessions`, or when more than one agent appears, each line gains `[agent/session]`
   after the time.
 - **Pointers:**
