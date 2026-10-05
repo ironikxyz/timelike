@@ -31,7 +31,7 @@ Conventions are as in 003–007:
   manifest fields, and the `ValueError`.
 - [X] T002 [US0] `tools/bin/timelike-conform` C2: R1's five checks. In `tests/unit/test_conform_violations.py`,
   each check is shown failing on a manifest that breaks it, and `edit`'s and `undo`'s shapes pass.
-- [ ] T003 [US0] 001's contracts:
+- [X] T003 [US0] 001's contracts:
   - `agent-info.schema.json`: `confirm_protocol` and `dry_run`, both optional, with "absent means" in
     their descriptions; `flags`' description changes to `--yes if confirm_protocol`;
   - `output-contract.md`: the `--yes` row, and § Confirmation's revision-13 sentence with the three

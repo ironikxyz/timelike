@@ -45,3 +45,14 @@ FLAGGED: `--yes` offered by a tool that does not confirm is a C2 failure — cho
 ABSENT: a separate C-number and its catalogue entries (C2 keeps its rule list "5, 6"; the C2 finding names rule 8 and revision 13 in its text)
 Verification: 7 new cases in tests/unit/test_conform_violations.py (edit's shape passes; no dry run, --yes without confirming, confirm without mutating, dry_run disagreeing with the flags, an envelope from a non-confirming tool, a non-boolean — each C2 and only C2); test_conform.py and test_conform_violations.py 63 passed; ruff, format, mypy clean
 SCOPE: in (2 changed files)
+
+### T003: 001's contracts — schema (confirm_protocol, dry_run), output contract § Confirmation (revision 13), conformance C2
+**Started:** 2026-10-05T04:59:56Z | **Completed:** 2026-10-05T05:00:31Z
+
+INHERITED: the manifest fields and their "absent means" defaults — from T001; C2's five checks — from T002 (confidence: high)
+FLAGGED: both new schema properties are optional, with "absent means" in their descriptions — chose that over required, following `envelopes` (revision 10), so a manifest printed before revision 13 still validates (confidence: high)
+FLAGGED: `conformance.md`'s C2 row also changes (not named in tasks.md's T003, which lists the schema and output-contract.md) — its text described the old "--yes if mutating" rule and would have been false after T002 (confidence: high)
+ASSUMED: 001's spec.md is not modified: it is UNAUDITED at 11–13 with no criterion changed, and routing it is the mentor's (research R1) (confidence: high)
+ABSENT: a change to `confirm-envelope.schema.json` — the envelope itself is unchanged; only which tools may print it
+Verification: the schema parses as JSON; test_agentio.py (which validates manifests against it, the new edit-shaped one included) 72 passed. Host conformance over all 8 shipped tools (installed with the venv interpreter, scratchpad conform-all.sh): pass — undo with confirm_protocol true, the others false
+SCOPE: in (3 changed files)
