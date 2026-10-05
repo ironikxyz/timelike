@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -131,6 +131,19 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 > (H2)* gate cites the conformance check (C8 checks ANSI, not the line cut). The cut itself changes in
 > `agentio` in feature 006's cycle. No threshold moved. Revision 12 is appended to
 > `governance_audited_against`.
+>
+> **Audited against discovery revision 13** (2026-10-05), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T23:28:30Z), § "What Changed In Those Revisions", and
+> `../bridge/feedback/batch-20261004-232148-rule9-scope-and-workspace-context-file.md` § Resolution.
+> **Amended:** revision 13 clarifies the Agent output contract's rule 9. A change to an exactly named
+> target, applied whole or not at all, that shows what it changed, is not confirmed; such a tool
+> declares `mutating: true` and `confirm_protocol: false`, and rule 8 (`--dry-run`) still binds it when
+> it overwrites or removes. No gate restated rule 9 as "every mutating tool confirms", but the *Output
+> contract (H2)* gate lists the conformance check's rules by revision, and this one adds a rule. So the
+> gate gains one bullet: `confirm_protocol: false` on a tool that overwrites or removes requires
+> `dry_run: true`, shown failing on a manifest that breaks it. The check itself is built in feature
+> 008's cycle (prompt 06), with `confirm_protocol` restored in 001's manifest schema. No threshold
+> moved. Revision 13 is appended to `governance_audited_against`.
 
 # Quality Standards - Timelike
 
@@ -351,6 +364,10 @@ These gates guard P2, P4, P5 and P7. They are pass/fail and do not count toward 
     command, `performed: false`), each validated against its own schema. No envelope's `confirm`
     may name a command outside the agent's own tool. That is a negative case, and the check must be
     shown failing on an envelope that breaks it
+  - **Confirmation scope (discovery revision 13):** a manifest declares `confirm_protocol`. Only a
+    tool with `confirm_protocol: true` honours `--yes` and exits 4 with a confirmation envelope. A
+    tool with `confirm_protocol: false` that overwrites or removes must declare `dry_run: true`. That
+    is a negative case, and the check must be shown failing on a manifest that breaks it
 - **Build stamp (H8):** the image label and `timelike --agent-info` carry a non-empty git revision
 - **Invocation matrix (P2, P7, gap G13):** every environment default is in effect under
   non-interactive `bash -c`, login `bash -lc`, and an interactive shell. A default that lives only

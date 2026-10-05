@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -83,6 +83,13 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 > is a contract rule, not a technology choice, and `stack.md` is unchanged (last changed at `0f6e1ed`,
 > revision 11). Revision 12 is appended to `governance_audited_against`: a no-change audit is a recorded
 > result.
+>
+> **Audited against discovery revision 13** (2026-10-05), via `../bridge/governance-context.md`
+> (`/mentor:regovern`, 2026-10-04T23:28:30Z), § "What Changed In Those Revisions", and
+> `../bridge/feedback/batch-20261004-232148-rule9-scope-and-workspace-context-file.md` § Resolution.
+> **No change needed:** revision 13 clarifies the output contract's rule 9 (which changes are
+> confirmed). That is a contract rule, not a technology choice, and `stack.md` is unchanged. Revision
+> 13 is appended to `governance_audited_against`: a no-change audit is a recorded result.
 
 # Tech Stack - Timelike
 

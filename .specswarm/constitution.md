@@ -1,9 +1,32 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: none (1.4.2 stands; a no-change audit amends nothing)
+- Audit against discovery revision 13, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern 2026-10-04T23:28:30Z), § "What Changed In Those Revisions", and
+  ../bridge/feedback/batch-20261004-232148-rule9-scope-and-workspace-context-file.md § Resolution.
+  Revision 13 appended to governance_audited_against: a no-change audit is a recorded result
+- What revision 13 moved: one clarification of the Agent output contract's rule 9. Confirmation binds
+  a change whose scope the arguments do not name exactly, that touches another agent's or session's
+  work, or that cannot be reversed from what the tool shows. A change to an exactly named target,
+  applied whole or not at all, that shows what it changed, is not confirmed: such a tool declares
+  mutating: true and confirm_protocol: false, and rule 8 (--dry-run) still binds it when it overwrites
+  or removes
+- Checked: no article restates rule 9 as "every mutating tool confirms" or makes --yes required of
+  every tool that changes a file. H2 describes the confirmation envelope's shape (the agent's own
+  command plus --yes), not when it is required, so it holds under revision 13 as written. H3 and H4 do
+  not mention confirmation
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (per the evidence section)
+- HOW H1–H9: checked, unchanged
+- Dependent artifacts: tech-stack.md audited, no change (stack.md unchanged); quality-standards.md
+  audited, amended (the H2 gate gains one bullet: confirm_protocol: false with an overwriting or
+  removing tool requires dry_run: true). In flight: 008-edit (06 s0) carries confirm_protocol in 001's
+  schema, agentio and timelike-conform in its cycle, not here
+- Deferred TODOs: none
+
 - Version change: none (1.4.2 stands; a no-change audit amends nothing)
 - Audit against discovery revision 12, no change needed. Source: ../bridge/governance-context.md (/mentor:regovern 2026-10-04T08:54:45Z), § "What Changed In Those Revisions", and
   ../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md § Q3.
