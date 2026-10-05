@@ -120,3 +120,14 @@ Verification:
 - conformance on the host (all 9 tools installed with the venv interpreter): pass, edit included
 - start-up on the host, 20 runs each, every exit asserted 0: `edit --help` p50 79 / p95 82 ms; the probe (`--dry-run`, no change) p50 79 / p95 81 ms; budget < 100 ms p95
 SCOPE: in (1 changed files)
+
+### T009: cycle-report.md § Cycle 1, implement step 10, .specswarm/metrics.json, the marker
+**Started:** 2026-10-05T05:58:19Z | **Completed:** 2026-10-05T05:59:23Z
+
+INHERITED: every task's record; the step-10 output of the installed blocks; the host-lane figures — from T008 (confidence: high)
+FLAGGED: Group B copies the send (`discovery_revision: 12`), and the prose names revision 13 as delivered through code-track § Resume after pause-06 — the Resume section's instruction, over writing 13 into a copied field (confidence: high)
+FLAGGED: every criterion `unconfirmed`, the D6 Manual one included; the host stand-in run of the e2e files is reported beside the citations as evidence for the files, and changes no mode (confidence: high)
+ASSUMED: `delegations: []` — the two test writers were subagents, not sibling features (the send's definition) (confidence: high)
+ABSENT: `demo_points_reached` (the mentor derives it); a lane result (no Docker here)
+Verification: six citations, each `grep -cF` = 1 in the send; tallies from the installed blocks; step 10's output pasted verbatim; metrics.json gains only the 008 entry
+SCOPE: in (1 changed files)
