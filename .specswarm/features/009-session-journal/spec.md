@@ -161,7 +161,8 @@ and sees every run, snapshot and grant use in order, each with its session.
 - **FR-7** **The shell record:**
   - one JSON line per `bash -c` / `bash -lc` invocation, appended by the hook's `EXIT` trap;
   - fields: `v`, `kind: "shell"`, `cmd` (the command line, cut at 4096 characters with `cut_bytes`),
-    `exit`, `start_ms` and `end_ms` (epoch milliseconds), `pid`, `ppid`, `session`, `agent`, `cwd`, `style`
+    `exit`, `start_us` and `end_us` (epoch microseconds, `EPOCHREALTIME`), `pid`, `ppid`, `session`,
+    `agent`, `cwd`, `style`
     (`bash -c`, `bash -lc`);
   - mode `0600`, in the session's `0700` directory, appended on an `O_APPEND` descriptor in one write.
   - The hook keeps 001's hook rules: bash builtins only (no fork), silent, never fails the shell,
@@ -208,7 +209,8 @@ and sees every run, snapshot and grant use in order, each with its session.
   other `journal`.
 - **FR-14** Exit codes:
   - `0`: entries shown, or none found (an empty session is a result);
-  - `1`: a record unreadable as a whole;
+  - `1`: the ledger given with `--ledger` unreadable, or not a JSON array (an unreadable events or shell
+    record is named in the verdict and the rest shown, exit 0: contract § Refusals);
   - `2`: usage;
   - `3`: `--session S` names no session directory.
 

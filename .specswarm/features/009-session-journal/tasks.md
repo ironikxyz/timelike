@@ -25,7 +25,7 @@
   `contracts/event.schema.json` (optional fields) and `contracts/output-contract.md` § Session event.
   Extend `tests/unit/test_agentio.py`: new and old lines validate, `ref` present only for a declared
   key, and `agent` only when valid.
-- [ ] T002 [US2] [US4] `image/rootfs/etc/timelike/journal-exit.bash` (new) and the guarded step in
+- [X] T002 [US2] [US4] `image/rootfs/etc/timelike/journal-exit.bash` (new) and the guarded step in
   `image/rootfs/etc/timelike/shell-env.bash` (research R1). Add the `COPY` in `image/Dockerfile`. Extend
   `tests/host/test_shell_env_hook.sh`:
   - F1 holds;

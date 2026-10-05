@@ -26,7 +26,7 @@ journal --ledger FILE|-         merge `adeled ledger --json` rows as grant entri
 | `destructive` | `false` |
 | `reads_stdin` | `true` (only `--ledger -`) |
 | `probe` | `[]` (the current session; an empty one is exit 0) |
-| `exit_codes` | `0` entries shown, or none found · `1` a record or the ledger could not be read as a whole · `2` usage · `3` no such session |
+| `exit_codes` | `0` entries shown, or none found · `1` the ledger (`--ledger`) could not be read or is not a JSON array; an unreadable events or shell record is named in the verdict, exit 0 (§ Refusals) · `2` usage · `3` no such session |
 | extra | `tail: 20`, `sources: ["events.jsonl", "shell.jsonl", "ledger (stdin or file)"]`, `captures: ["bash -c", "bash -lc"]`, `not_captured: ["sh -c", "interactive shells", "a command that sets its own EXIT trap", "direct exec"]` |
 
 ## Target, scope, verdict

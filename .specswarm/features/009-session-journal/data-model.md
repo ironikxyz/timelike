@@ -51,6 +51,11 @@ int, the event carries `ref: {kind: value}`.
 | `cwd` | string | `$PWD` at exit |
 | `style` | `"bash -c"` \| `"bash -lc"` | |
 
+Written only by a non-root, non-interactive `bash -c` / `bash -lc`. The hook sets the trap only when the
+exit file is readable; `TIMELIKE_JOURNAL_EXIT` is a test-only override of its path (as 001's
+`TIMELIKE_CGROUP_CPU_MAX`), and nothing in the image sets it. The image copies the exit file after its last
+`RUN`, so no build step is captured.
+
 ## Ledger row (004's `adeled ledger --json`; read only)
 
 `id`, `at` (RFC 3339, s), `outcome` (`performed` | `refused` | `extended`), `grant`, `session`,

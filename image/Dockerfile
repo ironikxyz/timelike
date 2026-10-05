@@ -207,6 +207,10 @@ RUN scratch="$(mktemp -d)" \
  && test ! -e /tmp/timelike
 
 # --- 9. Run as the unprivileged agent (step 10) ------------------------------------------------------
+# The session journal's shell record (feature 009): copied after the last RUN, so no build step is
+# captured (the hook sets its trap only when this file is readable) and /tmp/timelike stays absent.
+COPY --chmod=0644 image/rootfs/etc/timelike/journal-exit.bash /etc/timelike/journal-exit.bash
+
 USER agent
 WORKDIR /home/agent
 # Places the announcement for each harness on every container start, then execs the command (feature
