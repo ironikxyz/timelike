@@ -210,3 +210,19 @@ decisions: sections=8 flagged_sections=7 non_flagged_sections=1 sections_without
 
 - `unrecorded=1` is T009, this report. The marker's tallies are taken after it.
 - There is no low-confidence entry, so no pause file was written **for this feature**.
+
+### Addendum 1 — lane batch-a's failed cell, fixed (2026-10-05T04:43:04Z, read from the clock)
+
+- **Finding** (mentor, `../bridge/history.md` 2026-10-05T00:06:27Z, lane batch-a at `8b8c61c`): not ok 50,
+  SC-2 [bash -lc, notty], `timelike announce --check exits 0 … on an unmodified copy`: the fixture's
+  `cp` into the file's temp dir failed with Permission denied.
+- **Cause: cell order, not the login shell.** `/etc/timelike/announcement.md` is 0444 (Dockerfile § 8b),
+  and `cp` gives a new file the source's mode. Both cells copied to the same `${SC2_DIR}/copy.md` (one
+  dir per file, from `setup_file`). Cell 49 (bash -c) runs first and creates it 0444. Cell 50's `cp`,
+  as `agent` (`USER agent`), then cannot open it for writing. Reproduced on the host as a non-root
+  user: the first `cp` succeeds, the second fails with the same message.
+- **Fix:** `check_check_passes` copies to `copy-<style>-<tty>.md`, one per cell. Test-side only; the tool
+  and the image are unchanged. `check_missing_tool_fails` writes its copy with Python's `open(…, "w")`
+  (mode from umask, owner-writable), so it does not have this defect.
+- **Not verified here:** the cell itself (no Docker in this instance). It is `unconfirmed` until the
+  full lane at the batch's end.

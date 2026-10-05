@@ -182,11 +182,14 @@ check_generated_from_manifests() {
 }
 
 check_check_passes() {
-  exec_plain cp /etc/timelike/announcement.md "${SC2_DIR}/copy.md"
+  # One copy per cell. cp gives the copy the source's 0444, so a second cell's cp into the same
+  # name fails as agent (Permission denied): the lane batch-a failure of the -lc cell.
+  local copy="${SC2_DIR}/copy-$1-$2.md"
+  exec_plain cp /etc/timelike/announcement.md "$copy"
   run_in "$1" "$2" "timelike announce --check"
   assert_within 20
   assert_status 0
-  run_in "$1" "$2" "timelike announce --check '${SC2_DIR}/copy.md'"
+  run_in "$1" "$2" "timelike announce --check '$copy'"
   assert_within 20
   assert_status 0
 }
