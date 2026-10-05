@@ -82,3 +82,15 @@ ASSUMED: the delegate's settlements of contract ambiguity are kept as written: t
 ABSENT: a forced concurrent change, the 5 s deadline itself, an owner that cannot be kept (needs a second uid), the `line endings` / `trailing whitespace` candidate differences (unreachable: such a window matches at level 2), and `--limit` cutting the diff — named by the delegate as not tested
 Verification: 57 passed; ruff and format clean
 SCOPE: in (1 changed files)
+
+### T005: e2e — SC-1 to SC-5 and the name and manifest (delegated), 28 cells, run on a host stand-in
+**Started:** delegated,_written_after_9294a5a_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-05T05:44:18Z
+
+INHERITED: the contract as amended once while it worked (the diff in `lines`, endings in the verdict), helpers.bash, and the 006/007 files' layout (confidence: high)
+FLAGGED: every cell makes its own directory with `mkdir` (no `-p`) and its own file — the lesson of lane batch-a's 007 cell (two cells sharing one 0444 copy) applied before the lane, not after (confidence: high)
+FLAGGED: SC-5's expected diff is GNU `diff -u --label a/FILE --label b/FILE` over CR-stripped copies, an engine independent of the tool's difflib (P005) (confidence: high)
+FLAGGED: run here before the lane on a host stand-in (scratchpad only, not committed): bats-core v1.11.1 cloned, and a `docker` stub that runs `exec` locally against tools/bin installed with the venv interpreter, maps the image's interpreter to the venv's, and turns `bash -lc` into `bash -c` (the host's /etc/profile resets PATH). Result: 26 of 28 ok; the 2 not ok are the `type -a` cells, which named the stand-in's path instead of /opt/timelike/bin/edit — image-only by design. This is not image evidence: the -lc cells ran as -c, and the image's interpreter, PATH and user are not the host's (confidence: high)
+ASSUMED: the delegate's settlements are kept: a one-line verdict in either form, the header scope asserted by prefix only, the level-3 phrase by its parts, SC-4's difference containing "line 2" (confidence: medium)
+ABSENT: tty and pty cells — edit is a non-interactive file tool and the criteria name no terminal mode; the contract's rule-1 JSON default under a pipe is what the notty cells exercise
+Verification: shellcheck -x clean over the six files; 28 @tests; host stand-in 26/28 as above; no test directory left under /tmp after the run
+SCOPE: in (6 changed files)

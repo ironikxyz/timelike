@@ -43,7 +43,7 @@ Conventions are as in 003–007:
   uniqueness, the indentation inference, line endings, candidates (ranking, floor, overlap, deadline),
   the atomic write (concurrent change, unwritable, symlink, hard link, mode, owner), BOM and non-UTF-8,
   and the usage and refusal cases. Text and JSON shapes come from `contracts/edit-cli.md`.
-- [ ] T005 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`. Fixtures are built by
+- [X] T005 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`. Fixtures are built by
   `printf` in the test, and every byte claim is checked with `sha256sum` in the container:
   - `tests/e2e/edit-replacing-text-appearing-once-changes-only-that-text-prints-edited-region.bats` (SC-1)
   - `tests/e2e/edit-crlf-tab-indented-file-given-lf-and-spaces-preserves-crlf-and-tabs.bats` (SC-2)
