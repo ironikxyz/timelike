@@ -29,7 +29,7 @@ Conventions are as in 003–007:
 
   Extend `tests/unit/test_agentio.py`: the three values and the default, flags, codes, envelopes, the
   manifest fields, and the `ValueError`.
-- [ ] T002 [US0] `tools/bin/timelike-conform` C2: R1's five checks. In `tests/unit/test_conform_violations.py`,
+- [X] T002 [US0] `tools/bin/timelike-conform` C2: R1's five checks. In `tests/unit/test_conform_violations.py`,
   each check is shown failing on a manifest that breaks it, and `edit`'s and `undo`'s shapes pass.
 - [ ] T003 [US0] 001's contracts:
   - `agent-info.schema.json`: `confirm_protocol` and `dry_run`, both optional, with "absent means" in

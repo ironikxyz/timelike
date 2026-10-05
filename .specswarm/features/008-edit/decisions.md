@@ -34,3 +34,14 @@ ASSUMED: `confirm_required()` needs no new guard: `_emit_result` already refuses
 ABSENT: the schema and conform changes — T002/T003; tasks.md's "confirm_required() raises" is met by that existing refusal rather than a raise inside it
 Verification: 5 new units in tests/unit/test_agentio.py (default, edit's shape, the undeclared envelope, the ValueError, dry_run); test_agentio.py 72 passed; whole unit suite on the host 1315 passed; ruff, format, mypy clean
 SCOPE: in (3 changed files)
+
+### T002: timelike-conform C2 — the confirmation-scope checks (revision 13), each shown failing
+**Started:** 2026-10-05T04:57:40Z | **Completed:** 2026-10-05T04:59:28Z
+
+INHERITED: `confirm_protocol` and `dry_run` in the manifest, absent meaning `mutating` and "--dry-run in flags" — from T001 (confidence: high)
+FLAGGED: the checks live in C2 (the manifest), not in a new C10 — they are properties of the manifest, beside the flags and envelopes checks that already were there; C9 still checks every exit-4 output, and `declared_envelopes` now defaults by `confirms()` (confidence: high)
+FLAGGED: every mutating tool that does not confirm must declare `dry_run: true` with `--dry-run` — the ruling binds "when it overwrites or removes", and a manifest cannot say which; a tool that only creates declares mutating false (snapshot's shape) (confidence: medium)
+FLAGGED: `--yes` offered by a tool that does not confirm is a C2 failure — chose refusing it over tolerating it, so a `--yes` never appears where it would do nothing (confidence: high)
+ABSENT: a separate C-number and its catalogue entries (C2 keeps its rule list "5, 6"; the C2 finding names rule 8 and revision 13 in its text)
+Verification: 7 new cases in tests/unit/test_conform_violations.py (edit's shape passes; no dry run, --yes without confirming, confirm without mutating, dry_run disagreeing with the flags, an envelope from a non-confirming tool, a non-boolean — each C2 and only C2); test_conform.py and test_conform_violations.py 63 passed; ruff, format, mypy clean
+SCOPE: in (2 changed files)

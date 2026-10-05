@@ -301,13 +301,18 @@ def check_pass_through(name: str, p: Probe, f: Findings) -> None:
 
 
 def declared_envelopes(m: Any) -> set[str]:
-    """The manifest's `envelopes`; absent means confirmation_required if mutating, else none."""
+    """The manifest's `envelopes`; absent means confirmation_required if the tool confirms, else none."""
     if not isinstance(m, dict):
         return set()
     listed = m.get("envelopes")
     if isinstance(listed, list):
         return {e for e in listed if isinstance(e, str)}
-    return {agentio.CONFIRMATION_REQUIRED} if m.get("mutating") else set()
+    return {agentio.CONFIRMATION_REQUIRED} if confirms(m) else set()
+
+
+def confirms(m: dict[str, Any]) -> bool:
+    """Rule 9 binds this tool: `confirm_protocol`, or `mutating` when absent (discovery revision 13)."""
+    return bool(m.get("confirm_protocol", m.get("mutating")))
 
 
 SHELL_OPS = {";", "&", "&&", "|", "||", "(", ")", "<", ">", ">>", "<<", ";;", "|&", "&>"}
@@ -370,6 +375,38 @@ def check_envelope(name: str, out: str, declared: set[str]) -> list[str]:
     return problems
 
 
+def check_confirmation_scope(m: dict[str, Any], flags: set[str]) -> list[str]:
+    """Discovery revision 13 (quality-standards § Output contract): rule 9 confirms only a change whose
+    scope is not named exactly, that touches another's work, or that cannot be reversed from what the
+    tool shows. A mutating tool outside those cases declares confirm_protocol: false, and then rule 8
+    binds it: dry_run: true, with --dry-run. A manifest cannot say whether a tool overwrites or removes,
+    so every mutating tool that does not confirm is held to it; a tool that only creates is not mutating.
+    """
+    problems: list[str] = []
+    for key in ("confirm_protocol", "dry_run"):
+        if key in m and not isinstance(m[key], bool):
+            problems.append(f"{key} is {m[key]!r}, not a boolean")
+    if problems:
+        return problems
+    mutating = m.get("mutating") is True
+    if m.get("confirm_protocol") is True and not mutating:
+        problems.append("confirm_protocol is true but mutating is false: only a mutation is confirmed")
+    if not confirms(m) and "--yes" in flags:
+        problems.append(
+            "--yes is offered but the tool does not confirm (confirm_protocol false): it would do nothing"
+        )
+    dry_run = m.get("dry_run", "--dry-run" in flags)
+    if "dry_run" in m and dry_run != ("--dry-run" in flags):
+        problems.append(
+            f"dry_run is {dry_run} but --dry-run is {'' if '--dry-run' in flags else 'not '}in flags"
+        )
+    if mutating and not confirms(m) and not (dry_run and "--dry-run" in flags):
+        problems.append(
+            "mutating with confirm_protocol false needs dry_run: true and --dry-run (rule 8; revision 13)"
+        )
+    return problems
+
+
 def check_manifest(name: str, m: Any) -> list[str]:
     if not isinstance(m, dict):
         return ["manifest is not an object"]
@@ -390,17 +427,18 @@ def check_manifest(name: str, m: Any) -> list[str]:
         problems.append(f"exit_codes {codes!r} outside the vocabulary")
     flags = set(m.get("flags", []))
     need = set(REQUIRED_FLAGS)
-    if m.get("mutating"):
+    if confirms(m):
         need.add("--yes")
     if m.get("destructive"):
         need.add("--dry-run")
     if need - flags:
         problems.append(f"flags lack {sorted(need - flags)}")
+    problems.extend(check_confirmation_scope(m, flags))
     envelopes = m.get("envelopes", [])
     if not isinstance(envelopes, list) or not set(envelopes) <= ENVELOPE_STATUSES:
         problems.append(f"envelopes {envelopes!r} outside {sorted(ENVELOPE_STATUSES)}")
-    elif "envelopes" in m and bool(m.get("mutating")) != (agentio.CONFIRMATION_REQUIRED in envelopes):
-        problems.append("envelopes lists confirmation_required exactly when mutating")
+    elif "envelopes" in m and confirms(m) != (agentio.CONFIRMATION_REQUIRED in envelopes):
+        problems.append("envelopes lists confirmation_required exactly when the tool confirms (rule 9)")
     if "passes_exit" in m and not isinstance(m["passes_exit"], bool):
         problems.append(f"passes_exit is {m['passes_exit']!r}, not a boolean")
     probe = m.get("probe")
