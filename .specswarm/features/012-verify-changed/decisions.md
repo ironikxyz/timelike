@@ -32,3 +32,22 @@ ASSUMED: go counts are top-level tests and the leaf subtest is the reported fail
 ABSENT: relative Python imports for deleted files; selecting by symbol; JUnit/JSON reporters; flaky detection (slice 2)
 Verification: host smoke run — every one of the 14 recordings read through `verify test -- cat`, counts and locations as the generator wrote them; a script exiting 37 passed through (cause command); changed on a committed pytest project after an edit to app/models.py: tests/test_models.py (imports app/models.py) and tests/test_orders.py (imports app/orders.py, which imports app/models.py), pytest on those two only (3 failed, 9 passed), ruff and mypy on app/models.py only; no change → exit 0 nothing selected; tools off PATH → three `not run`, exit 1; outside a repository and an unknown --since → exit 2 on stderr. T001's tests (written from the contract) then found 9 deviations, fixed before T001's commit (listed there). ruff, format and mypy strict clean.
 SCOPE: in (1 changed files)
+
+### T001: tests/unit/test_verify.py (delegated) — every recording against the generator's counts and locations, identification, run's failures, redaction unavailable, the change set and selection on real git repositories, not-run, the manifest
+**Started:** 2026-10-06T17:58:24Z | **Completed:** 2026-10-06T18:11:15Z
+
+INHERITED: the contract (amended for the bare `verify CMD` form and the manifest before the delegate finished), make-project.sh and the 14 recordings (confidence: high)
+FLAGGED: expected values come from the generated projects (counts from the generator's header, lines by locating needles in the generated text), never from verify's answers (P005); the recordings are replayed through the real `run` with the recorded exit (confidence: high)
+ASSUMED: run's own failure is tested with verify copied beside a stub `run`; every other case uses the real run, symbols and search, copied with a host interpreter shebang as test_conform does (confidence: high)
+ABSENT: real jest, vitest, go and cargo runs (not on the lane's unit step; their real output is replayed); tsc and eslint under `changed` are replayed by stub linters on PATH printing the recordings
+Verification: the delegate's tests ran 52 passed / 9 failed against T003's first version, and all 9 were tool deviations from the contract, fixed in tools/bin/verify (in T003's commit `d3befbc`, made after these findings, 2026-10-06):
+1. no "N failed so far" on a timeout (contract § test, timeout row);
+2. the --limit omission named agentio's artefact, not run's log (now a Cut over whole blocks with run's log as the full output);
+3. assertion lines were still in JSON when redaction was unavailable (R2);
+4. three: run missing, failing or unreadable was a stderr error, not an `internal` result (contract § test);
+5. a deleted file was not used to find dependents (spec edge case; now by text for Python);
+6. a passing test step's state was `400 passed`, not `passed` (FR-10);
+7. `selected.untested` shape — here the CONTRACT was amended to `[{path, reason}]` and the test's assertion changed to compare paths (the reason is the point).
+One more assertion amended: the SC-1 text verdict's regex required a part between the duration and the log path; verify now drops run's line count (T003, FLAGGED), which the contract's example already showed (`exit 1 · 0.6 s · log …`).
+After the fixes: 61 passed (scratch venv, Python 3.12.3). ruff and format clean.
+SCOPE: in (2 changed files)

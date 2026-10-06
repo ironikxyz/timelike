@@ -22,7 +22,7 @@ them with `record.sh`, and never edits a recording by hand.
 
 ## Phase 1: Tests first (from the contract; delegated)
 
-- [ ] T001 [P] [US1] [US2] [US3] [US4] `tests/unit/test_verify.py`, per research R7.
+- [X] T001 [P] [US1] [US2] [US3] [US4] `tests/unit/test_verify.py`, per research R7.
   - **Every recording** in `tests/fixtures/verify/recorded/`, with the expected counts, names and
     locations taken from `make-project.sh`'s projects (what the generator wrote), never from the parser's
     answer.
