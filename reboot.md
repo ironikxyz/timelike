@@ -5,11 +5,10 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-05T09:06:07Z (read from the clock). **Dispatch batch `20261004-183704` PAUSED at prompt 09** (services):
-`../bridge/dispatch/pause-09.md`, cause 4 (a FLAGGED decision outside tasks.md's scope: the agentio
-`takes_command` change, T003 `ac9c55f`). Readings: (a) accept, (b) revert and take options before NAME,
-(c) other. 06 s0 done (`008-edit`, `62d1820`); 08 s1 done (`009-session-journal`, `d27bec7`). specswarm
-2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge nothing.
+**Snapshot:** 2026-10-06T17:13:02Z (read from the clock). **Dispatch batch `20261004-183704` running.** 06 s0 done (`008-edit`,
+`62d1820`); 08 s1 done (`009-session-journal`, `d27bec7`); 09 s1 done (`010-services-interactive`, `c4f8aed`; paused
+once on cause 4, answered (a): `../bridge/feedback/09-20261006-162949-takes-command-in-agentio.md`). Next: 10 s1.
+specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge nothing.
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -20,8 +19,8 @@ Read this first after a context clear. It is a snapshot. The artifacts it points
    schema, conform C2, 001's contracts; `undo` confirm_protocol=True.
 5. `009-session-journal` — 08 s1 done (`d27bec7`): `journal`; agentio event + agent/ppid/t_ms/ref; the
    shell record (EXIT trap from 001's hook, `/etc/timelike/journal-exit.bash`, COPY after the last RUN).
-6. `010-services-interactive` — 09 s1 **paused** after T003 (`ac9c55f`): `services` built; T001/T002
-   (delegated tests) uncommitted in the tree; T004–T006 not started. Resume per pause-09's answer.
+6. `010-services-interactive` — 09 s1 done (`c4f8aed`): `services`; agentio `takes_command` (accepted, 001's
+   contract paragraph); loads run's process helpers.
 7. Not started: 10 s1 (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
 
 **`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
