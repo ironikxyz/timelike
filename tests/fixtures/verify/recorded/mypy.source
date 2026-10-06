@@ -1,0 +1,8 @@
+runner: mypy 2.4.0
+command: <TOOLS>/mypy --no-incremental bad.py 
+exit: 1
+project: tests/fixtures/verify/make-project.sh lint
+recorded_at: 2026-10-06T17:55:04Z
+host: Linux x86_64
+recorded_by: tests/fixtures/verify/record.sh (stdout and stderr together, NO_COLOR=1, no terminal)
+paths: the project directory is <PROJECT>, tool directories <TOOLS>, the home directory <HOME>

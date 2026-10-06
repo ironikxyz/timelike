@@ -1,0 +1,48 @@
+........................................................................ [ 17%]
+........................................................................ [ 34%]
+........................................................................ [ 52%]
+........................................................................ [ 69%]
+........................................................................ [ 87%]
+.............................................F....FF                     [100%]
+=================================== FAILURES ===================================
+______________________________ test_total_rounds _______________________________
+
+    def test_total_rounds():
+        order = Order([1, 2])
+>       assert order.total() == 4, "1 + 2 should round to 4"
+E       AssertionError: 1 + 2 should round to 4
+E       assert 3 == 4
+E        +  where 3 = total()
+E        +    where total = <app.models.Order object at 0x7adcdde0a8a0>.total
+
+tests/test_models.py:26: AssertionError
+_________________________ test_checkout_total_is_wrong _________________________
+
+    def test_checkout_total_is_wrong():
+>       assert checkout([100, 100]) == 300
+E       assert 200 == 300
+E        +  where 200 = checkout([100, 100])
+
+tests/test_orders.py:21: AssertionError
+_____________________________ test_checkout_empty ______________________________
+
+    def test_checkout_empty():
+>       assert checkout([]) == 0
+               ^^^^^^^^^^^^
+
+tests/test_orders.py:25: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prices = []
+
+    def checkout(prices: list[int]) -> int:
+        if not prices:
+>           raise ValueError("empty order")
+E           ValueError: empty order
+
+app/orders.py:6: ValueError
+=========================== short test summary info ============================
+FAILED tests/test_models.py::test_total_rounds - AssertionError: 1 + 2 should...
+FAILED tests/test_orders.py::test_checkout_total_is_wrong - assert 200 == 300
+FAILED tests/test_orders.py::test_checkout_empty - ValueError: empty order
+3 failed, 409 passed in 0.61s

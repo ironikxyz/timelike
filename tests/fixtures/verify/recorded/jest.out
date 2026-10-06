@@ -1,0 +1,60 @@
+FAIL ./math.test.js
+  ● adds wrongly
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 4
+
+       7 | test('adds zero', () => { expect(add(0, 5)).toBe(5); });
+       8 | test('adds wrongly', () => {
+    >  9 |   expect(add(2, 2)).toBe(5);
+         |                     ^
+      10 | });
+      11 | test('parses a number', () => { expect(parse('3')).toEqual({ value: 3 }); });
+      12 | test('parses another number', () => { expect(parse('7')).toEqual({ value: 7 }); });
+
+      at Object.toBe (math.test.js:9:21)
+
+  ● parses into the wrong shape
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Object {
+    -   "unit": "cm",
+        "value": 4,
+      }
+
+      12 | test('parses another number', () => { expect(parse('7')).toEqual({ value: 7 }); });
+      13 | test('parses into the wrong shape', () => {
+    > 14 |   expect(parse('4')).toEqual({ value: 4, unit: 'cm' });
+         |                      ^
+      15 | });
+      16 | test('parses zero', () => { expect(parse('0')).toEqual({ value: 0 }); });
+      17 | test('parses a negative', () => { expect(parse('-2')).toEqual({ value: -2 }); });
+
+      at Object.toEqual (math.test.js:14:22)
+
+  ● rejects text
+
+    not a number: abc
+
+       6 |   const value = Number(text);
+       7 |   if (Number.isNaN(value)) {
+    >  8 |     throw new Error(`not a number: ${text}`);
+         |           ^
+       9 |   }
+      10 |   return { value };
+      11 | }
+
+      at parse (math.js:8:11)
+      at Object.parse (math.test.js:19:3)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 9 passed, 12 total
+Snapshots:   0 total
+Time:        0.521 s
+Ran all test suites.
