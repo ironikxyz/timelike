@@ -7,7 +7,9 @@
 - one session event per call, and rule 13 on lines.
 
 **Every verdict ends with the cache state:** `; cache: fresh`, `; cache stale: N files changed, M
-removed; rebuilt`, or `; cache: built (N files)`.
+removed; rebuilt`, or `; cache: built (N files)`. **Notes come before it**, never after: the workspace when
+no `.git` was found, skipped files, a cache that could not be saved, an incomplete index. An `outline` of a
+file outside the index ends with `; cache: not used (outside the index: parsed directly)`.
 
 ```
 symbols outline FILE

@@ -103,8 +103,12 @@ class Outcome(Exception):
 
 def language_of(path: str, head: bytes) -> str | None:
     lang = LANGS.get(os.path.splitext(path)[1].lower())
-    if lang is None and head.startswith(b"#!") and re.match(rb"#![^\n]*\b(ba)?sh\b", head):
-        return "shell"
+    if lang is None and head.startswith(b"#!"):
+        first = head.split(b"\n", 1)[0]
+        if re.search(rb"\bpython[0-9.]*\b", first):
+            return "python"
+        if re.search(rb"\b(ba)?sh\b", first):
+            return "shell"
     return lang
 
 
@@ -351,6 +355,7 @@ class Index:
         self.limited = False
         self.seconds = 0.0
         self.not_saved: str | None = None
+        self.ws_note: str | None = None
 
     def refresh(self) -> None:
         began = time.monotonic()
@@ -452,14 +457,18 @@ class Index:
             text = f"cache stale: {_n(self.changed, 'file')} changed, {self.removed} removed; rebuilt"
         else:
             text = f"cache: built ({_n(len(self.files), 'file')})"
+        # The contract: every verdict ENDS with the cache state, so the notes come before it.
+        notes: list[str] = []
+        if self.ws_note:
+            notes.append(self.ws_note)
         skipped = [f"{v} {k}" for k, v in self.skipped.items() if v]
         if skipped:
-            text += f"; skipped: {', '.join(skipped)}"
+            notes.append(f"skipped: {', '.join(skipped)}")
         if self.not_saved:
-            text += f"; cache not saved ({self.not_saved})"
+            notes.append(f"cache not saved ({self.not_saved})")
         if self.limited:
-            text += f"; index incomplete: stopped at {MAX_FILES} files or {WALK_LIMIT_S:g} s"
-        return text
+            notes.append(f"index incomplete: stopped at {MAX_FILES} files or {WALK_LIMIT_S:g} s")
+        return "; ".join([*notes, text])
 
     def data(self) -> dict[str, Any]:
         return {
@@ -575,7 +584,7 @@ def resolve_imports(index: Index) -> dict[str, list[tuple[str, int, str]]]:
                 for f in sorted(files):
                     if f.endswith(".go") and index.files[f]["lang"] == "go":
                         d = os.path.dirname(f).split("/") if os.path.dirname(f) else []
-                        if d and d[-len(tail) :] == tail and f != rel:
+                        if d and tail[-len(d) :] == d and f != rel:
                             found.append((f, 1, f'import "{imp["path"]}"'))
             elif lang == "rust":
                 if imp.get("form") == "mod":
@@ -638,6 +647,8 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
             return outline(ctx, args.args[0])
         root, in_repo = workspace_root(os.getcwd())
         index = Index(ctx, root)
+        if not in_repo:
+            index.ws_note = "workspace: the current directory (no .git above it)"
         index.refresh()
         if action == "def":
             result = definition(index, args.args[0])
@@ -645,8 +656,6 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
             result = callers(index, args.args[0])
         else:
             result = dependents(index, args.args)
-        if not in_repo:
-            result.verdict += "; workspace: the current directory (no .git above it)"
         result.data["cache"] = index.data()
         result.data["workspace"] = root
         if index.limited:
@@ -691,7 +700,7 @@ def outline(ctx: agentio.Context, file: str) -> agentio.Result:
     if entry is None:  # outside the index (ignored, or outside the workspace): parsed directly, not cached
         st = os.stat(real)
         entry = Index(ctx, root).parse(real, st)
-        clause = "not indexed (parsed directly)"
+        clause = "cache: not used (outside the index: parsed directly)"
     else:
         clause = index.clause()
     if entry is None:

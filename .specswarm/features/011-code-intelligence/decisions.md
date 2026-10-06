@@ -42,3 +42,10 @@ FLAGGED: raised as an item, not a pause, as the send's seam 1 asks — nothing i
 ABSENT: moving the index (the state root does not exist yet)
 Verification: the item names what was built, its measured cost, and the one-path change that would move it
 SCOPE: in (1 changed files)
+
+**Fixes from the T001 delegate's findings (2026-10-06T17:23:49Z, read from the clock)**, made in tools/bin/symbols before T001's commit. The delegate's tests (written from the contract) ran 38/42 against T003; the 4 failures were 3 tool deviations:
+1. **Notes after the cache clause:** the contract says every verdict ends with the cache state. The notes (workspace without .git, skipped files, unsaved cache, incomplete index) now come before it.
+2. **A Python shebang was not recognised** (only shell's), so `outline /opt/timelike/bin/symbols` (the manifest's probe) was refused, and conformance would have failed in the image.
+3. **Go import resolution was inverted:** it required the whole import path to be a suffix of the directory. Now the import path's last segments name the directory (research R3).
+
+One contract amendment: an outline of a file outside the index ends with `cache: not used (outside the index: parsed directly)`, a fourth state. Claiming `fresh` for a file the index never saw would be false; the test's pattern gained exactly that state. 42/42 now.
