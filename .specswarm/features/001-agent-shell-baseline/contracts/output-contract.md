@@ -19,6 +19,12 @@ formats that the rules leave open, so the implementation and the conformance che
 | `--dry-run` | Print the plan and change nothing | tools whose manifest says `"destructive": true` (`"dry_run": true`) |
 | `--yes` | Confirm a mutation | tools whose manifest says `"confirm_protocol": true` (absent: `"mutating": true`). Never on a tool that does not confirm (discovery revision 13) |
 
+**A command after `--` (changed in feature 010):** a tool may take a command to start after the first
+`--` without passing that command's exit through. It declares `takes_command` (`agentio.Tool`), and
+`agentio` splits argv there before parsing its own options (`services start NAME --port N -- CMD`). This
+is distinct from `passes_exit` (discovery revision 9), where the command's exit becomes the tool's: a
+`takes_command` tool's exits stay its own outcomes, and conform C6 does not run it as a pass-through.
+
 **Mode selection (rule 1):** `--json` or `--text` if given. Otherwise JSON when stdout is not a
 terminal, text when it is. Under a harness, stdout is always a pipe, so the default there is JSON.
 

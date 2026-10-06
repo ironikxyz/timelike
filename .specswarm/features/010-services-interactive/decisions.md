@@ -35,3 +35,8 @@ Verification: host smoke runs with real processes — a server with a setsid gra
 SCOPE: out — tests/unit/test_agentio.py (1 of 3 changed files) (task has FLAGGED: yes)
 
 **Paused at 2026-10-05T09:06:07Z** (read from the clock): T003's SCOPE record is `out` (tests/unit/test_agentio.py) on a task with a FLAGGED decision (the agentio `takes_command` change). That is code-track's pause cause 4, which takes no confidence judgment. Pause file: `<repo>/../bridge/dispatch/pause-09.md`, naming readings (a) accept, (b) revert and put options before NAME, (c) another route. tasks.md was not amended after the fact to make the record read `in`. The T001/T002 delegates' files are left uncommitted until the answer.
+
+**Resumed at 2026-10-06T16:52:34Z** (read from the clock): pause-09 answered (a) by the mentor (`../bridge/feedback/09-20261006-162949-takes-command-in-agentio.md`), pause file deleted. Its three conditions:
+1. **Declared** in the cycle report's `changed_other_features` (T006): `tools/agentio/agentio.py` (`takes_command`) and `tests/unit/test_agentio.py`.
+2. **Written into 001's contract text** (this commit): `output-contract.md` § Invocation surface, one paragraph: a tool may take a command after the first `--` without passing its exit through (`takes_command`), distinct from `passes_exit`.
+3. **The died verdict fixed** to the contract's `last N log lines below` (this commit), and the not-ready verdict to the same form. The T001 delegate's test was right; it passes now (28/28).

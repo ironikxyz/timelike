@@ -560,13 +560,14 @@ def wait_ready(
             words, rc, sig = _died_words(proc)
             entry.update(exit=rc, signal=sig, ended_at=time.time())
             reg.update(name, entry)
-            lines, total = tail(log, LOG_TAIL)
+            lines, _ = tail(log, LOG_TAIL)
             shown = red.lines(lines)
             return Outcome(
                 agentio.EXIT_FAILURE,
                 name,
                 "died",
-                f"{name} died before ready ({words}) after {elapsed:.1f} s; last {len(lines)} of {total} log lines below",
+                f"{name} died before ready ({words}) after {elapsed:.1f} s; "
+                f"last {_n(len(lines), 'log line')} below",
                 lines=shown,
                 data={**_public(entry), "seconds": round(elapsed, 2), "tail": shown},
                 remedy=shlex.join(["services", "logs", name]),
@@ -579,7 +580,7 @@ def wait_ready(
                 if pattern is not None
                 else "not alive"
             )
-            lines, total = tail(log, LOG_TAIL)
+            lines, _ = tail(log, LOG_TAIL)
             shown = red.lines(lines)
             if keep:
                 state = "left running (--keep)"
@@ -594,7 +595,7 @@ def wait_ready(
                 "not ready",
                 f"{name} not ready after {limit:g} s: {what}; {state}"
                 + ("" if keep else " (use --keep to leave it running)")
-                + f"; last {len(lines)} of {total} log lines below",
+                + f"; last {_n(len(lines), 'log line')} below",
                 lines=shown,
                 data={**_public(entry), "seconds": round(time.monotonic() - began, 2), "tail": shown},
                 remedy=shlex.join(["services", "logs", name]),
