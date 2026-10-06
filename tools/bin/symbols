@@ -1,0 +1,892 @@
+#!/opt/timelike/python/bin/python3 -I
+"""symbols — where things are defined, who calls them, what imports a file; never bodies (P1, P3).
+
+`symbols outline FILE` lists a file's classes and functions with line ranges and signatures.
+`symbols def NAME` lists NAME's definitions, best first (exit 3 when there is none). `symbols callers NAME`
+lists its call sites grouped by enclosing function, and says it is text-based. `symbols dependents FILE…`
+lists the files that import the given files, ranked.
+
+An index of the workspace (the nearest ancestor holding .git, or the current directory) lives in the session
+scratch (rule 10, discovery revision 11: never inside the workspace) and is checked file by file on every
+call, so the answer is never from stale content; the verdict says when the cache was stale and what it
+rebuilt. Python is read with its syntax tree (exact); JS/TS, Go, Rust and shell by line patterns
+(text-based), and the answer says which (P3). No tool beyond the interpreter is needed.
+
+Design: .specswarm/features/011-code-intelligence/ (spec, research R1-R7, data-model.md,
+contracts/symbols-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import shlex
+import sys
+import time
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+import agentio
+
+MAX_FILE = 1024 * 1024
+MAX_FILES = 100_000
+WALK_LIMIT_S = 30.0
+SNIFF = 8192
+SKIP_DIRS = frozenset(
+    {"node_modules", "bower_components", "vendor", ".venv", "venv", "site-packages", "__pycache__", "build"}
+    | {"dist", "target", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".nox", ".next", ".cache"}
+)  # fmt: skip
+LANGS = {
+    ".py": "python",
+    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
+    ".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".sh": "shell", ".bash": "shell",
+}  # fmt: skip
+PRECISION = {"python": "exact", "javascript": "text-based", "typescript": "text-based"} | {
+    "go": "text-based", "rust": "text-based", "shell": "text-based"
+}  # fmt: skip
+KIND_RANK = {"class": 0, "function": 0, "type": 0, "method": 1, "nested": 2}
+CALLERS_NOTE = (
+    'text-based: name matches followed by "(", not resolved calls; '
+    "comments and strings excluded for Python only"
+)
+
+TOOL = agentio.Tool(
+    name="symbols",
+    target="query",
+    summary="where a name is defined, who calls it, what imports a file, a file's outline; never bodies",
+    usage=[
+        "symbols outline FILE          # classes and functions with line ranges and signatures",
+        "symbols def NAME              # where NAME (or Outer.NAME) is defined, best first; 3 if nowhere",
+        "symbols callers NAME          # call sites grouped by enclosing function (text-based)",
+        "symbols dependents FILE…      # the files that import these, ranked",
+        "python is exact (its syntax tree); JS/TS, Go, Rust and shell are text-based, and say so",
+        "the index lives in the session scratch and is refreshed per file on every call",
+    ],
+    probe=("outline", "/opt/timelike/bin/symbols"),
+    exit_codes={
+        agentio.EXIT_OK: "answered",
+        agentio.EXIT_FAILURE: "the workspace could not be read",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "not found",
+        agentio.EXIT_TIMEOUT: "the index walk hit its limit before the answer could be complete",
+    },
+    manifest_extra=lambda: {
+        "languages": {k: PRECISION[k] for k in sorted(PRECISION)},
+        "index": "<scratch>/<session>/symbols/<key>.json",
+    },
+)
+
+
+class Outcome(Exception):
+    def __init__(self, code: int, target: str, scope: str, verdict: str, remedy: str | None = None) -> None:
+        super().__init__(verdict)
+        self.code, self.target, self.scope, self.verdict, self.remedy = code, target, scope, verdict, remedy
+
+    def result(self) -> agentio.Result:
+        lines = [f"do instead: {self.remedy}"] if self.remedy else []
+        data = {"remedy": self.remedy} if self.remedy else {}
+        return agentio.Result(self.target, self.scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+# ── languages ──────────────────────────────────────────────────────────────────────────────────
+
+
+def language_of(path: str, head: bytes) -> str | None:
+    lang = LANGS.get(os.path.splitext(path)[1].lower())
+    if lang is None and head.startswith(b"#!") and re.match(rb"#![^\n]*\b(ba)?sh\b", head):
+        return "shell"
+    return lang
+
+
+def _sig_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+    sig = f"{prefix} {node.name}({ast.unparse(node.args)})"
+    return sig + (f" -> {ast.unparse(node.returns)}" if node.returns is not None else "")
+
+
+def parse_python(text: str) -> dict[str, Any]:
+    tree = ast.parse(text)
+    defs: list[dict[str, Any]] = []
+
+    def visit(node: ast.AST, parent: str | None, parent_kind: str | None) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if isinstance(child, ast.ClassDef):
+                    kind = "class"
+                    bases = [ast.unparse(b) for b in child.bases] + [ast.unparse(k) for k in child.keywords]
+                    sig = f"class {child.name}" + (f"({', '.join(bases)})" if bases else "")
+                else:
+                    kind = "method" if parent_kind == "class" else "nested" if parent_kind else "function"
+                    sig = _sig_args(child)
+                start = min([child.lineno, *(d.lineno for d in child.decorator_list)])
+                qual = f"{parent}.{child.name}" if parent else child.name
+                defs.append(
+                    {"name": child.name, "qual": qual, "kind": kind, "start": start,
+                     "end": child.end_lineno or child.lineno, "sig": sig, "parent": parent}
+                )  # fmt: skip
+                visit(child, qual, kind)
+            else:
+                visit(child, parent, parent_kind)
+
+    visit(tree, None, None)
+    imports: list[dict[str, Any]] = []
+    calls: list[list[Any]] = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                imports.append({"module": a.name, "level": 0, "names": [], "line": n.lineno})
+        elif isinstance(n, ast.ImportFrom):
+            imports.append(
+                {
+                    "module": n.module or "",
+                    "level": n.level,
+                    "names": [a.name for a in n.names],
+                    "line": n.lineno,
+                }
+            )
+        elif isinstance(n, ast.Call):
+            f = n.func
+            name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
+            if name:
+                calls.append([name, n.lineno])
+    return {"defs": defs, "imports": imports, "calls": calls}
+
+
+_TEXT_DEFS: dict[str, list[tuple[re.Pattern[str], str]]] = {
+    "javascript": [
+        (
+            re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)\s*\("),
+            "function",
+        ),
+        (re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)"), "class"),
+        (
+            re.compile(
+                r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|\w+)\s*=>"
+            ),
+            "function",
+        ),
+        (
+            re.compile(
+                r"^\s+(?:(?:static|async|public|private|protected|get|set)\s+)*(\w+)\s*\([^)]*\)\s*(?::[^{]*)?\{"
+            ),
+            "method",
+        ),
+    ],
+    "go": [
+        (re.compile(r"^func\s+\([^)]*\)\s*(\w+)\s*\("), "method"),
+        (re.compile(r"^func\s+(\w+)\s*[\[(]"), "function"),
+        (re.compile(r"^type\s+(\w+)\s+(?:struct|interface)\b"), "type"),
+    ],
+    "rust": [
+        (
+            re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)"),
+            "function",
+        ),
+        (re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait)\s+(\w+)"), "type"),
+    ],
+    "shell": [
+        (re.compile(r"^\s*function\s+([A-Za-z_][\w-]*)"), "function"),
+        (re.compile(r"^\s*([A-Za-z_][\w-]*)\s*\(\)\s*\{?"), "function"),
+    ],
+}
+_TEXT_DEFS["typescript"] = _TEXT_DEFS["javascript"]
+_KEYWORDS = frozenset({"if", "for", "while", "switch", "catch", "function", "return", "with", "elif", "else"})
+_CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+_JS_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)['"](\.{1,2}/[^'"]+)['"]""")
+_JS_NAMES = re.compile(r"import\s*\{([^}]*)\}")
+_GO_IMPORT = re.compile(r'^\s*(?:import\s+)?(?:\w+\s+)?"([^"]+)"')
+_RUST_MOD = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;")
+_RUST_USE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+crate::([\w:]+)")
+_SH_SOURCE = re.compile(r"^\s*(?:source|\.)\s+['\"]?([^\s'\";|&]+)")
+
+
+def _brace_end(lines: list[str], start: int) -> int | None:
+    """The line closing the block opened at or after `start` (1-based), by brace depth; None if unbalanced."""
+    depth = 0
+    opened = False
+    for i in range(start - 1, len(lines)):
+        for ch in lines[i]:
+            if ch == "{":
+                depth += 1
+                opened = True
+            elif ch == "}":
+                depth -= 1
+                if opened and depth == 0:
+                    return i + 1
+        if not opened and i > start + 1:
+            return None
+    return None
+
+
+def parse_text(text: str, lang: str) -> dict[str, Any]:
+    lines = text.splitlines()
+    found: list[dict[str, Any]] = []
+    in_go_import = False
+    imports: list[dict[str, Any]] = []
+    calls: list[list[Any]] = []
+    def_lines: set[int] = set()
+    for no, line in enumerate(lines, 1):
+        for rx, kind in _TEXT_DEFS[lang]:
+            m = rx.match(line)
+            if m and m.group(1) not in _KEYWORDS:
+                end = _brace_end(lines, no) if lang != "shell" or "{" in line else None
+                found.append(
+                    {
+                        "name": m.group(1),
+                        "kind": kind,
+                        "start": no,
+                        "end": end,
+                        "sig": line.strip().rstrip("{").strip(),
+                    }
+                )
+                def_lines.add(no)
+                break
+        if lang in ("javascript", "typescript"):
+            for m in _JS_IMPORT.finditer(line):
+                names = _JS_NAMES.search(line)
+                count = len([x for x in names.group(1).split(",") if x.strip()]) if names else 1
+                imports.append({"path": m.group(1), "names": ["*"] * count, "line": no})
+        elif lang == "go":
+            if re.match(r"^\s*import\s*\(", line):
+                in_go_import = True
+                continue
+            if in_go_import and line.strip() == ")":
+                in_go_import = False
+                continue
+            if in_go_import or line.lstrip().startswith("import "):
+                m = _GO_IMPORT.match(line)
+                if m:
+                    imports.append({"path": m.group(1), "names": [], "line": no})
+        elif lang == "rust":
+            m = _RUST_MOD.match(line) or _RUST_USE.match(line)
+            if m:
+                imports.append(
+                    {
+                        "path": m.group(1),
+                        "names": [],
+                        "line": no,
+                        "form": "mod" if "mod" in m.re.pattern else "use",
+                    }
+                )
+        elif lang == "shell":
+            m = _SH_SOURCE.match(line)
+            if m:
+                imports.append({"path": m.group(1), "names": [], "line": no})
+        if no not in def_lines:
+            for m in _CALL_RE.finditer(line):
+                if m.group(1) not in _KEYWORDS:
+                    calls.append([m.group(1), no])
+    # ends where braces did not decide: the line before the next definition, or the end of the file
+    for i, d in enumerate(found):
+        if d["end"] is None:
+            d["end"] = (found[i + 1]["start"] - 1) if i + 1 < len(found) else len(lines)
+    # nesting: the innermost earlier definition whose range contains this one
+    for d in found:
+        parents = [p for p in found if p is not d and p["start"] < d["start"] and d["end"] <= p["end"]]
+        parent = max(parents, key=lambda p: p["start"]) if parents else None
+        if parent is not None:
+            d["parent"] = parent["name"]
+            if d["kind"] == "function":
+                d["kind"] = "method" if parent["kind"] in ("class", "type") else "nested"
+        else:
+            d["parent"] = None
+            if d["kind"] == "method" and lang in ("javascript", "typescript"):
+                d["kind"] = "function"
+        d["qual"] = f"{d['parent']}.{d['name']}" if d["parent"] else d["name"]
+    return {"defs": found, "imports": imports, "calls": calls}
+
+
+# ── the index (research R1) ────────────────────────────────────────────────────────────────────
+
+
+def _search() -> ModuleType:
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "search")
+    try:
+        loader = importlib.machinery.SourceFileLoader("timelike_search", path)
+        spec = importlib.util.spec_from_loader("timelike_search", loader)
+        if spec is None:
+            raise ImportError(f"cannot load {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["timelike_search"] = module
+        loader.exec_module(module)
+    except (OSError, ImportError, SyntaxError) as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, f"cannot load the ignore rules from {path}: {e}", "reinstall the tools"
+        ) from None
+    return module
+
+
+def workspace_root(start: str) -> tuple[str, bool]:
+    here = os.path.realpath(start)
+    probe = here
+    while True:
+        if os.path.lexists(os.path.join(probe, ".git")):
+            return probe, True
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            return here, False
+        probe = parent
+
+
+class Index:
+    def __init__(self, ctx: agentio.Context, root: str) -> None:
+        self.root = root
+        key = hashlib.sha256(root.encode()).hexdigest()[:12]
+        self.path = ctx.scratch() / "symbols" / f"{key}.json"
+        self.files: dict[str, dict[str, Any]] = {}
+        self.state = "built"
+        self.changed = 0
+        self.removed = 0
+        self.skipped = {"large": 0, "binary": 0, "unreadable": 0}
+        self.limited = False
+        self.seconds = 0.0
+        self.not_saved: str | None = None
+
+    def refresh(self) -> None:
+        began = time.monotonic()
+        old: dict[str, dict[str, Any]] = {}
+        try:
+            doc = json.loads(self.path.read_text())
+            if doc.get("v") == 1 and doc.get("workspace") == self.root:
+                old = doc.get("files", {})
+                self.state = "fresh"
+        except (OSError, ValueError):
+            pass
+        search = _search()
+        seen: dict[str, dict[str, Any]] = {}
+        count = 0
+        for kind, path in search.walk(self.root, True):
+            if kind != "file":
+                continue
+            rel = os.path.relpath(path, self.root)
+            if any(part in SKIP_DIRS for part in rel.split(os.sep)[:-1]):
+                continue
+            count += 1
+            if count > MAX_FILES or time.monotonic() - began > WALK_LIMIT_S:
+                self.limited = True
+                break
+            try:
+                st = os.stat(path)
+            except OSError:
+                self.skipped["unreadable"] += 1
+                continue
+            prev = old.get(rel)
+            if prev and prev.get("size") == st.st_size and prev.get("mtime_ns") == st.st_mtime_ns:
+                seen[rel] = prev
+                continue
+            entry = self.parse(path, st)
+            if entry is None:
+                continue
+            seen[rel] = entry
+            if self.state == "fresh":
+                self.changed += 1
+        self.removed = len(set(old) - set(seen)) if self.state == "fresh" else 0
+        if self.state == "fresh" and (self.changed or self.removed):
+            self.state = "stale"
+        self.files = seen
+        if self.state != "fresh":
+            self.save()
+        self.seconds = round(time.monotonic() - began, 3)
+
+    def parse(self, path: str, st: os.stat_result) -> dict[str, Any] | None:
+        if st.st_size > MAX_FILE:
+            lang = LANGS.get(os.path.splitext(path)[1].lower())
+            if lang:
+                self.skipped["large"] += 1
+            return None
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+        except OSError:
+            self.skipped["unreadable"] += 1
+            return None
+        lang = language_of(path, raw[:SNIFF])
+        if lang is None:
+            return None
+        if b"\x00" in raw[:SNIFF]:
+            self.skipped["binary"] += 1
+            return None
+        text = raw.decode("utf-8", "replace")
+        precision = PRECISION[lang]
+        if lang == "python":
+            try:
+                parsed = parse_python(text)
+            except (SyntaxError, ValueError, RecursionError):
+                parsed = _python_fallback(text)
+                precision = "text-based"
+        else:
+            parsed = parse_text(text, lang)
+        return {
+            "size": st.st_size,
+            "mtime_ns": st.st_mtime_ns,
+            "lang": lang,
+            "precision": precision,
+            **parsed,
+        }
+
+    def save(self) -> None:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
+            tmp.write_text(
+                json.dumps({"v": 1, "workspace": self.root, "built_at": time.time(), "files": self.files})
+            )
+            os.replace(tmp, self.path)
+        except OSError as e:
+            self.not_saved = f"{e.strerror or e}"
+
+    def clause(self) -> str:
+        if self.state == "fresh":
+            text = "cache: fresh"
+        elif self.state == "stale":
+            text = f"cache stale: {_n(self.changed, 'file')} changed, {self.removed} removed; rebuilt"
+        else:
+            text = f"cache: built ({_n(len(self.files), 'file')})"
+        skipped = [f"{v} {k}" for k, v in self.skipped.items() if v]
+        if skipped:
+            text += f"; skipped: {', '.join(skipped)}"
+        if self.not_saved:
+            text += f"; cache not saved ({self.not_saved})"
+        if self.limited:
+            text += f"; index incomplete: stopped at {MAX_FILES} files or {WALK_LIMIT_S:g} s"
+        return text
+
+    def data(self) -> dict[str, Any]:
+        return {
+            "state": self.state, "changed": self.changed, "removed": self.removed, "files": len(self.files),
+            "seconds": self.seconds, "skipped": self.skipped, "limited": self.limited, "path": str(self.path),
+        }  # fmt: skip
+
+
+_PY_DEF = re.compile(r"^(\s*)(?:async\s+)?(def|class)\s+(\w+)")
+
+
+def _python_fallback(text: str) -> dict[str, Any]:
+    """A Python file that does not parse: definitions and calls by line pattern, labelled text-based."""
+    lines = text.splitlines()
+    defs: list[dict[str, Any]] = []
+    calls: list[list[Any]] = []
+    stack: list[tuple[int, dict[str, Any]]] = []
+    for no, line in enumerate(lines, 1):
+        m = _PY_DEF.match(line)
+        if m:
+            indent = len(m.group(1))
+            while stack and stack[-1][0] >= indent:
+                stack.pop()
+            parent = stack[-1][1] if stack else None
+            kind = (
+                "class"
+                if m.group(2) == "class"
+                else "method"
+                if parent and parent["kind"] == "class"
+                else "nested"
+                if parent
+                else "function"
+            )
+            name = m.group(3)
+            d = {"name": name, "qual": f"{parent['qual']}.{name}" if parent else name, "kind": kind,
+                 "start": no, "end": None, "sig": line.strip().rstrip(":"),
+                 "parent": parent["qual"] if parent else None,
+                 "_indent": indent}  # fmt: skip
+            defs.append(d)
+            stack.append((indent, d))
+            continue
+        for c in _CALL_RE.finditer(line):
+            if c.group(1) not in _KEYWORDS:
+                calls.append([c.group(1), no])
+    for i, d in enumerate(defs):
+        end = len(lines)
+        for later in defs[i + 1 :]:
+            if later["_indent"] <= d["_indent"]:
+                end = later["start"] - 1
+                break
+        d["end"] = end
+    for d in defs:
+        d.pop("_indent", None)
+    return {"defs": defs, "imports": [], "calls": calls}
+
+
+# ── import resolution (research R2, R3; FR-7) ──────────────────────────────────────────────────
+
+
+def resolve_imports(index: Index) -> dict[str, list[tuple[str, int, str]]]:
+    """importer → [(target file, names, how)], for imports that resolve to an indexed file."""
+    files = set(index.files)
+    roots = ["", *sorted({p.split("/", 1)[0] for p in files if "/" in p and not p.startswith(".")})]
+    out: dict[str, list[tuple[str, int, str]]] = {}
+
+    def first(cands: list[str]) -> str | None:
+        return next((c for c in cands if c in files), None)
+
+    for rel, entry in index.files.items():
+        found: list[tuple[str, int, str]] = []
+        here = os.path.dirname(rel)
+        for imp in entry.get("imports", []):
+            lang = entry["lang"]
+            if lang == "python":
+                mod, level, names = imp["module"], imp["level"], imp["names"]
+                if level:
+                    base = here
+                    for _ in range(level - 1):
+                        base = os.path.dirname(base)
+                    bases = [base]
+                else:
+                    bases = [r for r in roots]
+                parts = mod.split(".") if mod else []
+                target = None
+                for b in bases:
+                    stem = os.path.join(b, *parts) if parts else b
+                    target = first([f"{stem}.py", os.path.join(stem, "__init__.py")]) if stem else None
+                    if target:
+                        break
+                how = f"from {'.' * level}{mod} import {', '.join(names)}" if names else f"import {mod}"
+                if target:
+                    found.append((target, max(1, len(names)), how))
+                for name in names:  # `from pkg import module`
+                    for b in bases:
+                        sub = first(
+                            [
+                                os.path.join(b, *parts, f"{name}.py"),
+                                os.path.join(b, *parts, name, "__init__.py"),
+                            ]
+                        )
+                        if sub and sub != target:
+                            found.append((sub, 1, how))
+                            break
+            elif lang in ("javascript", "typescript"):
+                stem = os.path.normpath(os.path.join(here, imp["path"]))
+                exts = ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"]
+                cands = [stem + e for e in exts] + [os.path.join(stem, f"index{e}") for e in exts[1:]]
+                target = first(cands)
+                if target:
+                    found.append((target, len(imp["names"]) or 1, f"import '{imp['path']}'"))
+            elif lang == "go":
+                tail = imp["path"].strip("/").split("/")
+                for f in sorted(files):
+                    if f.endswith(".go") and index.files[f]["lang"] == "go":
+                        d = os.path.dirname(f).split("/") if os.path.dirname(f) else []
+                        if d and d[-len(tail) :] == tail and f != rel:
+                            found.append((f, 1, f'import "{imp["path"]}"'))
+            elif lang == "rust":
+                if imp.get("form") == "mod":
+                    target = first(
+                        [os.path.join(here, f"{imp['path']}.rs"), os.path.join(here, imp["path"], "mod.rs")]
+                    )
+                    how = f"mod {imp['path']};"
+                else:
+                    segs = imp["path"].split("::")
+                    srcs = [r for r in ("src", "") if any(f.startswith(f"{r}/") or not r for f in files)]
+                    target = None
+                    for s in srcs:
+                        for k in range(len(segs), 0, -1):
+                            stem = os.path.join(s, *segs[:k])
+                            target = first([f"{stem}.rs", os.path.join(stem, "mod.rs")])
+                            if target:
+                                break
+                        if target:
+                            break
+                    how = f"use crate::{imp['path']}"
+                if target:
+                    found.append((target, 1, how))
+            elif lang == "shell":
+                p = imp["path"]
+                target = first([os.path.normpath(os.path.join(here, p)), os.path.normpath(p)])
+                if target:
+                    found.append((target, 1, f"source {p}"))
+        if found:
+            out[rel] = [f for f in found if f[0] != rel]
+    return out
+
+
+# ── the command ────────────────────────────────────────────────────────────────────────────────
+
+
+def _n(count: int, word: str) -> str:
+    return f"{count} {word}{'' if count == 1 else 's'}"
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("action", nargs="?", metavar="outline|def|callers|dependents")
+    p.add_argument("args", nargs="*", metavar="NAME|FILE")
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    action = args.action
+    if action not in ("outline", "def", "callers", "dependents"):
+        raise agentio.UsageError(
+            f"unknown action {action!r}" if action else "symbols needs an action",
+            "symbols outline FILE | symbols def NAME | symbols callers NAME | symbols dependents FILE…",
+        )
+    if action in ("outline", "def", "callers") and len(args.args) != 1:
+        raise agentio.UsageError(
+            f"{action} takes one {'FILE' if action == 'outline' else 'NAME'}", "symbols --help"
+        )
+    if action == "dependents" and not args.args:
+        raise agentio.UsageError("dependents needs FILE…", "symbols dependents app/models.py")
+    try:
+        if action == "outline":
+            return outline(ctx, args.args[0])
+        root, in_repo = workspace_root(os.getcwd())
+        index = Index(ctx, root)
+        index.refresh()
+        if action == "def":
+            result = definition(index, args.args[0])
+        elif action == "callers":
+            result = callers(index, args.args[0])
+        else:
+            result = dependents(index, args.args)
+        if not in_repo:
+            result.verdict += "; workspace: the current directory (no .git above it)"
+        result.data["cache"] = index.data()
+        result.data["workspace"] = root
+        if index.limited:
+            result.exit = agentio.EXIT_TIMEOUT
+        return result
+    except Outcome as o:
+        return o.result()
+
+
+def show(root: str, rel: str) -> str:
+    """A path as the agent would type it from here."""
+    full = os.path.join(root, rel)
+    shown = os.path.relpath(full)
+    return full if shown.startswith("..") else shown
+
+
+def scope_of(precisions: set[str]) -> str:
+    if precisions == {"exact"}:
+        return "exact (python)"
+    if precisions == {"text-based"}:
+        return "text-based"
+    return "mixed" if precisions else "exact (python)"
+
+
+def outline(ctx: agentio.Context, file: str) -> agentio.Result:
+    root, _ = workspace_root(os.getcwd())
+    real = os.path.realpath(file)
+    if not os.path.isfile(real):
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            file,
+            "not found",
+            f"no such file: {file}",
+            shlex.join(["search", "-F", os.path.basename(file), "."]),
+        )
+    index = Index(ctx, root)
+    rel = os.path.relpath(real, root)
+    entry: dict[str, Any] | None = None
+    if not rel.startswith(".."):
+        index.refresh()
+        entry = index.files.get(rel)
+    if entry is None:  # outside the index (ignored, or outside the workspace): parsed directly, not cached
+        st = os.stat(real)
+        entry = Index(ctx, root).parse(real, st)
+        clause = "not indexed (parsed directly)"
+    else:
+        clause = index.clause()
+    if entry is None:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            file,
+            "refused",
+            f"{file}: not a source file symbols reads (python, js/ts, go, rust, shell)",
+        )
+    defs = sorted(entry["defs"], key=lambda d: (d["start"], d.get("end") or 0))
+    depth: dict[str, int] = {}
+    lines: list[str] = []
+    out: list[dict[str, Any]] = []
+    width = len(str(max([d["end"] for d in defs], default=1)))
+    for d in defs:
+        lvl = depth.get(d["parent"], -1) + 1 if d["parent"] else 0
+        depth[d["qual"]] = lvl
+        rng = f"{d['start']}-{d['end']}"
+        lines.append(f"{rng:>{2 * width + 1}}  {'  ' * lvl}{d['kind']:<8} {d['sig']}")
+        out.append({k: d[k] for k in ("name", "qual", "kind", "start", "end", "sig")} | {"depth": lvl})
+    how = (
+        "exact: python syntax tree"
+        if entry["precision"] == "exact"
+        else f"text-based: {entry['lang']} line patterns"
+    )
+    verdict = f"{_n(len(defs), 'definition')} in {file} ({how}); {clause}"
+    label = "exact (python)" if entry["precision"] == "exact" else "text-based"
+    scope = f"{_n(len(defs), 'definition')}, {label}"
+    return agentio.Result(
+        file,
+        scope,
+        verdict,
+        lines=lines,
+        data={"path": file, "precision": entry["precision"], "definitions": out},
+    )
+
+
+def definition(index: Index, name: str) -> agentio.Result:
+    hits: list[tuple[str, dict[str, Any], str]] = []
+    for rel, entry in index.files.items():
+        for d in entry["defs"]:
+            if d["name"] == name or d["qual"] == name or ("." in name and d["qual"].endswith(f".{name}")):
+                hits.append((rel, d, entry["precision"]))
+
+    def rank(h: tuple[str, dict[str, Any], str]) -> tuple[Any, ...]:
+        rel, d, prec = h
+        base = name.rsplit(".", 1)[-1].lower()
+        in_path = base in rel.lower()
+        return (prec != "exact", KIND_RANK.get(d["kind"], 3), not in_path, d["qual"] != name, rel, d["start"])
+
+    hits.sort(key=rank)
+    if not hits:
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            name,
+            "not found",
+            f"no definition of {name} in {_n(len(index.files), 'indexed file')}; {index.clause()}",
+            shlex.join(["search", "-w", name.rsplit(".", 1)[-1]]),
+        )
+    rows = []
+    lines = []
+    for rel, d, prec in hits:
+        where = f"{show(index.root, rel)}:{d['start']}"
+        lines.append(f"{where:<30} {d['kind']:<8} {d['qual']:<24} {d['sig']}")
+        rows.append(
+            {
+                "path": show(index.root, rel),
+                "line": d["start"],
+                "end": d["end"],
+                "kind": d["kind"],
+                "qual": d["qual"],
+                "sig": d["sig"],
+                "precision": prec,
+            }
+        )
+    best = rows[0]
+    verdict = (
+        f"{name} is defined in {_n(len(hits), 'place')}; "
+        f"best first: {best['path']}:{best['line']} {best['qual']}; "
+        f"{index.clause()}"
+    )
+    data = {
+        "definitions": rows,
+        "ranking": (
+            "exact before text-based; class/function before method before nested; name in path; "
+            "qualified match; path, line"
+        ),
+    }
+    return agentio.Result(
+        name,
+        f"{_n(len(hits), 'definition')}, {scope_of({r['precision'] for r in rows})}",
+        verdict,
+        lines=lines,
+        data=data,
+    )
+
+
+def callers(index: Index, name: str) -> agentio.Result:
+    short = name.rsplit(".", 1)[-1]
+    sites: list[dict[str, Any]] = []
+    for rel, entry in sorted(index.files.items()):
+        def_lines = {d["start"] for d in entry["defs"] if d["name"] == short}
+        lines_cache: list[str] | None = None
+        for call, line in entry.get("calls", []):
+            if call != short or line in def_lines:
+                continue
+            if lines_cache is None:
+                try:
+                    lines_cache = (Path(index.root) / rel).read_text(errors="replace").splitlines()
+                except OSError:
+                    lines_cache = []
+            enclosing = [
+                d
+                for d in entry["defs"]
+                if d["kind"] in ("function", "method", "nested") and d["start"] <= line <= d["end"]
+            ]
+            enc = max(enclosing, key=lambda d: d["start"]) if enclosing else None
+            text = lines_cache[line - 1].strip() if 0 < line <= len(lines_cache) else ""
+            where = {"qual": enc["qual"], "start": enc["start"], "end": enc["end"]} if enc else None
+            sites.append(
+                {"path": show(index.root, rel), "line": line, "text": text[:200], "enclosing": where}
+            )
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for s in sites:
+        enc = s["enclosing"]
+        key = (
+            s["path"],
+            f"{enc['qual']} ({s['path']}:{enc['start']}-{enc['end']})" if enc else f"(top level) {s['path']}",
+        )
+        groups.setdefault(key, []).append(s)
+    lines: list[str] = []
+    for (_, label), members in groups.items():
+        lines.append(f"── {label} ──")
+        for s in members:
+            lines.append(f"{s['path']}:{s['line']:<6} {s['text']}")
+    n_fn = sum(1 for (_, label) in groups if not label.startswith("(top level)"))
+    n_top = len(groups) - n_fn
+    spread = _n(n_fn, "function") + (f" and the top level of {_n(n_top, 'file')}" if n_top else "")
+    verdict = f"{_n(len(sites), 'call site')} of {name} in {spread} ({CALLERS_NOTE}); {index.clause()}"
+    if not sites:
+        verdict = f"0 call sites of {name} ({CALLERS_NOTE}); {index.clause()}"
+    data = {"call_sites": sites, "groups": len(groups), "precision": "text-based"}
+    return agentio.Result(name, f"{_n(len(sites), 'call site')}, text-based", verdict, lines=lines, data=data)
+
+
+def dependents(index: Index, files: list[str]) -> agentio.Result:
+    targets: list[str] = []
+    for f in files:
+        rel = os.path.relpath(os.path.realpath(f), index.root)
+        if rel not in index.files:
+            raise Outcome(
+                agentio.EXIT_NOT_FOUND, f, "not found",
+                f"{f} is not an indexed source file of {index.root}; {index.clause()}",
+                "symbols outline " + shlex.quote(f),
+            )  # fmt: skip
+        targets.append(rel)
+    graph = resolve_imports(index)
+    direct: dict[str, tuple[int, str]] = {}
+    for importer, edges in graph.items():
+        if importer in targets:
+            continue
+        for target, names, how in edges:
+            if target in targets:
+                prev = direct.get(importer)
+                total = names + (prev[0] if prev else 0)
+                direct[importer] = (total, prev[1] if prev else how)
+    indirect: dict[str, str] = {}
+    for importer, edges in graph.items():
+        if importer in targets or importer in direct:
+            continue
+        for target, _, _ in edges:
+            if target in direct:
+                indirect.setdefault(importer, target)
+    rows: list[dict[str, Any]] = [
+        {"path": show(index.root, p), "depth": 1, "via": how, "names": n}
+        for p, (n, how) in sorted(direct.items(), key=lambda kv: (-kv[1][0], kv[0]))
+    ] + [
+        {"path": show(index.root, p), "depth": 2, "via": show(index.root, t), "names": 0}
+        for p, t in sorted(indirect.items())
+    ]
+    lines = [
+        f"{r['path']:<30} {'direct' if r['depth'] == 1 else 'indirect':<9} "
+        + (f"{r['via']}   ({_n(r['names'], 'name')})" if r["depth"] == 1 else f"via {r['via']}")
+        for r in rows
+    ]
+    shown = ", ".join(show(index.root, t) for t in targets)
+    verdict = (
+        f"{_n(len(rows), 'file')} import {shown}: {len(direct)} directly, {len(indirect)} through them "
+        f"(ranked: direct first, then by names imported); {index.clause()}"
+    )
+    if not rows:
+        verdict = f"0 dependents of {shown}; {index.clause()}"
+    data = {"dependents": rows, "targets": [show(index.root, t) for t in targets]}
+    return agentio.Result(shown, _n(len(rows), "dependent"), verdict, lines=lines, data=data)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

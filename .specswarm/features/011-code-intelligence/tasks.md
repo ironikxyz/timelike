@@ -43,7 +43,7 @@
 
 ## Phase 2: Implementation
 
-- [ ] T003 [US1] [US2] [US3] [US4] [US5] `tools/bin/symbols`, per `contracts/symbols-cli.md`:
+- [X] T003 [US1] [US2] [US3] [US4] [US5] `tools/bin/symbols`, per `contracts/symbols-cli.md`:
   - the index in the session scratch, with freshness on every call (R1), using `search`'s walk and ignore
     rules loaded from `tools/bin/search`;
   - Python via `ast` (R2), and the text-based languages (R3);

@@ -49,7 +49,9 @@ feature mutates, so rule 9 does not apply.
      enclosing functions and imports are exact for Python.
    - **TypeScript/JavaScript, Go, Rust and shell:** read by line patterns for their definition and import
      forms. Their answers say so ("text-based").
-   - **Other files:** answer `def` by a name match only, with a low-precision note.
+   - **Other files:** not indexed in slice 1, and `def`'s not-found answer names `search -w NAME` for them.
+     This was amended at implement, from "a name match with a low-precision note": a second, weaker `def`
+     path for unknown languages would blur the precision the header states.
    - **Why not ctags or tree-sitter now:** universal-ctags and the tree-sitter CLI are approved in
      `tech-stack.md`, but adding them changes `make scan`'s inputs and the bench images. Slice 1's criteria
      are met without them: the 14-entry outline and the 1,000-file timing are Python fixtures, and callers
