@@ -9,7 +9,7 @@
    "defs": [{"name": "Order", "qual": "Order", "kind": "class", "start": 12, "end": 48,
              "sig": "class Order(Base)", "parent": null},
             {"name": "save", "qual": "Order.save", "kind": "method", "start": 30, "end": 41,
-             "sig": "def save(self, force: bool = False) -> None", "parent": "Order"}],
+             "sig": "def save(self, force: bool=False) -> None", "parent": "Order"}],
    "imports": [{"target": "app/db.py", "module": "app.db", "names": ["connect"], "line": 3}],
    "calls": [{"name": "connect", "line": 33}]}}}
 ```

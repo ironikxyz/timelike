@@ -32,7 +32,7 @@
   - binary and large files skipped;
   - a generated 1,000-file warm timing under 2 s;
   - the manifest.
-- [ ] T002 [P] [US1] [US2] [US3] [US4] [US5] e2e, each under `bash -c` and `bash -lc`, with its own
+- [X] T002 [P] [US1] [US2] [US3] [US4] [US5] e2e, each under `bash -c` and `bash -lc`, with its own
   workspace and session:
   - `tests/e2e/symbols-outline-fixture-14-definitions-line-ranges-no-bodies.bats` (SC-1)
   - `tests/e2e/symbols-def-file-and-line-first-exit-3-not-found-under-2s-warm.bats` (SC-2)

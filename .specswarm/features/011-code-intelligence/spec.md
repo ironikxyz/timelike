@@ -68,7 +68,7 @@ feature mutates, so rule 9 does not apply.
 
 ### Scenario 1: a file's shape (SC-1)
 `symbols outline app/models.py` lists the file's 14 classes and functions, nested as they are, each with its
-line range (`12-48`) and its signature (`def save(self, force: bool = False) -> None`). No line of any body is
+line range (`12-48`) and its signature (`def save(self, force: bool=False) -> None`). No line of any body is
 shown.
 
 ### Scenario 2: where is it defined (SC-2)

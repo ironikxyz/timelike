@@ -36,7 +36,7 @@ symbols dependents FILE [FILE…]
 symbols: app/models.py [14 definitions, exact (python)]
 verdict: 14 definitions in app/models.py (exact: python syntax tree); cache: fresh
  12-48   class    class Order(Base)
- 30-41     method   def save(self, force: bool = False) -> None
+ 30-41     method   def save(self, force: bool=False) -> None
  …
 ```
 
@@ -50,7 +50,7 @@ verdict: 14 definitions in app/models.py (exact: python syntax tree); cache: fre
 ```
 symbols: save [3 definitions, exact (python)]
 verdict: save is defined in 3 places; best first: app/orders.py:30 Order.save; cache: fresh
-app/orders.py:30   method   Order.save   def save(self, force: bool = False) -> None
+app/orders.py:30   method   Order.save   def save(self, force: bool=False) -> None
 …
 ```
 

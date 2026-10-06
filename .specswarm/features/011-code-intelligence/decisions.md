@@ -60,3 +60,15 @@ ASSUMED: the delegate's settlements: signatures compared without whitespace (ast
 ABSENT: exit 1 (index unreadable) and exit 124 (walk limit); shell `source` relative to the importer vs the root (both readings agree in the fixture) — named by the delegate as not tested
 Verification: 42 passed (6.5 s), the 1,000-file warm timing under 2 s included; ruff clean
 SCOPE: in (1 changed files)
+
+### T002: e2e (delegated) — SC-1 to SC-5 and the name and manifest, 28 cells
+**Started:** delegated,_written_after_8bac3b4_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-06T17:25:42Z
+
+INHERITED: the contract (as amended at fbf6d71: the cache state ends every verdict); helpers.bash; 010's files as the model (confidence: high)
+FLAGGED: each cell its own workspace (a fresh directory holding .git) and session, checked empty first; fixtures by printf or the image's Python; expected values written by hand (14 definitions, 4 ranked `persist`, 3 planted `save(` calls among decoys in a docstring, a string and comments, 3+1 importers with 3/2/1 names) (confidence: high)
+FLAGGED: SC-2's 2 s bound is measured inside the container around the warm command alone, after a cold call that must report `cache: built (1000 files)` (confidence: high)
+FLAGGED: the contract's example signature now reads `bool=False`, as ast.unparse prints it (the delegate found the example and R2 disagreeing; aligned here in the contract, spec and data model) (confidence: high)
+ASSUMED: the delegate's settlements: `1 file(s) changed` both accepted, depth compared relative to the top level, paths compared relative to the workspace, the `search -w` hint on stdout or stderr (confidence: medium)
+ABSENT: the fourth cache state (an outline outside the index) — no criterion needs it; units cover it
+Verification: shellcheck -x clean over the six files. Host stand-in (advisory): 26 of 28 ok; not ok only the 2 type -a cells (image-only); the warm def on 1,000 files took 168–175 ms there
+SCOPE: in (6 changed files)
