@@ -89,3 +89,14 @@ Verification:
 - e2e host stand-in (advisory): services files 20 of 22, the 2 type -a cells image-only
 - start-up on the host, 20 runs each, every exit asserted 0: `services --help` p50 76 / p95 86 ms; `services list --json` (the probe) p50 89 / p95 92 ms
 SCOPE: in (2 changed files)
+
+### T006: cycle-report.md § Cycle 1 (the pause and its answer; condition 1 declared), implement step 10, .specswarm/metrics.json, the marker
+**Started:** 2026-10-06T17:11:52Z | **Completed:** 2026-10-06T17:12:35Z
+
+INHERITED: every task's record; the pause-09 answer and its three conditions; the host-lane figures — from T005 (confidence: high)
+FLAGGED: changed_other_features names agentio's takes_command, its unit and 001's contract paragraph (the mentor's condition 1), and also run's helpers as an interface services now loads — not asked for, but a change to run's internals would now break services (confidence: high)
+FLAGGED: T004's wrong "ruff clean" is recorded as a process failure, beside the cause-4 pause (confidence: high)
+ASSUMED: `delegations: []` (subagents) (confidence: high)
+ABSENT: `demo_points_reached`; a lane result
+Verification: six citations, each `grep -cF` = 1 in the send; tallies from the installed blocks; metrics.json gains only the 010 entry
+SCOPE: in (1 changed files)
