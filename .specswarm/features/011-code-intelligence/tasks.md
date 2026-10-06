@@ -19,7 +19,7 @@
 
 ## Phase 1: Tests first (from the contract; delegated)
 
-- [ ] T001 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_symbols.py`, per research R7. Fixtures are
+- [X] T001 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_symbols.py`, per research R7. Fixtures are
   written by the test, and counts come from the test's own list. Cover:
   - a 14-definition Python fixture: nested, decorated, async, multi-line signatures, and no body line in
     the output;

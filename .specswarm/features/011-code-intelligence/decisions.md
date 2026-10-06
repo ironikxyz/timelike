@@ -49,3 +49,14 @@ SCOPE: in (1 changed files)
 3. **Go import resolution was inverted:** it required the whole import path to be a suffix of the directory. Now the import path's last segments name the directory (research R3).
 
 One contract amendment: an outline of a file outside the index ends with `cache: not used (outside the index: parsed directly)`, a fourth state. Claiming `fresh` for a file the index never saw would be false; the test's pattern gained exactly that state. 42/42 now.
+
+### T001: tests/unit/test_symbols.py (delegated, from the contract): 42 tests on fixtures the tests write and count
+**Started:** delegated,_written_after_8bac3b4_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-06T17:23:54Z
+
+INHERITED: the contract and research R7; `symbols` as committed at T003 and fixed after this file's first run (confidence: high)
+FLAGGED: expected values come from the fixtures' own definitions (14 definitions listed by hand, 3 planted call sites, 2+1 importers), never from the tool (P005); a comment and a string carrying `save(` must not count (confidence: high)
+FLAGGED: its first run found 3 tool deviations (4 failures), fixed in the tool before this commit; one test pattern widened by exactly the fourth cache state the contract now names (confidence: high)
+ASSUMED: the delegate's settlements: signatures compared without whitespace (ast.unparse prints `bool=False`), a class inside a class left unpinned, JS imports with the `.js` extension (confidence: medium)
+ABSENT: exit 1 (index unreadable) and exit 124 (walk limit); shell `source` relative to the importer vs the root (both readings agree in the fixture) — named by the delegate as not tested
+Verification: 42 passed (6.5 s), the 1,000-file warm timing under 2 s included; ruff clean
+SCOPE: in (1 changed files)
