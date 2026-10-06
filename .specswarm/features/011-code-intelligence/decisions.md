@@ -33,3 +33,12 @@ ASSUMED: a workspace is the nearest ancestor holding .git (a file or a directory
 ABSENT: a cache that survives sessions (the state root, 07 slice 1; FOR-MENTOR Item 20 in T004); resolved calls; languages beyond the five
 Verification: host smoke run on a 3-file Python fixture (outline 6 definitions with nested/async/decorated ranges; def ranked, exit 3 with `search -w`; callers 3 sites in 2 groups, the comment and the string not counted; dependents direct then indirect; a change reported `cache stale: 1 file changed` and answered from the new content). On a generated 1,000-file repository: cold 1882 ms, warm 259 and 284 ms (bound 2 s warm). ruff, format, mypy strict clean; host conformance: 12 tools pass
 SCOPE: in (1 changed files)
+
+### T004: FOR-MENTOR.md Item 20 — the symbols index lives in the session scratch until the state root exists (seam 1)
+**Started:** 2026-10-06T17:20:49Z | **Completed:** 2026-10-06T17:20:59Z
+
+INHERITED: the index location and the measured cold/warm cost — from T003 (confidence: high)
+FLAGGED: raised as an item, not a pause, as the send's seam 1 asks — nothing in slice 1 waits on it (confidence: high)
+ABSENT: moving the index (the state root does not exist yet)
+Verification: the item names what was built, its measured cost, and the one-path change that would move it
+SCOPE: in (1 changed files)
