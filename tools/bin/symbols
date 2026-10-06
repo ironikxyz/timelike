@@ -19,7 +19,6 @@ contracts/symbols-cli.md).
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -31,7 +30,10 @@ import sys
 import time
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import ast
 
 import agentio
 
@@ -113,12 +115,16 @@ def language_of(path: str, head: bytes) -> str | None:
 
 
 def _sig_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    import ast
+
     prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
     sig = f"{prefix} {node.name}({ast.unparse(node.args)})"
     return sig + (f" -> {ast.unparse(node.returns)}" if node.returns is not None else "")
 
 
 def parse_python(text: str) -> dict[str, Any]:
+    import ast  # deferred: only parsing needs it (start-up budget, quality-standards: < 100 ms p95)
+
     tree = ast.parse(text)
     defs: list[dict[str, Any]] = []
 

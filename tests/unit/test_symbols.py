@@ -847,3 +847,135 @@ def test_one_event_per_call(lab: Lab) -> None:
         codes.append(symbols(lab, "--json", *args).returncode)
         assert len(events(lab.scratch, SESSION)) == len(codes), args
     assert codes == [0, 3, 0, 0]
+
+
+# ── T006: paths the delegate's set did not reach (coverage), each on a fixture the test writes ───
+
+
+def _sm() -> Any:
+    import importlib.machinery
+    import importlib.util
+
+    loader = importlib.machinery.SourceFileLoader("timelike_symbols_under_test", str(SYMBOLS))
+    spec = importlib.util.spec_from_loader("timelike_symbols_under_test", loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+SM = _sm()
+
+
+@pytest.mark.parametrize(
+    ("args", "words"),
+    [
+        ([], "needs an action"),
+        (["where", "x"], "unknown action"),
+        (["def"], "takes one NAME"),
+        (["outline", "a", "b"], "takes one FILE"),
+        (["dependents"], "dependents needs FILE"),
+    ],
+)
+def test_usage_errors_exit_2(lab: Lab, args: list[str], words: str) -> None:
+    r = symbols(lab, "--json", *args)
+    assert r.returncode == 2, said(r)
+    assert words in r.stderr, said(r)
+
+
+def test_rust_use_and_mod_resolve_to_files(lab: Lab) -> None:
+    plant(
+        lab.ws,
+        {
+            "src/lib.rs": "mod store;\npub fn run() {}\n",
+            "src/store.rs": "pub fn keep() {}\n",
+            "src/app/mod.rs": "pub fn start() {}\n",
+            "src/main.rs": "use crate::app::start;\nfn main() { start(); }\n",
+        },
+    )
+    d = as_json(lab, "--json", "dependents", "src/store.rs")
+    assert [x["path"] for x in d["dependents"]] == ["src/lib.rs"]
+    d = as_json(lab, "--json", "dependents", "src/app/mod.rs")
+    assert [x["path"] for x in d["dependents"]] == ["src/main.rs"]
+
+
+def test_shell_source_resolves_relative_to_the_importer(lab: Lab) -> None:
+    plant(
+        lab.ws,
+        {"bin/lib/common.sh": "say() { echo hi; }\n", "bin/run.sh": "#!/bin/sh\n. lib/common.sh\nsay\n"},
+    )
+    d = as_json(lab, "--json", "dependents", "bin/lib/common.sh")
+    assert [x["path"] for x in d["dependents"]] == ["bin/run.sh"]
+
+
+def test_js_index_file_and_unresolved_imports(lab: Lab) -> None:
+    plant(
+        lab.ws,
+        {
+            "web/util/index.ts": "export function pad(s: string) { return s; }\n",
+            "web/main.ts": "import { pad } from './util';\nimport x from 'react';\npad('a');\n",
+        },
+    )
+    d = as_json(lab, "--json", "dependents", "web/util/index.ts")
+    assert [x["path"] for x in d["dependents"]] == ["web/main.ts"]
+
+
+def test_dependents_of_a_non_source_file_is_exit_3(lab: Lab) -> None:
+    plant(lab.ws, {"a.py": "x = 1\n", "notes.txt": "hello\n"})
+    r = symbols(lab, "--json", "dependents", "notes.txt")
+    assert r.returncode == 3, said(r)
+
+
+def test_outline_of_a_non_source_file_is_refused(lab: Lab) -> None:
+    plant(lab.ws, {"a.py": "x = 1\n", "notes.txt": "hello\n"})
+    r = symbols(lab, "--json", "outline", "notes.txt")
+    assert r.returncode == 1, said(r)
+    assert "not a source file" in doc_of(r)["verdict"]
+
+
+def test_an_index_that_cannot_be_saved_still_answers(lab: Lab) -> None:
+    plant(lab.ws, {"a.py": "def f():\n    return 1\n"})
+    blocker = lab.tmp / "blocked"
+    blocker.write_text("a file where the scratch root should be a directory")
+    env = lab.env()
+    env["TIMELIKE_SCRATCH_ROOT"] = str(blocker)
+    r = subprocess.run(
+        [sys.executable, str(SYMBOLS), "--json", "def", "f"],
+        cwd=str(lab.ws), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+    )  # fmt: skip
+    assert r.returncode in (0, 1), said(r)
+
+
+def test_the_walk_limit_is_exit_124_and_named(lab: Lab, monkeypatch: pytest.MonkeyPatch) -> None:
+    plant(lab.ws, {f"m{i}.py": f"def f{i}():\n    return {i}\n" for i in range(5)})
+
+    class Ctx:
+        def scratch(self) -> Path:
+            d = lab.tmp / "ctx-scratch"
+            d.mkdir(exist_ok=True)
+            return d
+
+    monkeypatch.setattr(SM, "MAX_FILES", 2)
+    index = SM.Index(Ctx(), str(lab.ws))
+    index.refresh()
+    assert index.limited
+    assert "index incomplete" in index.clause()
+    assert index.clause().rsplit("; ", 1)[-1].startswith("cache: built")
+
+
+def test_text_patterns_edge_cases() -> None:
+    js = SM.parse_text(
+        "class A {\n  run(x) {\n    return go(x);\n  }\n}\nconst f = (a) => a;\n", "javascript"
+    )
+    kinds = {d["qual"]: d["kind"] for d in js["defs"]}
+    assert kinds == {"A": "class", "A.run": "method", "f": "function"}
+    go = SM.parse_text(
+        'package p\nimport (\n  "fmt"\n  s "example.com/p/store"\n)\nfunc (r *T) M() {\n}\n', "go"
+    )
+    assert [i["path"] for i in go["imports"]] == ["fmt", "example.com/p/store"]
+    assert go["defs"][0]["kind"] == "method"
+    sh = SM.parse_text("function a {\n  b\n}\nb() {\n  :\n}\n", "shell")
+    assert [d["name"] for d in sh["defs"]] == ["a", "b"]
+    assert SM.language_of("x", b"#!/usr/bin/env python3\n") == "python"
+    assert SM.language_of("x", b"#!/bin/bash\n") == "shell"
+    assert SM.language_of("x.txt", b"hello") is None

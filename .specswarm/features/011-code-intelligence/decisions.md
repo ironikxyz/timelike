@@ -81,3 +81,21 @@ FLAGGED: committed only after `ruff check` printed "All checks passed!" over too
 ABSENT: a Status bullet (the README's Status lists 001–004 only)
 Verification: ruff check clean, format clean (71 files); mypy strict (25 files); shellcheck over the Makefile's 68 files, every file present
 SCOPE: in (3 changed files)
+
+### T006: host lane — lint, units with coverage, make test-host, conformance, the e2e stand-in, start-up; symbols' unreached paths tested; `ast` deferred
+**Started:** 2026-10-06T17:26:24Z | **Completed:** 2026-10-06T17:45:36Z
+
+INHERITED: every earlier task's files (confidence: high)
+FLAGGED: the traced run had **1 failure, not in this feature:** tests/unit/test_adele_cli.py::test_conform_passes_either_way[reachable] (conform's 5 s probe limit for `adele --text status` under coverage tracing). Re-run untraced 3 times: 2 passed each time (1.3 s); adele and its tests are untouched by 011. Recorded as a load/tracing timing artefact (reboot.md's watch items name the load-dependent timings), not hidden (confidence: medium)
+FLAGGED: symbols was at 90% in the traced run; 12 cases added to tests/unit/test_symbols.py (usage errors, Rust `use crate::`/`mod`, shell `source` relative to the importer, a JS `index.ts`, a non-source file for outline and dependents, an index that cannot be saved, the walk limit, text-pattern edges, shebang languages) — all passed first time; symbols 94% from its own tests (confidence: high)
+FLAGGED: `import ast` deferred to the parse functions (TYPE_CHECKING for annotations): it cost about 5 ms of every call's start-up (`-X importtime`), and `--help` sat at 87 ms p95 against the 100 ms budget (confidence: high)
+ASSUMED: the probe (`outline` of the tool's own 900-line file) measures work, not start-up; it is reported beside the start-up figure (confidence: medium)
+ABSENT: the Docker lane (the mentor's)
+Verification:
+- traced units: 1552 passed, 1 skipped, 1 failed (the adele timing above), 697 s, before the 12 cases; coverage TOTAL 95% (symbols 90% → 94% after them)
+- make test-host: passed (units 1567 untraced; files 60/60; hook 44/44)
+- lint: ruff check and format clean; mypy strict (25 files); shellcheck over the Makefile's 68 files
+- conformance on the host, all 12 tools: pass
+- e2e host stand-in (advisory): symbols files 26 of 28, the 2 type -a cells image-only
+- start-up on the host, 20 runs each, every exit asserted 0: `symbols --help` p95 87 ms before deferring ast, p50 80 / p95 83 ms after; the probe (`outline` of its own 900-line file, work included) p50 119 / p95 130 ms
+SCOPE: in (2 changed files)
