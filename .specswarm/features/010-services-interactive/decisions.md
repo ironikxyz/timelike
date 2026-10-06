@@ -62,3 +62,13 @@ ASSUMED: SC-2 asserts exit 1 exactly (the contract's died code), so a 124 cannot
 ABSENT: tty and pty cells (services is a pipe-and-terminal tool alike; the criteria name no mode)
 Verification: shellcheck -x clean over the six files. Host stand-in (advisory): 20 of 22 ok against the tool after the resume; not ok only the 2 type -a cells (image-only). The delegate's mutation check on a scratch copy: a port check that always succeeds failed all four SC-1 cells; a stop by process group only failed both SC-4 cells
 SCOPE: in (6 changed files)
+
+### T004: pyproject (ruff, mypy lists), Makefile (shellcheck list: the six e2e files), README (a services section)
+**Started:** 2026-10-06T16:54:01Z | **Completed:** 2026-10-06T16:54:11Z
+
+INHERITED: tools/bin/services — from T003 and the resume; the e2e files — from T002 (confidence: high)
+FLAGGED: the README's example names the image's interpreter (/opt/timelike/python/bin/python3) — the image has no `python3` on PATH (found by the T002 delegate) (confidence: high)
+ASSUMED: the announcement (007) lists `services` from its --agent-info summary; no change there (confidence: high)
+ABSENT: a Status bullet (the README's Status section lists 001–004 only)
+Verification: ruff and format clean; mypy strict over the project's files; shellcheck over the Makefile's list, every file present
+SCOPE: in (3 changed files)

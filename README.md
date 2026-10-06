@@ -342,6 +342,34 @@ docker exec timelike-adele adeled ledger --json | docker exec -i timelike-agent 
 - **Secrets:** every printed command and path goes through rule 15's redaction rules. If the rules cannot
   be loaded, commands are withheld, never printed raw.
 
+## services — start it, know when it is ready, stop all of it
+
+`services` runs the agent's own long-running processes (feature 010, prompt 09 slice 1):
+
+```
+services start web --port 8000 -- /opt/timelike/python/bin/python3 -m http.server 8000
+                                # returns when 127.0.0.1:8000 accepts, or it died (exit 1, its log's tail)
+services list                   # state, port, uptime; died ones marked
+services logs web -n 20
+services stop web               # every process of its tree; checks that none remains
+```
+
+- **Every start concludes:**
+  - ready (exit 0);
+  - died before ready (exit 1, with the last log lines);
+  - not ready within `--timeout` (60 s): exit 124, and the service is stopped unless `--keep`.
+
+  It never reports success for a process that has exited.
+- **The whole tree:** a service's processes carry an inherited marker (`TIMELIKE_SERVICE`). `stop` finds
+  them by it, by their hold on the service's log, and by the process group, so a child that called
+  `setsid` is still stopped. `stop` re-scans and names anything left.
+- **Ports:** a start on a port another registered service holds is refused, naming the holder.
+  Readiness checks the loopback address only.
+- **No daemon:** the registry is a file in the session scratch, which is disposable. A service whose
+  records were cleared shows in `list` as unlisted.
+- **Rule 9:** your own `start` and `stop` need no `--yes` (`stop --dry-run` lists the processes).
+  Stopping another session's service (`--session S`), or `--all`, asks for `--yes`.
+
 ## Speedup bench
 
 ```bash

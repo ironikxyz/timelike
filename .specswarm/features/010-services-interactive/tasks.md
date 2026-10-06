@@ -55,7 +55,7 @@
   - `list`, including unlisted marker processes;
   - `logs`;
   - the registry under flock.
-- [ ] T004 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files),
+- [X] T004 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files),
   `README.md` (a services section).
 
 ## Phase 3: Polish

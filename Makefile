@@ -67,6 +67,11 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/journal-shell-commands-outside-tools-with-exit-codes.bats \
   tests/e2e/journal-last-20-entries-of-current-session-bounded.bats \
   tests/e2e/journal-concurrent-agents-separable-by-agent-and-session.bats tests/e2e/journal-name-and-manifest.bats \
+  tests/e2e/services-start-with-port-readiness-returns-after-port-accepts.bats \
+  tests/e2e/services-start-exits-before-ready-non-zero-died-last-log-lines.bats \
+  tests/e2e/services-start-port-held-by-registered-service-refused-naming-holder.bats \
+  tests/e2e/services-stop-terminates-every-process-in-its-tree.bats \
+  tests/e2e/services-list-state-port-uptime-marks-died.bats tests/e2e/services-name-and-manifest.bats \
   image/rootfs/opt/timelike/libexec/entrypoint \
   tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \

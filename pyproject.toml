@@ -4,7 +4,7 @@
 [tool.ruff]
 target-version = "py312"
 line-length = 110
-extend-include = ["tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "tools/bin/snapshot", "tools/bin/undo", "tools/bin/view", "tools/bin/search", "tools/bin/edit", "tools/bin/journal", "bench/bin/timelike-bench", "tests/fixtures/bad-tool/timelike-bad", "tests/fixtures/bad-tool/timelike-hang"]
+extend-include = ["tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "tools/bin/snapshot", "tools/bin/undo", "tools/bin/view", "tools/bin/search", "tools/bin/edit", "tools/bin/journal", "tools/bin/services", "bench/bin/timelike-bench", "tests/fixtures/bad-tool/timelike-bad", "tests/fixtures/bad-tool/timelike-hang"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
@@ -20,7 +20,7 @@ ignore = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["tools/agentio/agentio.py", "tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "tools/bin/snapshot", "tools/bin/undo", "tools/bin/view", "tools/bin/search", "tools/bin/edit", "tools/bin/journal", "scan/evaluate.py", "scan/denylist.py", "bench/benchlib", "bench/bin/timelike-bench"]
+files = ["tools/agentio/agentio.py", "tools/bin/timelike", "tools/bin/timelike-conform", "tools/bin/run", "tools/bin/adele", "tools/bin/snapshot", "tools/bin/undo", "tools/bin/view", "tools/bin/search", "tools/bin/edit", "tools/bin/journal", "tools/bin/services", "scan/evaluate.py", "scan/denylist.py", "bench/benchlib", "bench/bin/timelike-bench"]
 mypy_path = "tools/agentio:bench"
 scripts_are_modules = true
 
