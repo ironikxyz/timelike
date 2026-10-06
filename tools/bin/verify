@@ -1,0 +1,1446 @@
+#!/opt/timelike/python/bin/python3 -I
+"""verify — run tests and report only the failures, with their locations; or check what a change affects.
+
+`verify test -- CMD` (or `verify CMD`) runs CMD through `run`, reads the log `run` wrote, and reports the
+counts and each failure's file, line, test name and first assertion lines, for pytest, jest, vitest,
+go test and cargo test. The format is read from the output's concluding summary, never from the command's
+name; any other output falls back to `run`'s verdict, marked `format unknown`. The exit is the command's.
+
+`verify changed` takes the working changes (git), selects the tests importing a changed file (through
+`symbols dependents`, directly or through one other file), and lints and type-checks the changed files
+only. It runs each step through `run`, and says what it selected and why. A selected check that cannot
+run fails the call: not running a check is not passing it (P1).
+
+Design: .specswarm/features/012-verify-changed/ (spec, research R1-R7, data-model.md,
+contracts/verify-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from typing import Any, NoReturn
+
+import agentio
+
+FORMATS = ("pytest", "jest", "vitest", "go", "cargo")
+ASSERTION_LINES = 5
+BATCH_DEPENDENTS_OVER = 50
+MAX_LOG_BYTES = 64 * 1024 * 1024
+UNKNOWN_WORDS = "format unknown: no pytest, jest, vitest, go test or cargo test summary"
+SUPERSET_WORDS = (
+    "tests importing a changed file directly or through one other file "
+    "(a superset; text-based outside Python)"
+)
+SOURCE_EXTS = {
+    ".py": "python",
+    ".js": "js", ".mjs": "js", ".cjs": "js", ".jsx": "js",
+    ".ts": "js", ".tsx": "js", ".mts": "js", ".cts": "js",
+    ".go": "go",
+    ".rs": "rust",
+    ".sh": "shell", ".bash": "shell",
+}  # fmt: skip
+CACHE_DIRS = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
+_ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
+
+TOOL = agentio.Tool(
+    name="verify",
+    target="tests",
+    summary="run tests and see only the failures, with file and line; or check only what a change affects",
+    usage=[
+        "verify test [--timeout S] -- CMD [ARG...]   failures only; $? is CMD's",
+        "verify CMD [ARG...]                         the same (CMD is not test or changed)",
+        "verify changed [--since REF] [--timeout S] [--dry-run]",
+        "  tests importing the changed files, lint and type-check of the changed files only",
+        "formats: pytest, jest, vitest, go test, cargo test; others: run's verdict, format unknown",
+        "lint: ruff, eslint; type-check: mypy, tsc; looked up in .venv/bin, node_modules/.bin, PATH",
+        "global flags (--json, --text, --limit) go before test, changed or CMD",
+    ],
+    probe=("true",),
+    passes_exit=True,
+    exit_codes={
+        agentio.EXIT_OK: "passed, or nothing selected",
+        agentio.EXIT_FAILURE: "failures, a selected check not run, or run itself failed",
+        agentio.EXIT_USAGE: "usage, or changed outside a git repository",
+        agentio.EXIT_TIMEOUT: "a command hit run's time limit",
+    },
+    manifest_extra=lambda: {
+        "formats": list(FORMATS),
+        "assertion_lines": ASSERTION_LINES,
+        "batch_dependents_over": BATCH_DEPENDENTS_OVER,
+        "subcommands": ["test", "changed"],
+    },
+    event_ref=("log", "log"),
+)
+
+
+# ── running a command through run ──────────────────────────────────────────────────────────────
+
+
+@dataclass
+class RunResult:
+    exit: int
+    command_exit: int | None
+    cause: str
+    seconds: float
+    log: str
+    verdict: str
+    lines: list[str]
+    withheld: bool
+    text: str  # the log, ANSI-stripped; empty when it could not be read
+
+
+class RunFailed(Exception):
+    """`run` could not be started, or its result could not be read (contract § test: scope internal)."""
+
+
+def sibling(name: str) -> str:
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), name)
+
+
+def run_command(argv: Sequence[str], cwd: str | None, timeout: float | None) -> RunResult:
+    """Run argv through `run --json` (seam 2) and read its result and log."""
+    run = sibling("run")
+    cmd = [run, "--json", "--limit", "0"]
+    if timeout is not None:
+        cmd += ["--timeout", format_seconds(timeout)]
+    cmd += ["--", *argv]
+    try:
+        p = subprocess.run(
+            cmd,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+    except OSError as e:
+        raise RunFailed(f"run could not be started: {run}: {e.strerror}") from None
+    try:
+        doc = json.loads(p.stdout)
+        if not isinstance(doc, dict):
+            raise ValueError("not an object")
+    except ValueError:
+        said = (p.stderr or p.stdout).strip().splitlines()
+        last = said[-1] if said else "no output"
+        raise RunFailed(f"run's result could not be read: {run} exited {p.returncode}: {last}") from None
+    redaction = doc.get("redaction")
+    withheld = isinstance(redaction, dict) and redaction.get("state") == "unavailable"
+    log = str(doc.get("log") or "")
+    text = ""
+    if log:
+        try:
+            with open(log, "rb") as f:
+                text = _ANSI.sub("", f.read(MAX_LOG_BYTES).decode("utf-8", "replace")).replace("\r", "")
+        except OSError:
+            text = ""
+    command_exit = doc.get("command_exit")
+    return RunResult(
+        exit=int(doc.get("exit", p.returncode)),
+        command_exit=command_exit if isinstance(command_exit, int) else None,
+        cause=str(doc.get("cause") or "internal"),
+        seconds=float(doc.get("duration_s") or 0.0),
+        log=log,
+        verdict=str(doc.get("verdict") or ""),
+        lines=[str(x) for x in doc.get("lines") or []],
+        withheld=withheld,
+        text=text,
+    )
+
+
+def format_seconds(s: float) -> str:
+    return str(int(s)) if float(s).is_integer() else str(s)
+
+
+# ── reports: the five formats (research R3) ────────────────────────────────────────────────────
+
+
+@dataclass
+class Failure:
+    test: str
+    file: str | None = None
+    line: int | None = None
+    lines: list[str] = field(default_factory=list)
+
+    def data(self) -> dict[str, Any]:
+        return {"test": self.test, "file": self.file, "line": self.line, "lines": self.lines}
+
+
+@dataclass
+class Report:
+    format: str
+    failed: int | None = None
+    passed: int | None = None
+    skipped: int | None = None
+    errors: int | None = None
+    failures: list[Failure] = field(default_factory=list)
+    note: str = ""
+
+    def counts(self) -> dict[str, int | None]:
+        return {"failed": self.failed, "passed": self.passed, "skipped": self.skipped, "errors": self.errors}
+
+    def summary(self) -> str:
+        parts = []
+        if self.failed:
+            parts.append(f"{self.failed} failed")
+        if self.errors:
+            parts.append(f"{self.errors} {'error' if self.errors == 1 else 'errors'}")
+        if self.passed is None:
+            parts.append(
+                "passes not reported (go test without -v)" if self.format == "go" else "passes unknown"
+            )
+        else:
+            parts.append(f"{self.passed} passed")
+        if self.skipped:
+            parts.append(f"{self.skipped} skipped")
+        return ", ".join(parts)
+
+    def bad(self) -> bool:
+        return bool(self.failed or self.errors or self.failures)
+
+
+def first_lines(lines: Sequence[str], n: int = ASSERTION_LINES) -> list[str]:
+    out = [x.rstrip() for x in lines if x.strip()]
+    return out[:n]
+
+
+def same_file(path: str, wanted: str) -> bool:
+    a, b = path.removeprefix("./"), wanted.removeprefix("./")
+    return a == b or a.endswith("/" + b) or b.endswith("/" + a)
+
+
+# pytest ──────────────────────────────────────────────────────────────────────────────────────────
+
+PY_SUMMARY = re.compile(r"^=+ (?P<body>.*?) in [\d.]+s(?: \([^)]*\))? =+$")
+PY_SUMMARY_Q = re.compile(r"^(?P<body>(?:no tests ran|\d+ \w+)(?:, \d+ \w+)*) in [\d.]+s(?: \([^)]*\))?$")
+PY_COUNT = re.compile(r"(\d+) (failed|passed|skipped|errors?|xfailed|xpassed)\b")
+PY_SHORT = re.compile(r"^(FAILED|ERROR) (.+?)(?: - (.*))?$")
+PY_BLOCK = re.compile(r"^_{3,} (.+?) _{3,}$")
+PY_LOC = re.compile(r"^([^\s:]+\.py):(\d+):")
+
+
+def parse_pytest(text: str) -> Report | None:
+    lines = text.splitlines()
+    body = None
+    for x in reversed(lines):
+        m = PY_SUMMARY.match(x) or PY_SUMMARY_Q.match(x)
+        if m:
+            body = m.group("body")
+            break
+    if body is None:
+        return None
+    r = Report("pytest", failed=0, passed=0, skipped=0, errors=0)
+    for n, word in PY_COUNT.findall(body):
+        k = int(n)
+        if word == "failed":
+            r.failed = k
+        elif word == "passed":
+            r.passed = k
+        elif word == "skipped":
+            r.skipped = k
+        elif word.startswith("error"):
+            r.errors = k
+    blocks: dict[str, list[str]] = {}
+    order: list[str] = []
+    current: list[str] | None = None
+    in_section = False
+    for x in lines:
+        if x.startswith("=") and x.rstrip("=").strip():
+            title = x.strip("= ").strip()
+            in_section = title in ("FAILURES", "ERRORS")
+            current = None
+            continue
+        if not in_section:
+            continue
+        m = PY_BLOCK.match(x)
+        if m:
+            current = blocks.setdefault(m.group(1), [])
+            order.append(m.group(1))
+            continue
+        if current is not None:
+            current.append(x)
+    shorts = [m for m in map(PY_SHORT.match, lines) if m]
+    used: set[str] = set()
+    if shorts:
+        for m in shorts:
+            nodeid = m.group(2).strip()
+            path, _, rest = nodeid.partition("::")
+            key = rest.replace("::", ".")
+            name = next((b for b in order if b not in used and (b == key or b.endswith(" " + key))), None)
+            if name is None:
+                name = next((b for b in order if b not in used and key and key in b), None)
+            if name is not None:
+                used.add(name)
+            r.failures.append(pytest_failure(nodeid, path, blocks.get(name or "", []), m.group(3)))
+    else:
+        for name in order:
+            r.failures.append(pytest_failure(name, "", blocks[name], None))
+    return r
+
+
+def pytest_failure(test: str, path: str, block: list[str], message: str | None) -> Failure:
+    f = Failure(test)
+    locs = [(m.group(1), int(m.group(2))) for m in map(PY_LOC.match, block) if m]
+    own = [loc for loc in locs if path and same_file(loc[0], path)]
+    loc = own[-1] if own else (locs[-1] if locs else None)
+    if loc is not None:
+        f.file, f.line = loc
+    elif path:
+        f.file = path
+    e_lines = [x[1:].strip() for x in block if x.startswith("E ")]
+    f.lines = first_lines(e_lines) or ([message] if message else [])
+    return f
+
+
+# jest ────────────────────────────────────────────────────────────────────────────────────────────
+
+JEST_SUMMARY = re.compile(r"^Tests:\s+(.*?)\b(\d+) total\s*$")
+JEST_COUNT = re.compile(r"(\d+) (failed|passed|skipped|todo|pending)")
+JEST_FILE = re.compile(r"^(FAIL|PASS)\s+(\S+)")
+JEST_BLOCK = re.compile(r"^  ● (.+?)\s*$")
+JEST_AT = re.compile(r"^\s+at .*?\(?((?:[A-Za-z]:)?[^\s()]+):(\d+):(\d+)\)?\s*$")
+FRAME = re.compile(r"^\s*>?\s*\d+\s*\|")
+JEST_POINTER = re.compile(r"^\s*>\s*(\d+)\s*\|")
+
+
+def parse_jest(text: str) -> Report | None:
+    lines = text.splitlines()
+    summary = next((m for m in map(JEST_SUMMARY.match, reversed(lines)) if m), None)
+    if summary is None:
+        return None
+    r = Report("jest", failed=0, passed=0, skipped=0)
+    for n, word in JEST_COUNT.findall(summary.group(1)):
+        if word == "failed":
+            r.failed = int(n)
+        elif word == "passed":
+            r.passed = int(n)
+        else:
+            r.skipped = (r.skipped or 0) + int(n)
+    file = ""
+    block: list[str] | None = None
+    title = ""
+
+    def close() -> None:
+        if block is not None:
+            r.failures.append(jest_failure(title, file, block))
+
+    for x in lines:
+        fm = JEST_FILE.match(x)
+        bm = JEST_BLOCK.match(x)
+        if fm or x.startswith(("Test Suites:", "Tests:")):
+            close()
+            block = None
+            if fm:
+                file = fm.group(2)
+            continue
+        if bm:
+            close()
+            title, block = bm.group(1), []
+            continue
+        if block is not None:
+            block.append(x)
+    close()
+    return r
+
+
+def jest_failure(title: str, file: str, block: list[str]) -> Failure:
+    file = file.removeprefix("./")
+    f = Failure(f"{file} › {title}" if file else title)
+    text_part: list[str] = []
+    for x in block:
+        if FRAME.match(x) or JEST_AT.match(x):
+            break
+        text_part.append(x)
+    f.lines = first_lines(text_part)
+    ats = [(m.group(1), int(m.group(2))) for m in map(JEST_AT.match, block) if m]
+    own = [a for a in ats if file and same_file(a[0], file)]
+    if own:
+        f.file, f.line = own[0]
+    else:
+        pointer = next((m for m in map(JEST_POINTER.match, block) if m), None)
+        if ats and "node_modules" not in ats[0][0]:
+            f.file, f.line = ats[0]
+        elif pointer and file:
+            f.file, f.line = file, int(pointer.group(1))
+    if f.file:
+        f.file = f.file.removeprefix("./")
+    return f
+
+
+# vitest ──────────────────────────────────────────────────────────────────────────────────────────
+
+VITEST_TESTS = re.compile(r"^\s*Tests\s+(.+?)\s*\((\d+)\)\s*$")
+VITEST_FILES = re.compile(r"^\s*Test Files\s+")
+VITEST_COUNT = re.compile(r"(\d+) (failed|passed|skipped|todo)")
+VITEST_FAIL = re.compile(r"^\s*FAIL\s+(\S+)(?: > (.+?))?(?: \[ .* \])?\s*$")
+VITEST_LOC = re.compile(r"^\s*❯ (?:\S+ )?((?:[A-Za-z]:)?[^\s]+?):(\d+):(\d+)\s*$")
+VITEST_END = re.compile(r"^⎯+")
+
+
+def parse_vitest(text: str) -> Report | None:
+    lines = text.splitlines()
+    if not any(VITEST_FILES.match(x) for x in lines):
+        return None
+    tests = next((m for m in map(VITEST_TESTS.match, reversed(lines)) if m), None)
+    r = Report("vitest")
+    if tests is not None:
+        r.failed, r.passed, r.skipped = 0, 0, 0
+        for n, word in VITEST_COUNT.findall(tests.group(1)):
+            if word == "failed":
+                r.failed = int(n)
+            elif word == "passed":
+                r.passed = int(n)
+            else:
+                r.skipped = (r.skipped or 0) + int(n)
+    else:
+        r.note = "no Tests line: the test files failed before any test ran"
+    block: list[str] | None = None
+    head: re.Match[str] | None = None
+    for x in [*lines, "⎯"]:
+        m = VITEST_FAIL.match(x)
+        if m or VITEST_END.match(x):
+            if block is not None and head is not None:
+                r.failures.append(vitest_failure(head, block))
+            block, head = ([], m) if m else (None, None)
+            continue
+        if block is not None:
+            block.append(x)
+    return r
+
+
+def vitest_failure(head: re.Match[str], block: list[str]) -> Failure:
+    file, title = head.group(1), head.group(2)
+    f = Failure(f"{file} > {title}" if title else file)
+    text_part: list[str] = []
+    for x in block:
+        if VITEST_LOC.match(x) or FRAME.match(x):
+            break
+        text_part.append(x)
+    f.lines = first_lines(text_part)
+    locs = [(m.group(1), int(m.group(2))) for m in map(VITEST_LOC.match, block) if m]
+    own = [loc for loc in locs if same_file(loc[0], file)]
+    loc = own[0] if own else (locs[0] if locs else None)
+    if loc is not None:
+        f.file, f.line = loc
+    return f
+
+
+# go test ─────────────────────────────────────────────────────────────────────────────────────────
+
+GO_PKG = re.compile(r"^(ok|FAIL|\?)\s+(\S+)\s+(?:[\d.]+s|\(cached\)|\[[^\]]+\])")
+GO_STATUS = re.compile(r"^(\s*)--- (FAIL|PASS|SKIP): (\S+) \(")
+GO_RUN = re.compile(r"^=== (?:RUN|CONT)\s+(\S+)")
+GO_MSG = re.compile(r"^\s+([\w./-]+\.go):(\d+): ?(.*)$")
+GO_BUILD = re.compile(r"^FAIL\s+(\S+)\s+\[(build failed|setup failed)\]")
+GO_COMPILE = re.compile(r"^((?:\./)?[\w./-]+\.go):(\d+):\d+: (.*)$")
+
+
+def parse_go(text: str) -> Report | None:
+    lines = text.splitlines()
+    if not any(GO_PKG.match(x) or GO_STATUS.match(x) for x in lines):
+        return None
+    verbose = any(GO_RUN.match(x) for x in lines)
+    r = Report("go", failed=0, passed=0 if verbose else None, skipped=0)
+    msgs: dict[str, list[tuple[str, int, str]]] = {}
+    failing: list[str] = []
+    current = ""
+    for x in lines:
+        rm = GO_RUN.match(x)
+        sm = GO_STATUS.match(x)
+        mm = GO_MSG.match(x)
+        if rm:
+            current = rm.group(1)
+        elif sm:
+            depth, state, name = len(sm.group(1)), sm.group(2), sm.group(3)
+            if state == "FAIL":
+                failing.append(name)
+                current = name
+                if depth == 0:
+                    r.failed = (r.failed or 0) + 1
+            elif depth == 0 and state == "PASS" and r.passed is not None:
+                r.passed += 1
+            elif depth == 0 and state == "SKIP":
+                r.skipped = (r.skipped or 0) + 1
+        elif mm and current:
+            msgs.setdefault(current, []).append((mm.group(1), int(mm.group(2)), mm.group(3)))
+        elif x.startswith("        ") and current and msgs.get(current):
+            file, line, msg = msgs[current][-1]
+            msgs[current][-1] = (file, line, f"{msg} {x.strip()}")
+    for name in failing:
+        if any(other.startswith(name + "/") for other in failing):
+            continue  # a parent that failed through its subtests: the leaf is reported
+        f = Failure(name)
+        found = msgs.get(name, [])
+        if found:
+            f.file, f.line = found[0][0], found[0][1]
+        f.lines = first_lines([m[2] for m in found])
+        r.failures.append(f)
+    compile_errors = [m for m in map(GO_COMPILE.match, lines) if m]
+    for m in filter(None, map(GO_BUILD.match, lines)):
+        f = Failure(f"{m.group(1)} [{m.group(2)}]")
+        if compile_errors:
+            f.file, f.line = compile_errors[0].group(1).removeprefix("./"), int(compile_errors[0].group(2))
+        f.lines = first_lines([c.group(0) for c in compile_errors])
+        r.failures.append(f)
+        r.errors = (r.errors or 0) + 1
+    return r
+
+
+# cargo test ──────────────────────────────────────────────────────────────────────────────────────
+
+CARGO_RESULT = re.compile(r"^test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored")
+CARGO_BLOCK = re.compile(r"^---- (\S+) stdout ----$")
+CARGO_PANIC = re.compile(r"panicked at (?:'(.*)', )?([^\s:]+):(\d+):(\d+):?")
+CARGO_FAILED = re.compile(r"^test (\S+) \.\.\. FAILED$")
+
+
+def parse_cargo(text: str) -> Report | None:
+    lines = text.splitlines()
+    results = [m for m in map(CARGO_RESULT.match, lines) if m]
+    if not results:
+        return None
+    r = Report(
+        "cargo",
+        passed=sum(int(m.group(1)) for m in results),
+        failed=sum(int(m.group(2)) for m in results),
+        skipped=sum(int(m.group(3)) for m in results),
+    )
+    blocks: dict[str, list[str]] = {}
+    current: list[str] | None = None
+    for x in lines:
+        m = CARGO_BLOCK.match(x)
+        if m:
+            current = blocks.setdefault(m.group(1), [])
+        elif x == "failures:" or x.startswith("test result:"):
+            current = None
+        elif current is not None:
+            current.append(x)
+    names = list(dict.fromkeys(m.group(1) for m in map(CARGO_FAILED.match, lines) if m)) or list(blocks)
+    for name in names:
+        f = Failure(name)
+        block = blocks.get(name, [])
+        after: list[str] = []
+        for i, x in enumerate(block):
+            pm = CARGO_PANIC.search(x)
+            if pm:
+                f.file, f.line = pm.group(2), int(pm.group(3))
+                if pm.group(1):
+                    after.append(pm.group(1))
+                for y in block[i + 1 :]:
+                    if y.startswith("note:") or CARGO_PANIC.search(y):
+                        break
+                    after.append(y)
+                break
+        f.lines = first_lines(after)
+        r.failures.append(f)
+    return r
+
+
+PARSERS: dict[str, Callable[[str], Report | None]] = {
+    "pytest": parse_pytest,
+    "jest": parse_jest,
+    "vitest": parse_vitest,
+    "go": parse_go,
+    "cargo": parse_cargo,
+}
+
+
+def read_report(text: str) -> Report:
+    """The first format whose concluding summary is in the output (R3's order), else unknown."""
+    for name in FORMATS:
+        rep = PARSERS[name](text)
+        if rep is not None:
+            return rep
+    return Report("unknown")
+
+
+# ── linter diagnostics ─────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class Diagnostic:
+    file: str
+    line: int
+    col: int | None
+    message: str
+    code: str | None
+
+    def data(self) -> dict[str, Any]:
+        return {
+            "file": self.file,
+            "line": self.line,
+            "col": self.col,
+            "message": self.message,
+            "code": self.code,
+        }
+
+    def text(self) -> str:
+        where = f"{self.file}:{self.line}" + (f":{self.col}" if self.col else "")
+        return f"{where}  {self.code + ' ' if self.code else ''}{self.message}"
+
+
+RUFF_LINE = re.compile(r"^(\S+?):(\d+):(\d+): ([A-Z]+\d+) (?:\[\*\] )?(.*)$")
+MYPY_LINE = re.compile(r"^(\S+?):(\d+)(?::(\d+))?: error: (.*?)(?:  \[([\w-]+)\])?$")
+TSC_LINE = re.compile(r"^(\S+?)\((\d+),(\d+)\): error (TS\d+): (.*)$")
+TSC_PRETTY = re.compile(r"^(\S+?):(\d+):(\d+) - error (TS\d+): (.*)$")
+ESLINT_FILE = re.compile(r"^(/\S.*|\S+\.\w+)$")
+ESLINT_LINE = re.compile(r"^\s+(\d+):(\d+)\s+(error|warning)\s+(.*?)\s{2,}(\S+)$")
+
+
+def read_diagnostics(tool: str, text: str, workspace: str) -> list[Diagnostic]:
+    out: list[Diagnostic] = []
+    lines = text.splitlines()
+    if tool == "ruff":
+        for m in filter(None, map(RUFF_LINE.match, lines)):
+            out.append(Diagnostic(m.group(1), int(m.group(2)), int(m.group(3)), m.group(5), m.group(4)))
+    elif tool == "mypy":
+        for m in filter(None, map(MYPY_LINE.match, lines)):
+            col = int(m.group(3)) if m.group(3) else None
+            out.append(Diagnostic(m.group(1), int(m.group(2)), col, m.group(4), m.group(5)))
+    elif tool == "tsc":
+        for m in filter(None, (TSC_LINE.match(x) or TSC_PRETTY.match(x) for x in lines)):
+            out.append(Diagnostic(m.group(1), int(m.group(2)), int(m.group(3)), m.group(5), m.group(4)))
+    elif tool == "eslint":
+        file = ""
+        for x in lines:
+            lm = ESLINT_LINE.match(x)
+            if lm and file:
+                out.append(Diagnostic(file, int(lm.group(1)), int(lm.group(2)), lm.group(4), lm.group(5)))
+            elif ESLINT_FILE.match(x) and not x.startswith(("✖", " ")):
+                file = relative(x.strip(), workspace)
+    return out
+
+
+def relative(path: str, workspace: str) -> str:
+    if os.path.isabs(path):
+        try:
+            return os.path.relpath(path, workspace)
+        except ValueError:
+            return path
+    return path
+
+
+# ── verify test ────────────────────────────────────────────────────────────────────────────────
+
+
+def failure_lines(rep: Report, withheld: bool) -> list[str]:
+    out: list[str] = []
+    for f in rep.failures:
+        where = f"{f.file}:{f.line}" if f.file and f.line else (f.file or "(location not in the output)")
+        out.append(f"{where}  {f.test}")
+        if not withheld:
+            out += [f"    {x.strip()}" for x in f.lines]
+    detailed = len(rep.failures)
+    expected = (rep.failed or 0) + (rep.errors or 0)
+    if expected > detailed:
+        out.append(f"({expected - detailed} more not detailed in the output; see the log)")
+    return out
+
+
+def run_part(rr: RunResult) -> str:
+    """`run`'s verdict without its line count, and with `exit N` alone when the command simply exited.
+
+    Every further part `run` adds (timeout, detached children, memory, disk, redaction) is kept as `run`
+    words it (seam 2: the concluding behaviour is `run`'s, and so are its words).
+    """
+    parts = rr.verdict.split(" · ") if rr.verdict else []
+    if not parts:
+        return f"exit {rr.exit} · log {rr.log}"
+    first = parts[0]
+    if rr.cause == "command" and first == f"exit {rr.exit} (command exited {rr.command_exit})":
+        first = f"exit {rr.exit}"
+    rest = [x for x in parts[1:] if not re.fullmatch(r"\d+ lines?", x)]
+    return " · ".join([first, *rest])
+
+
+def cmd_test(command: list[str], timeout: float | None, ctx: agentio.Context) -> agentio.Result:
+    target = shlex.join(command)
+    try:
+        rr = run_command(command, None, timeout)
+    except RunFailed as e:
+        return agentio.Result(
+            target,
+            "internal",
+            str(e),
+            data={"format": "unknown", "counts": Report("unknown").counts(), "failures": []},
+            exit=agentio.EXIT_FAILURE,
+            cause="internal",
+        )
+    data: dict[str, Any] = {
+        "format": "unknown",
+        "counts": Report("unknown").counts(),
+        "failures": [],
+        "run": run_data(rr),
+        "log": rr.log,
+        "withheld": rr.withheld,
+    }
+    if rr.cause == "internal" and rr.command_exit is None and rr.exit != agentio.EXIT_TIMEOUT:
+        return agentio.Result(
+            target,
+            "internal",
+            f"run failed: {run_part(rr)} ({sibling('run')})",
+            rr.lines,
+            data=data,
+            exit=agentio.EXIT_FAILURE,
+            cause="internal",
+        )
+    rep = read_report(rr.text)
+    if rr.withheld:
+        for f in rep.failures:
+            f.lines = []  # the program's data stays withheld; the runner's structure does not
+    data.update(format=rep.format, counts=rep.counts(), failures=[f.data() for f in rep.failures])
+    cut: agentio.Cut | None = None
+    if rep.format == "unknown":
+        verdict = f"{rr.verdict or run_part(rr)} · {UNKNOWN_WORDS}"
+        body = rr.lines if rr.withheld else rr.text.splitlines()
+        scope = "format unknown"
+    else:
+        verdict = f"{rep.summary()} ({rep.format}) · {run_part(rr)}"
+        if rep.note:
+            verdict += f" · {rep.note}"
+        if rr.cause == "timeout":
+            verdict += f" · {len(rep.failures)} failed so far"
+        if rr.withheld:
+            verdict += " · assertion lines withheld: redaction rules unavailable"
+        body = failure_lines(rep, rr.withheld)
+        cut = cut_blocks(body, ctx, rr.log)
+        scope = rep.format
+    return agentio.Result(
+        target,
+        scope,
+        verdict,
+        body,
+        data=data,
+        exit=rr.exit,
+        cause=rr.cause,
+        command_exit=rr.command_exit,
+        cut=cut,
+    )
+
+
+def cut_blocks(body: list[str], ctx: agentio.Context, log: str) -> agentio.Cut | None:
+    """Rule 3 over whole failure blocks: those that fit --limit, then the omission naming run's log."""
+    if ctx.limit <= 0 or len(body) <= ctx.limit:
+        return None
+    blocks: list[list[str]] = []
+    for x in body:
+        if x.startswith("    ") and blocks:
+            blocks[-1].append(x)
+        else:
+            blocks.append([x])
+    kept: list[str] = []
+    n = 0
+    for b in blocks:
+        if kept and len(kept) + len(b) > ctx.limit:
+            break
+        kept += b
+        n += 1
+    rest = body[len(kept) :]
+    more = shlex.join(["verify", *without_limit(ctx.argv), "--limit", "0"])
+    return agentio.Cut(
+        [(f"failures 1–{n} of {len(blocks)}", kept)],
+        omitted_lines=len(rest),
+        omitted_bytes=sum(len(x.encode()) + 1 for x in rest),
+        full_output=log,
+        more=more,
+    )
+
+
+def without_limit(argv: list[str]) -> list[str]:
+    """argv without its --limit (one of the leading global options), for the `more:` command."""
+    out: list[str] = []
+    skip = False
+    for i, a in enumerate(argv):
+        if skip:
+            skip = False
+            continue
+        if a == "--limit":
+            skip = True
+            continue
+        if a.startswith("--limit="):
+            continue
+        if not a.startswith("-") or a == "--":
+            return out + argv[i:]
+        out.append(a)
+    return out
+
+
+def run_data(rr: RunResult) -> dict[str, Any]:
+    return {
+        "exit": rr.exit,
+        "command_exit": rr.command_exit,
+        "cause": rr.cause,
+        "seconds": rr.seconds,
+        "log": rr.log,
+        "verdict": rr.verdict,
+    }
+
+
+# ── verify changed: the change set and the selection (research R4) ─────────────────────────────
+
+
+@dataclass
+class Change:
+    path: str
+    status: str  # modified | added | deleted | renamed | untracked
+
+
+def git(workspace: str, *args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", "-c", "core.fsmonitor=false", "-C", workspace, *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+    )
+
+
+def git_toplevel() -> str:
+    try:
+        p = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "rev-parse", "--show-toplevel"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        raise agentio.UsageError(
+            "verify changed needs git, which was not found", "use verify test -- CMD"
+        ) from None
+    if p.returncode != 0 or not p.stdout.strip():
+        raise agentio.UsageError(
+            f"verify changed needs a git repository; {os.getcwd()} is not in one", "use verify test -- CMD"
+        )
+    return p.stdout.strip()
+
+
+def change_set(workspace: str, since: str | None) -> list[Change]:
+    changes: dict[str, Change] = {}
+    if since is None:
+        p = git(workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+        if p.returncode != 0:
+            raise agentio.ToolError(
+                agentio.EXIT_FAILURE,
+                f"git status failed: {p.stderr.decode(errors='replace').strip()}",
+                "run git status in the workspace",
+            )
+        parts = p.stdout.decode(errors="surrogateescape").split("\0")
+        i = 0
+        while i < len(parts):
+            entry = parts[i]
+            i += 1
+            if len(entry) < 4:
+                continue
+            xy, path = entry[:2], entry[3:]
+            if "R" in xy or "C" in xy:
+                i += 1  # the original path follows
+                status = "renamed"
+            elif xy == "??":
+                status = "untracked"
+            elif "D" in xy:
+                status = "deleted"
+            elif "A" in xy:
+                status = "added"
+            else:
+                status = "modified"
+            changes[path] = Change(path, status)
+        return kept(changes)
+    ok = git(workspace, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}")
+    if ok.returncode != 0:
+        raise agentio.UsageError(f"--since {since}: not a commit in this repository", "git log --oneline -5")
+    p = git(workspace, "diff", "--name-status", "-z", since)
+    parts = p.stdout.decode(errors="surrogateescape").split("\0")
+    i = 0
+    while i < len(parts):
+        st = parts[i]
+        i += 1
+        if not st:
+            continue
+        if st[0] in "RC":
+            path = parts[i + 1] if i + 1 < len(parts) else ""
+            i += 2
+            status = "renamed"
+        else:
+            path = parts[i] if i < len(parts) else ""
+            i += 1
+            status = {"D": "deleted", "A": "added"}.get(st[0], "modified")
+        if path:
+            changes[path] = Change(path, status)
+    u = git(workspace, "ls-files", "--others", "--exclude-standard", "-z")
+    for path in u.stdout.decode(errors="surrogateescape").split("\0"):
+        if path:
+            changes[path] = Change(path, "untracked")
+    return kept(changes)
+
+
+def kept(changes: dict[str, Change]) -> list[Change]:
+    """The change set without the runners' own caches, which an unignored workspace shows as untracked
+    after the first `verify changed` (pytest's __pycache__, mypy's and ruff's caches)."""
+    return sorted(
+        (
+            c
+            for c in changes.values()
+            if not (c.status == "untracked" and CACHE_DIRS & set(c.path.split("/")))
+        ),
+        key=lambda c: c.path,
+    )
+
+
+def language(path: str) -> str | None:
+    return SOURCE_EXTS.get(os.path.splitext(path)[1].lower())
+
+
+def is_test_file(path: str) -> bool:
+    name = os.path.basename(path)
+    parts = path.split("/")[:-1]
+    lang = language(path)
+    if lang == "python":
+        return (
+            name.startswith("test_")
+            or name.endswith("_test.py")
+            or any(p in ("tests", "test") for p in parts)
+        )
+    if lang == "js":
+        return ".test." in name or ".spec." in name or "__tests__" in parts
+    if lang == "go":
+        return name.endswith("_test.go")
+    if lang == "rust":
+        return "tests" in parts
+    return False
+
+
+@dataclass
+class Selected:
+    path: str
+    reason: str
+    runner: str = ""
+
+
+def dependents(workspace: str, paths: list[str]) -> tuple[list[dict[str, Any]], str | None]:
+    """`symbols --json dependents PATH…` (seam 3; 011 at 6d523d4): its dependents, or why there are none."""
+    try:
+        p = subprocess.run(
+            [sibling("symbols"), "--json", "--limit", "0", "dependents", *paths],
+            cwd=workspace,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+    except OSError as e:
+        return [], f"symbols could not be started: {e.strerror}"
+    try:
+        doc = json.loads(p.stdout)
+    except ValueError:
+        return [], f"symbols' answer could not be read (exit {p.returncode})"
+    if p.returncode == agentio.EXIT_NOT_FOUND:
+        return [], "not a source file symbols indexes"
+    if p.returncode != 0:
+        return [], f"symbols exit {p.returncode}: {doc.get('verdict') or doc.get('error') or ''}".strip()
+    deps = doc.get("dependents")
+    return (deps if isinstance(deps, list) else []), None
+
+
+def deleted_importers(workspace: str, path: str) -> tuple[list[dict[str, Any]], str | None]:
+    """A deleted file's importers. 011's lookup resolves imports to files that exist, so for a deleted
+    Python module they are found by text instead (absolute imports only), and its importers' own
+    importers through `symbols`. Other languages: none, said."""
+    if language(path) != "python":
+        return [], "deleted: its importers cannot be resolved (outside Python)"
+    module = path[: -len(".py")].replace("/", ".").removesuffix(".__init__")
+    parent, _, leaf = module.rpartition(".")
+    m = re.escape(module)
+    pattern = re.compile(
+        rf"^\s*(?:from\s+{m}\s+import\b|import\s+(?:[\w.]+\s*,\s*)*{m}\b"
+        + (rf"|from\s+{re.escape(parent)}\s+import\s+(?:.*[\s,(])?{re.escape(leaf)}\b" if parent else "")
+        + ")",
+        re.MULTILINE,
+    )
+    listed = git(workspace, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py")
+    found: list[dict[str, Any]] = []
+    for f in listed.stdout.decode(errors="surrogateescape").split("\0"):
+        if not f or f == path:
+            continue
+        try:
+            with open(os.path.join(workspace, f), encoding="utf-8", errors="replace") as fh:
+                hit = pattern.search(fh.read(1024 * 1024))
+        except OSError:
+            continue
+        if hit is None:
+            continue
+        found.append({"path": f, "depth": 1, "via": hit.group(0).strip()})
+        if not is_test_file(f):
+            deps, _ = dependents(workspace, [f])
+            found += [{"path": d.get("path"), "depth": 2, "via": f} for d in deps if d.get("depth") == 1]
+    return found, None if found else "deleted, and no file imports it by name"
+
+
+@dataclass
+class Selection:
+    changed: list[Change]
+    tests: list[Selected] = field(default_factory=list)
+    lint: list[str] = field(default_factory=list)
+    untested: list[tuple[str, str]] = field(default_factory=list)
+    batched: bool = False
+
+
+def select(workspace: str, changed: list[Change]) -> Selection:
+    sel = Selection(changed)
+    tests: dict[str, str] = {}
+    present = [c for c in changed if c.status != "deleted"]
+    sel.lint = [c.path for c in present if language(c.path) in ("python", "js")]
+    for c in changed:
+        if is_test_file(c.path) and c.status != "deleted":
+            tests.setdefault(c.path, "changed")
+        elif os.path.basename(c.path) == "conftest.py" and c.status != "deleted":
+            folder = os.path.dirname(c.path) or "."
+            tests.setdefault(folder, f"conftest.py for the tests under {folder}")
+    sources = [c for c in changed if language(c.path) and not is_test_file(c.path)]
+    if len(sources) > BATCH_DEPENDENTS_OVER:
+        sel.batched = True
+        deps, why = dependents(workspace, [c.path for c in sources if c.status != "deleted"])
+        for d in deps:
+            if is_test_file(str(d.get("path", ""))):
+                tests.setdefault(str(d["path"]), "imports a changed file")
+        if why:
+            sel.untested.append(("(batch)", why))
+        return finish(sel, tests)
+    for c in sources:
+        if c.status == "deleted":
+            deps, why = deleted_importers(workspace, c.path)
+        else:
+            deps, why = dependents(workspace, [c.path])
+        found = False
+        for d in deps:
+            path = str(d.get("path", ""))
+            if not is_test_file(path):
+                continue
+            found = True
+            via = d.get("via")
+            if d.get("depth") == 2 and isinstance(via, str):
+                reason = f"imports {via}, which imports {c.path}"
+            else:
+                reason = f"imports {c.path}"
+            tests.setdefault(path, reason)
+        if not found and c.path not in tests:
+            sel.untested.append((c.path, why or "no test imports it"))
+    for c in changed:
+        if not language(c.path) and c.status != "deleted":
+            sel.untested.append((c.path, "not a source file: nothing selected for it"))
+    return finish(sel, tests)
+
+
+def finish(sel: Selection, tests: dict[str, str]) -> Selection:
+    sel.tests = [Selected(p, r) for p, r in sorted(tests.items())]
+    return sel
+
+
+# ── verify changed: the steps (research R5) ────────────────────────────────────────────────────
+
+
+@dataclass
+class Step:
+    kind: str  # test | lint | type
+    tool: str
+    command: list[str]
+    cwd: str
+    files: list[str]
+    state: str = "not run"
+    exit: int | None = None
+    log: str = ""
+    report: Report | None = None
+    diagnostics: list[Diagnostic] = field(default_factory=list)
+    dropped: int = 0
+    body: list[str] = field(default_factory=list)
+    missing: str = ""  # why the tool was not found
+    failed: bool = False
+    timed_out: bool = False
+
+    def data(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "kind": self.kind,
+            "tool": self.tool,
+            "command": self.command,
+            "files": self.files,
+            "state": self.state,
+            "exit": self.exit,
+            "log": self.log or None,
+        }
+        if self.report is not None:
+            d["report"] = {
+                "format": self.report.format,
+                "counts": self.report.counts(),
+                "failures": [f.data() for f in self.report.failures],
+            }
+        if self.kind != "test":
+            d["diagnostics"] = [x.data() for x in self.diagnostics]
+            d["dropped"] = self.dropped
+            if self.exit is not None:  # the same shape as a test step's report (contract § changed)
+                d["report"] = {
+                    "format": self.tool,
+                    "counts": {
+                        "failed": len(self.diagnostics),
+                        "passed": None,
+                        "skipped": None,
+                        "errors": None,
+                    },
+                    "failures": [
+                        {"test": x.code or x.message, "file": x.file, "line": x.line, "lines": [x.message]}
+                        for x in self.diagnostics
+                    ],
+                }
+        return d
+
+
+def find_tool(name: str, workspace: str, local: str | None = None) -> list[str] | None:
+    """The workspace's own copy first (.venv/bin or node_modules/.bin), then PATH (R5)."""
+    if local is not None:
+        own = os.path.join(workspace, local, name)
+        if os.access(own, os.X_OK) and os.path.isfile(own):
+            return [own]
+    found = shutil.which(name)
+    return [found] if found else None
+
+
+def find_pytest(workspace: str) -> tuple[list[str] | None, str]:
+    cmd = find_tool("pytest", workspace, ".venv/bin")
+    if cmd:
+        return cmd, ""
+    py = (
+        os.path.join(workspace, ".venv/bin/python")
+        if os.path.exists(os.path.join(workspace, ".venv/bin/python"))
+        else shutil.which("python3")
+    )
+    if py:
+        p = subprocess.run(
+            [py, "-c", "import pytest"], stdin=subprocess.DEVNULL, capture_output=True, check=False
+        )
+        if p.returncode == 0:
+            return [py, "-m", "pytest"], ""
+    return None, "pytest not found (looked in .venv/bin, PATH, and python3 -m pytest)"
+
+
+def nearest(workspace: str, path: str, marker: str) -> str:
+    d = os.path.dirname(os.path.join(workspace, path))
+    while True:
+        if os.path.exists(os.path.join(d, marker)):
+            return d
+        if os.path.realpath(d) == os.path.realpath(workspace) or os.path.dirname(d) == d:
+            return workspace
+        d = os.path.dirname(d)
+
+
+def plan_steps(workspace: str, sel: Selection) -> list[Step]:
+    steps: list[Step] = []
+    by_lang: dict[str, list[str]] = {}
+    for t in sel.tests:
+        by_lang.setdefault(language(t.path) or ("python" if "conftest.py" in t.reason else ""), []).append(
+            t.path
+        )
+    py_tests = by_lang.get("python", [])
+    if py_tests:
+        cmd, why = find_pytest(workspace)
+        steps.append(
+            Step("test", "pytest", [*(cmd or ["pytest"]), *py_tests], workspace, py_tests, missing=why)
+        )
+    js_tests = by_lang.get("js", [])
+    if js_tests:
+        vitest = find_tool("vitest", workspace, "node_modules/.bin")
+        jest = None if vitest else find_tool("jest", workspace, "node_modules/.bin")
+        if vitest:
+            steps.append(Step("test", "vitest", [*vitest, "run", *js_tests], workspace, js_tests))
+        else:
+            steps.append(
+                Step(
+                    "test",
+                    "jest",
+                    [*(jest or ["jest"]), *js_tests],
+                    workspace,
+                    js_tests,
+                    missing="" if jest else "vitest or jest not found (looked in node_modules/.bin and PATH)",
+                )
+            )
+    go_changed = [c.path for c in sel.changed if language(c.path) == "go"] + by_lang.get("go", [])
+    go_deps = [t.path for t in sel.tests if language(t.path) == "go"]
+    if go_changed:
+        root = nearest(workspace, go_changed[0], "go.mod")
+        pkgs = sorted(
+            {
+                "./" + (os.path.relpath(os.path.dirname(os.path.join(workspace, p)), root))
+                for p in go_changed + go_deps
+            }
+        )
+        pkgs = ["." if p == "./." else p for p in pkgs]
+        go = find_tool("go", workspace)
+        steps.append(
+            Step(
+                "test",
+                "go",
+                [*(go or ["go"]), "test", *pkgs],
+                root,
+                pkgs,
+                missing="" if go else "go not found (looked in PATH)",
+            )
+        )
+    rs_changed = [c.path for c in sel.changed if language(c.path) == "rust"]
+    if rs_changed:
+        root = nearest(workspace, rs_changed[0], "Cargo.toml")
+        cargo = find_tool("cargo", workspace)
+        steps.append(
+            Step(
+                "test",
+                "cargo",
+                [*(cargo or ["cargo"]), "test"],
+                root,
+                ["(the crate)"],
+                missing="" if cargo else "cargo not found (looked in PATH)",
+            )
+        )
+    py_files = [p for p in sel.lint if language(p) == "python"]
+    js_files = [p for p in sel.lint if language(p) == "js"]
+    if py_files:
+        ruff = find_tool("ruff", workspace, ".venv/bin")
+        steps.append(
+            Step(
+                "lint",
+                "ruff",
+                [*(ruff or ["ruff"]), "check", "--output-format", "concise", *py_files],
+                workspace,
+                py_files,
+                missing="" if ruff else "ruff not found (looked in .venv/bin and PATH)",
+            )
+        )
+    if js_files:
+        eslint = find_tool("eslint", workspace, "node_modules/.bin")
+        steps.append(
+            Step(
+                "lint",
+                "eslint",
+                [*(eslint or ["eslint"]), *js_files],
+                workspace,
+                js_files,
+                missing="" if eslint else "eslint not found (looked in node_modules/.bin and PATH)",
+            )
+        )
+    if py_files:
+        mypy = find_tool("mypy", workspace, ".venv/bin")
+        steps.append(
+            Step(
+                "type",
+                "mypy",
+                [*(mypy or ["mypy"]), *py_files],
+                workspace,
+                py_files,
+                missing="" if mypy else "mypy not found (looked in .venv/bin and PATH)",
+            )
+        )
+    ts_files = [p for p in js_files if os.path.splitext(p)[1] in (".ts", ".tsx", ".mts", ".cts")]
+    if ts_files:
+        tsc = find_tool("tsc", workspace, "node_modules/.bin")
+        steps.append(
+            Step(
+                "type",
+                "tsc",
+                [*(tsc or ["tsc"]), "--noEmit", "-p", "."],
+                workspace,
+                ts_files,
+                missing="" if tsc else "tsc not found (looked in node_modules/.bin and PATH)",
+            )
+        )
+    for s in steps:
+        if s.missing:
+            s.state = f"not run: {s.missing}"
+    return steps
+
+
+def execute(step: Step, workspace: str, timeout: float | None) -> None:
+    try:
+        rr = run_command(step.command, step.cwd, timeout)
+    except RunFailed as e:
+        step.state, step.failed = f"run failed: {e}", True
+        return
+    step.exit, step.log = rr.exit, rr.log
+    if rr.cause == "internal" and rr.command_exit is None and rr.exit != agentio.EXIT_TIMEOUT:
+        step.state, step.failed = f"run failed: {run_part(rr)}", True
+        return
+    if rr.exit == agentio.EXIT_TIMEOUT and rr.cause == "timeout":
+        step.timed_out = True
+    if step.kind == "test":
+        rep = read_report(rr.text)
+        step.report = rep
+        if rep.format == "unknown":
+            step.state = f"exit {rr.exit}, {UNKNOWN_WORDS}"
+            step.failed = rr.exit != 0
+            step.body = rr.lines if rr.withheld else rr.text.splitlines()[-20:]
+        else:
+            step.failed = rep.bad() or rr.exit != 0
+            step.state = rep.summary() if step.failed else "passed"
+            step.body = failure_lines(rep, rr.withheld)
+            if not rep.bad() and rr.exit != 0:
+                step.state += f", but exit {rr.exit}"
+    else:
+        diags = read_diagnostics(step.tool, rr.text, step.cwd)
+        if step.tool == "tsc":
+            wanted = set(step.files)
+            kept = [d for d in diags if d.file in wanted]
+            step.dropped = len(diags) - len(kept)
+            diags = kept
+        step.diagnostics = diags
+        if diags:
+            step.state = f"{len(diags)} {'diagnostic' if len(diags) == 1 else 'diagnostics'}"
+            step.failed = True
+            step.body = [d.text() for d in diags]
+        elif rr.exit == 0 or (step.tool == "tsc" and step.dropped):
+            step.state = "passed"
+        else:
+            step.state = f"exit {rr.exit}, output not recognised"
+            step.failed = True
+            step.body = rr.lines if rr.withheld else rr.text.splitlines()[-20:]
+        if step.dropped:
+            step.state += f" ({step.dropped} diagnostics in unchanged files dropped)"
+    if step.timed_out:
+        step.state = f"timed out: {rr.verdict}"
+        step.failed = True
+
+
+def cmd_changed(since: str | None, timeout: float | None, dry_run: bool) -> agentio.Result:
+    workspace = git_toplevel()
+    against = since or "HEAD"
+    target = f"changed against {against}"
+    changed = change_set(workspace, since)
+    data: dict[str, Any] = {
+        "workspace": workspace,
+        "against": against,
+        "changed": [{"path": c.path, "status": c.status} for c in changed],
+        "selected": {"tests": [], "lint": [], "typecheck": [], "untested": []},
+        "steps": [],
+    }
+    if not changed:
+        return agentio.Result(
+            target,
+            "nothing selected",
+            f"no changes against {against}: nothing selected, nothing run",
+            data=data,
+        )
+    sel = select(workspace, changed)
+    steps = plan_steps(workspace, sel)
+    for t in sel.tests:
+        t.runner = next((s.tool for s in steps if s.kind == "test" and t.path in s.files), "")
+    data["selected"] = {
+        "tests": [{"path": t.path, "reason": t.reason, "runner": t.runner} for t in sel.tests],
+        "lint": [p for s in steps if s.kind == "lint" for p in s.files],
+        "typecheck": [p for s in steps if s.kind == "type" for p in s.files],
+        "untested": [{"path": p, "reason": r} for p, r in sel.untested],
+        "batched": sel.batched,
+    }
+    head = selection_lines(sel, steps)
+    n_tests = len(sel.tests)
+    n_lint = sum(1 for s in steps if s.kind == "lint")
+    n_type = sum(1 for s in steps if s.kind == "type")
+    scope = f"{n_tests} {'test' if n_tests == 1 else 'tests'}, {n_lint} lint, {n_type} type-check"
+    n = len(changed)
+    lead = f"{n} changed {'file' if n == 1 else 'files'}; selected {SUPERSET_WORDS}: {n_tests} test files"
+    if sel.batched:
+        lead += f" (more than {BATCH_DEPENDENTS_OVER} changed files: one dependents lookup for all of them)"
+    if dry_run:
+        body = head + [
+            f"would run: {shown(s.command)}" if not s.missing else f"would not run: {s.state}" for s in steps
+        ]
+        data["steps"] = [s.data() for s in steps]
+        return agentio.Result(target, "dry run", f"{lead} · dry run: nothing run", body, data=data)
+    for s in steps:
+        if not s.missing:
+            execute(s, workspace, timeout)
+    data["steps"] = [s.data() for s in steps]
+    first_log = next((s.log for s in steps if s.log), "")
+    if first_log:
+        data["log"] = first_log
+    body = list(head)
+    for s in steps:
+        tail = f" · exit {s.exit} · log {s.log}" if s.log else ""
+        body.append(f"── {shown(s.command)} · {s.state}{tail}")
+        body += s.body
+    parts = [
+        f"{s.tool}: {s.state}" + (f" ({s.report.summary()})" if s.state == "passed" and s.report else "")
+        for s in steps
+    ] or ["no test, lint or type-check applies to these files"]
+    verdict = f"{lead} · " + " · ".join(parts)
+    if any(s.timed_out for s in steps):
+        code = agentio.EXIT_TIMEOUT
+    elif any(s.failed or s.missing for s in steps):
+        code = agentio.EXIT_FAILURE
+    else:
+        code = agentio.EXIT_OK
+    return agentio.Result(target, scope, verdict, body, data=data, exit=code)
+
+
+def shown(command: list[str]) -> str:
+    """A step's command as the agent would type it: the program by name (JSON keeps the full path)."""
+    return shlex.join([os.path.basename(command[0]), *command[1:]])
+
+
+def selection_lines(sel: Selection, steps: list[Step]) -> list[str]:
+    out = [f"changed   {c.path} ({c.status})" for c in sel.changed]
+    out += [f"test      {t.path}   {t.reason}" for t in sel.tests]
+    out += [f"lint      {p}   {s.tool}" for s in steps if s.kind == "lint" for p in s.files]
+    out += [f"type      {p}   {s.tool}" for s in steps if s.kind == "type" for p in s.files]
+    out += [f"none      {p}   {why}" for p, why in sel.untested]
+    return out
+
+
+# ── argv: the subcommand is read from the command (contract, amended at implement) ─────────────
+
+
+class _Sub(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise agentio.UsageError(f"{self.prog}: {message}", "run verify --help")
+
+
+def positive_seconds(text: str) -> float:
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of seconds") from None
+    if v <= 0:
+        raise argparse.ArgumentTypeError("must be more than 0")
+    return v
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    words: list[str] = list(args.command or [])
+    if not words:
+        raise agentio.UsageError("nothing to run", "verify test -- CMD, verify CMD, or verify changed")
+    if words[0] == "changed":
+        p = _Sub(prog="verify changed", add_help=False, allow_abbrev=False)
+        p.add_argument("--since")
+        p.add_argument("--timeout", type=positive_seconds)
+        p.add_argument("--dry-run", action="store_true")
+        ns = p.parse_args(words[1:])
+        return cmd_changed(ns.since, ns.timeout, ns.dry_run)
+    if words[0] == "test":
+        if "--" not in words:
+            raise agentio.UsageError(
+                "verify test needs -- before the command", "verify test [--timeout S] -- CMD [ARG...]"
+            )
+        cut = words.index("--")
+        p = _Sub(prog="verify test", add_help=False, allow_abbrev=False)
+        p.add_argument("--timeout", type=positive_seconds)
+        ns = p.parse_args(words[1:cut])
+        command = words[cut + 1 :]
+        if not command:
+            raise agentio.UsageError("verify test: no command after --", "verify test -- CMD [ARG...]")
+        return cmd_test(command, ns.timeout, ctx)
+    return cmd_test(words, None, ctx)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main)

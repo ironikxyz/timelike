@@ -44,7 +44,7 @@ them with `record.sh`, and never edits a recording by hand.
 
 ## Phase 2: Implementation
 
-- [ ] T003 [US1] [US2] [US3] [US4] `tools/bin/verify`, per `contracts/verify-cli.md`:
+- [X] T003 [US1] [US2] [US3] [US4] `tools/bin/verify`, per `contracts/verify-cli.md`:
   - `run --json` and the log (R2);
   - the five parsers and the linter diagnostics (R3);
   - the change set, and selection through `symbols dependents` (R4);
