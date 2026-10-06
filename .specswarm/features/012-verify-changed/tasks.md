@@ -57,7 +57,7 @@ them with `record.sh`, and never edits a recording by hand.
 
 - [X] T005 Host lane: lint, units with coverage, `make test-host`, host conformance, the e2e host stand-in,
   start-up. Results in `decisions.md`.
-- [ ] T006 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
+- [X] T006 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
 
 ## Dependencies
 

@@ -94,3 +94,12 @@ Verification:
 - e2e host stand-in (advisory): 36 of 38, the 2 type -a cells image-only
 - start-up on the host, 20 runs each, every exit asserted 0: `verify --help` p50 89 / p95 93 ms (114 before); the probe `verify --json true` (through run) p50 186 / p95 191 ms
 SCOPE: in (2 changed files)
+
+### T006: cycle-report.md § Cycle 1, implement step 10, .specswarm/metrics.json, the marker
+**Started:** 2026-10-06T18:46:41Z | **Completed:** 2026-10-06T18:47:26Z
+
+INHERITED: every earlier task's records, and T005's host-lane figures (confidence: high)
+ASSUMED: criteria are cited by text matching exactly one line of the send (grep -cF = 1 for all five); every one is unconfirmed until the mentor's Docker lane, D20 after it (confidence: high)
+ABSENT: demo_points_reached (the mentor derives it); any image evidence
+Verification: step 10 run from the installed blocks (CLAUDE_PLUGIN_ROOT set): output identical to 011's with timestamps masked — every component excluded, Quality Score unknown, gate UNKNOWN warned, block_merge_on_failure=false; nothing hand-filled; the project's figures beside it in metrics.json → 012.project_measurements_not_scored
+SCOPE: in (1 changed files)
