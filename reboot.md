@@ -5,10 +5,11 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-06T17:13:02Z (read from the clock). **Dispatch batch `20261004-183704` running.** 06 s0 done (`008-edit`,
-`62d1820`); 08 s1 done (`009-session-journal`, `d27bec7`); 09 s1 done (`010-services-interactive`, `c4f8aed`; paused
-once on cause 4, answered (a): `../bridge/feedback/09-20261006-162949-takes-command-in-agentio.md`). Next: 10 s1.
-specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing, merge nothing.
+**Snapshot:** 2026-10-06T17:46:53Z (read from the clock). **Dispatch batch `20261004-183704` running.** Done: 06 s0 (`008-edit`,
+`62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`; pause-09 answered (a)),
+10 s1 (`011-code-intelligence`, `6d523d4`). Next: 11 s1 (`012-verify-changed`, the last). Toolchains for 11's recorded
+runner output are in the scratchpad (`tc/`: go 1.27.1, cargo 1.99.0 with RUSTUP_HOME/CARGO_HOME set, jest 30.5.2,
+vitest 5.0.3 in `tc/js`). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -21,7 +22,9 @@ specswarm 2.35.0 (`4ff8dcb`) loaded. **This repository is public**; push nothing
    shell record (EXIT trap from 001's hook, `/etc/timelike/journal-exit.bash`, COPY after the last RUN).
 6. `010-services-interactive` — 09 s1 done (`c4f8aed`): `services`; agentio `takes_command` (accepted, 001's
    contract paragraph); loads run's process helpers.
-7. Not started: 10 s1 (`011-code-intelligence`), 11 s1 (`012-verify-changed`).
+7. `011-code-intelligence` — 10 s1 done (`6d523d4`): `symbols` (outline/def/callers/dependents; index in the scratch;
+   FOR-MENTOR Item 20).
+8. Not started: 11 s1 (`012-verify-changed`).
 
 **`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
 Resume section). Unpushed, not cleared.
