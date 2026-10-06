@@ -51,7 +51,7 @@
   - the bounds.
 - [X] T004 `FOR-MENTOR.md`: Item 20, the index and the state root (seam 1): the cache lives in the session
   scratch and is rebuilt per session until 07 slice 1's state root exists.
-- [ ] T005 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files),
+- [X] T005 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files),
   `README.md` (a symbols section).
 
 ## Phase 3: Polish

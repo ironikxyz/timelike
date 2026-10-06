@@ -72,3 +72,12 @@ ASSUMED: the delegate's settlements: `1 file(s) changed` both accepted, depth co
 ABSENT: the fourth cache state (an outline outside the index) — no criterion needs it; units cover it
 Verification: shellcheck -x clean over the six files. Host stand-in (advisory): 26 of 28 ok; not ok only the 2 type -a cells (image-only); the warm def on 1,000 files took 168–175 ms there
 SCOPE: in (6 changed files)
+
+### T005: pyproject (ruff, mypy lists), Makefile (shellcheck list: the six e2e files), README (a symbols section)
+**Started:** 2026-10-06T17:25:58Z | **Completed:** 2026-10-06T17:26:14Z
+
+INHERITED: tools/bin/symbols — from T003 and its fixes; the e2e files — from T002 (confidence: high)
+FLAGGED: committed only after `ruff check` printed "All checks passed!" over tools tests scan bench (010's T004 lesson) (confidence: high)
+ABSENT: a Status bullet (the README's Status lists 001–004 only)
+Verification: ruff check clean, format clean (71 files); mypy strict (25 files); shellcheck over the Makefile's 68 files, every file present
+SCOPE: in (3 changed files)

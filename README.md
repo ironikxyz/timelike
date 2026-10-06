@@ -370,6 +370,26 @@ services stop web               # every process of its tree; checks that none re
 - **Rule 9:** your own `start` and `stop` need no `--yes` (`stop --dry-run` lists the processes).
   Stopping another session's service (`--session S`), or `--all`, asks for `--yes`.
 
+## symbols — where it is defined, who calls it, what imports it
+
+`symbols` answers structural questions offline, from an index of the workspace (feature 011, prompt 10
+slice 1):
+
+```
+symbols outline app/models.py      # classes and functions with line ranges and signatures; never bodies
+symbols def save                   # where save is defined, best first; exit 3 if nowhere
+symbols callers save               # call sites grouped by enclosing function (text-based)
+symbols dependents app/models.py   # the files that import it, direct first, ranked
+```
+
+- **Precision is stated:** Python is exact (its syntax tree). JS/TS, Go, Rust and shell are read by line
+  patterns, and their answers say `text-based`. `callers` is always text-based: name matches, not
+  resolved calls.
+- **No build step:** every call checks the index file by file, re-reads what changed, and ends its
+  verdict with the cache state (`fresh`, `stale: N changed; rebuilt`, `built`).
+- **The index lives in the session scratch,** outside the workspace (rule 10), and is rebuilt once per
+  session. On 1,000 files that took 1.9 s cold and about 0.3 s warm, measured on the host.
+
 ## Speedup bench
 
 ```bash
