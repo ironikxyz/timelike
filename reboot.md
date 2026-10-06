@@ -5,11 +5,11 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-06T17:46:53Z (read from the clock). **Dispatch batch `20261004-183704` running.** Done: 06 s0 (`008-edit`,
-`62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`; pause-09 answered (a)),
-10 s1 (`011-code-intelligence`, `6d523d4`). Next: 11 s1 (`012-verify-changed`, the last). Toolchains for 11's recorded
-runner output are in the scratchpad (`tc/`: go 1.27.1, cargo 1.99.0 with RUSTUP_HOME/CARGO_HOME set, jest 30.5.2,
-vitest 5.0.3 in `tc/js`). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
+**Snapshot:** 2026-10-06T18:48:04Z (read from the clock). **Dispatch batch `20261004-183704`: all 8 prompts built.** Done: 06 s0
+(`008-edit`, `62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`;
+pause-09 answered (a)), 10 s1 (`011-code-intelligence`, `6d523d4`), 11 s1 (`012-verify-changed`, `d075404`). Next: the
+batch's final report to the mentor (through the operator), then the mentor's Docker lane. specswarm 2.35.0 (`4ff8dcb`).
+**This repository is public**; push nothing, merge nothing.
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -24,7 +24,10 @@ vitest 5.0.3 in `tc/js`). specswarm 2.35.0 (`4ff8dcb`). **This repository is pub
    contract paragraph); loads run's process helpers.
 7. `011-code-intelligence` — 10 s1 done (`6d523d4`): `symbols` (outline/def/callers/dependents; index in the scratch;
    FOR-MENTOR Item 20).
-8. Not started: 11 s1 (`012-verify-changed`).
+8. `012-verify-changed` — 11 s1 done (`d075404`): `verify` (test: through run, pytest/jest/vitest/go/cargo,
+   exit passed through; changed: symbols dependents at 011's `6d523d4`, lint/type-check of changed files only).
+   Fixtures recorded from the real runners in `tests/fixtures/verify/recorded/` with `.source` sidecars;
+   e2e run real pytest/ruff/mypy in the image via uv at the pins (`install_uv_tool_wrappers`).
 
 **`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
 Resume section). Unpushed, not cleared.
@@ -35,8 +38,8 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 
 ## Next actions
 
-1. **Continue the batch:** 08 s1, 09 s1, 10 s1, 11 s1 from `bridge/dispatch/code-track.md`, each branch
-   cut from the previous (09 from 009-…, etc.). Re-read the code-track header and § Resume between features.
+1. **The batch is built.** Report it to the operator for the mentor (the items below), and wait. Nothing
+   in the bridge is to be written except pause files.
 2. The mentor's lane after the batch, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
    (`human-track.md`), hand merges, pushes on the operator's OK.
 
@@ -74,6 +77,13 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 § Cycle 1 (one ungated commit amended locally, the probe, CLAUDE_PLUGIN_ROOT).
 
 **Open items from this batch, for the batch's final report:**
+- **012:** the send's premise "pytest runs in the image" was false (the image has no pytest, ruff or
+  mypy); the e2e fetch them via the image's uv at the pins, so they need PyPI from inside the agent
+  container (not yet proved by the lane). `verify`'s children run with a scratch root inside the session's
+  scratch so a call writes one event (C7). The D104 note: T001–T003 shared one start read from HEAD, so
+  T001's scope range includes T003's commit (true, and wider than the task).
+- **Traced-run timing failures outside the features:** 011's adele conform, 012's bench runner; both pass
+  untraced 3/3.
 - **FOR-MENTOR Item 19:** closed (revision 13, user level only). Item 18 Q3 closed (revision 12).
 - **Plugin observations to relay (2.35.0):** implement's expansion clobbers awk's `$0`; specify's
   expansion breaks on a quoted description (the stray quote is in the description; an unquoted `&`
