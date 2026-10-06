@@ -35,10 +35,7 @@ ASSERTION_LINES = 5
 BATCH_DEPENDENTS_OVER = 50
 MAX_LOG_BYTES = 64 * 1024 * 1024
 UNKNOWN_WORDS = "format unknown: no pytest, jest, vitest, go test or cargo test summary"
-SUPERSET_WORDS = (
-    "tests importing a changed file directly or through one other file "
-    "(a superset; text-based outside Python)"
-)
+SUPERSET_WORDS = "importing a change, directly or through one file: a superset"
 SOURCE_EXTS = {
     ".py": "python",
     ".js": "js", ".mjs": "js", ".cjs": "js", ".jsx": "js",
@@ -699,7 +696,7 @@ def cmd_test(command: list[str], timeout: float | None, ctx: agentio.Context) ->
     data.update(format=rep.format, counts=rep.counts(), failures=[f.data() for f in rep.failures])
     cut: agentio.Cut | None = None
     if rep.format == "unknown":
-        verdict = f"{rr.verdict or run_part(rr)} · {UNKNOWN_WORDS}"
+        verdict = f"{UNKNOWN_WORDS} · {run_part(rr)}"  # first, so rule 13's cut never takes it
         body = rr.lines if rr.withheld else rr.text.splitlines()
         scope = "format unknown"
     else:
@@ -1348,7 +1345,10 @@ def cmd_changed(since: str | None, timeout: float | None, dry_run: bool) -> agen
     n_type = sum(1 for s in steps if s.kind == "type")
     scope = f"{n_tests} {'test' if n_tests == 1 else 'tests'}, {n_lint} lint, {n_type} type-check"
     n = len(changed)
-    lead = f"{n} changed {'file' if n == 1 else 'files'}; selected {SUPERSET_WORDS}: {n_tests} test files"
+    files = "file" if n_tests == 1 else "files"
+    lead = f"{n} changed {'file' if n == 1 else 'files'} · {n_tests} test {files} {SUPERSET_WORDS}"
+    if any(language(c.path) not in (None, "python") for c in changed):
+        lead += " (text-based outside Python)"
     if sel.batched:
         lead += f" (more than {BATCH_DEPENDENTS_OVER} changed files: one dependents lookup for all of them)"
     if dry_run:

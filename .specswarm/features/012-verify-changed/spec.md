@@ -149,8 +149,9 @@ Then each step's failures, as in scenario 1.
   - **No location in the output:** `file` and `line` are `null`, and the block says `location not in the
     output`.
 - **FR-4** **Unknown format:**
-  - **The verdict:** `run`'s verdict followed by `format unknown: no pytest, jest, vitest, go test or
-    cargo test summary`.
+  - **The verdict:** `format unknown: no pytest, jest, vitest, go test or cargo test summary`, then
+    `run`'s verdict. *Amended at implement:* the clause was moved first, so rule 13's cut at 200 columns
+    never takes it; `run`'s line count is dropped, as for every format.
   - **The body:** the log's head and tail, bounded by rule 3.
   - **Not a parse failure:** the counts are `null`, never zero.
 - **FR-5** **Exit:** `run`'s exit, unchanged, which is the command's for any cause (the pass-through gate).

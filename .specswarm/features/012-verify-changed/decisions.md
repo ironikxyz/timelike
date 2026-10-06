@@ -51,3 +51,18 @@ Verification: the delegate's tests ran 52 passed / 9 failed against T003's first
 One more assertion amended: the SC-1 text verdict's regex required a part between the duration and the log path; verify now drops run's line count (T003, FLAGGED), which the contract's example already showed (`exit 1 · 0.6 s · log …`).
 After the fixes: 61 passed (scratch venv, Python 3.12.3). ruff and format clean.
 SCOPE: in (2 changed files)
+
+### T002: e2e (delegated) — SC-1 to SC-4 and the name and manifest, bash -c and bash -lc, each cell its own workspace and session; real pytest, ruff and mypy in the image through uv wrappers at the pins.env versions
+**Started:** 2026-10-06T17:58:24Z | **Completed:** 2026-10-06T18:18:31Z
+
+INHERITED: the contract as amended at T003 (bare `verify CMD`, the manifest, changed outside a repository), make-project.sh and the recordings (confidence: high)
+FLAGGED: `install_uv_tool_wrappers DIR` (tests/e2e/helpers.bash) writes pytest, ruff and mypy wrappers that run the REAL tools via the image's uv at PYTEST_VERSION, RUFF_VERSION and MYPY_VERSION read from pins.env on the runner side — the image has none of them (the send's "pytest runs in the image" is false, R1); needs PyPI from inside the agent container, which the lane has proved only for a throwaway container of the same image (confidence: medium)
+FLAGGED: jest, vitest, go and cargo are not in the image, so SC-2 replays their recorded output through `verify test -- cat FILE` (real output, recorded on the host, sources in the .source sidecars); pytest runs for real (confidence: high)
+ASSUMED: each wrapper-using file warms the tools once in setup_file under a 300 s bound, so timed cells start warm (confidence: medium)
+ABSENT: any run in the image (no Docker here); the two `type -a` cells can only pass there
+Verification: shellcheck -x clean over the five files, helpers.bash and tests/fixtures/verify/*.sh. Host stand-in (advisory; a scratchpad copy whose install_uv_tool_wrappers links this host's pytest 8.4.2, mypy 2.4.0 and ruff 0.16.7 instead of uv): first run 30 of 38; the delegate's findings and mine, fixed before this commit (2026-10-06):
+1. two header assertions assumed `verify: test …`; the target is the command, shell-quoted, as run's is (contract amended; the cells now expect `verify: pytest [pytest]` and `verify: sh -c … [format unknown]`);
+2. SC-3's edit left one blank line after `import os`, so a ruff selecting isort (the host's did) adds I001; the edit now leaves two, so the only finding is the unused import whatever ruff selects;
+3. the changed verdict and the unknown-format verdict could be cut by rule 13 at 200 columns, taking step results or the `format unknown` clause with them. Fixed in tools/bin/verify: the changed lead is shorter ("N changed files · M test files importing a change, directly or through one file: a superset", "(text-based outside Python)" only when a non-Python file changed), and the unknown clause comes FIRST, then run's verdict with its line count dropped. Spec FR-4 and the contract amended; one unit assertion and one e2e check of the old order amended with them.
+After the fixes: stand-in 36 of 38, only the 2 type -a cells not ok (image-only); units 61 passed.
+SCOPE: in (8 changed files)

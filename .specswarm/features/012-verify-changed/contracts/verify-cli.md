@@ -39,7 +39,7 @@ verify changed [--since REF] [--timeout S] [--dry-run]
 | failures | the command's | `pytest` | `3 failed, 409 passed (pytest) · exit 1 · 0.6 s · log /…/run/….log` |
 | all passed | 0 | `pytest` | `400 passed (pytest) · exit 0 · 0.6 s · log …` |
 | go without `-v` | the command's | `go` | `3 failed, passes not reported (go test without -v) · exit 1 · …` |
-| unknown format | the command's | `format unknown` | `<run's verdict> · format unknown: no pytest, jest, vitest, go test or cargo test summary` |
+| unknown format | the command's | `format unknown` | `format unknown: no pytest, jest, vitest, go test or cargo test summary · <run's verdict>` (clause first: amended at implement) |
 | timeout | 124 | the format, or `format unknown` | `… · timeout after 100 s (default); raise with --timeout or TIMELIKE_RUN_TIMEOUT · 2 failed so far` |
 | `run` failed | 1 | `internal` | `run could not be started: /opt/timelike/bin/run: …`, or `run's result could not be read: /opt/timelike/bin/run exited 1: …` |
 
@@ -73,7 +73,7 @@ tests/test_models.py:26  tests/test_models.py::test_total_rounds
 
 ```
 verify: changed against HEAD [2 tests, 1 lint, 1 type-check]
-verdict: 1 changed file; selected tests importing a changed file directly or through one other file (a superset; text-based outside Python): 2 test files · pytest: 1 failed, 11 passed · ruff: 1 diagnostic · mypy: passed
+verdict: 1 changed file · 2 test files importing a change, directly or through one file: a superset · pytest: 1 failed, 11 passed · ruff: 1 diagnostic · mypy: passed (amended at implement: shorter, so rule 13 does not cut the steps; `(text-based outside Python)` is added only when a non-Python file changed)
 changed   app/models.py (modified)
 test      tests/test_models.py   imports app/models.py
 test      tests/test_orders.py   imports app/orders.py, which imports app/models.py

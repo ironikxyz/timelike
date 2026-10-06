@@ -418,8 +418,10 @@ def test_unknown_format_passes_exit_through(lab: Lab) -> None:
     d = doc_of(r)
     assert d["scope"] == "format unknown" and d["format"] == "unknown"
     assert all(v is None for v in d["counts"].values()), d["counts"]  # never zero
-    assert d["verdict"].startswith(d["run"]["verdict"]), d["verdict"]
-    assert d["verdict"].endswith(SUMMARY_UNKNOWN), d["verdict"]
+    # Amended at implement: the clause first (rule 13's cut never takes it), then run's verdict as verify
+    # words every format's (its line count dropped): the exit and run's log are in it.
+    assert d["verdict"].startswith(f"{SUMMARY_UNKNOWN} · exit 7"), d["verdict"]
+    assert f"log {d['run']['log']}" in d["verdict"], d["verdict"]
     assert d["run"]["command_exit"] == 7
     t = verify(lab, "--text", "test", "--", "sh", "-c", "echo x; exit 7")
     assert t.returncode == 7 and "x" in text_of(t)[2:], said(t)  # the body is run's bounded lines

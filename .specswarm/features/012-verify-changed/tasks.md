@@ -33,7 +33,7 @@ them with `record.sh`, and never edits a recording by hand.
     untracked, `--since`).
   - **Selection reasons**, using the real `symbols` beside `verify`.
   - **Not-run steps**, exit codes, `--dry-run`, and the manifest.
-- [ ] T002 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`, with its own workspace
+- [X] T002 [P] [US1] [US2] [US3] [US4] e2e, each under `bash -c` and `bash -lc`, with its own workspace
   and session. Projects come from `make-project.sh` copied into the container; pytest, ruff and mypy are
   uv-backed wrappers from a `tests/e2e/helpers.bash` function (R1):
   - `tests/e2e/verify-pytest-3-failed-409-passed-file-line-name-assertion-lines.bats` (SC-1)

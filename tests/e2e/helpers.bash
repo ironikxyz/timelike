@@ -454,3 +454,48 @@ pyq() {
   timeout "$RUN_TIMEOUT" docker run --rm -i --network none --cap-drop ALL --label "${THROWAWAY_LABEL}=1" \
     --entrypoint "$AGENT_PY" "$image" -I -c "$1"
 }
+
+# ── Real pytest, ruff and mypy in the agent container (feature 012, research R1) ───────────────────
+# install_uv_tool_wrappers DIR — write executable wrappers DIR/pytest, DIR/ruff and DIR/mypy inside the
+# agent container (DIR must be under /tmp, e.g. from container_tmpdir), then warm them once.
+#
+# The image has no pytest, ruff or mypy (only uv and its Python). Each wrapper runs the REAL tool at
+# the version pinned in pins.env (PYTEST_VERSION, RUFF_VERSION, MYPY_VERSION), fetched by the image's
+# uv, exactly as the lane's own unit and lint steps fetch them: never a stub with canned output (P005).
+# pins.env is read here, on the runner side, from the mounted repository: tests/run.sh passes none of
+# its values into the runner. uv's cache and tool directories, and the mypy and ruff caches, live
+# under DIR, so nothing lands in a cell's workspace except what pytest itself writes. Cells put DIR
+# first on PATH in their own command string. NEEDS NETWORK ACCESS to PyPI on the first warm-up, as
+# the unit step does; the warm-up is bounded by 300 s instead of RUN_TIMEOUT, and the cells after it
+# then start from a warm cache (mypy's builtins cache included).
+install_uv_tool_wrappers() {
+  local dir="$1" pins="${BATS_TEST_DIRNAME}/../../pins.env" pair name key ver body out
+  [[ "$dir" == /tmp/?* ]] || { echo "install_uv_tool_wrappers: DIR must be under /tmp: '${dir}'" >&2; return 1; }
+  [[ -f "$pins" ]] || { echo "install_uv_tool_wrappers: no pins.env at ${pins}" >&2; return 1; }
+  for pair in pytest:PYTEST_VERSION ruff:RUFF_VERSION mypy:MYPY_VERSION; do
+    name="${pair%%:*}"
+    key="${pair#*:}"
+    ver="$(sed -n "s/^${key}=//p" "$pins" | head -n 1)"
+    [[ "$ver" =~ ^[0-9][0-9A-Za-z.]*$ ]] || { echo "install_uv_tool_wrappers: ${key} in pins.env is '${ver}'" >&2; return 1; }
+    body="#!/bin/sh
+# the real ${name} ${ver} (pins.env ${key}), run by the image's uv: feature 012, research R1
+export UV_CACHE_DIR='${dir}/.uv-cache' UV_TOOL_DIR='${dir}/.uv-tools' UV_PYTHON_DOWNLOADS=never
+export MYPY_CACHE_DIR='${dir}/.mypy-cache' RUFF_CACHE_DIR='${dir}/.ruff-cache'
+exec /bin/uv --quiet tool run --python ${AGENT_PY} '${name}@${ver}' \"\$@\""
+    # shellcheck disable=SC2016 # expanded in the container
+    exec_plain sh -c 'mkdir -p "$(dirname "$1")" && printf "%s\n" "$2" >"$1" && chmod 0755 "$1"' \
+      wrapper "${dir}/${name}" "$body" || { echo "install_uv_tool_wrappers: cannot write ${dir}/${name}" >&2; return 1; }
+  done
+  # Warm-up: fetch each tool once and check it reports the pinned version (the wrapper is the tool).
+  local RUN_TIMEOUT=300
+  for pair in pytest:PYTEST_VERSION ruff:RUFF_VERSION mypy:MYPY_VERSION; do
+    name="${pair%%:*}"
+    ver="$(sed -n "s/^${pair#*:}=//p" "$pins" | head -n 1)"
+    out="$(exec_plain "${dir}/${name}" --version 2>&1)" || { printf 'install_uv_tool_wrappers: %s --version failed:\n%s\n' "$name" "$out" >&2; return 1; }
+    [[ "$out" == *"$ver"* ]] || { printf 'install_uv_tool_wrappers: %s --version does not report %s:\n%s\n' "$name" "$ver" "$out" >&2; return 1; }
+  done
+  # mypy's first check builds its builtins cache (seconds); do it here, not inside a timed cell.
+  # shellcheck disable=SC2016 # expanded in the container
+  out="$(exec_plain sh -c 'cd "$1" && printf "x: int = 1\n" >warm.py && ./mypy warm.py' warm "$dir" 2>&1)" ||
+    { printf 'install_uv_tool_wrappers: mypy warm-up failed:\n%s\n' "$out" >&2; return 1; }
+}
