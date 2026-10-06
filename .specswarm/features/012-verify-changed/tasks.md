@@ -50,7 +50,7 @@ them with `record.sh`, and never edits a recording by hand.
   - the change set, and selection through `symbols dependents` (R4);
   - runner lookup and "not run" (R5);
   - `test`, `changed` and `--dry-run`, with the exits (R6).
-- [ ] T004 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files and
+- [X] T004 `pyproject.toml` (ruff and mypy lists), `Makefile` (`SHELLCHECK_FILES`: the e2e files and
   `tests/fixtures/verify/*.sh`), `README.md` (a verify section).
 
 ## Phase 3: Polish

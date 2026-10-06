@@ -66,3 +66,12 @@ Verification: shellcheck -x clean over the five files, helpers.bash and tests/fi
 3. the changed verdict and the unknown-format verdict could be cut by rule 13 at 200 columns, taking step results or the `format unknown` clause with them. Fixed in tools/bin/verify: the changed lead is shorter ("N changed files · M test files importing a change, directly or through one file: a superset", "(text-based outside Python)" only when a non-Python file changed), and the unknown clause comes FIRST, then run's verdict with its line count dropped. Spec FR-4 and the contract amended; one unit assertion and one e2e check of the old order amended with them.
 After the fixes: stand-in 36 of 38, only the 2 type -a cells not ok (image-only); units 61 passed.
 SCOPE: in (8 changed files)
+
+### T004: pyproject.toml (verify in the ruff and mypy lists), Makefile (SHELLCHECK_FILES: the five e2e files and tests/fixtures/verify/*.sh), README.md (a verify section)
+**Started:** 2026-10-06T18:18:41Z | **Completed:** 2026-10-06T18:19:13Z
+
+INHERITED: tools/bin/verify, its e2e files and the fixture scripts — from T001–T003 (confidence: high)
+ASSUMED: the fixture generator and recorder go in the shellcheck list like any repository shell script; record.sh is host-only and never run by the lane (confidence: high)
+ABSENT: the e2e files are NOT added to any per-feature run list beyond SHELLCHECK_FILES — tests/run.sh runs every tests/e2e/*.bats, as for 008–011
+Verification: ruff check and format clean over the repository (host ruff 0.16.7; the lane pins 0.16.9); mypy strict: 26 files, no issues; shellcheck over the Makefile's 75 files: clean
+SCOPE: in (3 changed files)
