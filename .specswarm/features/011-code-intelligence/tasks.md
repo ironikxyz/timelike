@@ -58,7 +58,7 @@
 
 - [X] T006 Host lane: lint, units with coverage, `make test-host`, host conformance, the e2e host
   stand-in, start-up. Results in `decisions.md`.
-- [ ] T007 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
+- [X] T007 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
 
 ## Dependencies
 

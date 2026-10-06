@@ -99,3 +99,13 @@ Verification:
 - e2e host stand-in (advisory): symbols files 26 of 28, the 2 type -a cells image-only
 - start-up on the host, 20 runs each, every exit asserted 0: `symbols --help` p95 87 ms before deferring ast, p50 80 / p95 83 ms after; the probe (`outline` of its own 900-line file, work included) p50 119 / p95 130 ms
 SCOPE: in (2 changed files)
+
+### T007: cycle-report.md § Cycle 1, implement step 10, .specswarm/metrics.json, the marker
+**Started:** 2026-10-06T17:45:48Z | **Completed:** 2026-10-06T17:46:26Z
+
+INHERITED: every task's record; step 10's output (identical to 008's); the host-lane figures — from T006 (confidence: high)
+FLAGGED: the adele timing failure in the traced run is recorded in process_failures_recorded and in metrics, not left out because it is outside this feature (confidence: high)
+ASSUMED: `delegations: []` (subagents) (confidence: high)
+ABSENT: `demo_points_reached`; a lane result
+Verification: six citations, each `grep -cF` = 1; tallies from the installed blocks; metrics.json gains only the 011 entry
+SCOPE: in (1 changed files)
