@@ -75,3 +75,22 @@ ASSUMED: the fixture generator and recorder go in the shellcheck list like any r
 ABSENT: the e2e files are NOT added to any per-feature run list beyond SHELLCHECK_FILES — tests/run.sh runs every tests/e2e/*.bats, as for 008–011
 Verification: ruff check and format clean over the repository (host ruff 0.16.7; the lane pins 0.16.9); mypy strict: 26 files, no issues; shellcheck over the Makefile's 75 files: clean
 SCOPE: in (3 changed files)
+
+### T005: host lane — lint, units with coverage, make test-host, conformance, the e2e stand-in, start-up; three tool fixes it found (one event per call, conftest, start-up), 12 unit cases added
+**Started:** 2026-10-06T18:19:48Z | **Completed:** 2026-10-06T18:46:30Z
+
+INHERITED: every earlier task's files (confidence: high)
+FLAGGED: host conformance failed verify on C7 — each call appended 2 events (verify's, and the nested run's; symbols adds one per changed file). Fixed without touching 001's agentio: run and symbols get TIMELIKE_SCRATCH_ROOT=<scratch>/<session>/verify, so their logs, index and events stay inside the session's scratch and the journal holds verify's one event (ref: run's log). A unit now asserts one event per call whatever verify runs. The cost: symbols' index for verify is separate from the agent's own, built once per session (confidence: medium)
+FLAGGED: `verify --help` measured p95 114 ms against quality-standards' 100 ms; dataclasses (12 ms of import, through inspect) replaced by slotted classes and shutil deferred: p50 89 / p95 93 ms. The rest is compiling the 1,460-line script (~20 ms, as every tool here pays) (confidence: high)
+FLAGGED: the traced run had 1 failure outside this feature: tests/unit/test_bench_runner.py::test_totals_and_endings_match_rb4[git-inspect-timelike] ("setup failed: hung" under coverage tracing). Untraced, the whole test passed 8/8 three times (4.5 s); bench is untouched by 012. Recorded as a tracing/load timing artefact, as 011 recorded adele's, not hidden (confidence: medium)
+ASSUMED: runners not on this host (vitest, jest, go, cargo) are exercised in changed mode by stubs printing their REAL recordings, as T001's lint stubs do: what those cases test is the selection, the command and the step state, not the parser (confidence: high)
+ABSENT: the Docker lane (the mentor's); a go build-failure recording (the parser's `[build failed]` branch is untested — no real recording was made, and a written one would prove nothing, P005); the >50-file batched dependents path
+Verification:
+- traced units (before the 12 cases and the fixes): 1626 passed, 1 skipped, 1 failed (the bench timing above), 739 s; coverage TOTAL 94%, verify 85%
+- 12 cases added (vitest and jest steps with the workspace's runner, go test on the package, cargo test in the crate, a missing JS runner, a changed conftest, a step past its limit → 124, --timeout validation ×3 forms, real pytest skipped and error counts, one event per call); the conftest case found a real defect (conftest.py under tests/ was handed to pytest as a test file) — fixed. verify 90% from its own tests (traced); units 73 passed
+- make test-host (before the final fixes): passed — units 1639 untraced, files 60/60, hook 44/44
+- lint: ruff check and format clean (host ruff 0.16.7), mypy strict 26 files, shellcheck over the Makefile's 75 files
+- conformance on the host, all 13 tools: pass (after the C7 fix)
+- e2e host stand-in (advisory): 36 of 38, the 2 type -a cells image-only
+- start-up on the host, 20 runs each, every exit asserted 0: `verify --help` p50 89 / p95 93 ms (114 before); the probe `verify --json true` (through run) p50 186 / p95 191 ms
+SCOPE: in (2 changed files)

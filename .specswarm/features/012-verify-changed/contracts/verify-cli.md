@@ -121,6 +121,12 @@ app/models.py:1:8  F401 `os` imported but unused
 - **A deleted Python file:** 011's lookup resolves imports only to files that exist. So its importers are
   found by text (absolute imports: `import a.b`, `from a.b import`, `from a import b`), and theirs through
   `symbols`. A deleted file in another language is listed in `untested` with that reason.
+- **One session event per call (rule 16, conform C7):** `run` and `symbols` are tools, and each writes an
+  event. `verify` runs them with `TIMELIKE_SCRATCH_ROOT=<scratch>/<session>/verify`, so their logs, index
+  and events stay inside this session's scratch (rule 10). The session's journal then holds `verify`'s one
+  event, whose `ref` is `run`'s log. Found by host conformance at T005.
+- **`conftest.py` and `__init__.py` are not test files,** even under `tests/`. A changed `conftest.py`
+  selects its directory. Found at T005: it had been passed to pytest as a test file.
 - **The runners' caches:** an untracked path under `__pycache__`, `.pytest_cache`, `.mypy_cache` or
   `.ruff_cache` is not a change. A workspace that does not ignore them would otherwise list `verify`'s
   own leftovers on the next call.

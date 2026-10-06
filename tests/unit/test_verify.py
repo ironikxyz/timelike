@@ -830,3 +830,137 @@ def test_help_is_within_40_lines(lab: Lab) -> None:
     assert r.returncode == 0, said(r)
     lines = r.stdout.splitlines()
     assert 0 < len(lines) <= 40 and lines[0].startswith("verify: ")
+
+
+# ── T005 (host lane): the paths T001 did not reach, found by the traced run's missing lines ────────
+# Runners that are not on this host are stubs that print their REAL recorded output (as lint_repo's
+# linters do), so the parser still reads what the runner wrote; what is tested here is the selection,
+# the command each step runs, and the step's state.
+
+
+def runner_repo(lab: Lab, projects: dict[str, Path], kind: str) -> None:
+    shutil.copytree(projects[kind], lab.ws, dirs_exist_ok=True)
+    (lab.ws / ".gitignore").write_text(GITIGNORE + "node_modules/\ntarget/\n")
+    git(lab, "init", "-q", "-b", "main")
+    git(lab, "add", "-A")
+    git(lab, "commit", "-q", "-m", "initial")
+
+
+def replaying(where: Path, name: str, recording: str, code: int, log: Path | None = None) -> None:
+    where.mkdir(parents=True, exist_ok=True)
+    note = f"printf '%s\\n' \"$*\" >> '{log}'\n" if log else ""
+    (where / name).write_text(f"#!/bin/sh\n{note}cat '{REC / recording}.out'\nexit {code}\n")
+    (where / name).chmod(0o755)
+
+
+@pytest.mark.parametrize("runner", ["vitest", "jest"])
+def test_js_change_runs_the_importing_test_with_the_workspace_runner(
+    lab: Lab, projects: dict[str, Path], runner: str
+) -> None:
+    runner_repo(lab, projects, runner)
+    calls = lab.tmp / "calls.log"
+    replaying(lab.ws / "node_modules" / ".bin", runner, runner, 1, calls)
+    append(lab, "math.js", "\n")
+    r = verify(lab, "--json", "changed", PATH="/usr/bin:/bin")
+    assert r.returncode == 1, said(r)
+    d = doc_of(r)
+    assert selected_tests(d) == {"math.test.js": "imports math.js"}, d["selected"]
+    step = next(s for s in d["steps"] if s["kind"] == "test")
+    assert step["tool"] == runner and step["files"] == ["math.test.js"], step
+    want = "run math.test.js" if runner == "vitest" else "math.test.js"
+    assert calls.read_text().strip() == want, calls.read_text()
+    assert step["report"]["counts"]["failed"] == 3 and step["report"]["counts"]["passed"] == 9, step
+    assert f"{runner}: 3 failed, 9 passed" in d["verdict"], d["verdict"]
+
+
+def test_go_change_runs_go_test_on_its_package(lab: Lab, projects: dict[str, Path]) -> None:
+    runner_repo(lab, projects, "go")
+    stubs, calls = lab.tmp / "stubs", lab.tmp / "calls.log"
+    replaying(stubs, "go", "go-test", 1, calls)
+    append(lab, "calc.go", "\n")
+    r = verify(lab, "--json", "changed", PATH=f"{stubs}:/usr/bin:/bin")
+    assert r.returncode == 1, said(r)
+    d = doc_of(r)
+    step = next(s for s in d["steps"] if s["tool"] == "go")
+    assert calls.read_text().strip() == "test .", calls.read_text()
+    assert step["report"]["counts"]["passed"] is None, step  # go test without -v reports no passes
+    assert "passes not reported" in step["state"], step
+
+
+def test_rust_change_runs_cargo_test_in_the_crate(lab: Lab, projects: dict[str, Path]) -> None:
+    runner_repo(lab, projects, "cargo")
+    stubs, calls = lab.tmp / "stubs", lab.tmp / "calls.log"
+    replaying(stubs, "cargo", "cargo-test", 101, calls)
+    append(lab, "src/lib.rs", "\n")
+    r = verify(lab, "--json", "changed", PATH=f"{stubs}:/usr/bin:/bin")
+    assert r.returncode == 1, said(r)
+    step = next(s for s in doc_of(r)["steps"] if s["tool"] == "cargo")
+    assert calls.read_text().strip() == "test", calls.read_text()
+    assert (step["report"]["counts"]["failed"], step["report"]["counts"]["passed"]) == (3, 9), step
+
+
+def test_missing_js_runner_is_not_run(lab: Lab, projects: dict[str, Path]) -> None:
+    runner_repo(lab, projects, "jest")
+    append(lab, "math.js", "\n")
+    r = verify(lab, "--json", "changed", PATH="/usr/bin:/bin")
+    assert r.returncode == 1, said(r)
+    step = next(s for s in doc_of(r)["steps"] if s["kind"] == "test")
+    assert step["state"].startswith("not run: vitest or jest not found"), step
+
+
+def test_changed_conftest_selects_the_tests_under_it(repo: Lab) -> None:
+    (repo.ws / "tests" / "conftest.py").write_text("")
+    d = dry(repo)
+    assert selected_tests(d) == {"tests": "conftest.py for the tests under tests"}, d["selected"]
+
+
+def test_a_step_past_its_limit_is_124_timed_out(repo: Lab) -> None:
+    stubs = repo.tmp / "stubs"
+    stubs.mkdir()
+    for name in ("pytest", "ruff", "mypy"):
+        (stubs / name).write_text("#!/bin/sh\nexec sleep 30\n")
+        (stubs / name).chmod(0o755)
+    append(repo, "app/models.py", "\n")
+    r = verify(repo, "--json", "changed", "--timeout", "1", PATH=f"{stubs}:/usr/bin:/bin", timeout=120)
+    assert r.returncode == 124, said(r)
+    states = [s["state"] for s in doc_of(r)["steps"]]
+    assert states and all(s.startswith("timed out: ") for s in states), states
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "soon"])
+def test_timeout_must_be_a_positive_number(repo: Lab, value: str) -> None:
+    for args in (["changed", "--timeout", value], ["test", "--timeout", value, "--", "true"]):
+        r = verify(repo, "--json", *args)
+        assert r.returncode == 2 and r.stdout == "", said(r)
+
+
+def test_real_pytest_skipped_and_error_counts(lab: Lab) -> None:
+    """A suite the test writes: 1 passing, 1 skipped, 1 erroring in a fixture; real pytest counts it."""
+    here = str(Path(sys.executable).parent)
+    if not (shutil.which("pytest", path=here) or shutil.which("pytest")):
+        pytest.skip("no pytest on this host")
+    (lab.ws / "test_mix.py").write_text(
+        "import pytest\n\n\n@pytest.fixture\ndef broken():\n    raise RuntimeError('fixture broke')\n\n\n"
+        "def test_ok():\n    assert True\n\n\n"
+        "@pytest.mark.skip(reason='later')\ndef test_later():\n    pass\n\n\n"
+        "def test_uses_broken(broken):\n    pass\n"
+    )
+    r = verify(
+        lab, "--json", "test", "--", sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "test_mix.py"
+    )
+    assert r.returncode == 1, said(r)
+    d = doc_of(r)
+    assert d["format"] == "pytest"
+    assert (d["counts"]["passed"], d["counts"]["skipped"], d["counts"]["errors"]) == (1, 1, 1), d["counts"]
+    assert any("test_uses_broken" in f["test"] for f in d["failures"]), d["failures"]
+    assert "1 error" in d["verdict"] and "1 skipped" in d["verdict"], d["verdict"]
+
+
+def test_one_session_event_per_call_whatever_it_runs(repo: Lab) -> None:
+    """Rule 16 (conform C7): run and symbols are tools too; their events stay out of the session's journal."""
+    before = len(events(repo.scratch, SESSION))
+    append(repo, "app/models.py", "\n")
+    verify(repo, "--json", "changed", "--dry-run")  # symbols, once per changed file
+    verify(repo, "--json", "test", "--", "true")  # run
+    new = events(repo.scratch, SESSION)[before:]
+    assert [e["tool"] for e in new] == ["verify", "verify"], new

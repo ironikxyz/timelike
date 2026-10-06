@@ -22,10 +22,8 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
 from typing import Any, NoReturn
 
 import agentio
@@ -81,21 +79,41 @@ TOOL = agentio.Tool(
 # ── running a command through run ──────────────────────────────────────────────────────────────
 
 
-@dataclass
 class RunResult:
-    exit: int
-    command_exit: int | None
-    cause: str
-    seconds: float
-    log: str
-    verdict: str
-    lines: list[str]
-    withheld: bool
-    text: str  # the log, ANSI-stripped; empty when it could not be read
+    __slots__ = ("cause", "command_exit", "exit", "lines", "log", "seconds", "text", "verdict", "withheld")
+
+    def __init__(
+        self,
+        exit: int,
+        command_exit: int | None,
+        cause: str,
+        seconds: float,
+        log: str,
+        verdict: str,
+        lines: list[str],
+        withheld: bool,
+        text: str,
+    ) -> None:
+        self.exit = exit
+        self.command_exit = command_exit
+        self.cause = cause
+        self.seconds = seconds
+        self.log = log
+        self.verdict = verdict
+        self.lines = lines
+        self.withheld = withheld
+        self.text = text  # the log, ANSI-stripped; empty when it could not be read
 
 
 class RunFailed(Exception):
     """`run` could not be started, or its result could not be read (contract § test: scope internal)."""
+
+
+# run and symbols are tools too, and each writes its own session event. Rule 16 gives a call one event
+# (conform C7), so the children run with a scratch root inside this session's own scratch: their logs,
+# index and events stay in the session (rule 10), and the session's journal holds verify's one event,
+# whose ref is run's log. Set by main(); None (inherit) only when main did not run.
+CHILD_ENV: dict[str, str] | None = None
 
 
 def sibling(name: str) -> str:
@@ -113,6 +131,7 @@ def run_command(argv: Sequence[str], cwd: str | None, timeout: float | None) -> 
         p = subprocess.run(
             cmd,
             cwd=cwd,
+            env=CHILD_ENV,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -160,26 +179,45 @@ def format_seconds(s: float) -> str:
 # ── reports: the five formats (research R3) ────────────────────────────────────────────────────
 
 
-@dataclass
 class Failure:
-    test: str
-    file: str | None = None
-    line: int | None = None
-    lines: list[str] = field(default_factory=list)
+    __slots__ = ("file", "line", "lines", "test")
+
+    def __init__(
+        self,
+        test: str,
+        file: str | None = None,
+        line: int | None = None,
+        lines: list[str] | None = None,
+    ) -> None:
+        self.test = test
+        self.file = file
+        self.line = line
+        self.lines: list[str] = lines if lines is not None else []
 
     def data(self) -> dict[str, Any]:
         return {"test": self.test, "file": self.file, "line": self.line, "lines": self.lines}
 
 
-@dataclass
 class Report:
-    format: str
-    failed: int | None = None
-    passed: int | None = None
-    skipped: int | None = None
-    errors: int | None = None
-    failures: list[Failure] = field(default_factory=list)
-    note: str = ""
+    __slots__ = ("errors", "failed", "failures", "format", "note", "passed", "skipped")
+
+    def __init__(
+        self,
+        format: str,
+        failed: int | None = None,
+        passed: int | None = None,
+        skipped: int | None = None,
+        errors: int | None = None,
+        failures: list[Failure] | None = None,
+        note: str = "",
+    ) -> None:
+        self.format = format
+        self.failed = failed
+        self.passed = passed
+        self.skipped = skipped
+        self.errors = errors
+        self.failures: list[Failure] = failures if failures is not None else []
+        self.note = note
 
     def counts(self) -> dict[str, int | None]:
         return {"failed": self.failed, "passed": self.passed, "skipped": self.skipped, "errors": self.errors}
@@ -562,13 +600,22 @@ def read_report(text: str) -> Report:
 # ── linter diagnostics ─────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
 class Diagnostic:
-    file: str
-    line: int
-    col: int | None
-    message: str
-    code: str | None
+    __slots__ = ("code", "col", "file", "line", "message")
+
+    def __init__(
+        self,
+        file: str,
+        line: int,
+        col: int | None,
+        message: str,
+        code: str | None,
+    ) -> None:
+        self.file = file
+        self.line = line
+        self.col = col
+        self.message = message
+        self.code = code
 
     def data(self) -> dict[str, Any]:
         return {
@@ -784,10 +831,16 @@ def run_data(rr: RunResult) -> dict[str, Any]:
 # ── verify changed: the change set and the selection (research R4) ─────────────────────────────
 
 
-@dataclass
 class Change:
-    path: str
-    status: str  # modified | added | deleted | renamed | untracked
+    __slots__ = ("path", "status")
+
+    def __init__(
+        self,
+        path: str,
+        status: str,
+    ) -> None:
+        self.path = path
+        self.status = status  # modified | added | deleted | renamed | untracked
 
 
 def git(workspace: str, *args: str) -> subprocess.CompletedProcess[bytes]:
@@ -900,6 +953,8 @@ def is_test_file(path: str) -> bool:
     parts = path.split("/")[:-1]
     lang = language(path)
     if lang == "python":
+        if name in ("conftest.py", "__init__.py"):
+            return False  # configuration under tests/, not tests: a conftest selects its directory
         return (
             name.startswith("test_")
             or name.endswith("_test.py")
@@ -914,11 +969,18 @@ def is_test_file(path: str) -> bool:
     return False
 
 
-@dataclass
 class Selected:
-    path: str
-    reason: str
-    runner: str = ""
+    __slots__ = ("path", "reason", "runner")
+
+    def __init__(
+        self,
+        path: str,
+        reason: str,
+        runner: str = "",
+    ) -> None:
+        self.path = path
+        self.reason = reason
+        self.runner = runner
 
 
 def dependents(workspace: str, paths: list[str]) -> tuple[list[dict[str, Any]], str | None]:
@@ -927,6 +989,7 @@ def dependents(workspace: str, paths: list[str]) -> tuple[list[dict[str, Any]], 
         p = subprocess.run(
             [sibling("symbols"), "--json", "--limit", "0", "dependents", *paths],
             cwd=workspace,
+            env=CHILD_ENV,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -981,13 +1044,22 @@ def deleted_importers(workspace: str, path: str) -> tuple[list[dict[str, Any]], 
     return found, None if found else "deleted, and no file imports it by name"
 
 
-@dataclass
 class Selection:
-    changed: list[Change]
-    tests: list[Selected] = field(default_factory=list)
-    lint: list[str] = field(default_factory=list)
-    untested: list[tuple[str, str]] = field(default_factory=list)
-    batched: bool = False
+    __slots__ = ("batched", "changed", "lint", "tests", "untested")
+
+    def __init__(
+        self,
+        changed: list[Change],
+        tests: list[Selected] | None = None,
+        lint: list[str] | None = None,
+        untested: list[tuple[str, str]] | None = None,
+        batched: bool = False,
+    ) -> None:
+        self.changed = changed
+        self.tests: list[Selected] = tests if tests is not None else []
+        self.lint: list[str] = lint if lint is not None else []
+        self.untested: list[tuple[str, str]] = untested if untested is not None else []
+        self.batched = batched
 
 
 def select(workspace: str, changed: list[Change]) -> Selection:
@@ -1044,23 +1116,58 @@ def finish(sel: Selection, tests: dict[str, str]) -> Selection:
 # ── verify changed: the steps (research R5) ────────────────────────────────────────────────────
 
 
-@dataclass
 class Step:
-    kind: str  # test | lint | type
-    tool: str
-    command: list[str]
-    cwd: str
-    files: list[str]
-    state: str = "not run"
-    exit: int | None = None
-    log: str = ""
-    report: Report | None = None
-    diagnostics: list[Diagnostic] = field(default_factory=list)
-    dropped: int = 0
-    body: list[str] = field(default_factory=list)
-    missing: str = ""  # why the tool was not found
-    failed: bool = False
-    timed_out: bool = False
+    __slots__ = (
+        "body",
+        "command",
+        "cwd",
+        "diagnostics",
+        "dropped",
+        "exit",
+        "failed",
+        "files",
+        "kind",
+        "log",
+        "missing",
+        "report",
+        "state",
+        "timed_out",
+        "tool",
+    )
+
+    def __init__(
+        self,
+        kind: str,
+        tool: str,
+        command: list[str],
+        cwd: str,
+        files: list[str],
+        state: str = "not run",
+        exit: int | None = None,
+        log: str = "",
+        report: Report | None = None,
+        diagnostics: list[Diagnostic] | None = None,
+        dropped: int = 0,
+        body: list[str] | None = None,
+        missing: str = "",
+        failed: bool = False,
+        timed_out: bool = False,
+    ) -> None:
+        self.kind = kind  # test | lint | type
+        self.tool = tool
+        self.command = command
+        self.cwd = cwd
+        self.files = files
+        self.state = state
+        self.exit = exit
+        self.log = log
+        self.report = report
+        self.diagnostics: list[Diagnostic] = diagnostics if diagnostics is not None else []
+        self.dropped = dropped
+        self.body: list[str] = body if body is not None else []
+        self.missing = missing  # why the tool was not found
+        self.failed = failed
+        self.timed_out = timed_out
 
     def data(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -1104,11 +1211,15 @@ def find_tool(name: str, workspace: str, local: str | None = None) -> list[str] 
         own = os.path.join(workspace, local, name)
         if os.access(own, os.X_OK) and os.path.isfile(own):
             return [own]
+    import shutil  # deferred: only changed mode looks tools up (start-up, quality C2)
+
     found = shutil.which(name)
     return [found] if found else None
 
 
 def find_pytest(workspace: str) -> tuple[list[str] | None, str]:
+    import shutil  # deferred, as in find_tool
+
     cmd = find_tool("pytest", workspace, ".venv/bin")
     if cmd:
         return cmd, ""
@@ -1416,6 +1527,8 @@ def positive_seconds(text: str) -> float:
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    global CHILD_ENV
+    CHILD_ENV = {**os.environ, "TIMELIKE_SCRATCH_ROOT": str(ctx.scratch() / "verify")}
     words: list[str] = list(args.command or [])
     if not words:
         raise agentio.UsageError("nothing to run", "verify test -- CMD, verify CMD, or verify changed")
