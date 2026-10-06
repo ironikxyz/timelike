@@ -1,0 +1,10 @@
+feature: 011-code-intelligence
+completed_at: 2026-10-06T17:46:39+00:00
+mode: dispatch
+tasks: 7/7 in tasks.md (T001–T007), all ticked; no unplanned sections
+tests: UNKNOWN — the plugin's run_tests returned 2 (pytest declared, not installed for /usr/bin/python3); project_measured (host venv, pytest 8.4.2): 1567 passed (make test-host)
+coverage: UNKNOWN — run_coverage printed unknown (rc 1); project_measured (coverage.py with subprocess coverage, host venv): 95% Python line and branch (symbols 94% from its tests), against min_test_coverage 90
+lint: ruff 0.16.7 check and format over tools tests scan bench (71 files), mypy 2.4.0 strict (25 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (68 files): clean
+decisions: sections=7 flagged_sections=7 non_flagged_sections=0 sections_without_absent=0 flagged=15 assumed=5 deferred=0 absent=7 inherited=7 low_confidence=0 flagged_low_confidence=0
+scope: planned=7 recorded=7 unplanned=0 unrecorded=0 in=7 out=0 none=0 unknown=0 flagged=7 flagged_out=0 other=0 other_out=0
+pause_file_written: no
