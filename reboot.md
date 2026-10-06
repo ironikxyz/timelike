@@ -5,11 +5,33 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-06T18:48:04Z (read from the clock). **Dispatch batch `20261004-183704`: all 8 prompts built.** Done: 06 s0
+**Snapshot:** 2026-10-06T20:04:26Z (read from the clock). **Dispatch batch `20261004-183704`: all 8 prompts built.** Done: 06 s0
 (`008-edit`, `62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`;
-pause-09 answered (a)), 10 s1 (`011-code-intelligence`, `6d523d4`), 11 s1 (`012-verify-changed`, `d075404`). Next: the
-batch's final report to the mentor (through the operator), then the mentor's Docker lane. specswarm 2.35.0 (`4ff8dcb`).
-**This repository is public**; push nothing, merge nothing.
+pause-09 answered (a)), 10 s1 (`011-code-intelligence`, `6d523d4`), 11 s1 (`012-verify-changed`, `d075404`). The
+batch's final report went to the operator in chat (2026-10-06); repeat it if the mentor asks. **Lane batch-b ran at
+`1dfc6b7`** (bridge/history 2026-10-06T20:03:07Z): not signable, three failures for the mentor to route (§ Lane
+batch-b below). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
+
+## Lane batch-b (2026-10-06, at `1dfc6b7`): result and this instance's reading
+
+`make test` FAILED: e2e 534/537, units 1 failed / 1637 passed / 2 skipped, Go pass, start-up p95 97.8 ms
+(budget 100). `make scan` PASS ×4 (agent 83 baselined, adele 0, vanilla 82, bench-driver 54); deny-list pass
+(P1–P7, 449 files). Every new tool held in the image: symbols 28/28, services 22/22, journal 16/16, edit 28/28,
+verify all but one, so real pytest/ruff/mypy via uv at the pins **does** reach PyPI from the agent container.
+
+The three failures, read from `tests/out/` (no fix until the mentor routes them; each on the branch owning the file):
+1. **not ok 249, 250** — 001's SC-6 `peer-agents-write-to-own-scratch-space.bats`, the `default`-session cells.
+   Diagnosis (not a leak): 009's shell record (`journal-exit.bash`) writes the command text as `"cmd"`, and the
+   test's `PEER_SCRIPT` contains `${TIMELIKE_SESSION:-default}`, so peer b's `shell.jsonl` holds the needle
+   `default` that `fixtures/sc6_check.py:79-80` greps for. Every other isolation count is clean; the two
+   named-peer cells pass because random ids never occur in the script. Fix options: the content check skips
+   `shell.jsonl` and checks its `session` field instead, or the peer script stops containing the literal.
+2. **not ok 432** — 012 SC-4 `[bash -c]` JSON clean tree: verify's JSON is complete and correct (exit 0);
+   `jpy` failed with no stderr after ~30 s, consistent with `pyq`'s throwaway `docker run` killed by
+   `timeout $RUN_TIMEOUT`. Its `-lc` twin and the rest of the file passed. Unconfirmed (no Docker here).
+3. **unit `test_verify.py::test_not_found_steps_are_not_run_exit_1`** (012, line 756): the skip probe runs
+   `python3` on `PATH=/usr/bin:/bin`; the image has none there (`FileNotFoundError`). Fix: guard with
+   `shutil.which("python3", path=bare)` (no python3 there means pytest cannot be imported either).
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -38,9 +60,10 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 
 ## Next actions
 
-1. **The batch is built.** Report it to the operator for the mentor (the items below), and wait. Nothing
-   in the bridge is to be written except pause files.
-2. The mentor's lane after the batch, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
+1. **Wait for the mentor to route lane batch-b's three failures** (a `bridge/feedback/` file or a history
+   row). Fix only what is routed, on the owning branch, then rebase or cascade the stack as the mentor says.
+   Nothing in the bridge is to be written except pause files.
+2. Then a re-run of the lane, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
    (`human-track.md`), hand merges, pushes on the operator's OK.
 
 **Batch recipes (scratchpad, gone after a clear; rebuild them):**
