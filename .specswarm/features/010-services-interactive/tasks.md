@@ -37,7 +37,7 @@
   - logs and their redaction;
   - concurrent starts in one session;
   - the manifest.
-- [ ] T002 [P] [US1] [US2] [US3] [US4] [US5] e2e, each under `bash -c` and `bash -lc`, with its own session
+- [X] T002 [P] [US1] [US2] [US3] [US4] [US5] e2e, each under `bash -c` and `bash -lc`, with its own session
   and free port:
   - `tests/e2e/services-start-with-port-readiness-returns-after-port-accepts.bats` (SC-1)
   - `tests/e2e/services-start-exits-before-ready-non-zero-died-last-log-lines.bats` (SC-2)

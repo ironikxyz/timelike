@@ -51,3 +51,14 @@ ASSUMED: the delegate's settlements: global flags before the subcommand, the dat
 ABSENT: the survivors outcome (needs a process that hides from all three nets), a holder another user owns, the ::1 fallback, rule 3's cut in `logs` — named by the delegate as not tested
 Verification: 28 passed (14 s); ruff clean
 SCOPE: in (1 changed files)
+
+### T002: e2e (delegated) — SC-1 to SC-5 and the name and manifest, 22 cells
+**Started:** delegated,_written_after_b3ac307_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-06T16:53:40Z
+
+INHERITED: the contract; helpers.bash; 008/009's files as the model (confidence: high)
+FLAGGED: each cell its own session and free port; the claim checked against the container's state — the port connected in the same shell the moment start returns (SC-1), a refusal tested with a `sleep` that would otherwise read as ready (SC-3), the tree's pids (with start times, against pid reuse) all gone after stop, the setsid escapee included (SC-4), a service killed from outside marked died (SC-5) (confidence: high)
+FLAGGED: the image has no `python3` on PATH (only /opt/timelike/python/bin/python3), so the files take that interpreter for their servers, with `python3` as the host stand-in's fallback (confidence: high)
+ASSUMED: SC-2 asserts exit 1 exactly (the contract's died code), so a 124 cannot pass for a death (confidence: high)
+ABSENT: tty and pty cells (services is a pipe-and-terminal tool alike; the criteria name no mode)
+Verification: shellcheck -x clean over the six files. Host stand-in (advisory): 20 of 22 ok against the tool after the resume; not ok only the 2 type -a cells (image-only). The delegate's mutation check on a scratch copy: a port check that always succeeds failed all four SC-1 cells; a stop by process group only failed both SC-4 cells
+SCOPE: in (6 changed files)
