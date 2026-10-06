@@ -19,7 +19,7 @@
 
 ## Phase 1: Tests first (from the contract; delegated)
 
-- [ ] T001 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_services.py`, per research R8. Real
+- [X] T001 [P] [US1] [US2] [US3] [US4] [US5] `tests/unit/test_services.py`, per research R8. Real
   processes only:
   - `python3 -m http.server` on a free port;
   - `sh -c` trees with a `setsid` grandchild;

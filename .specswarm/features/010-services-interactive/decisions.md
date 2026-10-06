@@ -40,3 +40,14 @@ SCOPE: out — tests/unit/test_agentio.py (1 of 3 changed files) (task has FLAGG
 1. **Declared** in the cycle report's `changed_other_features` (T006): `tools/agentio/agentio.py` (`takes_command`) and `tests/unit/test_agentio.py`.
 2. **Written into 001's contract text** (this commit): `output-contract.md` § Invocation surface, one paragraph: a tool may take a command after the first `--` without passing its exit through (`takes_command`), distinct from `passes_exit`.
 3. **The died verdict fixed** to the contract's `last N log lines below` (this commit), and the not-ready verdict to the same form. The T001 delegate's test was right; it passes now (28/28).
+
+### T001: tests/unit/test_services.py (delegated, from the contract): 28 tests with real processes
+**Started:** delegated,_written_after_b3ac307_(its_start_was_not_read_from_a_clock) | **Completed:** 2026-10-06T16:53:35Z
+
+INHERITED: the contract and research; `services` as committed at T003 and fixed at the resume (confidence: high)
+FLAGGED: every fixture is a real process (http.server on a free port, sh trees with a setsid grandchild, early exits, a never-ready sleep), and every claim is checked in /proc, on the port and in the registry file — a teardown SIGKILLs every process carrying the test's own session marker, and none was left after the runs (confidence: high)
+FLAGGED: its one failure on the tool as committed (the died verdict's `last N of M` against the contract's `last N`) was a tool deviation; fixed at the resume (`ae4bb5e`, the mentor's condition 3) and now 28/28 (confidence: high)
+ASSUMED: the delegate's settlements: global flags before the subcommand, the data model's registry shape, `exit_status` for a died start's status (agentio reserves `exit`), stop's `pids`/`survivors` keyed by service name (confidence: medium)
+ABSENT: the survivors outcome (needs a process that hides from all three nets), a holder another user owns, the ::1 fallback, rule 3's cut in `logs` — named by the delegate as not tested
+Verification: 28 passed (14 s); ruff clean
+SCOPE: in (1 changed files)
