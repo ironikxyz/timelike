@@ -714,3 +714,78 @@ def test_agent_info(lab: Lab) -> None:
 def test_the_probe_runs_clean_on_an_empty_session(lab: Lab) -> None:
     d = result(lab.svc("list"), 0)
     assert d["services"] == []
+
+
+# ── T005: the paths the delegate's set did not reach (coverage), each against real processes ─────
+
+
+@pytest.mark.parametrize(
+    ("args", "words"),
+    [
+        ([], "needs an action"),
+        (["restart", "web"], "unknown action"),
+        (["list", "--", "x"], "belong to start"),
+        (["logs", "bad name"], "not a service name"),
+        (["logs", "web", "--session", "bad session"], "not a session id"),
+        (["start", "web", "--port", "70000", "--", "true"], "is not a port"),
+        (["start", "web", "--ready-log", "(", "--", "true"], "not a regular expression"),
+        (["start", "web", "--timeout", "0", "--", "true"], "must be above 0"),
+        (["stop"], "stop needs NAME"),
+        (["stop", "web", "--all"], "--all stops every service"),
+        (["logs"], "logs needs NAME"),
+    ],
+)
+def test_usage_errors_exit_2(lab: Lab, args: list[str], words: str) -> None:
+    r = lab.svc("--json", *args)
+    assert r.returncode == 2, said(r)
+    assert words in r.stderr, said(r)
+
+
+def test_a_service_that_ignores_sigterm_is_frozen_and_killed(lab: Lab) -> None:
+    """run's sweep past the grace: TERM ignored, so freeze, KILL, re-scan; nothing remains."""
+    port = free_port()
+    cmd = ["sh", "-c", f"trap '' TERM; {shlex.join(http(port))} & trap '' TERM; wait"]
+    d = started(lab, "stubborn", cmd, "--port", str(port))
+    pids = set(service_pids(lab.session(), "stubborn"))
+    assert pids
+    began = time.monotonic()
+    r = lab.svc("--json", "stop", "stubborn")
+    took = time.monotonic() - began
+    assert r.returncode == 0, said(r)
+    assert took >= 1.5, took  # the 2 s grace ran out before the KILL
+    assert not any(alive(p) for p in pids)
+    assert not accepts(port)
+    assert d["pid"] in flat(doc_of(r)["pids"])
+
+
+def test_a_start_killed_by_a_signal_names_it(lab: Lab) -> None:
+    r = start(lab, "selfkill", ["sh", "-c", "echo going; kill -9 $$"], "--port", str(free_port()))
+    d = result(r, 1, "died")
+    assert "killed by SIGKILL" in d["verdict"], d["verdict"]
+    assert d["signal"] == "SIGKILL"
+
+
+def test_logs_longer_than_n_are_cut_with_the_full_log_as_output(lab: Lab) -> None:
+    lines = "; ".join(f"echo line{i}" for i in range(30))
+    started(lab, "chatty", ["sh", "-c", f"{lines}; exec sleep 300"])
+    assert wait_until(lambda: "line29" in Path(lab.registry()["chatty"]["log"]).read_text())
+    r = lab.svc("--json", "logs", "chatty", "-n", "5")
+    d = result(r, 0)
+    assert d["lines"] == [f"line{i}" for i in range(25, 30)]
+    assert d["truncated"]["omitted_lines"] == 25
+    assert d["truncated"]["full_output"] == lab.registry()["chatty"]["log"]
+    assert lab.svc("--json", "logs", "chatty", "-n", "0").returncode == 2
+
+
+def test_logs_withheld_when_the_redaction_rules_are_unavailable(lab: Lab) -> None:
+    started(lab, "quiet", ["sh", "-c", "echo hello; exec sleep 300"])
+    assert wait_until(lambda: "hello" in Path(lab.registry()["quiet"]["log"]).read_text())
+    r = lab.svc("--json", "logs", "quiet", TIMELIKE_REDACTION_RULES=str(lab.tmp / "absent.toml"))
+    d = result(r, 0)
+    assert d["lines"] == ["[log lines withheld: redaction rules unavailable]"]
+    assert "withheld: redaction rules unavailable" in d["verdict"]
+
+
+def test_stop_all_with_nothing_registered_stops_nothing(lab: Lab) -> None:
+    d = result(lab.svc("--json", "stop", "--all", "--yes"), 0)
+    assert "nothing stopped" in d["verdict"]

@@ -657,7 +657,7 @@ def stop(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.
                 "not found",
                 f"no service {args.name} in session {session}",
                 data={"name": args.name, "session": session},
-                remedy="services list" + (f" --all-sessions" if args.session else ""),
+                remedy="services list" + (" --all-sessions" if args.session else ""),
             )
         chosen = [args.name]
     marked = markers()
@@ -714,7 +714,8 @@ def stop(args: argparse.Namespace, ctx: agentio.Context, root: Path) -> agentio.
         else:
             reg.update(n, None)
             results.append(
-                f"{n} stopped: {_n(len(plan[n]), 'process')} ({', '.join(map(str, sorted(plan[n])))}), none remains; "
+                f"{n} stopped: {_n(len(plan[n]), 'process')} "
+                f"({', '.join(map(str, sorted(plan[n])))}), none remains; "
                 f"start again: {restart_command(entry)}"
             )
     data = {

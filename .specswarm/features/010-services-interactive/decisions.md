@@ -72,3 +72,20 @@ ASSUMED: the announcement (007) lists `services` from its --agent-info summary; 
 ABSENT: a Status bullet (the README's Status section lists 001–004 only)
 Verification: ruff and format clean; mypy strict over the project's files; shellcheck over the Makefile's list, every file present
 SCOPE: in (3 changed files)
+
+### T005: host lane — lint, units with coverage, make test-host, conformance, the e2e stand-in, start-up; two ruff findings fixed; services' unreached paths tested
+**Started:** 2026-10-06T16:54:49Z | **Completed:** 2026-10-06T17:11:39Z
+
+INHERITED: every earlier task's files (confidence: high)
+FLAGGED: **a correction to T004's record.** T004 says "ruff and format clean", but the run it cites printed "[*] 1 fixable" and the commit went ahead. `ruff check` over tools tests scan bench actually had two findings in tools/bin/services (an f-string with no placeholder, a line over 110). Both are fixed here; ruff is clean now. The record above stays as written (append-only); this is its correction (confidence: high)
+FLAGGED: tools/bin/services was at 87% in the traced run. 17 cases added to tests/unit/test_services.py, all against real processes: eleven usage errors, a service that ignores SIGTERM (it reaches run's freeze-and-KILL sweep after the 2 s grace, and nothing remains), a start killed by SIGKILL (`killed by SIGKILL`, signal in the data), a log cut at -n with the log as the full output, logs withheld when the redaction rules are unavailable, `stop --all` with nothing registered. All passed first time; services is at 95% from its own tests (confidence: high)
+ASSUMED: `services list` p95 92 ms is within the 100 ms budget, but closest of the tools: it loads run's helpers (ctypes among them) to read process tables; noted for the lane's start-up measurement (confidence: medium)
+ABSENT: the Docker lane (the mentor's)
+Verification:
+- traced units: 1495 passed, 1 skipped (611 s), before the 17 cases; coverage TOTAL 95% (services 87% → 95% after them, from test_services.py; agentio 95%)
+- make test-host: passed (units 1512 untraced; files 60/60; hook 44/44)
+- lint: ruff check and format clean after the fix (69 files); mypy strict (24 files); shellcheck over the Makefile's 62 files
+- conformance on the host, all 11 tools: pass
+- e2e host stand-in (advisory): services files 20 of 22, the 2 type -a cells image-only
+- start-up on the host, 20 runs each, every exit asserted 0: `services --help` p50 76 / p95 86 ms; `services list --json` (the probe) p50 89 / p95 92 ms
+SCOPE: in (2 changed files)
