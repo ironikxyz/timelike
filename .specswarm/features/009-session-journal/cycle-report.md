@@ -188,3 +188,30 @@ decisions: sections=7 flagged_sections=7 non_flagged_sections=0 sections_without
 
 - `unrecorded=1` is T008, this report. The marker's tallies are taken after it.
 - There is no low-confidence entry, so no pause file was written.
+
+### Addendum 1 — lane batch-b's SC-6 cells, fixed (2026-10-07T00:05:37Z, read from the clock)
+
+- **Finding** (mentor, `../bridge/history.md` 2026-10-06T20:03:07Z, lane batch-b at `1dfc6b7`; log
+  `bridge/.make-test-batch-b.log` lines 1948–2010): not ok 249 and 250, 001's SC-6
+  `peer-agents-write-to-own-scratch-space.bats`, the default-session cells `[bash -c]` and `[bash -lc]`:
+  `b_holds_other_content=1`, `b_foreign=…/peer-b-…/shell.jsonl`. Every other isolation count was clean.
+- **Routed** by `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md` § Failure 1, with its ruling.
+- **Cause: not a leak.** `fixtures/sc6_check.py` searched each peer's files for the other's session id as
+  bytes. In the default cells that id is the word `default`, which the test's `PEER_SCRIPT` holds
+  (`${TIMELIKE_SESSION:-default}`). This feature's shell record writes the command text as `"cmd"`, so the
+  named peer's `shell.jsonl` held the word with nothing leaked. The named-peer cells passed because random
+  ids never occur in the script.
+- **Fix, as ruled:** `PEER_SCRIPT` unchanged. `sc6_check.py` leaves `ROOT/X/shell.jsonl` out of the byte
+  search and nothing else. In its place it reports `X_shell_records` and `X_shell_own_session`, and the
+  test asserts that each peer has at least one record and that every record carries that peer's own
+  session. So SC-6 now checks this feature's record for isolation instead of tripping on it.
+- **Checked on the host** (no Docker here): the fixture over synthetic trees. The lane's shape gives
+  `b_holds_other_content=0` (the old fixture gives 1 on `shell.jsonl`, as in the lane). Three controls trip:
+  a session id in another file, a record carrying the other session (`records 2`, `own 1`), and no record
+  (`records 0`). The new bats assertion was run in isolation over the same four outputs. ruff, mypy and
+  shellcheck are clean.
+- **Not verified here:** the four SC-6 cells themselves. They stay `unconfirmed` until the lane re-runs.
+
+**changed_other_features (this addendum):** 001's SC-6 test,
+`tests/e2e/peer-agents-write-to-own-scratch-space.bats`, and its fixture `tests/e2e/fixtures/sc6_check.py`.
+Test-side only; no tool and no image file changed.
