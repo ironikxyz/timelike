@@ -223,3 +223,33 @@ decisions: sections=5 flagged_sections=4 non_flagged_sections=1 sections_without
 **For the batch:** this was prompt 8 of 8. The batch's final report goes to the mentor through the
 operator, not into this file.
 
+
+### Addendum 1 — lane batch-b's two 012 failures, and the cascade (2026-10-07T00:09:09Z, read from the clock)
+
+- **Finding** (mentor, `../bridge/history.md` 2026-10-06T20:03:07Z, lane batch-b at `1dfc6b7`; log
+  `bridge/.make-test-batch-b.log`). **Routed** by `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md`,
+  with its rulings (§ 2 and § 3 here; § 1 is on 009).
+- **Unit `test_verify.py::test_not_found_steps_are_not_run_exit_1`** (log 2364–2559): its probe ran
+  `python3` on `PATH=/usr/bin:/bin`. The image has none there, so it raised `FileNotFoundError` before
+  reaching its claim. It passed on this instance's host, which has one. **Fix** (`2a0ca75`): guard the probe
+  with `shutil.which("python3", path=bare)`. No `python3` there means verify's `python3 -m pytest` fallback
+  (`find_pytest`) is unavailable too, so the precondition holds. Checked on the host, and under a "bare"
+  PATH holding only `git`: **passes, not skipped** (`-rs` lists no skip), and the old probe reproduces the
+  lane's `FileNotFoundError` there. The ruling's condition (it must run, not skip, in the image) is for the
+  re-run's log to show.
+- **not ok 432**, SC-4 `[bash -c]` JSON clean tree (log 2193–2203): verify's JSON was complete and correct
+  with exit 0, and `jpy` failed after 33.7 s with no stderr. **Diagnosability only, as ruled** (`f6cf7da`):
+  the five `verify-*.bats` files' `jpy` keep `pyq`'s exit status and stderr, and name exit 124 as the
+  timeout, in the `flunk` message. No assertion and no timeout changed; the shared `pyq` in `helpers.bash`
+  is untouched. The new `jpy` was run outside bats against a stubbed `pyq`: parsed, a parse error (exit 1
+  with its traceback), exit 124 with stderr, and a hang killed by a real `timeout` (named). If the re-run
+  passes, 432 goes down as **load-sensitive**, citing both lanes; if it fails, the message says how.
+- **The cascade** (009's fix `2e3f483`): `010-services-interactive`, `011-code-intelligence` and this branch
+  were rebased in that order, with no conflicts. 010 and 011 each gained an Addendum 1 naming their new
+  hashes. This branch's 12 commits kept their subjects; the marker `d075404` is now **`4772706`**.
+  Tips after the cascade, before this addendum: 009 `2e3f483`, 010 `dbe1959`, 011 `eb9d004`, 012 `f6cf7da`.
+  This branch's tip is the commit that adds this addendum.
+- **Process slip:** `2a0ca75` and `f6cf7da` were committed before the deny-list check ran. It ran over
+  `f6cf7da` right after, before anything else: PASS (7 entries, 449 files, P1–P7 0/0).
+- **Not verified here:** the six cells and the unit test in the image. They stay `unconfirmed` until the
+  lane re-runs.
