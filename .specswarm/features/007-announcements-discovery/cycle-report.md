@@ -226,3 +226,46 @@ decisions: sections=8 flagged_sections=7 non_flagged_sections=1 sections_without
   (mode from umask, owner-writable), so it does not have this defect.
 - **Not verified here:** the cell itself (no Docker in this instance). It is `unconfirmed` until the
   full lane at the batch's end.
+
+### Addendum 2 — D4 observed by the operator (2026-10-07T20:38:33Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T20:37:02Z) and the transcript
+it cites, `bridge/.d4-demo-20261007T185100Z.txt` (with the harness's stream-json beside it,
+`.d4-demo-20261007T185100Z.jsonl`; bridge `a4b5567`). This instance read the `.txt`.
+
+- `04 · "uses a timelike tool it learned about from the environment's announcement _(traces to: D4)_"` —
+  **observed by the operator**, by interview with the mentor instance on a real harness session.
+  - **The environment:** a throwaway from the image lane batch-d passed (revision `244c4a8`,
+    `sha256:d0dd2058…`). Node 20 and Claude Code 2.1.292 were added for the demo only. It ran with
+    `--cap-drop ALL`, `no-new-privileges` and `--init`, as user `agent`.
+  - **The session:** one `claude -p` with HOME `/home/agent`, so it loaded `~/.claude/CLAUDE.md`, the
+    announcement the entrypoint placed at start (`announce --status`: claude-code, codex and opencode all
+    `current`; 28 lines). Its built-in file tools were disallowed, so it worked through its shell tool.
+  - **The prompt** (verbatim in the transcript) names neither timelike nor any tool.
+  - **What the agent did:**
+    1. `view mailparse/_header_value_parser.py:1404-1437`;
+    2. `symbols get_word`, a usage error (exit 2) whose message lists the four actions;
+    3. `symbols callers get_word`.
+  - **Its answer** gave `get_word`'s role and its callers: 4 call sites in 3 functions (`get_phrase` at
+    1452 and 1465, `get_local_part` at 1501, `get_obs_local_part` at 1551), which it said were text-based.
+    The mentor checked the four lines by grep in the image.
+  - **Interview:** answers 1–3 matched; one was corrected (the entrypoint placed the file, and `announce
+    --status` only reports it). Answer 4 first said "4 functions"; when challenged, the operator
+    corrected it to 3 (a mistype). The operator accepts D4 as observed.
+  - **Credential**, from the mentor's entry: the operator's subscription token reached the harness
+    process only. timelike's shell-env strips token-shaped variables from every bash, so the agent's
+    shell never held it. The token is absent from both transcript files.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **What this settles from § Cycle 1's not_verified:** "whether each harness reads its file", for
+  **Claude Code** only. Codex and opencode reading their files is still not observed.
+- **Noted by this instance, not a defect:** the agent's first guess, `symbols NAME`, cost one turn, and the
+  usage message's list of actions recovered it. The announcement's `symbols` line is the manifest summary
+  (`tools/bin/symbols:68`: "where a name is defined, who calls it, what imports a file, a file's outline;
+  never bodies"). It names what the tool answers but no action word, so a first guess like this is
+  expected. A summary naming the actions would avoid the extra turn; that is a question for a later
+  cycle, not a change here.
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12 and D14 addenda
+  (`d932c1c`, `631a29e`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+
+§ Cycle 1's automated criteria are still recorded `unconfirmed` above. Lane batch-d (2026-10-07T03:26:28Z,
+e2e 537/537) ran their cells, but this addendum records D4 only.
