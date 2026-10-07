@@ -665,3 +665,38 @@ decisions: sections=23 flagged_sections=14 non_flagged_sections=9 sections_witho
 
 - `unrecorded=1` is T024, this report. The marker's tallies are taken after it.
 - No low-confidence entry, so no pause file was written.
+
+### Cycle 2 — D14 addendum (operator interview) (2026-10-07T16:34:18Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T16:32:56Z) and the transcript
+it cites, `bridge/.d14-demo-20261007T155725Z.txt` (bridge `7e0e160`), which this instance read.
+
+- `05 · "orients in an unfamiliar repository with one budgeted directory overview _(traces to: D14)_"` —
+  **observed by the operator**, by interview with the mentor instance on `view`'s real output. The image
+  was the one lane batch-d passed (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway with
+  `--cap-drop ALL`, `no-new-privileges` and `--init`. Everything ran as user `agent` under `bash -lc`,
+  with stdout a pipe.
+  - **The repository** was written for the demo (`inventory-svc`): git history, an ignored `dist/`, and
+    `web/node_modules` with 10,000 files in 200 packages (counted independently with `find`). There were
+    10051 files outside `.git`, 21 of them tracked.
+  - **One call, `view .`:**
+    - JSON: `budget_lines 200`;
+    - text: 33 lines;
+    - verdict: `10104 files, 451 dirs, 325.2 KiB under .; collapsed 3 (vcs 1, dependency 1, build 1)`
+      (10051 + `.git`'s 53 = 10104);
+    - `.git/`, `dist/` and `web/node_modules/` take one line each, with counts, kind and
+      `expand: view …/`.
+  - **The printed way in:** `view web` and then the printed `view web/node_modules/` show the 200
+    packages, each collapsed for the budget with its own `expand:`.
+  - **Interview:** all four answers matched what the transcript shows. Two additions were the
+    operator's assumptions, and the mentor corrected them: the 200 is the overview's default budget
+    (spec SC-6), not a configuration file, and the transcript does not show how files are counted. The
+    operator accepts D14 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Noted by the mentor, not a defect of `view`:** in the transcript, part 4's first `$` line omits
+  `--text`, although the script ran it with `--text`, as the output shows.
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with 003's D12 addendum (`d932c1c`),
+  so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+
+§ Cycle 2's automated criteria are still recorded `unconfirmed` above. Lane batch-d (2026-10-07T03:26:28Z,
+e2e 537/537) ran their cells, but this addendum records D14 only.
