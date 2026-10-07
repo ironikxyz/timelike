@@ -191,3 +191,17 @@ decisions: sections=5 flagged_sections=5 non_flagged_sections=0 sections_without
 - `unrecorded=1` is T006, this report. The marker's tallies are taken after it.
 - **`flagged_out=1` is T003** (pause-09, answered (a)): the pair cause 4 exists to catch.
 - There is no low-confidence entry.
+
+### Addendum 1 — rebased after lane batch-b's fix on 009 (2026-10-07T00:08:03Z, read from the clock)
+
+- **Why:** lane batch-b (`../bridge/history.md` 2026-10-06T20:03:07Z, at `1dfc6b7`) failed 001's SC-6
+  default-session cells. The fix went on `009-session-journal` (`2e3f483`, 009 § Cycle 1 Addendum 1), as
+  `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md` ruled, and this branch was rebased onto it
+  in the cascade that ruling orders (010, then 011, then 012).
+- **The rebase:** `git rebase --onto 2e3f483 ee9c8e0 010-services-interactive`. No conflicts. The same 15
+  commits; the tree differs from the old tip `39b4224` by 009's fix only (`sc6_check.py`, the SC-6 test,
+  009's cycle report). **Nothing of 010 changed.**
+- **New hashes:** the marker `c4f8aed` is now **`80cbaa3`**; the code tip `39b4224` is now `7c9a5bd`. The
+  branch's tip is the commit that adds this addendum.
+- **Not verified here:** 010's cells in the image. They passed in lane batch-b (services 22/22) and stay as
+  recorded until the lane re-runs at the new tip.
