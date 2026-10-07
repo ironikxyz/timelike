@@ -171,3 +171,17 @@ decisions: sections=6 flagged_sections=6 non_flagged_sections=0 sections_without
 
 - `unrecorded=1` is T007, this report. The marker's tallies are taken after it.
 - There is no low-confidence entry, and no pause.
+
+### Addendum 1 — rebased after lane batch-b's fix on 009 (2026-10-07T00:08:24Z, read from the clock)
+
+- **Why:** the cascade ordered by `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md`. The fix
+  for lane batch-b's SC-6 default-session cells (`../bridge/history.md` 2026-10-06T20:03:07Z) went on
+  `009-session-journal` (`2e3f483`). 010 was rebased onto it and gained its Addendum 1 (`dbe1959`), and this
+  branch was rebased onto that.
+- **The rebase:** `git rebase --onto dbe1959 7c9a5bd 011-code-intelligence`. No conflicts. The same 14
+  commits; the tree differs from the old tip `473be4a` by 009's fix and 010's addendum only. **Nothing of
+  011 changed.**
+- **New hashes:** the marker `6d523d4` is now **`14cd5a3`**; the code tip `473be4a` is now `5cce652`. The
+  branch's tip is the commit that adds this addendum.
+- **Not verified here:** 011's cells in the image. They passed in lane batch-b (symbols 28/28) and stay as
+  recorded until the lane re-runs at the new tip.
