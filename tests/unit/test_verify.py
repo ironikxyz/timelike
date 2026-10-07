@@ -753,9 +753,13 @@ def test_not_found_steps_are_not_run_exit_1(repo: Lab) -> None:
     bare = "/usr/bin:/bin"
     if any(shutil.which(n, path=bare) for n in ("pytest", "ruff", "mypy")):
         pytest.skip("pytest, ruff or mypy is on /usr/bin:/bin here")
-    probe = subprocess.run(["python3", "-c", "import pytest"], env={"PATH": bare}, capture_output=True)
-    if probe.returncode == 0:
-        pytest.skip("python3 on /usr/bin:/bin can import pytest here")
+    # No python3 on the bare PATH (the image: its Python is under /opt) means verify's `python3 -m
+    # pytest` fallback is unavailable too, so the precondition holds and the test runs (lane batch-b).
+    py = shutil.which("python3", path=bare)
+    if py:
+        probe = subprocess.run([py, "-c", "import pytest"], env={"PATH": bare}, capture_output=True)
+        if probe.returncode == 0:
+            pytest.skip("python3 on /usr/bin:/bin can import pytest here")
     append(repo, "app/models.py", "\nW = 1\n")
     r = verify(repo, "--json", "changed", PATH=bare)
     assert r.returncode == 1, said(r)
