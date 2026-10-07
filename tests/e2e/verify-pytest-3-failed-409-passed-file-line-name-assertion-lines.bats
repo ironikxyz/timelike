@@ -151,7 +151,8 @@ expect_status() {
 # a path given absolute, relative or as ./relative compares the same; `cmd_paths(c)` is the set of path arguments
 # (ending .py) of a command given as a list or a string, each through rel. Output in $JPY.
 jpy() {
-  local jpy_rc=0 jpy_err="${BATS_TEST_TMPDIR}/jpy.stderr"
+  local jpy_rc=0 jpy_err="${BATS_TEST_TMPDIR}/jpy.stderr" jpy_t0
+  jpy_t0="$(now_ms)"
   JPY="$(printf '%s' "$output" | pyq "import json,sys
 WS='${CELL}'
 d=json.load(sys.stdin)
@@ -173,10 +174,13 @@ def cmd_paths(c):
     words = c if isinstance(c, list) else str(c).split()
     return sorted({rel(w) for w in words if str(w).endswith('.py')})
 $1" 2>"$jpy_err")" || jpy_rc=$?
-  # Say why the parser failed (lane batch-b, not ok 432): its exit, a timeout by name, its stderr.
+  # Say why the parser failed (lanes batch-b and batch-c, not ok 432 and 448): its exit, its time, a
+  # timeout by name, its stderr. "Timed out" is decided by elapsed time against PYQ_TIMEOUT, because
+  # the runner's BusyBox timeout reports the killed command's 143, never 124 (helpers.bash).
   if ((jpy_rc != 0)); then
-    local why="the parser (pyq) exited ${jpy_rc}"
-    ((jpy_rc == 124)) && why+=": killed by timeout after ${RUN_TIMEOUT} s"
+    local jpy_ms=$(($(now_ms) - jpy_t0))
+    local why="the parser (pyq) exited ${jpy_rc} after ${jpy_ms} ms"
+    ((jpy_ms >= PYQ_TIMEOUT * 1000)) && why+=": killed by its timeout (PYQ_TIMEOUT=${PYQ_TIMEOUT} s)"
     flunk "stdout is not the JSON expected — ${why}; its stderr: $(cat "$jpy_err" 2>/dev/null)"
   fi
 }

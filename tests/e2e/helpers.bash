@@ -54,6 +54,12 @@ REVISION_LABEL=org.opencontainers.image.revision
 # Runner-side limit per docker exec. Criteria assert far tighter bounds (20 s, 10 s); this exists so
 # a hang becomes a failure (rc 124), never a wait (P2).
 RUN_TIMEOUT="${RUN_TIMEOUT:-30}"
+# The parser's own bound (pyq): test plumbing, so it belongs to no criterion, and it is kept apart from
+# RUN_TIMEOUT so a throwaway container's start-up under load cannot fail a cell whose tool answered.
+# The runner's timeout is BusyBox's (bats/bats is Alpine), which exits with the killed command's status
+# (143 for SIGTERM), never GNU's 124: decide "timed out" by elapsed time, not by the exit code.
+# (Lane batch-c, not ok 448; bridge/feedback/batch-20261006-234535-lane-b-three-failures.md § Failure 4.)
+PYQ_TIMEOUT="${PYQ_TIMEOUT:-120}"
 # Process names (comm, exact match) of pagers and editors that must never be left running.
 PAGER_EDITOR_NAMES='less|more|most|pager|pg|vi|vim|vim\.basic|vim\.tiny|nvi|view|ex|nano|rnano|pico|editor|sensible-editor|emacs|jed|joe|mcedit|ne'
 
@@ -451,7 +457,7 @@ adele_run_with_grants() {
 pyq() {
   local image
   image="$(agent_image)" || return 1
-  timeout "$RUN_TIMEOUT" docker run --rm -i --network none --cap-drop ALL --label "${THROWAWAY_LABEL}=1" \
+  timeout "$PYQ_TIMEOUT" docker run --rm -i --network none --cap-drop ALL --label "${THROWAWAY_LABEL}=1" \
     --entrypoint "$AGENT_PY" "$image" -I -c "$1"
 }
 

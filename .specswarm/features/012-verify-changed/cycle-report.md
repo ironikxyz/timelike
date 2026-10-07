@@ -253,3 +253,41 @@ operator, not into this file.
   `f6cf7da` right after, before anything else: PASS (7 entries, 449 files, P1–P7 0/0).
 - **Not verified here:** the six cells and the unit test in the image. They stay `unconfirmed` until the
   lane re-runs.
+
+### Addendum 2 — the parser's bound: lane batch-b's 432 and lane batch-c's 448, one finding (2026-10-07T02:02:36Z, read from the clock)
+
+- **Finding** (mentor, `../bridge/history.md` 2026-10-07T01:31:30Z, lane batch-c at `7aafbbb`; log
+  `bridge/.make-test-batch-c.log` lines 2113–2124). **Routed** by
+  `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md` § Lane batch-c, Failure 4, with its ruling.
+  Lane batch-c otherwise confirmed Addendum 1's fixes: ok 249 and 250, ok 432, and the unit test ran
+  (1638 passed, 2 skipped, as before).
+- **One finding, not two flakes:** not ok 432 in lane batch-b (`bridge/.make-test-batch-b.log` 2193, 33.7 s)
+  and not ok 448 in lane batch-c (32.3 s). In both, verify's JSON was complete and correct, and `pyq`'s
+  throwaway `docker run` was killed at `RUN_TIMEOUT` (30 s), the bound meant for the tools under test. The
+  failure moves between 012's heavy cells (448's neighbours took 69 s and 81 s).
+- **Why 143, and a defect in Addendum 1:** the runner image is `bats/bats` (Alpine), whose `timeout` is
+  BusyBox's. It execs the command in its own process and has a grandchild send the signal
+  (`coreutils/timeout.c`: `BB_EXECVP_or_die`, `kill(parent, signo)`), so a killed command reports **143**,
+  never GNU's 124. Addendum 1's `jpy` named a timeout only on 124, so in the real runner it never could:
+  448's message said "exited 143" and no more. The mentor read the 143 correctly from the source of the
+  signal.
+- **Fix, as ruled (the first option):**
+  - `tests/e2e/helpers.bash` gains `PYQ_TIMEOUT="${PYQ_TIMEOUT:-120}"`, and `pyq` alone uses it.
+  - `RUN_TIMEOUT`, every bound on a command under test, and every assertion are unchanged.
+  - The five `verify-*.bats` `jpy` decide "timed out" by elapsed time against `PYQ_TIMEOUT` (as the Adele
+    helper above `pyq` does with `SECONDS`), and print the exit and the elapsed milliseconds either way.
+  - A timeout still fails the cell, and the message says so.
+  - The parser stays in a throwaway container with no network; the ruling's alternative (parse inside the
+    session container) was not taken.
+- **Checked here** (no Docker): the new `jpy` outside bats against stubbed `pyq` with `PYQ_TIMEOUT=2`:
+  - parsed;
+  - a parse error (exit 1, 36 ms, not a timeout);
+  - a BusyBox-shaped SIGTERM at the bound (143 after 2011 ms, named a timeout);
+  - a GNU `timeout` (124 after 2008 ms, named);
+  - a fast 143 (5 ms, not named).
+  shellcheck is clean, and no bats per-test timeout caps the new bound.
+- **Not verified here:** 432, 448 and their neighbours in the image. If they pass in the re-run, this finding
+  is closed by the bound; if one fails, its message now gives its exit and time.
+
+**changed_other_features (this addendum):** 001's `tests/e2e/helpers.bash`: `PYQ_TIMEOUT` (default 120 s) for
+`pyq`, which 43 e2e files use. Only the parser's bound moves; no criterion's bound changes.
