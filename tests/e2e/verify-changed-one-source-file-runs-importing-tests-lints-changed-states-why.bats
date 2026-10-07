@@ -155,6 +155,7 @@ expect_status() {
 # a path given absolute, relative or as ./relative compares the same; `cmd_paths(c)` is the set of path arguments
 # (ending .py) of a command given as a list or a string, each through rel. Output in $JPY.
 jpy() {
+  local jpy_rc=0 jpy_err="${BATS_TEST_TMPDIR}/jpy.stderr"
   JPY="$(printf '%s' "$output" | pyq "import json,sys
 WS='${CELL}'
 d=json.load(sys.stdin)
@@ -175,7 +176,13 @@ def rel(p):
 def cmd_paths(c):
     words = c if isinstance(c, list) else str(c).split()
     return sorted({rel(w) for w in words if str(w).endswith('.py')})
-$1")" || flunk "stdout is not the JSON expected"
+$1" 2>"$jpy_err")" || jpy_rc=$?
+  # Say why the parser failed (lane batch-b, not ok 432): its exit, a timeout by name, its stderr.
+  if ((jpy_rc != 0)); then
+    local why="the parser (pyq) exited ${jpy_rc}"
+    ((jpy_rc == 124)) && why+=": killed by timeout after ${RUN_TIMEOUT} s"
+    flunk "stdout is not the JSON expected — ${why}; its stderr: $(cat "$jpy_err" 2>/dev/null)"
+  fi
 }
 
 jval() {
