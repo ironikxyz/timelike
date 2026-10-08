@@ -205,3 +205,34 @@ decisions: sections=5 flagged_sections=5 non_flagged_sections=0 sections_without
   branch's tip is the commit that adds this addendum.
 - **Not verified here:** 010's cells in the image. They passed in lane batch-b (services 22/22) and stay as
   recorded until the lane re-runs at the new tip.
+
+### Addendum 2 — D18 observed by the operator (2026-10-08T05:37:13Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T23:35:32Z) and the transcript
+it cites, `bridge/.d18-demo-20261007T231824Z.txt` (bridge `80954b2`), which this instance read.
+
+- `09 · "receives a ready verdict naming its port, stops it, and no process from it remains _(traces to: D18)_"` —
+  **observed by the operator**, by interview with the mentor instance on `services`'s real output. The
+  image was the one lane batch-d passed (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway with `--cap-drop ALL`, `no-new-privileges` and
+  `--init`. Each agent command was its own `docker exec … bash -lc`, as user `agent`. The mentor's
+  `/proc` listings were taken in the same container, independently of the tool.
+  - **The server:** `dev.py` spawns a helper (`sleep 3600`) and listens on 127.0.0.1:8000 after 2.5 s.
+  - **Start:** `services start --text web --port 8000 -- …` returned after 2.6 s with
+    `web ready: pid 41, port 8000 accepting, log /tmp/timelike/default/services/web.log`. A request
+    returned HTTP 200. `services list` showed `web running port 8000 pid 41 up 3s`, and `/proc` showed
+    41 `dev.py` and 42 `sleep 3600`.
+  - **Stop:** `services stop --text web` gave `web stopped: 2 processes (41, 42), none remains; start
+    again: services start web --port 8000 -- …`.
+  - **Afterwards:** `/proc` showed only the container's pids 1 and 7; a connect to 127.0.0.1:8000 returned
+    111 (ECONNREFUSED); `services list` showed 0 services.
+  - **Interview:** answers 1 and 4 matched. Answer 2 first named only pid 41, and answer 3 first cited
+    an "ssh timeout" and the tool's own list. The mentor challenged both, and the operator corrected both
+    from the transcript (pid 42 `sleep 3600`, both stopped; connection refused and `/proc` clean). The
+    operator accepts D18 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Noted by the mentor, not blocking:** the list's header says `[1 services]`, while its verdict says
+  `1 service`. That is the same plural defect as `1 lines` (003) and `1 files` (006).
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12, D14 and D4 addenda
+  (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+  The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
+  first option). A revert of 012 by branch topology would carry this addendum with it.
