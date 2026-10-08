@@ -386,3 +386,4 @@ ASSUMED: the gate files the npm finding under a new origin, "files under /opt/ag
 ASSUMED: reviewed 2026-10-01 and review_by 2026-12-27 left unchanged ("the same review date as their neighbours"); a review note records who added them and on whose ruling — (confidence: high)
 ABSENT: none of the seven fixable findings is baselined (the gate would block them anyway: a baselined finding with a fix still blocks)
 Verification (host, advisory): evaluate.py report over lane 007s1-a's own scan output with the new baselines — agent: 85 baselined, 7 blocking; vanilla: 84 baselined, 7 blocking; the 7 are exactly the fixable npm findings. tests/unit/test_scan_baseline.py and test_scan_report.py: 112 passed
+SCOPE: in (2 changed files)
