@@ -85,3 +85,39 @@ not persist. P1. And Item 21, answered as Q1 (a), Q2 (ii) and Q3.
 
 Additive. A missing `python3`, `pip`, `node` or `npm` now resolves instead of answering 127. Every other tool
 behaves as before.
+
+---
+
+# Cycle 5: lane 007s1-a's fixes and discovery revision 15, the bundled-library rule (send `bridge/sends/04-rev14-20261008-201729.md`)
+
+**Status:** Active. **Created:** 2026-10-08. **Impact analysis:** `impact-analysis.md` § Cycle 5. **Spec:** § Slice 1, cycle 5.
+
+## Modification summary
+
+**What:**
+- Lane 007s1-a's four items, as ruled in `../bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`
+  (built before this send arrived, T034–T038): the direct-exec cell's stream, 001's C6 premise, the two no-fix
+  baseline entries, pip-audit over `/opt/agent/python`, and npm 11.21.0 pinned by version and registry integrity.
+- Revision 15: the three findings npm's bundled tree still carries become **bundled-class** baseline entries,
+  each with its own 30-day review, and the gate gains a **release check** that voids them as soon as any stable
+  npm inside the constraint ships the fix, and blocks when it cannot tell.
+- The governance audit 14 → 15. Record 15 in `audited_against`.
+
+**Why:** the lane failed on three cells and nine scan findings; plan's ruling at revision 15
+(`../bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` § Resolution) defines "fix
+available" for a library bundled inside a component as the component's release.
+
+## Proposed changes
+
+- **F012 · The lane fixes** (T034–T038): built.
+- **F013 · Bundled-class baseline entries** (FR-32): three per image, in both the agent and vanilla baselines.
+- **F014 · The release check** (FR-33): `evaluate.py releases` reads the component's released manifests on every
+  scan; `report` lets a bundled-class entry through only on its answer; fails closed.
+- **F015 · Its tests** (FR-34), with fixtures the tests write (cross-stack P005).
+- **F016 · Governance 14 → 15**, and provenance: append 15, with its `audit-log.md` row.
+
+## Backward compatibility
+
+Additive to the gate. A baseline without bundled-class entries is judged exactly as before; the release-check step
+records `none` for it. A bundled-class entry is stricter than an ordinary one: it passes only while its own review
+date holds and the release check answers that no release ships the fix.

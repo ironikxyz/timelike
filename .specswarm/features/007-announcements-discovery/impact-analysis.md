@@ -169,3 +169,48 @@ used to get the 127 answer.
 - **Network at build:** uv's Python download and the Node tarball, both pinned.
 
 **Risk level:** medium. **Proceed:** yes.
+
+---
+
+# Cycle 5: lane 007s1-a's fixes and discovery revision 15 (send `bridge/sends/04-rev14-20261008-201729.md`)
+
+**Analysis date:** 2026-10-08T20:25Z. specswarm **4.0.1-botbaubble.2.37.0**, the same session (no reload). Continued
+on `modify/007-slice-1` from `d3ab6ee` (lane fixes T034–T038 already committed on that branch, before the send arrived).
+
+**Provenance:** modify **row 4**, computed by the installed blocks: `source_prompt` agrees; the prompt is still at
+revision 14, which is already in `audited_against [1, 13, 14]`, so the library finds nothing new. **The send asks
+for 15 to be appended** (discovery revision 15, which changed no prompt): this cycle audits the spec against it and
+records it, with the row-4 result named in `audit-log.md`.
+
+**What changed.** Revision 15 is a clarification of revision 5's "fix available" (the paragraph is quoted in
+`../bridge/governance-context.md`), plus npm's own pin and constraint in stack.md's Agent runtimes row. **No prompt
+changed; no criterion changed.**
+
+**Classification: needs no body change, except FR-30's account of the scan,** which this cycle extends by declared
+addition (the lane fixes and the bundled class). Nothing the body states became false: FR-30's "a new finding with no fix
+is a baseline change" still holds; revision 15 says which release counts.
+
+## Affected components
+
+| Component | Impact | Notes |
+|---|---|---|
+| `scan/evaluate.py` | High | bundled-class entries; `releases` subcommand (network); `report` consults its result |
+| `scan/scan.sh` | Medium | a `release-check` step per image, with network, run from the agent image |
+| `scan/baseline/timelike-agent.json`, `timelike-vanilla.json` | Medium | three bundled-class entries each |
+| `tests/unit/` | Medium | a new test file for the release check; `test_scan_report.py`'s fake docker and step lists |
+| `.specswarm/quality-standards.md`, `tech-stack.md`, `constitution.md` | Low | the audit to 15 |
+
+## Breaking changes
+
+None. Every existing baseline entry is judged as before.
+
+## Risks
+
+- **The scan now needs registry access for the release check.** Without it the three findings block (fail closed), which
+  is the ruling's intent, and the escalation says why.
+- **The check downloads npm's packument (about 25 MB) and the candidate tarballs (about 3 MB each)** per image that has
+  bundled-class entries. Bounded: only stable releases published on or after the library's fix date are candidates.
+- **Engines ranges are evaluated by a small semver range reader.** A range it cannot parse makes the check `unknown`,
+  which blocks.
+
+**Risk level:** medium. **Proceed:** yes.

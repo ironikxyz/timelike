@@ -564,3 +564,39 @@ builder, and the failure names the file. The tarball is fetched with `ADD`, beca
 one (stock behaviour). A builder stage from the same pinned base and `uv` image installs the interpreter, and
 only `/opt/agent` is copied. The agent image does the same, so the two prefixes come from identical steps.
 
+
+---
+
+## Slice 1, cycle 5 — lane 007s1-a's fixes and the bundled-library rule (discovery revision 15; send `bridge/sends/04-rev14-20261008-201729.md`), declared
+
+> Added by `/specswarm:modify 007` from the send above. Revision 15 (plan `300fdf3`) clarifies revision 5's "fix
+> available" for a library bundled inside a component the stack installs as one unit. **No prompt and no criterion
+> changed.** The ruling is `../bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md`
+> § Resolution; the lane fixes are `../bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`.
+
+- **FR-30, extended (declared addition, not a correction).** Two things now hold beside FR-30's text:
+  - pip-audit runs over the agent interpreter (`/opt/agent/python`) too, in every image that carries it, on a line of its
+    own (`pip-audit-agent`);
+  - npm is pinned separately from the Node tarball (`NPM_VERSION`, `NPM_SHA512` from the registry's integrity) and
+    replaces Node's bundled npm whole. Its constraint is any stable npm whose `engines` admits the pinned Node.
+- **FR-32 · Bundled-class baseline entries.** A finding in a library bundled inside a component (npm's `node_modules`;
+  pip's vendored packages) may be baselined only as a bundled-class entry. Besides the usual fields it names the
+  bundling component and version, the bundled library and version, the upstream fixed version and its date, and **its
+  own `reviewed` and `review_by`, at most 30 days apart**. The rest of the baseline keeps its 90-day review. An entry
+  past its `review_by`, or over the cap, blocks its finding.
+- **FR-33 · The release check, on every scan.** For each bundled-class entry, the gate reads the component's released
+  manifests (npm: the registry's packument and each candidate release's published tarball, checked against its
+  integrity) and asks whether any stable release whose `engines` admits the pinned Node ships the library at or above
+  the fixed version (or no longer bundles it). Pre-releases and deprecated releases never count.
+  - One does → the finding is fixable and **blocks**, naming the release to move to.
+  - None does → the finding passes through its entry.
+  - The check cannot run (no registry access, an unparseable manifest or range, a component the check does not read)
+    → the finding **blocks** with an escalation naming the component, the library, why, and what to do.
+  - **Fails closed; never passes silently.** The scan's output names what was checked.
+  - Generic over the component by a table; **npm is implemented**. pip is named and answers `unknown` (so it blocks)
+    until its reader exists: PyPI's JSON for stable pip releases whose `Requires-Python` admits the agent interpreter, and
+    each candidate wheel's `pip/_vendor/vendor.txt`.
+- **FR-34 · Its tests**, with fixtures the tests write (a registry served from files): a release ships the fix (blocks);
+  none does (passes); the registry unreachable (blocks with the escalation); only a pre-release ships it (passes); an
+  entry past its 30-day date (blocks); plus the engines reader.
+- Bundled trees are never patched package by package.
