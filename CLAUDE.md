@@ -48,6 +48,21 @@ This is the **implementation** instance of the Timelike mentored project. It use
    - The token is read only through a throwaway `GIT_ASKPASS` script with `-c credential.helper=`, and
      the script is deleted afterwards. Never put it in a URL, an argument, printed output or a file here.
 
+## README: keeping it current (standing rule, `bridge/sends/maint-readme-20261008-060811.md`)
+
+`README.md` is the public landing page, and code/ owns the file. Three parts change in three ways:
+- **The command reference** is generated from the tools' own `--help` by `scripts/readme_reference.py`, and
+  `tests/unit/test_readme_reference.py` fails when it is stale. After any tool change that moves its help,
+  run `python3 scripts/readme_reference.py --write` in the same cycle. Never edit the generated block by hand.
+- **The intro's What and Status** change only through the mentor. A send or dispatch that changes a
+  feature's state carries a `## README status` block: the table rows that change and the new Status
+  paragraph. Apply it in that same cycle. Never edit those rows on your own reading: the slice count and
+  the plan live in `plan/`.
+- **The Why** changes only when discovery's pain statement or success vision does, also through a send.
+
+Constitution P6 binds the README: no "faster", "fewer turns" or "more reliable" as fact. Bench results
+are cited only as the bench reports them, with the run that produced them.
+
 ## Workflow
 
 1. Check `../bridge/active-prompt.md` for the current feature to build
