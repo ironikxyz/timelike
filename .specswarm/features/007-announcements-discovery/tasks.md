@@ -60,7 +60,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
 - [X] T010 `spec.md` SC-1 (`:161–163`) and its note (`:170–171`): quote revision 13's criterion verbatim, the workspace
   clause kept struck with its marker; the note becomes "struck at revision 13, nothing to build". FR-7's
   "narrows the criterion" note (`:113–116`) and Out of scope (`:232`) say the clause is struck at revision 13.
-- [ ] T011 `spec.md` D-1 (`:200–210`): keep the reasoning as written; append *resolved by discovery revision 13 (Q3,
+- [X] T011 `spec.md` D-1 (`:200–210`): keep the reasoning as written; append *resolved by discovery revision 13 (Q3,
   option (b)), plan `394c33e` — the FLAGGED decision is now the rule, not a deviation from it*.
 - [ ] T012 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode `scoped`
   (revision 13 rewords one criterion by a strike, so `full` would list it as unverified; its own change is what this

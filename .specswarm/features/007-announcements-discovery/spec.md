@@ -213,6 +213,12 @@ instruction for this batch, and the narrowing is visible. Raised as **FOR-MENTOR
 amend the criterion or overrule the seam. No pause file, because the decision has an informed basis: the
 send names it.
 
+**D-1 resolved by discovery revision 13 (Q3, option (b)), plan `394c33e`** *(appended by modify cycle 2,
+send `…-095251`, declared; the reasoning above is kept as written)*. Plan amended the criterion: its workspace clause
+is struck ("user level only; a committed workspace announcement would announce tools that exist only in timelike").
+The FLAGGED decision is now the rule, not a deviation from it. Nothing was built differently, and nothing is built
+now. FOR-MENTOR Item 19 has been closed since 2026-10-05.
+
 **D-2 · On container start, from an entrypoint.** Generating at build and placing at start (not at build
 into `/home/agent`) covers a home that is a volume or a mount, and a harness that recreates its
 directory. The entrypoint is best effort and always `exec`s the command (FR-8).

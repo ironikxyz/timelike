@@ -108,3 +108,10 @@ FLAGGED: the superseded notes are struck through and kept, each followed by a de
 ASSUMED: SC-1's "Tested for the user-level part" becomes "Tested", because the criterion is now user-level only and the cells test all of it — (confidence: high)
 ABSENT: no other body line changes; decisions.md T003's cell sense and Cycle 1's citation are left as written (append-only records)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T011: spec D-1 — resolution appended, reasoning kept
+**Started:** 2026-10-08T10:10:45Z | **Completed:** 2026-10-08T10:10:45Z | **Coordinator**
+
+INHERITED: T010 (same file; SC-1 and FR-7 already name D-1 as resolved) — (confidence: high)
+ASSUMED: the resolution is a paragraph after D-1, not an edit inside it, so D-1's original FLAGGED reasoning reads as it did — (confidence: high)
+ABSENT: research.md's seam reasoning is unchanged (still true); FOR-MENTOR.md is not touched (Item 19 already closed; outside the feature directory)
