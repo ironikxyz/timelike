@@ -923,3 +923,4 @@ SCOPE: none — no files outside the feature's artifacts changed
 INHERITED: T082 (same file); revision 10's annotation pattern on rule 9 (T079) — (confidence: high)
 ASSUMED: each clarification is copied verbatim from the send's prompt bytes, then a provenance note naming where the contract already carries it (re-read at output-contract.md:20, :81–83, :131–140, conformance.md:27) — (confidence: high)
 ABSENT: neither rule's existing text is changed (both stay true); no contract change
+SCOPE: none — no files outside the feature's artifacts changed
