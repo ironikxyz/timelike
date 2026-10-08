@@ -292,3 +292,12 @@ ASSUMED: 14 `user` rows (8 pip, 6 npm), each the prefix plus one package token (
 ABSENT: no change to standard-tools.json — python3 and node keep their REPL risk and `instead`, and `installed` is computed (true now); `uv` not listed (it is on PATH at /bin/uv); no network-dependent check that each package exists on PyPI or npm
 Verification: tests/unit/test_missing_commands.py 16 passed, 1 skipped (the pre-ruling "no user rows" check, off by flag)
 SCOPE: in (1 changed files)
+
+### T030: scan/scan.sh — its comments say timelike's interpreter, and where the agent runtimes are scanned
+**Started:** 2026-10-08T18:01:42Z | **Completed:** 2026-10-08T18:02:02Z | **Coordinator**
+
+INHERITED: FR-30; quality-standards.md's revised scan gate (governance audit, e58dd36) — (confidence: high)
+FLAGGED: the pip-audit "no interpreter in image" record is left as written — it already names the exact path it probed (`has no /opt/timelike/python/bin/python3`), so it is true for vanilla, and tests/unit/test_scan_report.py pins its wording; only the comments change — (confidence: high)
+ASSUMED: Grype over Syft's SBOM catalogs the CPython and Node binaries, pip in the agent prefix and npm's bundled packages, so no scanner step is added; the lane's scan shows what it finds — (confidence: medium)
+ABSENT: no pip-audit over the agent interpreter (its only distribution is pip, which Grype sees); no baseline change (findings unknown until the lane; a no-fix finding is raised, never exempted silently)
+Verification: bash -n and shellcheck clean; tests/unit/test_scan_report.py passed

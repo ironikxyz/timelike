@@ -5,8 +5,11 @@
 #
 #   1. SBOM        Syft over `docker save` of each image
 #   2. grype       Grype over that SBOM, JSON only
-#   3. pip-audit   over the image interpreter's installed distributions, via uv inside the image. An
-#                  image with no interpreter (vanilla; Adele's scratch stage) records none
+#   3. pip-audit   over timelike's interpreter's installed distributions, via uv inside the image. An
+#                  image without timelike's interpreter (vanilla; Adele's scratch stage) records none.
+#                  The agent runtimes (an agent Python with its pip, Node with npm's bundled packages;
+#                  discovery revision 14) are in the agent and vanilla SBOMs, so Grype covers them under
+#                  the same baseline rule
 #   4. govulncheck Adele only: govulncheck GOVULNCHECK_VERSION over adele/ (source, symbol level), run
 #                  from GO_IMAGE. Other images record none (not a Go image)
 #   5. gitleaks    over the repository's git history (once; its report is shared by every image)
@@ -23,8 +26,8 @@
 #   timelike-agent:local          → scan/out/                       required (unchanged since 001)
 #   timelike-adele:local          → scan/out/timelike-adele/        required. FROM scratch: no interpreter,
 #                                    so pip-audit records none; its base digest is GO_IMAGE's (below)
-#   timelike-vanilla:local        → scan/out/timelike-vanilla/      (bench baseline; no interpreter,
-#                                    so pip-audit records none)
+#   timelike-vanilla:local        → scan/out/timelike-vanilla/      (bench baseline; no timelike interpreter,
+#                                    so pip-audit records none; its agent runtimes are in its SBOM)
 #   timelike-bench-driver:local   → scan/out/timelike-bench-driver/ (holds the docker CLI, a Go binary:
 #                                    grype may report fixable Go-stdlib Highs that block until
 #                                    DOCKER_CLI_IMAGE is bumped, research RB10)
@@ -229,7 +232,8 @@ fi
 }
 
 # verdict IMAGE OUT — evaluate.py prints everything at once, so a crash never leaves half a verdict.
-# It always runs on the AGENT image's interpreter: the vanilla baseline has none. The baseline is read
+# It always runs on the AGENT image's timelike interpreter: the vanilla baseline has none (its agent
+# runtimes are not timelike's). The baseline is read
 # from /scan (the scan/ directory, mounted read-only); an absent file accepts nothing.
 verdict() {
   local rc=0 baseline=scan/baseline/${1%%:*}.json

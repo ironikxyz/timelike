@@ -158,7 +158,7 @@ bar.** US6 = SC-6.
 - [X] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
   Python and Node CLIs. `image/rootfs/etc/timelike/standard-tools.json` checked (python3 and node keep their risk
   and `instead`).
-- [ ] T030 `scan/scan.sh`: its comments and the pip-audit "no interpreter" record say timelike's interpreter, not
+- [X] T030 `scan/scan.sh`: its comments and the pip-audit "no interpreter" record say timelike's interpreter, not
   any interpreter.
 - [ ] T031 Host verification: the units, the host lane, lint, and an advisory host build check of the runtime
   steps (the uv prefix and Node tarball, as in R9). Results go in `decisions.md`.
