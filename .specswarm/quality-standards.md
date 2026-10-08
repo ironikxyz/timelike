@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -144,6 +144,18 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 > `dry_run: true`, shown failing on a manifest that breaks it. The check itself is built in feature
 > 008's cycle (prompt 06), with `confirm_protocol` restored in 001's manifest schema. No threshold
 > moved. Revision 13 is appended to `governance_audited_against`.
+>
+> **Audited against discovery revision 14** (2026-10-08), via `../bridge/governance-context.md`
+> (`/mentor:regovern` for revision 14), § "What Changed In Those Revisions" (relied on), and
+> `../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md` § Resolution (Q1–Q3).
+> **Amended:** revision 14 adds the agent runtimes (an agent Python and Node) to the agent image, and the
+> same binaries to the bench's vanilla image. Checked: whether any gate states the image's package set
+> (none does; stack note 15 is cited nowhere here), the vanilla image's contents (none does), and the
+> *Supply-chain scan* gate, which said "scan both images (agent and Adele)". `make scan` already scans
+> four images (agent, Adele, vanilla, bench driver), and two of them now carry the runtimes. So the gate
+> names the four images and says the runtimes, Node's bundled npm dependencies included, are in each
+> SBOM that Grype reads, under the same baseline rule; pip-audit stays over timelike's own interpreter.
+> No threshold moved. Revision 14 is appended to `governance_audited_against`.
 
 # Quality Standards - Timelike
 
@@ -383,11 +395,15 @@ These gates guard P2, P4, P5 and P7. They are pass/fail and do not count toward 
   the operator's per-workspace lift is visible at launch. Read the host checkout's state, not the
   tool's message
 - **Performance budgets:** the three budgets above, run as tests
-- **Supply-chain scan (H9, P4; discovery revisions 3–5):** before every merge, scan both images
-  (agent and Adele), their dependencies and the repository:
+- **Supply-chain scan (H9, P4; discovery revisions 3–5, 14):** before every merge, scan the images
+  (agent and Adele, and the bench's vanilla and driver images when built), their dependencies and the
+  repository:
   - `govulncheck` for Adele
-  - `pip-audit` for Python dependencies and tooling
-  - Grype over a Syft SBOM for both images' OS packages
+  - `pip-audit` for Python dependencies and tooling (timelike's own interpreter)
+  - Grype over a Syft SBOM for each image's OS packages and the language packages in it. Since discovery
+    revision 14 that includes the agent runtimes in the agent and vanilla images: the agent Python and its
+    bundled pip, and Node with npm's bundled dependencies. They go through the same baseline rule as
+    everything else; a new finding with no fix is a baseline change, raised for review
   - gitleaks for committed secrets
 
   A known High or Critical vulnerability with a fix available blocks, and so does any committed
