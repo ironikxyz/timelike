@@ -215,3 +215,43 @@ decisions: sections=7 flagged_sections=7 non_flagged_sections=0 sections_without
 **changed_other_features (this addendum):** 001's SC-6 test,
 `tests/e2e/peer-agents-write-to-own-scratch-space.bats`, and its fixture `tests/e2e/fixtures/sc6_check.py`.
 Test-side only; no tool and no image file changed.
+
+### Addendum 2 — D17 observed by the operator (2026-10-08T05:37:07Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T23:17:25Z) and the transcript
+it cites, `bridge/.d17-demo-20261007T224040Z.txt` (bridge `9833168`), which this instance read.
+
+- `08 · "sees every run, snapshot and grant use in order, each with its session _(traces to: D17)_"` —
+  **observed by the operator**, by interview with the mentor instance on the live stack from lane batch-d
+  (`timelike-agent` `sha256:d0dd2058…` and `timelike-adele` `sha256:8d299c50…`, revision `244c4a8`).
+  Each agent command was its own `docker exec … bash -lc`, as user `agent`, with `TIMELIKE_SESSION` and
+  `TIMELIKE_AGENT` set per command.
+  - **What the agents did:** agent-a, in session `d17-review`, took a snapshot, made two `run` calls
+    (exit 0 and exit 2) and two `adele request standin.box create --grant e2e` calls. Port 8080 was
+    performed (ledger #45, exit 0); port 22 was refused (ledger #46, exit 4, with an envelope naming
+    `adeled extend e2e ports 22`). It also ran plain shell commands. At the same time, agent-b worked in
+    session `d17-side`.
+  - **The operator's review**, using the spec's Scenario 5 pipe (`adeled ledger --json | journal --session
+    d17-review --all --ledger -`): 12 of 12 entries (3 tools, 7 shell, 2 grants) in time order, each with
+    its pointer (snapshot 1, the run logs, ledger #45 performed e2e, #46 refused e2e).
+    `--all-sessions --agent agent-b` showed agent-b's entries labelled `[agent-b/d17-side]`.
+  - **Ledger cross-check:** rows 45 and 46, session `d17-review`, outcomes performed and refused. They
+    agree with the journal.
+  - **Interview:** answers 1 and 4 matched. Answer 2 first reversed the outcomes, and answer 3 first
+    pointed at the ledger. The mentor challenged both, and the operator corrected both from the
+    transcript. The operator accepts D17 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Noted by the mentor, a finding for 08 and 12, not D17:** Adele's ledger rows carry `agent: None`
+  although `TIMELIKE_AGENT` was set, so the ledger alone cannot attribute a grant use to an agent. The
+  journal places it by session and time. That is for a later cycle.
+- **Read by this instance, not a defect:** agent-b's `run uname -s` appears as one row in the
+  `--all-sessions` view, while agent-a's calls appear as a shell row with an indented tool row. That is
+  FR-9's rule (`tools/bin/journal`, `link`): a shell whose command is exactly one tool call is shown once.
+  agent-a's commands began with `cd … &&`.
+- **The transcript header also discloses** a discarded first attempt at 22:40:15Z (its requests named no
+  grant). Its sessions `d17-demo` and `d17-other` remain in the live container's scratch, which is why
+  agent-b's view lists `d17-other`'s two entries.
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12, D14 and D4 addenda
+  (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+  The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
+  first option). A revert of 012 by branch topology would carry this addendum with it.
