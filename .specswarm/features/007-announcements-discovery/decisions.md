@@ -481,3 +481,4 @@ FLAGGED: T045's task text now names .specswarm/metrics.json (implement step 10's
 ASSUMED: every Automated criterion cited unconfirmed with lane 007s1-a's result and host results beside it; D4 kept "observed by the operator"; D13 unconfirmed; README unchanged (the send's block already applied in Cycle 4, word for word) — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); prompt_revision, discovery_revision and source_prompt untouched; no merge (implement step 11: option 2, stay on the branch); no commit after the cycle is reported done (send rule); T037's "116 passed" corrected to 114 in place, named in the line
 Verification: audit-append → MODE_USED=scoped APPENDED=15 NEW_AUDITED=[1, 13, 14, 15]; all eight criterion citations grep -cF = 1 in the send; step 10: Quality Score unknown (warned); tallies as in the cycle report
+SCOPE: in (2 changed files)
