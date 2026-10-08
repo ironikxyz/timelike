@@ -19,9 +19,12 @@ KINDS = {"instead", "debian", "user"}
 DEBIAN_NAME = re.compile(r"[a-z0-9][a-z0-9+.-]+")
 MUST_COVER = {"tree", "rg", "jq"}
 
-# FOR-MENTOR Item 21 (unprivileged installs) is open: no `user` row ships until it is answered (spec
-# FR-18, contract § The command-not-found answer). When the answer allows them, set this to True.
-USER_ROWS_ALLOWED = False
+# FOR-MENTOR Item 21 (unprivileged installs) was answered by discovery revision 14 (spec FR-18, FR-29):
+# `user` rows ship, each a command the agent can run as itself. Kept as a flag so a reversal is one line.
+USER_ROWS_ALLOWED = True
+USER_PREFIXES = ("pip install ", "npm install -g ")
+# The names the image now ships (spec FR-25, FR-29): no answer may list them.
+RUNTIME_NAMES = {"python3", "python", "pip", "pip3", "node", "npm", "npx"}
 
 Row = tuple[int, str, str, str, str]  # line number, name, kind, value, note
 
@@ -126,3 +129,36 @@ def test_no_user_rows_until_item_21() -> None:
 @pytest.mark.parametrize("name", sorted(MUST_COVER))
 def test_covers_the_common_names(name: str) -> None:
     assert name in {r[1] for r in rows()}, f"{name} has no answer"
+
+
+def user_rows() -> list[tuple[int, str, str]]:
+    return [(n, name, value) for n, name, kind, value, _note in rows() if kind == "user"]
+
+
+def test_every_user_value_is_an_unprivileged_install() -> None:
+    """Each `user` value is `pip install X` or `npm install -g X`, one package and no options: the bare
+    command goes to the agent's own location by the runtimes' configuration (FR-26, FR-27, FR-29)."""
+    if not USER_ROWS_ALLOWED:
+        pytest.skip("user rows are not allowed")
+    bad = []
+    for n, name, value in user_rows():
+        prefix = next((p for p in USER_PREFIXES if value.startswith(p)), None)
+        rest = value[len(prefix) :] if prefix else ""
+        if prefix is None or not re.fullmatch(r"[A-Za-z0-9@][A-Za-z0-9@/._+=<>~-]*", rest):
+            bad.append((n, name, value))
+    assert not bad, f"`user` values not of the form {[p + 'PACKAGE' for p in USER_PREFIXES]}: {bad}"
+
+
+@pytest.mark.parametrize("prefix", USER_PREFIXES)
+def test_user_rows_cover_both_runtimes(prefix: str) -> None:
+    if not USER_ROWS_ALLOWED:
+        pytest.skip("user rows are not allowed")
+    assert any(value.startswith(prefix) for _n, _name, value in user_rows()), (
+        f"no `user` row is a {prefix.strip()!r} install (FR-29: common Python and Node CLIs)"
+    )
+
+
+def test_no_runtime_name_is_listed() -> None:
+    """The image ships these now (FR-25), and every listed name must be absent from the image."""
+    listed = [(n, name) for n, name, *_ in rows() if name in RUNTIME_NAMES]
+    assert not listed, f"rows for names the image ships (FR-29): {listed}"

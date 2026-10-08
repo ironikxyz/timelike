@@ -142,7 +142,7 @@ bar.** US6 = SC-6.
   timelike's interpreter unchanged; no `PIP_BREAK_SYSTEM_PACKAGES`; the runtimes resolve to `/opt/agent`), and the
   P6 vanilla cell in `tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats` revised to
   FR-13 (same versions, marker kept, `npm prefix -g` default, bare pip refused, no announcement).
-- [ ] T025 [P] [US6] Units by a delegate: `tests/unit/test_announce.py`'s vanilla test (FR-13 revised: no timelike
+- [X] T025 [P] [US6] Units by a delegate: `tests/unit/test_announce.py`'s vanilla test (FR-13 revised: no timelike
   configuration path; the runtime pins present), `tests/unit/test_agent_runtimes.py` (new: `pins.env` carries
   `NODE_VERSION` and a 64-hex `NODE_SHA256`; both Dockerfiles verify it with `sha256sum -c`; `pip.conf` and
   `npmrc` only in the agent Dockerfile; no `PIP_BREAK_SYSTEM_PACKAGES` in `image/`, `bench/`, `compose.yaml`,

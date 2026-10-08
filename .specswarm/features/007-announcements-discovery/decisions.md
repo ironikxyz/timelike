@@ -302,3 +302,15 @@ ASSUMED: Grype over Syft's SBOM catalogs the CPython and Node binaries, pip in t
 ABSENT: no pip-audit over the agent interpreter (its only distribution is pip, which Grype sees); no baseline change (findings unknown until the lane; a no-fix finding is raised, never exempted silently)
 Verification: bash -n and shellcheck clean; tests/unit/test_scan_report.py passed
 SCOPE: in (1 changed files)
+
+### T025: units for the runtimes, the vanilla Dockerfile and the data (delegate, from the spec)
+**Started:** 2026-10-08T17:56Z (delegate launched) | **Completed:** 2026-10-08T18:03:10Z | **Delegate (general-purpose), reviewed and committed by the coordinator**
+
+INHERITED: spec FR-13 (revised), FR-25–FR-29, D-12, D-13; test_env_layer.sh's ENV parse — (confidence: high)
+FLAGGED (delegate): the PIP_BREAK_SYSTEM_PACKAGES scan skips full-line `#` comments, so image/Dockerfile's "Never PIP_BREAK_SYSTEM_PACKAGES" note does not fail it; a comment sets nothing, and test_break_system_scan_can_fail proves the pattern matches — (confidence: medium)
+ASSUMED (delegate): vanilla links the same seven names; vanilla needle checks skip comments and are case-insensitive — (confidence: medium)
+ASSUMED (delegate): a `user` value is the prefix plus one package token; at least one pip and one npm row — (confidence: medium)
+ASSUMED (delegate): the npmrc's ${HOME} must reach the file literally (single-quoted in the RUN) — (confidence: high)
+FLAGGED: the coordinator added test_the_two_runtimes_stages_are_identical (D-15: the agent and vanilla `runtimes` stages byte-identical), which the vanilla Dockerfile's header claims — (confidence: high)
+ABSENT (delegate): root ownership of /opt/agent (e2e territory); the stage name `runtimes` beyond the identity test; the vanilla header's wording
+Verification: 141 passed, 1 skipped (tests/unit/test_agent_runtimes.py, test_announce.py, test_missing_commands.py) against T026–T029's files; ruff check and format clean. The delegate checked the tests fail on mutated Dockerfiles (npmrc double-quoted, corepack linked, marker kept, the pre-cycle file)
