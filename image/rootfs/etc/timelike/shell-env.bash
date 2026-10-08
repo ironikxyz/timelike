@@ -171,11 +171,11 @@
     local IFS=$' \t\n' name="${1-}" row kind value note rest
     local data="${TIMELIKE_MISSING_COMMANDS:-/etc/timelike/missing-commands.tsv}"
     if [[ "$-" == *i* ]]; then
-      printf '%s: %s: command not found\n' "$0" "$name" >&2
+      printf '%s: %s: command not found\n' "${0##*/}" "$name" >&2  # interactive: bash prints argv0's base name
     else
       printf '%s: line %s: %s: command not found\n' "${BASH_SOURCE[1]:-$0}" "${BASH_LINENO[0]}" "$name" >&2
     fi
-    if [[ -n "$name" && -r "$data" ]]; then
+    if [[ -n "$name" && -f "$data" && -r "$data" ]]; then  # a directory there is unreadable, not an error
       while IFS=$'\t' read -r row kind value note rest || [[ -n "$row" ]]; do
         [[ "$row" == "$name" && -n "$value" && -n "$note" && -z "$rest" ]] || continue
         case "$kind" in

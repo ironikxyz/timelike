@@ -97,7 +97,7 @@ it nor traces it.
 | Shell | Line |
 |---|---|
 | non-interactive (`bash -c`, `bash -lc`, a script, `bash -s`) | `<where>: line <BASH_LINENO[0]>: <name>: command not found`, with `<where>` = the caller's `BASH_SOURCE[1]` when set, else `$0` (`bash -c '…' myname` → `myname`; a function defined in a `-c` string → `environment`, as bash says) |
-| interactive (`$-` contains `i`) | `<$0>: <name>: command not found` |
+| interactive (`$-` contains `i`) | `<base name of $0>: <name>: command not found` (bash prints argv0's base name: `/usr/bin/bash` → `bash`, `-bash` stays; settled at implementation, T015's finding) |
 
 **Then, for a known name, one line per data row whose `name` equals the command's name, in file order:**
 
@@ -113,7 +113,7 @@ Two spaces separate the command from `(<note>)`. A name with no row gets line 1 
 - UTF-8. Lines starting with `#`, and empty lines, are ignored.
 - Otherwise exactly four tab-separated fields: `name`, `kind` (`instead` | `debian` | `user`), `value`, `note`
   (`-` for none).
-- An unreadable or missing file means line 1 alone. A malformed line, or an unknown kind, is skipped.
+- An unreadable or missing file, or a directory at the path, means line 1 alone. A malformed line, or an unknown kind, is skipped.
 - `name` is a command word: no `/`, no whitespace.
 
 **Validity (unit test, on the shipped file):**

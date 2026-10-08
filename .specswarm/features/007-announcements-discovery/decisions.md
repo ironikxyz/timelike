@@ -170,3 +170,12 @@ ABSENT: no `user` rows (Item 21 open); no handling for a PATH set to the empty s
 Measurement (host bash 5.2.21, load ~1.6, 1000 calls in one shell, 3 runs each): with the handler, a listed name with one row (javac) 2843–2886 µs/call, an unknown name (all 64 rows read) 2734–2865 µs/call, tree (two rows) 2694–2846 µs/call; bash alone (no handler) 865–867 µs/call. So about 1.9 ms more per missing command. The subshell is bash's own (it forks for a not-found command either way); the handler adds none (the hook's no-fork probe F1 passes)
 Verification (host, advisory): byte-for-byte equal to bash for an unknown name in `bash -c` (line 2), a script with the name inside a function (`d/t.sh: line 3`), interactive `bash -i`; tree and jq print the contract's lines; `set -eux` caller: no handler trace, exit 127. tests/host/test_shell_env_hook.sh 44/44, tests/host/test_env_layer.sh 60/60; shellcheck clean on the hook and the test
 SCOPE: in (4 changed files)
+
+### T018 (follow-up): two handler defects the T015 delegate's host test found
+**Started:** 2026-10-08T16:40:31Z | **Completed:** 2026-10-08T16:41:15Z | **Coordinator**
+
+INHERITED: T018's handler; the delegate's report on tests/host/test_command_not_found.sh (30 of 33 at first) — (confidence: high)
+ASSUMED: interactive bash prints argv0's base name (`/usr/bin/bash` → `bash:`; `-bash` stays `-bash:`), confirmed here on host bash before the fix; the handler now prints `${0##*/}` when interactive. Non-interactive keeps $0 as given (bash prints `/bin/bash: line 1:` for an absolute argv0, observed in T018) — (confidence: high)
+ASSUMED: a directory at the data path is "unreadable" (line 1 alone), not an error; `-f` is tested beside `-r`, so bash's `read: read error … Is a directory` no longer leaks — (confidence: high)
+ABSENT: the contract's two rows are corrected (interactive base name; a directory means line 1 alone) — no other format changed
+Verification (host, advisory): tests/host/test_command_not_found.sh 33/33 (A interactive-path ×2 and D2 now pass), tests/host/test_shell_env_hook.sh 44/44
