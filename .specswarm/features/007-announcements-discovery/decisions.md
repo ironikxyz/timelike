@@ -347,3 +347,4 @@ FLAGGED: applied now, on built-and-host-verified, before the image lane — the 
 ASSUMED: row 04's "What it does" names `timelike budget` by its real name; the Status paragraph is the send's text verbatim; the vanilla bullet becomes "the same agent runtimes (Python and Node) with their stock behaviour"; "The vanilla bench image gets none of this (P6)" (§ announcements) stays true and is unchanged — (confidence: high)
 ABSENT: no value claim (P6); no other README change; the generated reference unchanged (no help moved this cycle)
 Verification: scripts/readme_reference.py --check current; tests/unit/test_readme_reference.py passed
+SCOPE: in (1 changed files)
