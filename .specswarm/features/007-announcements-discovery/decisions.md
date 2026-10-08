@@ -248,3 +248,4 @@ INHERITED: T014–T021; the step-10 output (T020) and the tallies from lib/tally
 FLAGGED: every Automated criterion is cited `unconfirmed` with host results beside it as advisory, not `executed` — no image lane has run on this branch, and host evidence is never image evidence (reboot.md § Environment) — (confidence: high)
 ASSUMED: SC-6 is cited `unconfirmed: NOT BUILT` rather than omitted, so the mentor's derivation sees it — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); T022 stays open (Item 21)
+SCOPE: none — no files outside the feature's artifacts changed
