@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/02-speedup-bench.md
 source_send: bridge/sends/02-rev1-20260929-000641.md
 prompt_revision: 1
 discovery_revision: 6
-audited_against: [1]
+audited_against: [1, 8]
 slice: 0
 ---
 
@@ -178,6 +178,20 @@ builds neither test, but it records how each run ended, which keeps P1's test an
   - for a loss, why it is a loss
 
   An interpretation written with a task is printed only when the run ended the way it describes.
+- **The verdict order** *(Added revision 8; copied from prompt 02's constraints by modify Cycle 2, send
+  `…-095251`.)* "A task's verdict compares, in order: ending, turns, hangs, failed commands. Each call is
+  counted once per row (a hung call is one failed command and one hang, and hangs are compared first).
+  Wall-clock time and tool calls are reported and never decide. The verdict sentence quotes only counts that
+  appear in the report's table (P6, P2)."
+  - **Slice 0 does not meet it, and is not changed for it.** Its verdict compares `nonzero_exits + hangs`
+    as one tiebreak after turns (`bench/benchlib/report.py:119`; `data-model.md` § Comparison and report,
+    step 3), so a hung call counts twice and hangs are not compared first, and the verdict sentence quotes
+    that sum (`report.py:227`). T016's assumption is where it came from. Plan's ruling (b) on
+    `bridge/feedback/02-20260930-060406-hang-counted-twice.md` carries the change to 02 slice 1, because
+    slice 0's reports are labelled fake-agent runs (FR-9).
+  - The slice-1 criterion that revision 8 added with it (two arms ending the same way in the same turns are
+    ranked by hangs, then failed commands) is not copied here: this spec carries no later-slice criteria
+    (§ Success Criteria).
 - **FR-10** The report MUST be built from the traces alone, so that any trace set can be re-reported
   without re-running it.
 

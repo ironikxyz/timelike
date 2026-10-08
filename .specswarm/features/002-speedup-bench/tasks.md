@@ -232,6 +232,37 @@ contract, with losing tasks first.
 - [X] T027 `cycle-report.md`: a section for this send, recording the Docker lane at `64270f7` (SC-1 and
   SC-2 executed), where the first line lives, and SC-3 still unconfirmed; `audit-log.md`, a `none` row.
 
+## Phase 9: Cycle 2 — revision 8 recorded (send `bridge/sends/02-rev8-20261008-095251.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 2): PASSED — plan.md § Tech Stack Compliance Report (Cycle 2) has no
+conflict or prohibition; the task scan (lib/tech-stack-parser.sh, ts_mentions) found no prohibited
+technology in the task text below. The tasks change Markdown only -->
+
+Governance is current at `[2..13]`, so there is no audit task. Nothing outside
+`.specswarm/features/002-speedup-bench/` changes, so there is no Docker lane (send § How this cycle runs).
+
+- [X] T028 `spec.md` § Reporting: copy revision 8's constraint in after FR-9a, verbatim and declared
+  *(Added revision 8.)*, with a note that slice 0's code does not meet it (`bench/benchlib/report.py:119`,
+  `:227`; `data-model.md:125`; T016) and that plan's ruling (b) carries the change to 02 slice 1. The
+  slice-1 criterion is not copied: the spec keeps no later-slice criterion list (`spec.md:216–218`). No other
+  body line changes; `report.py` and `data-model.md` are not edited.
+- [X] T029 `decisions.md` T016: below its fourth ASSUMED line (the hung call counted twice), add an
+  annotation: *superseded by discovery revision 8 (ruling (b)), code change carried to 02 s1*. The ASSUMED
+  line is kept as written.
+- [X] T030 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode
+  `scoped` with `OUT_OF_SCOPE` empty: revision 8's own change (the constraint) is addressed by T028, but its
+  added slice-1 criterion is not addressed by this cycle, so `full` is not available (Step 9: "Added criteria
+  this modification didn't address"). Expected append: 8 alone, as the send asks; revisions 2–7 did not
+  change prompt 02, so they leave no hole for 3c. Write
+  `audited_against` in `spec.md` frontmatter and one row in `audit-log.md`. Never touch `prompt_revision`,
+  `discovery_revision` or `source_prompt`.
+- [X] T031 Cycle report § Cycle 2 (the send's block): Group A not applicable; Group B copied from the send;
+  Group C, the two Automated criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree),
+  D2 with the mode the Cycle 1 sign-off addendum recorded (observed by the operator); `not_verified` names the
+  four unmet places; the plugin version and any stderr under 2.37.0.
+
+**Parallel:** T028 and T029 touch different files. T030 follows T028, and T031 comes last.
+
 ## Dependencies
 
 - T001 comes first.

@@ -140,6 +140,7 @@ INHERITED: verdict order and section order from data-model; first line and vanil
 ASSUMED: with no traces, line 1 is "NO TRACES — nothing was measured"; neither the fake nor the live line is true of an empty run — (confidence: high)
 ASSUMED: one fake-agent trace anywhere makes line 1 the fake-agent line (FR-9 "any fake-agent run") — (confidence: high)
 ASSUMED: nonzero_exits + hangs as the failure tiebreak counts a hung call twice (it is also non-zero), as data-model reads literally — (confidence: medium)
+  ↳ *Superseded by discovery revision 8 (ruling (b), `bridge/feedback/02-20260930-060406-hang-counted-twice.md`): hangs are compared on their own after turns and before failed commands, each call counted once. Code change carried to 02 s1; slice 0's `report.py:119`, `:227` and `data-model.md` step 3 are unchanged. Annotated 2026-10-08 by modify Cycle 2 (T029); the line above is kept as written.*
 FLAGGED: catalog.NOT_BENCHABLE said "token-shaped", which put "token" before the appendix against FR-9; the delegate reported it rather than rewriting text in render; the coordinator changed it to "key-shaped" (FR-12's term) in catalog.py — (confidence: high)
 FLAGGED: the appendix lists one line per trace, not the contract sample's single collapsed line — chose per-trace so a mixed live/fake set can't hide a recorded count (confidence: medium)
 FLAGGED: pair() raises on two traces for one task and environment, rather than letting file order decide a verdict; slice 2's repetitions will change this — (confidence: medium)
@@ -317,4 +318,41 @@ INHERITED: the send's host results (64270f7: make test 176/176 e2e, 575 unit; ma
 FLAGGED: SC-1 and SC-2 cited as `executed` at 64270f7, with the caveat that the report text, check messages and validator changed since; SC-3 stays `unconfirmed` — (confidence: high)
 ASSUMED: audit-log.md is created now with a seed row for specify's audited_against [1] and this cycle's `none` row — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch)
+SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 — send `bridge/sends/02-rev8-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T028: spec § Reporting — revision 8's constraint copied in, declared
+**Started:** 2026-10-08T09:58:33Z | **Completed:** 2026-10-08T09:58:44Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification is impact-analysis.md § Cycle 2 (additions only, by diff of the archived sends) — (confidence: high)
+FLAGGED: the constraint is placed under § Reporting after FR-9a as a declared bullet, not as a new numbered FR — chose that over an FR-9b because slice 0 does not meet it and an FR reads as a requirement this slice claims; the bullet says so in its own text — (confidence: high)
+ASSUMED: the constraint's text is copied verbatim from the send's prompt bytes (the *From Principles* list), quoted, with the revision marker moved into the bullet's lead — (confidence: high)
+ABSENT: report.py and data-model.md are not edited (send § 1); no other spec line changes, because none states a verdict order (impact analysis table); the slice-1 criterion is not copied (the spec carries no later-slice criteria)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T029: decisions.md T016 — the double-counting assumption annotated as superseded
+**Started:** 2026-10-08T09:59:01Z | **Completed:** 2026-10-08T09:59:01Z | **Coordinator**
+
+INHERITED: T028's spec note names T016 as the origin — (confidence: high)
+ASSUMED: an indented annotation under the ASSUMED line, rather than an edit to it, keeps the record of what was assumed at build time (append-only spirit of this log) — (confidence: high)
+ABSENT: T016's other lines are untouched; the code it describes is unchanged
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T030: provenance — audited_against [1] → [1, 8], one audit-log row
+**Started:** 2026-10-08T09:59:49Z | **Completed:** 2026-10-08T09:59:49Z | **Coordinator**
+
+INHERITED: T028 (the constraint now in the body, its unmet places named); the send's instruction "append 8" — (confidence: high)
+FLAGGED: mode scoped with OUT_OF_SCOPE empty, appending 8 — chose that over mode none, which the installed block returns when revision 8 is listed as out of scope (verified: it yields NEW_AUDITED [1]). The command reserves an append for a revision this modification "brought into line" or that "needed no body change"; revision 8's constraint is neither in the code, by plan's ruling. Chose the send's reading (audited_against = checked and needs no regeneration, the mentor's definition; the slice-1 criterion is another slice's), and recorded the code gap in the spec, the audit-log row and not_verified so the entry cannot be read as "slice 0 meets revision 8". Raised in the report — (confidence: medium)
+ASSUMED: the audit-log row's date is the clock's at writing — (confidence: high)
+ABSENT: prompt_revision (1), discovery_revision (6) and source_prompt untouched; revisions 2–7 not appended (they did not change prompt 02, so they leave no hole)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T031: cycle report § Cycle 2; implement steps 10 and 9b recorded
+**Started:** 2026-10-08T10:03Z | **Completed:** 2026-10-08T10:01:56Z | **Coordinator**
+
+INHERITED: T028–T030; lane readme-c's results from `bridge/history.md` 2026-10-08T08:28:00Z and its log (TAP 393–397) — (confidence: high: read, not re-run)
+FLAGGED: implement step 10j's `.specswarm/metrics.json` entry is not written — chose the send's "only .specswarm/features/<that feature>/ changes" over the command's step; step 10's output is in the cycle report instead — (confidence: high)
+ASSUMED: D2's mode stays "observed by the operator", as the send says (Cycle 1 sign-off addendum) — (confidence: high)
+ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no host or Docker lane (only this feature's directory changed)
 SCOPE: none — no files outside the feature's artifacts changed
