@@ -337,3 +337,4 @@ SCOPE: none — no files outside the feature's artifacts changed
 INHERITED: T028's spec note names T016 as the origin — (confidence: high)
 ASSUMED: an indented annotation under the ASSUMED line, rather than an edit to it, keeps the record of what was assumed at build time (append-only spirit of this log) — (confidence: high)
 ABSENT: T016's other lines are untouched; the code it describes is unchanged
+SCOPE: none — no files outside the feature's artifacts changed
