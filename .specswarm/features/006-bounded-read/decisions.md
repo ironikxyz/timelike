@@ -180,3 +180,87 @@ FLAGGED: none
 ABSENT: no Docker lane (R10); no ship or merge (they wait for the lane, the D5 demo and the mentor's sign-off); no demo_points_reached; no Group A (no marker on this path)
 Verification: make test-host 1055 passed, 60/60, 29/29; coverage view 96%, search 93%, agentio 95%; ruff, mypy, shellcheck clean; implement step 10 run from the installed 2.35.0 blocks (unknown, warned); all five criterion citations match one send line each
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)
+
+### T019: view DIR — the overview (FR-24 to FR-31)
+**Started:** 2026-10-04T19:19:30Z | **Completed:** 2026-10-04T19:21:33Z
+
+INHERITED: search's ignore rules (D-5) and display() (P002) — loaded from tools/bin/search, as undo loads snapshot (005 R8) (confidence: high)
+FLAGGED: the overview is `view DIR`, replacing slice 0's directory refusal (FR-8, exit 2) — chose one name over a new tool, because discovery's own example is `view`, vim's `view .` lists a directory, and a new name must be discovered (P3); declared in spec § Slice 1 and impact-analysis (confidence: high)
+FLAGGED: the budget is rule 3's output cap in lines — chose the unit the contract already has (send seam 1), over bytes (revision 6 leaves a total byte bound to the bench) and entries (a third unit) (confidence: high)
+FLAGGED: breadth-first fit is greedy: a directory too large for the lines left is collapsed as `budget`, and later, smaller ones may still expand — the contract's "each one only if its entries fit the lines left" (confidence: medium)
+FLAGGED: singular forms everywhere in the overview (`1 dir`), changing the contract's own example — the carried plural fix applies from the start; both test delegates told (confidence: high)
+ASSUMED: a dependency directory is recognised by name (FR-28's list), not by content (R8) (confidence: medium)
+ABSENT: the 100,000 count cap is not reached by any fixture here — a unit would need a patched constant
+ABSENT: --no-ignore keeps .git collapsed, as specified; nothing lists inside .git
+Verification: ruff, format, mypy clean; a fixture repository (10,000-file node_modules, .git, build, an ignored file, a symlink): node_modules one line with its counts and expand command, symlink shown not followed, 1 ignored file counted; view node_modules/ expands breadth-first within 200 lines; tests/unit/test_view.py 2 expectations updated for FR-24 (declared), 160 passed with test_search.py
+SCOPE: in (2 changed files)
+
+### T020: view --anchors (FR-32 to FR-35)
+**Started:** 2026-10-04T19:21:53Z | **Completed:** 2026-10-04T19:22:04Z
+
+INHERITED: the window code and the overview's flags — from T019 (confidence: high)
+FLAGGED: the anchor hashes the line's raw bytes (before decoding, escape stripping and the COLUMNS cut), line ending removed — chose raw bytes over the shown text, because the shown text depends on COLUMNS and on replacement, which would make the anchor unstable across views; removing \r\n makes CRLF and LF copies agree, which 06 needs (R9) (confidence: high)
+FLAGGED: 6 hex characters (24 bits) — chose them over 4 (16 bits, 1 in 65,536 per changed line) as short enough for a column and unlikely to collide over a session of edits; 06 also checks the line number (R9) (confidence: medium)
+ASSUMED: hashlib is imported only under --anchors, so the file mode's start-up is unchanged (confidence: high)
+ABSENT: anchors in the overview — a directory has no lines of a file; --anchors on a directory is a usage error (T019)
+Verification: ruff, format, mypy clean; a 4-line file with a CRLF line, an escape sequence and an invalid byte: each anchor equals sha256(raw line)[:6] computed separately; view --anchors FILE:2 marks line 2
+SCOPE: in (1 changed files)
+
+### T021: search's (and view's) verdict plurals (FR-36)
+**Started:** 2026-10-04T19:22:11Z | **Completed:** 2026-10-04T19:22:51Z
+
+INHERITED: the D5 transcript's defect `44 matches in 1 files (searched 1 files)` (mentor, history 2026-10-04T18:27:32Z) — from 006 Cycle 1 (confidence: high)
+FLAGGED: view's own verdict notes had the same defect (`1 undecodable bytes`, `1 lines had terminal escapes stripped`), seen in T020's check — fixed here too, beyond the task's wording, because the carried item is the plural and leaving one tool's would carry it again (confidence: high)
+ASSUMED: "skipped N kind" stays as written (`skipped 1 ignored`): the kind is an adjective there, with no plural to fix (confidence: high)
+ABSENT: plurals in other tools' verdicts (run, snapshot, adele) — not this feature's; none was reported
+Verification: ruff and format clean; tests/unit/test_view.py and test_search.py: 160 passed (their expectations use counts above 1); the singular cases are in T017's units
+SCOPE: in (2 changed files)
+
+### T022: README — the view section gains the overview and anchors
+**Started:** 2026-10-04T19:22:58Z | **Completed:** 2026-10-04T19:23:07Z
+
+INHERITED: the behaviour of T019–T021 (confidence: high)
+ASSUMED: the README's "view and search" section is where agents and operators read about both (P3) (confidence: high)
+ABSENT: "The edit tool accepts N:anchor" describes 06 slice 1, which is not built in this batch (08 is 06's slice 0) — worded as the form it accepts, stated in this feature's contract
+Verification: the example lines match the tools' output on the T019/T020 fixtures; deny-list PASS
+SCOPE: in (1 changed files)
+
+### T017: tests/unit/test_view_slice1.py (delegated)
+**Started:** after cd4e2b9 (19:18:44Z; the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T19:27:38Z
+
+INHERITED: contracts/view-search-cli.md § Slice 1, spec FR-24 to FR-38 — from the Cycle 2 spec (confidence: high)
+FLAGGED: test-first shown by the delegate after the fact — run against an export of cd4e2b9 (before T019–T021): 60 failed for the missing feature (51 overview/anchors, 4 plurals), 3 passed correctly (missing directory, unchanged layout, an already-right plural); all 63 pass now (confidence: high)
+FLAGGED: six contract gaps the delegate found (totals, collapsed.path, symlink order, the unreadable clause, kind collapse under --no-ignore and --limit 0, the cut's more), and the example's order breaking its own sort rule — settled in the contract as built (confidence: high)
+ASSUMED (delegate): the 100,000 count cap is untested — the contract offers no lowering mechanism (confidence: high)
+ABSENT: the cap, as above; it is recorded under not_verified
+Verification: reviewed; 63 passed; ruff, format and mypy clean on the file
+SCOPE: in (1 changed files)
+
+### T018: e2e — SC-6, SC-7 and the carried items (delegated)
+**Started:** after cd4e2b9 (19:18:44Z; the delegate's own start was not read from a clock) | **Completed:** 2026-10-04T19:31:25Z
+
+INHERITED: contracts/view-search-cli.md § Slice 1; the slice-0 006 e2e helpers and fixture (confidence: high)
+FLAGGED: not purely test-first — T019–T022 landed while the delegate wrote; its host dry run (a stub docker, paths rewritten) passed all 14 bash -c cells against the code, and it changed three expectations after seeing the tool's output (the verdict's kind order, anchors against file lines only, totals without unlisted ignored files), each a contract gap, all three now stated in the contract as built (confidence: high)
+FLAGGED: FR-37's speed is a printed TAP diagnostic, not an asserted value; the cell asserts the search concludes within 30 s and reaches all 8 files (40 matches), so an early stop cannot pass. Host dry run: 86.9 MB/s over 39.9 MiB (confidence: high)
+FLAGGED: Makefile SHELLCHECK_FILES gains the four files; Makefile is named in 006's tasks.md from Cycle 1 (T002's SHELLCHECK_FILES line), so the record reads SCOPE in (confidence: high)
+ABSENT: bash -lc cells, the image's Python 3.14 and git, docker exec timing, and the image's search speed — not groundable without Docker; the mentor's lane runs them
+Verification: reviewed; shellcheck clean; bats --count 6, 12, 10 (delegate); every expected value computed in the container by an oracle (image Python, coreutils, git)
+SCOPE: in (5 changed files)
+
+### T023: host lane — lint, units with coverage, make test-host, start-up
+**Started:** 2026-10-04T19:31:44Z | **Completed:** 2026-10-04T19:44:10Z
+
+INHERITED: T017–T022's files (confidence: high)
+ASSUMED: the image's Python 3.14.7 gives the same overview and anchors as the host's 3.12.3 (os.scandir, hashlib, str sorting) (confidence: high)
+ABSENT: the e2e on a stand-in — the e2e delegate dry-ran the 14 bash -c cells through a stub docker (T018); bash -lc cells and the image wait for the mentor's lane
+Verification: ruff check and format (62 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats: clean; units with subprocess coverage: 1259 passed, 1 skipped (483 s); Python 95% overall, view 94%, search 93%; make test-host: passed; start-up p95 (host, 40 runs, exits asserted): view --help 70 ms, view --json FILE 72 ms, view --json --anchors FILE 75 ms
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T024: cycle report § Cycle 2, implement step 10, metrics entry
+**Started:** 2026-10-04T19:44:26Z | **Completed:** 2026-10-04T19:44:58Z
+
+INHERITED: T017–T023's records — from T023 (confidence: high)
+FLAGGED: the report says plan and tasks were followed from the session's loaded 2.35.0 text, not re-invoked for this feature — chose to state it over implying a run (confidence: high)
+ABSENT: demo_points_reached — the mentor derives it; an audit-log row — row 4
+Verification: three citations, grep -cF = 1 each against the send; step 10 re-run from the installed blocks (output identical to 003's run); metrics.json gains 006-cycle-2 only; deny-list PASS
+SCOPE: in (1 changed files)

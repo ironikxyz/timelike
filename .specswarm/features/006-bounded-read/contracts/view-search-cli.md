@@ -167,3 +167,80 @@ exit 2.
 ## Session events
 
 One per invocation, written by agentio, as for every tool.
+
+---
+
+## Slice 1 (Cycle 2, send `bridge/sends/05-rev1-20261004-183704.md`)
+
+### `view DIR`: the overview (spec FR-24 to FR-31)
+
+```
+view DIR              the overview of DIR (`.` included), within rule 3's budget: 200 lines, --limit N, 0 = none
+  --no-ignore         list ignored entries too (.git stays collapsed)
+```
+Text:
+```
+view: DIR [overview]
+verdict: F files, D dirs, S under DIR; collapsed N (vcs 1, dependency 1); I ignored files not listed
+.git/  25 files, 9 dirs, 48.0 KiB; vcs — expand: view .git/
+node_modules/  10000 files, 1 dir, 39.1 MiB; dependency — expand: view node_modules/
+src/
+  util/
+    io.py  812 B
+  main.py  2.1 KiB
+README.md  1.2 KiB
+```
+- **Order and indentation:** directories before files, each group sorted by name (Python's `str` order).
+  Two spaces of indentation per level below DIR. A directory line ends with `/`, and a file line is
+  `name  SIZE`. A symlink line is `name -> target`, and the link is never followed.
+- **Sizes and counts:** sizes use 003's `size()` rule (below 1 KiB an integer `B`, else one decimal).
+  Counts are plain integers, and `100000+` past the cap. In a collapsed line, `files` and `dirs` count
+  everything below the directory, recursively. `S` is the total size of regular files.
+- **The verdict's clauses:** `collapsed …` only when N > 0, kinds in FR-28's precedence order;
+  `I ignored files not listed` only when I > 0.
+- **Singulars everywhere** (verdict and collapsed lines): `1 file`, `1 dir`, `1 ignored file`. FR-36's
+  plural fix applies to the overview from the start.
+- **Expand path:** relative to the current directory when the directory is below it, else absolute. It
+  is shell-quoted when needed (`shlex.join`).
+- **JSON:** `tool`, `target` (DIR), `scope: "overview"`, `verdict`, `lines` (as text, each cut at
+  COLUMNS), `overview: true`, `path`, `abs_path`, `files`, `dirs`, `bytes`, `ignored_files`,
+  `budget_lines` (the limit; 0 = none), and `collapsed: [{path, kind, files, dirs, bytes, complete,
+  expand}]` in the order the lines show them.
+- **Fits:** no omission line. Collapsed lines carry their own counts and commands. Over budget at DIR's
+  own level: the generic cut (rule 3), whose `more` re-runs the same command with `--limit 0`.
+- **A missing DIR:** as a missing FILE (exit 3, `do instead:`). An unreadable directory below DIR is
+  listed as `name/  unreadable` and counted in the verdict as `U unreadable`.
+
+### `view --anchors` (spec FR-32 to FR-35)
+
+```
+view --anchors FILE[:A-B|:N]
+```
+- **Line:** `{n:>width}{marker}{anchor} {text}`, where the anchor is 6 lowercase hex characters:
+  `hashlib.sha256(raw_line_without_line_ending).hexdigest()[:6]`. The line ending removed is a trailing
+  `\n`, then a trailing `\r`.
+- **JSON** adds `anchors: ["N:hhhhhh", …]`, one per **file line** shown, in order. A closing body line
+  (`long lines cut: …`) has no anchor. It is absent without `--anchors`.
+- **Continuing:** `next`, `more` and the long-lines command include `--anchors` when it was given.
+- `--anchors` on a directory is a usage error (exit 2): the overview has no lines of a file.
+
+### `search` plurals (FR-36)
+
+`N matches in M files (searched K files)` uses the singular for 1: `1 match`, `1 file`,
+`searched 1 file`. The other verdict forms are unchanged.
+
+### Settled at implementation (gaps the unit delegate found)
+
+- **Totals** in the verdict and JSON (`files`, `dirs`, `bytes`) count everything below DIR that is
+  listed or collapsed, collapsed directories' contents included. Ignored *files* are not in them: they
+  are counted separately (`I ignored files not listed`). Files inside an ignored *directory* are in that
+  directory's collapsed line and in the totals, not in `I`.
+- **JSON `collapsed.path`** is the path as the expand command types it (relative to the current
+  directory when below it), without the trailing `/`.
+- **Symlinks** sort among the files, by name.
+- **`U unreadable`** is the verdict's last clause.
+- **Kind collapse** (`vcs`, `dependency`, `build`) applies under `--no-ignore` and `--limit 0` too.
+  `--no-ignore` removes only the `ignored` kind, and `--limit 0` only the `budget` kind.
+- **The over-budget cut** is agentio's generic one. Its `more` is the same command with `--limit 0`
+  appended.
+

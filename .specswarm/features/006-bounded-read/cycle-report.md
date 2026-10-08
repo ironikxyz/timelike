@@ -465,3 +465,203 @@ with this section):
 
 **Not merged, not pushed.** Next: the mentor's hand merge into `master`, then a push to `public/main` on
 the operator's OK, after the deny-list and identity checks (CLAUDE.md rule 5).
+
+## Cycle 2 — bridge/sends/05-rev1-20261004-183704.md
+
+**Written:** 2026-10-04. **Dispatch mode**, batch `20261004-183704`, prompt 2 of 8. **specswarm
+4.0.1-botbaubble.2.35.0** (`4ff8dcb`), the version this session loaded: the expanded `/specswarm:modify`
+and `/specswarm:implement` named that cache path (lore Q002). The path is the one the send names, so
+there is no second report.
+
+**Sequence:**
+1. `git checkout -b modify/006-slice-1 modify/003-slice-1` (at `4857215`).
+2. `/specswarm:modify 006 --from-send bridge/sends/05-rev1-20261004-183704.md --dispatch`, invoked; Step
+   2's blocks run from the installed file.
+3. **`/specswarm:plan` and `/specswarm:tasks` were not re-invoked for this feature.** Their 2.35.0 text,
+   loaded for 003 earlier in this session, was followed: `plan.md` § Cycle 2 has the compliance report,
+   and `tasks.md` gains an appended Phase 6. The classification was not re-run here: stdlib only, no
+   new technology.
+4. `/specswarm:implement --dispatch`.
+
+Not `/specswarm:build`. **Pushed nothing; merged nothing.**
+
+**The `$ARGUMENTS` expansion:** nothing broke; the arguments held no `"`.
+
+**Status in one line:** `view DIR` is the budgeted overview, `view --anchors` shows a 6-hex anchor per
+line, and `search` and `view` write `1 file` and `1 match`. Units, lint and the host lane pass.
+Nothing has run in the image.
+
+### Group A — cited from `.implement-complete`
+
+The marker is `.specswarm/features/006-bounded-read/.implement-complete`, written at the end of this
+dispatch run, after this section's commit. Its tallies are taken then. No measured number is copied here.
+
+| Field | In the marker |
+|---|---|
+| feature | present |
+| completed_at | present |
+| mode | present |
+| tasks | present |
+| tests | present |
+| coverage | present |
+| lint | present |
+| decisions | present |
+| scope | present |
+| pause_file_written | present |
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/05-rev1-20261004-183704.md |
+| source_prompt | plan/.discover/prompts/05-bounded-read.md |
+| prompt_revision | 1 |
+| discovery_revision | 12 |
+| slice | 1 |
+
+### Provenance
+
+The spec's frontmatter is untouched: `source_send` is Cycle 1's first send, with `audited_against [1]`.
+Modify Step 2's installed blocks give **row 4**, so nothing is appended and no `audit-log.md` row is
+needed. The slice-1 criteria were in revision 1 from the start. They are added work. Two slice-0
+statements are amended, declared in spec § Slice 1:
+- FR-8's "a directory exits 2" is replaced by the overview (FR-24);
+- FR-3's layout gains its reserved anchor column (FR-32), only with `--anchors`.
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used. Two general-purpose subagents wrote the tests (T017,
+T018). They are subagents, not delegations, and `decisions.md` names them.
+
+**criteria_reestablished**
+
+Nothing has run in the image (R10). Every criterion is `unconfirmed` until the mentor's lane, and D14
+until the mentor's capture. Each citation carries its trace marker and matches exactly one line of the
+send (`grep -cF` = 1 for all three).
+
+- `05 · "collapses that directory to one line with counts, and names how to expand it _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats`, 6 cells)
+- `05 · "that changes when the line's content changes _(traces to: P1)_"` — **unconfirmed** (Docker lane
+  pending; `tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats`, 12 cells)
+- `05 · "orients in an unfamiliar repository with one budgeted directory overview _(traces to: D14)_"` —
+  **unconfirmed**. Manual (D14): the mentor captures it after the lane.
+
+**The carried items** from 05 slice 0 (send seam 3) are not criteria. They are in
+`tests/e2e/view-and-search-slice-1-carried-items.bats` (10 cells):
+- the plural;
+- a window ending at the file's end, now checked end to end;
+- **search speed in the image**, printed as a TAP diagnostic (`# search speed: N MB/s over M MiB`). The
+  host dry run measured 86.9 MB/s over 39.9 MiB. The image's figure is the lane's to read; D-8's ripgrep
+  fallback is decided from it.
+
+**reconcile_mode:** `full`. The spec was checked against prompt revision 1's whole criteria set: slice 0
+was built in Cycle 1, and slice 1 is built here. Nothing was appended (row 4).
+
+**not_verified**
+- **Everything in the image:**
+  - the 28 new e2e cells;
+  - the slice-0 006 cells after this change (`view DIR` no longer refuses);
+  - conform over `view`;
+  - Python 3.14.7.
+- **The `bash -lc` cells.** The e2e delegate's dry run used a stub `docker` on the host, and only for
+  `bash -c`.
+- **The 100,000 count cap** (FR-30) is not reached by any test. No lowering mechanism exists, and none
+  was added for a test.
+- **D14.**
+
+**changed_other_features**
+- None outside 006. `view` now loads `tools/bin/search` (this feature's own file) for its ignore rules.
+- **`Makefile`:** `SHELLCHECK_FILES` gains the four new e2e files.
+- **`README.md`:** the `view and search` section.
+- **Feeding feature 08 (prompt 06, edit):** the anchor form `N:hhhhhh` is what 06 slice 1 is to accept. This
+  batch builds 06 slice 0 (`008-edit`), which does not take anchors yet.
+
+**process_failures_recorded**
+1. **Plan and tasks were not re-invoked** for this feature (Sequence, item 3). The record says so rather
+   than implying a run.
+2. **Both test delegates' files were partly written after the code** (T019–T022 landed meanwhile).
+   - The unit delegate showed test-first after the fact: against `cd4e2b9`, 60 of 63 failed for the
+     missing feature.
+   - The e2e delegate changed three expectations after seeing the tool's output. Each was a gap in the
+     contract, now stated.
+3. **The contract's own examples broke its rules** (child order, the verdict's kind order, `1 dirs`).
+   Both delegates found it, and the examples are corrected.
+4. **A typed time and a wrong task number** in my own decision lines (T017's start; T018's "T013"). Both
+   were checked and corrected by amend before moving on, under the new rule: read times from the clock.
+
+**Plugin observation (2.35.0):** the same as 003's Cycle 2. The expanded `/specswarm:implement` replaces
+awk's `$0` with the argument. Blocks run from the installed file.
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.35.0), as the library reported it
+
+```
+🧪 Running Quality Validation
+=============================
+- Detector:
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+- run_tests pytest: rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+- parse_test_results: total=unknown passed=unknown failed=unknown skipped=unknown
+- run_coverage pytest: unknown (rc 1)
+- step 10e: browser test framework: none (no package.json)
+- quality-components: QC_BROWSER_STATE=not-applicable:no web project detected, so there is nothing to drive a browser over
+                      QC_BUNDLE_STATE=unavailable:lib/bundle-size-monitor.sh is not present in this install
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**. It warns and does not halt, and dispatch never asks. Nothing was filled in by
+hand. The project's figures are **beside** it in `.specswarm/metrics.json` →
+`006-cycle-2.project_measurements_not_scored`. The output is verbatim.
+
+**Host lane** (advisory; scratch venv, Python 3.12.3):
+- **Units:** 1259 passed, 1 skipped (483 s, with subprocess coverage). This cycle's new units: 63.
+- **Coverage:** Python **95%** overall, `view` 94%, `search` 93%.
+- **Lint:** ruff (62 files), mypy strict (21 files) and shellcheck over every shell and bats file: clean.
+- **`make test-host`:** passed.
+- **Start-up p95:** `view --help` 70 ms, `view --json FILE` 72 ms, `--anchors` 75 ms.
+- **Deny-list:** `pass` before every commit.
+
+**Implement step 9b: decision log** (the installed `scope-tally` and `decision-tally` blocks over 006's
+whole `tasks.md` and `decisions.md`, Cycles 1 and 2, after T023):
+
+```
+scope: planned=24 recorded=23 unplanned=0 unrecorded=1 in=21 out=1 none=1 unknown=0 flagged=14 flagged_out=0 other=9 other_out=1
+decisions: sections=23 flagged_sections=14 non_flagged_sections=9 sections_without_absent=0 flagged=29 assumed=20 deferred=0 absent=24 inherited=22 low_confidence=0 flagged_low_confidence=0
+```
+
+- `unrecorded=1` is T024, this report. The marker's tallies are taken after it.
+- No low-confidence entry, so no pause file was written.

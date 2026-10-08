@@ -108,3 +108,52 @@ Delegates working on their own files write the tests from the CLI contract **bef
 The tests come first, from the contract, written by delegates who do not see the code. The tools are
 written against the contract alone. T012 and T013 reconcile the two, and the contract decides every
 disagreement. MVP is US1 (`view`'s window); each later story is its own increment.
+
+---
+
+## Phase 6: Cycle 2 — slice 1: the overview, anchors, carried items (send `bridge/sends/05-rev1-20261004-183704.md`, via `/specswarm:modify`, `--dispatch`)
+
+<!-- Tech Stack Validation (Cycle 2): PASSED — plan § Tech Stack Compliance Report (Cycle 2): stdlib only, none added -->
+
+**Input:** spec § Slice 1, plan § Cycle 2, contracts/view-search-cli.md § Slice 1, research R7–R10.
+**Tests are required** (H7). Same conventions as Cycle 1, with these additions: `implement --dispatch`
+commits per task, and the scope is the files each task names.
+
+**Story map:** US6 overview (SC-6, SC-8 D14) · US7 anchors (SC-7) · US8 carried (FR-36 to FR-38).
+
+### Tests first (from the contract; delegated, disjoint files)
+
+- [X] T017 [P] [US6] [US7] [US8] `tests/unit/test_view_slice1.py`:
+  - the overview: order, indentation, sizes, symlinks, ignore rules, the five collapse kinds, the
+    breadth-first fit, the 100,000 cap (patched lower), the verdict clauses, JSON, `--no-ignore`,
+    `--limit 0`, the over-budget cut, a missing directory;
+  - anchors: equal to the test's own sha256 prefixes, stable, unchanged by insertions above, changed by
+    an edit, CRLF and LF agree, JSON `anchors`, `--anchors` kept in `next`/`more`, refused on a
+    directory;
+  - the search plurals.
+- [X] T018 [P] [US6] [US7] [US8] e2e, each under `bash -c` and `bash -lc`:
+  - `tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats` (SC-6);
+  - `tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats` (SC-7);
+  - `tests/e2e/view-and-search-slice-1-carried-items.bats` (a window ending at the end, the plural,
+    search speed measured).
+
+### Implementation
+
+- [X] T019 [US6] `tools/bin/view`: `view DIR`, the overview (FR-24 to FR-31); the slice-0 units or e2e
+  cells that asserted the directory refusal are updated in `tests/unit/test_view.py` and
+  `tests/e2e/view-range-context-missing-file-and-binary.bats` if they assert it.
+- [X] T020 [US7] `tools/bin/view`: `--anchors` (FR-32 to FR-35).
+- [X] T021 [US8] `tools/bin/search`: the verdict's plurals (FR-36); `tests/unit/test_search.py` where an
+  expectation names a plural.
+- [X] T022 `README.md`: the `view` section gains the overview and anchors.
+
+### Polish
+
+- [X] T023 Host lane: lint, units with coverage, `make test-host`, `view --help` start-up. Results in
+  `decisions.md`.
+- [X] T024 `cycle-report.md` § Cycle 2, implement step 10, `.specswarm/metrics.json`, the marker.
+
+### Dependencies (Cycle 2)
+
+- T019 → T020 (one file) → T021 → T022 → T023 → T024.
+- T017 and T018 depend only on the contract, and run beside T019–T021.

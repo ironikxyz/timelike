@@ -668,11 +668,13 @@ def test_a_missing_file_exits_3_with_do_instead(lab: Lab) -> None:
     assert out[2] == "do instead: check the name; search for it with: search -F nope.txt ."
 
 
-def test_a_directory_is_a_usage_error(lab: Lab) -> None:
+def test_a_directory_is_its_overview(lab: Lab) -> None:
+    # Slice 1 (spec FR-24) replaces slice 0's refusal ("a directory exits 2"), declared: view DIR is
+    # the overview. Its own tests are in test_view_slice1.py.
     (lab.ws / "adir").mkdir()
-    line = stderr_error(view(lab, "adir"), 2)
-    assert line.startswith("error: adir is a directory (code 2) — "), line
-    assert "search PATTERN adir" in line
+    r = view(lab, "--text", "adir")
+    assert r.returncode == 0 and r.stderr == ""
+    assert text_of(r)[0] == "view: adir [overview]"
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads a 000 file")
@@ -736,7 +738,7 @@ def test_one_event_per_invocation(lab: Lab, big: Any) -> None:
         r = view(lab, *args)
         expected.append(r.returncode)
         assert len(events(lab.scratch, SESSION)) == len(expected), args
-    assert expected == [0, 0, 3, 2, 2, 0, 2, 2]
+    assert expected == [0, 0, 3, 2, 0, 0, 2, 2]  # adir: the overview since slice 1 (FR-24)
     evs = events(lab.scratch, SESSION)
     assert [e["exit"] for e in evs] == expected
     event_schema = schema.load("event.schema.json")

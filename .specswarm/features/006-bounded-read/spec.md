@@ -296,3 +296,126 @@ replacement.
    without the `\r`.
 4. The search's time limit is wall-clock time in this process. It bounds the walk and the reads, not the
    machine's load.
+
+---
+
+## Slice 1 (Cycle 2, send `bridge/sends/05-rev1-20261004-183704.md`; natural)
+
+Built by `/specswarm:modify 006` on `modify/006-slice-1`, dispatch batch `20261004-183704`. Prompt 05 is
+still at revision 1, and `audited_against [1]` is current (modify row 4). The slice-1 criteria were in
+revision 1 from the start, so this is **added work** on a body that stays true. Two exceptions are
+declared below: FR-8's directory refusal is replaced by the overview (FR-24), and FR-3's layout gains
+its reserved anchor column (FR-32). The `Out of scope (slice 0)` list above is history.
+
+### Scenarios
+
+**Scenario 6: orient in an unfamiliar repository (Agent) — D14.**
+1. The agent runs `view .` in a repository it has never seen. Its `node_modules/` holds 10,000 files.
+2. One call shows the tree within 200 lines: directories first, then files with their sizes.
+   `node_modules/` is one line with its counts, its kind and `expand: view node_modules/`, and `.git/`
+   is another.
+3. The verdict counts files, directories and bytes, and names how many directories were collapsed and why.
+
+**Scenario 7: lines the edit tool can address (Agent).**
+1. The agent runs `view --anchors src/app.py:40-60`.
+2. Each line shows its number, its marker and a 6-character anchor, for example `  42 a3f9c1 return x`.
+3. The same line shows the same anchor in any later view. After the line changes, its anchor changes.
+   06 (edit) accepts `42:a3f9c1`.
+
+### Functional requirements
+
+**The overview (`view DIR`)**
+- **FR-24** `view DIR`, where DIR is a directory (`.` included), shows an **overview** instead of
+  refusing. *This replaces FR-8's "A directory exits 2 and suggests `search` or `ls`", declared.* The
+  header's scope is `overview`, and the exit is 0.
+- **FR-25** **The budget** is rule 3's output cap, in lines: 200 by default, `--limit N`, and `--limit 0`
+  for no budget, which is how the agent asks for the whole tree. Each line is cut at `COLUMNS`, as in
+  every mode (revision 12). This is the budget the contract already has (send seam 1). A total byte
+  bound stays the bench's question (revision 6).
+- **FR-26** **Lines:** DIR's entries, indented two spaces per level, directories first and then files,
+  each group sorted by name. A directory ends with `/`. A file shows its size, for example
+  `README.md  2.1 KiB`. A symbolic link shows `name -> target` and is never followed.
+- **FR-27** **Ignore files are respected,** with `search`'s rules (D-5): `.gitignore` at every level and
+  `.git/info/exclude`. An ignored file is not listed, and the verdict counts ignored files. An ignored
+  directory is listed collapsed (FR-28). `--no-ignore` lists everything, except that `.git` stays
+  collapsed.
+- **FR-28** **Collapsed directories:** one line each, `name/  F files, D dirs, S; KIND — expand: view
+  PATH/`. PATH is the directory's path as the agent's next command would type it, relative to the
+  current directory when below it (cross-stack P002). The kinds, in precedence order:
+  - `vcs`: `.git`, `.hg`, `.svn`;
+  - `dependency`: `node_modules`, `bower_components`, `jspm_packages`, `vendor`, `.venv`, `venv`,
+    `site-packages`, `Pods`, `.bundle`, `elm-stuff`;
+  - `build`: `build`, `dist`, `target`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`,
+    `.tox`, `.nox`, `.gradle`, `.next`, `.nuxt`, `.cache`, `coverage`, `.terraform`, and names ending
+    in `.egg-info`;
+  - `ignored`: a directory the ignore files exclude;
+  - `budget`: a directory left unexpanded so the overview fits its budget (FR-29).
+
+  DIR itself is never collapsed, so `view node_modules/` shows its contents, which is the expand
+  command's meaning.
+- **FR-29** **Fitting the budget:** DIR's own entries are always listed. Then directories are expanded
+  breadth-first (shallower first, then by path), each one only if its entries fit the lines left.
+  Directories that do not fit are collapsed as `budget`. When DIR's own entries alone exceed the budget,
+  the output is a cut (rule 3): the generic omission line, whose `more` re-runs with `--limit 0`. That is
+  harmless for a read-only tool.
+- **FR-30** **Counts in a collapsed directory** stop at 100,000 entries per directory. Beyond that the
+  line says `100000+ files`, and JSON says `complete: false`, so the overview always concludes (P2).
+- **FR-31** **Verdict:** `F files, D dirs, S under DIR; collapsed N (KIND n, …); I ignored files not
+  listed`, with the clauses that apply. JSON carries `overview: true`, `path`, `abs_path`, `files`,
+  `dirs`, `bytes`, `ignored_files`, `budget_lines`, `collapsed: [{path, kind, files, dirs, bytes,
+  complete, expand}]`, and `lines`: the same lines the text prints (D-1).
+
+**Anchors (`view --anchors`)**
+- **FR-32** `--anchors` adds an **anchor** to each shown line, in the column D-9 reserved: number,
+  marker, anchor, a space, text. For example ` 42 a3f9c1 return x`, and `>` in the marker on `FILE:N`'s
+  target line. *This extends FR-3's layout; without `--anchors` the layout is unchanged.*
+- **FR-33** **The anchor** (send seam 2) is the first 6 lowercase hex characters of the SHA-256 of the
+  line's raw bytes: as stored in the file, before decoding, before escape stripping, before the
+  `COLUMNS` cut, with its line ending removed (`\n`, and a `\r` before it). So:
+  - **stable:** the same bytes give the same anchor at any line number, in any file, view or mode;
+  - **changes with content:** any changed byte changes it, except with probability 1 in 16,777,216;
+  - **short:** 6 characters.
+- **FR-34** JSON carries `anchors: ["N:hhhhhh", …]`, one per shown line in order. That is the form 06
+  (edit) slice 1 accepts, so 06 can take it without the viewer changing (D-9's promise).
+- **FR-35** The `next` and `more` commands, and the long-lines command, keep `--anchors` when it was
+  given, so continuing keeps the mode.
+
+**Carried from slice 0** (send seam 3)
+- **FR-36** **Plurals:** `search`'s verdict says `1 file`, `1 match` and `searched 1 file`, never
+  `1 files`. This was the D5 transcript's defect (mentor, history 2026-10-04T18:27:32Z).
+- **FR-37** **Search speed in the image** is measured by an e2e cell over a generated corpus (about
+  40 MiB of text). The cell asserts the search concludes within 30 s and prints the measured MB/s into
+  the TAP output for the lane's record. It is a measurement, not a criterion. D-8's fallback (ripgrep)
+  is decided from it.
+- **FR-38** **A window ending at the file's end** (`view FILE:400-412` of a 412-line file) is a cut
+  whose `more` is the window before it (`view FILE:280-399`). It is now also checked end to end, not by
+  the units alone.
+
+### Success criteria (slice 1)
+
+The criterion text is the send's, copied exactly.
+
+- **SC-6** *"A directory overview of a repository with a dependency directory of 10,000 files fits its
+  default budget, collapses that directory to one line with counts, and names how to expand it"*. The
+  fixture is a real git repository with a `node_modules/` of 10,000 files, written by the test, which
+  counts them itself (P005). `view .` prints at most 200 body lines. `node_modules/` is exactly one line
+  with `10000 files` and `expand: view node_modules/`. Running that expand command shows
+  `node_modules/`'s own entries. *(slice 1)*
+- **SC-7** *"The viewer's anchor mode shows a short, stable anchor per line that changes when the line's
+  content changes"*. `view --anchors` shows a 6-hex anchor per line. The anchors equal SHA-256 prefixes
+  the test computes itself (P005). They are unchanged by a second view and by inserting lines above.
+  Changing one line changes that line's anchor only. *(slice 1)*
+- **SC-8** *DEMO: "the Agent orients in an unfamiliar repository with one budgeted directory overview"*
+  (D14). Manual: the mentor captures it after the lane. *(slice 1)*
+
+### Decisions (the slice-1 seams; reasoning in `research.md` R7–R10)
+
+| Point | Decision |
+|---|---|
+| The overview's name | `view DIR`: one name, discovery's own example; vim's `view .` lists a directory, so the habit exists. Replaces FR-8's refusal |
+| The budget | Rule 3's output cap, in lines (200, `--limit`); lines cut at COLUMNS |
+| Collapsing | By kind (vcs, dependency, build, ignored), then breadth-first to fit the budget (`budget`) |
+| Counting | Capped at 100,000 entries per collapsed directory (`100000+`, `complete: false`) |
+| Ignore rules | `search`'s, loaded from `view`'s own directory as `undo` loads `snapshot` (005 R8): one implementation |
+| The anchor | SHA-256 of the line's raw bytes without its line ending, first 6 hex; the edit form is `N:hhhhhh` |
+| Plural | `1 file`, `1 match` |

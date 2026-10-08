@@ -64,3 +64,15 @@ most hits that holds **fewer than all** of them, preferring the shallowest on ti
 `search <same pattern and flags> <that path>`, with `(N of the T)`. When every hit is in one file, there is
 no smaller place to search, and the line says so (`narrow: all T are in FILE; narrow the pattern, or view
 FILE:<first hit>`).
+
+---
+
+## Slice 1 (Cycle 2)
+
+- **Overview node:** `name`, `kind` (`file` | `dir` | `link`), `size` (file), `children` (an expanded
+  directory), and the counts `files`, `dirs`, `bytes`, `complete` (a collapsed directory). Built by one
+  walk below DIR that never follows symlinks. A collapsed directory's subtree is counted, not kept.
+- **Collapse kinds:** `vcs` > `dependency` > `build` > `ignored` > `budget` (spec FR-28).
+- **Anchor:** `sha256(raw line bytes without its line ending)[:6]` (hex). The edit form is `N:hhhhhh`.
+
+Nothing is stored. Both are computed per call.
