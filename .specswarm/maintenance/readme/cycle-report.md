@@ -218,3 +218,64 @@ with `scan/denylist.py`'s parser before committing:
 - tracked tree: `publish deny-list [tracked tree]: PASS — 7 entries, 455 tracked files: no match`.
 
 Identity: ironik.xyz.
+
+## Cycle 3 — bridge/sends/maint-readme-godel-2-20261008-190924.md
+
+**Written:** 2026-10-08T19:57:19Z (read from the clock). Built by hand on `maint/readme-godel`, on top of `866b49b`, in a temporary git
+worktree outside the project (in the session's scratchpad), after the mentor said lane `007s1-a` had ended
+(`bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`, "Also"). `modify/007-slice-1` and its
+working tree were not touched. No specswarm command was run. **One commit** (this one): `README.md` and this section.
+**Pushed nothing; merged nothing.** The send as read carries its 19:10:30Z amendment (no comma after "his").
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/maint-readme-godel-2-20261008-190924.md |
+| source_prompt | none (maintenance; the operator's text, 2026-10-08, verbatim) |
+| prompt_revision | none |
+| discovery_revision | none (the send names none) |
+| slice | none |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**What changed.**
+- **`README.md`:** the whole section, from `## Thank You Mr Gödel` (line 979) to the end of the file, replaced with the
+  send's fenced block. The block was extracted from the send with `awk` (the lines between ````markdown` and the
+  closing fence), not retyped, and the README was rebuilt as its first 978 lines followed by that block. Diff stat:
+  `README.md | 8 +++++++-` (7 insertions, 1 deletion: the Wolchover link line, which now continues the paragraph).
+- **Nothing else changed:** lines 1–978 are untouched, including the blank line after `MIT.`.
+
+**criteria_reestablished** (the send's checks, not prompt criteria):
+- **Byte comparison**, executed: `tail -n +979 README.md | cmp - <block>` reports no difference. Both are 14 lines and
+  1256 bytes, SHA-256 `3049085e01442467b79d820ba477317d9a7702e4a840d7d779ff1c73e49d51d9`. The straight quotes and the
+  apostrophe in "Marks'", the one curly apostrophe (U+2019) in "Gödel’s", the `ö`s and the three dots come across as sent.
+- `python3 scripts/readme_reference.py --check`: **executed**, `readme reference: current, 13 tools`, exit 0.
+- `make test-host` was not asked for by this send and was not run.
+
+**reconcile_mode:** not applicable (no prompt).
+
+**not_verified:** that the three new links resolve (no network check was asked for or made).
+
+**changed_other_features:** none.
+
+**process_failures_recorded:** none.
+
+**retired_prompts_seen:** none.
+
+**For the mentor:** `maint/readme-godel` now carries two commits (`866b49b` and this one). Merge `--no-ff` with 04 slice 1
+after sign-off; no tag of its own.
+
+**The deny-list per id**, over this commit's staged diff (`README.md` and this report) and its message, computed with
+`scan/denylist.py`'s parser before committing:
+- diff: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- message: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- tracked tree: `publish deny-list [tracked tree]: PASS — 7 entries, 455 tracked files: no match`; per id: P1 0/0, P2 0/0, P3 0/0, P4 0/0, P5 0/0, P6 0/0, P7 0/0.
+
+Identity: ironik.xyz.
