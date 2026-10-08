@@ -136,7 +136,7 @@ Spec § Slice 1, cycle 4 (FR-25 to FR-31, D-12 to D-15), plan § Cycle 4, resear
 14 on this branch (`e58dd36`, `07b914d`), so there is no audit task here. **The mentor's Docker lane is the merge
 bar.** US6 = SC-6.
 
-- [ ] T024 [P] [US6] e2e from the spec, by a delegate, before the images change:
+- [X] T024 [P] [US6] e2e from the spec, by a delegate, before the images change:
   `tests/e2e/a-bare-python-package-install-and-a-global-node-package-install-succeed-without-privilege.bats`
   (FR-31: per style; a test-built wheel and npm package, unique versions; new shell; only `/home/agent` changed;
   timelike's interpreter unchanged; no `PIP_BREAK_SYSTEM_PACKAGES`; the runtimes resolve to `/opt/agent`), and the

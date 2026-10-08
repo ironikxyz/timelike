@@ -315,3 +315,16 @@ FLAGGED: the coordinator added test_the_two_runtimes_stages_are_identical (D-15:
 ABSENT (delegate): root ownership of /opt/agent (e2e territory); the stage name `runtimes` beyond the identity test; the vanilla header's wording
 Verification: 141 passed, 1 skipped (tests/unit/test_agent_runtimes.py, test_announce.py, test_missing_commands.py) against T026–T029's files; ruff check and format clean. The delegate checked the tests fail on mutated Dockerfiles (npmrc double-quoted, corepack linked, marker kept, the pre-cycle file)
 SCOPE: in (3 changed files)
+
+### T024: e2e for SC-6, and the P6 vanilla cells revised to FR-13 (delegate, from the spec)
+**Started:** 2026-10-08T17:56Z (delegate launched) | **Completed:** 2026-10-08T18:03:23Z | **Delegate (general-purpose), reviewed and committed by the coordinator**
+
+INHERITED (delegate): run_in/notty styles, stamp_check, container_tmpdir, the KEY=value + value_of pattern, the vanilla docker run invocation; unique names and versions per cell (nodejs Q001, P004) — (confidence: high)
+FLAGGED (delegate): the Python cell fails if pip says "Defaulting to user installation" — without pip.conf pip would still fall back to ~/.local (site-packages unwritable), so location alone cannot prove FR-26's configuration — (confidence: high)
+FLAGGED (delegate): the runtime paths must resolve inside the resolved /opt/agent prefixes and never inside the resolved /opt/timelike/python (both are links to uv directories) — (confidence: high)
+ASSUMED (delegate): teardown uninstalls the probes (pip uninstall, npm uninstall -g) so cells do not leak onto the shared container's PATH; install calls get RUN_TIMEOUT=120 — (confidence: medium)
+ASSUMED (delegate): the "only home changed" find prints any changed path and allow-lists nothing — (confidence: medium)
+FLAGGED: the coordinator changed both `npm prefix -g` reads from `2>&1` to `2>/dev/null` (the delegate's flag: an update notice on stderr would break the exact match; the prefix is on stdout, and an error still fails the cell by an empty value); `npm prefix -g` through the /usr/local/bin link was confirmed on the host to report $HOME/.local — (confidence: high)
+ABSENT (delegate): no Docker run of either file (no daemon); the host trial ran the in-container scripts with other pip/npm versions
+ABSENT (delegate): the vanilla `pip config list` is not checked
+Verification: shellcheck -x -P tests/e2e:tests/host clean on both files; read by the coordinator (installs, the home-only find, teardown, the purelib listing)

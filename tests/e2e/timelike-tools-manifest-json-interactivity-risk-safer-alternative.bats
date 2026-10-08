@@ -24,13 +24,25 @@
 #      (contract § The manifest, two spaces between fields), timelike entries first, then by name
 #      (FR-12). ASSUMED: "by name" is Python's default string order within each kind.
 #
-# P6 (FR-13): the VANILLA bench image is untouched. It is started the way the bench starts it (its own
-# entrypoint, i.e. none; `docker run --rm`), and must hold none of the three user-level files in its
-# home, no /etc/timelike/announcement.md and no timelike entrypoint, and declare no ENTRYPOINT. The tag is
-# speedup-bench.bats' `timelike-vanilla:local` (built by tests/run.sh's benchimg step); its revision label
-# must be HEAD, so a stale vanilla image fails rather than passes vacuously. Its user and home are read
-# back and must be `agent` and /home/agent, which bench/vanilla/Dockerfile § 2 and § 4 declare, so the
-# home checked is the home the agent image's placement targets.
+# P6 (FR-13, revised at discovery revision 14): the VANILLA bench image has the same agent runtimes, with
+# stock behaviour, and nothing of timelike. It is started the way the bench starts it (its own entrypoint,
+# i.e. none; `docker run --rm`, here with no network), as its own user, which must be `agent` with home
+# /home/agent (bench/vanilla/Dockerfile § 2 and § 4), so the home checked is the home the agent image's
+# placement targets. The tag is speedup-bench.bats' `timelike-vanilla:local` (built by tests/run.sh's
+# benchimg step); its revision label must be HEAD, so a stale vanilla image fails rather than passes
+# vacuously. It must:
+#   - declare no ENTRYPOINT, and hold none of the three user-level files in its home, no /etc/timelike
+#     (so no announcement and no missing-commands data) and no timelike entrypoint;
+#   - report the same `python3 --version` and `node --version` as the running agent container, read under
+#     the same style (the runtimes come from the same pins, FR-30);
+#   - keep the agent interpreter's lib/python3.*/EXTERNALLY-MANAGED marker, and have neither
+#     /opt/agent/python/pip.conf nor /opt/agent/node/etc/npmrc;
+#   - answer `npm prefix -g` with /opt/agent/node, npm's default for that Node;
+#   - refuse a bare `pip install --no-index` of a wheel the cell builds there (stdlib zipfile, a name and
+#     version unique to the cell): non-zero, pip's externally-managed-environment error, and the module
+#     still not importable afterwards. The wheel is built first and must exist, so the refusal is pip's
+#     and not a missing file's;
+#   - have no `.local/bin` entry and no /opt/timelike entry on PATH.
 #
 # Cells: bash -c and bash -lc in `notty`.
 
@@ -225,15 +237,58 @@ check_manifest_text() {
 }
 
 # --- P6: the vanilla image ------------------------------------------------------------------------
-READ_VANILLA='printf "user=%s\n" "$(id -un)"
+# READ_VANILLA — in the vanilla image, under the style under test. Inputs (-e): P6_MOD, P6_VER, the
+# wheel's module name and version, unique to the cell.
+read -r -d '' READ_VANILLA <<'EOF' || true
+printf "user=%s\n" "$(id -un)"
 printf "home=%s\n" "$HOME"
 printf "passwd_home=%s\n" "$(getent passwd "$(id -u)" | cut -d: -f6)"
 for f in "$HOME/.claude/CLAUDE.md" "${CODEX_HOME:-$HOME/.codex}/AGENTS.md" "$HOME/.config/opencode/AGENTS.md" \
-  "$HOME/CLAUDE.md" "$HOME/AGENTS.md" /etc/timelike/announcement.md /etc/timelike/standard-tools.json \
-  /opt/timelike/libexec/entrypoint; do
+  "$HOME/CLAUDE.md" "$HOME/AGENTS.md" /etc/timelike /etc/timelike/announcement.md /etc/timelike/standard-tools.json \
+  /etc/timelike/missing-commands.tsv /opt/timelike/libexec/entrypoint /opt/agent/python/pip.conf /opt/agent/node/etc/npmrc; do
   if [ -e "$f" ]; then printf "present=%s\n" "$f"; fi
 done
-printf "read=done\n"'
+printf "python_version=%s\n" "$(python3 --version 2>&1)"
+printf "node_version=%s\n" "$(node --version 2>&1)"
+for d in /opt/agent/python/lib/python3.*/; do
+  if [ -e "${d}EXTERNALLY-MANAGED" ]; then printf "marker=%sEXTERNALLY-MANAGED\n" "$d"; fi
+done
+printf "npm_prefix_g=%s\n" "$(npm prefix -g 2>/dev/null | tr "\n" " " | sed "s/ *$//")"
+printf "path=%s\n" "$PATH"
+w="$(mktemp -d)"
+whl="$(python3 -I -c '
+import base64, hashlib, sys, zipfile
+out, mod, ver = sys.argv[1:4]
+di = "%s-%s.dist-info" % (mod, ver)
+files = {
+    mod + "/__init__.py": "",
+    di + "/METADATA": "Metadata-Version: 2.1\nName: %s\nVersion: %s\n" % (mod, ver),
+    di + "/WHEEL": "Wheel-Version: 1.0\nGenerator: timelike-e2e\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+}
+record = []
+for name, text in files.items():
+    data = text.encode()
+    digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+    record.append("%s,sha256=%s,%d" % (name, digest, len(data)))
+record.append(di + "/RECORD,,")
+files[di + "/RECORD"] = "\n".join(record) + "\n"
+path = "%s/%s-%s-py3-none-any.whl" % (out, mod, ver)
+with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+    for name, text in files.items():
+        z.writestr(name, text)
+print(path)
+' "$w" "$P6_MOD" "$P6_VER" 2>&1)"
+printf "build_rc=%s\n" "$?"
+if [ -f "$whl" ]; then printf "wheel=present\n"; else printf "wheel=absent %s\n" "$whl"; fi
+pip install --no-index "$whl" >"$w/pip.out" 2>&1
+printf "pip_rc=%s\n" "$?"
+printf "pip_refused=%s\n" "$(grep -ic "externally-managed-environment" "$w/pip.out")"
+printf "pip_out=%s\n" "$(tail -c 600 "$w/pip.out" | tr "\n" " ")"
+cd / && python3 -c "import ${P6_MOD}" >/dev/null 2>&1
+printf "import_after_rc=%s\n" "$?"
+rm -rf "$w"
+printf "read=done\n"
+EOF
 
 check_vanilla_untouched() {
   local label entry
@@ -247,13 +302,28 @@ check_vanilla_untouched() {
   fi
   entry="$(timeout "$RUN_TIMEOUT" docker image inspect --format '{{json .Config.Entrypoint}}' "$VANILLA_IMAGE" </dev/null 2>&1)"
   if [[ "$entry" != null && "$entry" != "[]" ]]; then
-    printf '%s declares an ENTRYPOINT (%s): FR-13 says the vanilla image is unchanged\n' "$VANILLA_IMAGE" "$entry" >&2
+    printf '%s declares an ENTRYPOINT (%s): FR-13 says the vanilla image declares none\n' "$VANILLA_IMAGE" "$entry" >&2
     return 1
   fi
+
+  # The agent container's runtimes, under the same style: what the vanilla image must match.
+  run_in "$1" notty 'printf "python_version=%s\n" "$(python3 --version 2>&1)"; printf "node_version=%s\n" "$(node --version 2>&1)"'
+  assert_status 0
+  local agent_py agent_node
+  agent_py="$(value_of python_version)"
+  agent_node="$(value_of node_version)"
+  [[ "$agent_py" =~ ^Python\ 3\.[0-9]+\.[0-9]+$ && "$agent_node" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    printf 'the agent container reports python3 %q and node %q: not versions; output:\n%s\n' "$agent_py" "$agent_node" "$output" >&2
+    return 1
+  }
+
+  local n="$((RANDOM % 9 + 1))${RANDOM}${RANDOM}"
+  local mod="tlprobe_${n}" ver="1.0.${n}"
   local -a shell
   mapfile -t shell < <(_shell_argv "$1")
   run timeout "$RUN_TIMEOUT" docker run --rm --network none --cap-drop ALL \
     --security-opt no-new-privileges:true --label "${THROWAWAY_LABEL}=1" \
+    -e "P6_MOD=${mod}" -e "P6_VER=${ver}" \
     "$VANILLA_IMAGE" "${shell[@]}" "$READ_VANILLA"
   assert_status 0
   assert_value read "done"
@@ -261,11 +331,39 @@ check_vanilla_untouched() {
   assert_value home /home/agent
   assert_value passwd_home /home/agent
   assert_no_line_matching '^present='
+  # The same runtimes (FR-13, FR-30) ...
+  assert_value python_version "$agent_py"
+  assert_value node_version "$agent_node"
+  # ... with stock behaviour.
+  assert_output_has "marker=/opt/agent/python/lib/python3."
+  assert_value npm_prefix_g /opt/agent/node
+  assert_value build_rc 0
+  assert_value wheel present
+  if [[ "$(value_of pip_rc)" == 0 || "$(value_of pip_refused)" == 0 ]]; then
+    printf 'a bare pip install in %s was not refused as externally managed (rc %s); output:\n%s\n' \
+      "$VANILLA_IMAGE" "$(value_of pip_rc)" "$output" >&2
+    return 1
+  fi
+  if [[ "$(value_of import_after_rc)" == 0 ]]; then
+    printf '%s imports %s after the refused install; output:\n%s\n' "$VANILLA_IMAGE" "$mod" "$output" >&2
+    return 1
+  fi
+  # Nothing of timelike on PATH.
+  local path entry_dir
+  path="$(value_of path)"
+  local -a dirs
+  IFS=: read -r -a dirs <<<"$path"
+  for entry_dir in "${dirs[@]}"; do
+    if [[ "$entry_dir" == */.local/bin || "$entry_dir" == */.local/bin/ || "$entry_dir" == /opt/timelike* ]]; then
+      printf '%s has %q on PATH (%s): FR-13 keeps it stock\n' "$VANILLA_IMAGE" "$entry_dir" "$path" >&2
+      return 1
+    fi
+  done
 }
 
 @test "SC-3 [bash -c, notty] One command prints a manifest of every timelike tool and curated standard tools with fields for JSON support, interactivity risk and safer alternative — timelike tools --json: every installed tool and every curated entry, each with json, interactive_risk and instead in the contract's vocabulary" { check_manifest_json c notty; }
 @test "SC-3 [bash -lc, notty] One command prints a manifest of every timelike tool and curated standard tools with fields for JSON support, interactivity risk and safer alternative — timelike tools --json: every installed tool and every curated entry, each with json, interactive_risk and instead in the contract's vocabulary" { check_manifest_json lc notty; }
 @test "SC-3 [bash -c, notty] One command prints a manifest of every timelike tool and curated standard tools with fields for JSON support, interactivity risk and safer alternative — timelike tools --text: one line per entry, timelike first, then by name" { check_manifest_text c notty; }
 @test "SC-3 [bash -lc, notty] One command prints a manifest of every timelike tool and curated standard tools with fields for JSON support, interactivity risk and safer alternative — timelike tools --text: one line per entry, timelike first, then by name" { check_manifest_text lc notty; }
-@test "P6 [bash -c] the vanilla bench image is untouched: no announcement in its home, none in /etc/timelike, no entrypoint" { check_vanilla_untouched c; }
-@test "P6 [bash -lc] the vanilla bench image is untouched: no announcement in its home, none in /etc/timelike, no entrypoint" { check_vanilla_untouched lc; }
+@test "P6 [bash -c] the vanilla bench image has the same agent runtimes with stock behaviour and nothing of timelike — same python3 and node versions as the agent container, EXTERNALLY-MANAGED kept, no pip.conf or npmrc, npm prefix -g /opt/agent/node, a bare pip install refused, no .local/bin or /opt/timelike on PATH, no announcement, no /etc/timelike, no entrypoint" { check_vanilla_untouched c; }
+@test "P6 [bash -lc] the vanilla bench image has the same agent runtimes with stock behaviour and nothing of timelike — same python3 and node versions as the agent container, EXTERNALLY-MANAGED kept, no pip.conf or npmrc, npm prefix -g /opt/agent/node, a bare pip install refused, no .local/bin or /opt/timelike on PATH, no announcement, no /etc/timelike, no entrypoint" { check_vanilla_untouched lc; }
