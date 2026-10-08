@@ -172,7 +172,11 @@ bar.** US6 = SC-6.
 T031 follows them, then T032, then T033.
 
 
-## Phase 8: Lane 007s1-a fixes (feedback `bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`, by hand on Cycle 4's tasks)
+## Phase 8: Cycle 5 — lane 007s1-a's fixes and revision 15 (send `bridge/sends/04-rev14-20261008-201729.md`, via `/specswarm:modify` → plan → tasks)
+
+> T034–T038 were built from `bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md` before this
+> send arrived, as a by-hand addendum to Cycle 4's tasks; the send folds them into Cycle 5, and this heading moves with
+> it (it read "Lane 007s1-a fixes …, by hand on Cycle 4's tasks"). T039 was the addendum's bookkeeping; it is replaced.
 
 - [X] T034 [US5] `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`: the direct-exec
   SC-5 cell looks for docker's not-found message on either stream (measured on Docker 29.4.2: stdout), and keeps
@@ -189,4 +193,28 @@ T031 follows them, then T032, then T033.
   `.specswarm/quality-standards.md` follow.
 - [X] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
   the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).
-- [ ] T039 `cycle-report.md` § Cycle 4, `### Lane 007s1-a fixes`; `reboot.md` brought up to date.
+- [ ] T039 Governance audit, discovery 14 → 15 (read `../bridge/governance-context.md`, revision 15):
+  `.specswarm/quality-standards.md` (the bundled-component reading of "fix available", the 30-day class review, the
+  fail-closed release check, npm and pip as components), `.specswarm/tech-stack.md` (npm's own pin and constraint),
+  `.specswarm/constitution.md` (only if it restates the rule). Append 15 to each `governance_audited_against`, with its
+  prose note.
+- [ ] T040 [US6] Tests first (FR-34): `tests/unit/test_scan_release_check.py`, with a registry the test writes and
+  serves from files (packument, tarballs it packs, integrities it computes): a release ships the fix (blocks, naming
+  it); none does (passes through the entry); the registry unreachable (blocks with the escalation); only a pre-release
+  or a deprecated release ships it (passes); an engines range that excludes the Node (does not count); an entry past
+  its 30-day date or over the cap (blocks); a pip-component entry (unknown, blocks); the engines reader.
+- [ ] T041 [US6] `scan/evaluate.py`: bundled-class entries (FR-32), the `releases` subcommand (FR-33), and `report`
+  consulting `release-check.json` for each finding a bundled-class entry matches; fails closed.
+- [ ] T042 [US6] `scan/scan.sh`: a `release-check` step per image, from the agent image, with network, after
+  pip-audit-agent; `none` without bundled-class entries. `tests/unit/test_scan_report.py`: the fake docker and the step
+  lists follow.
+- [ ] T043 [US6] `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: the three bundled-class
+  entries (GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 in brace-expansion 5.0.9; GHSA-rfgv-xxqx-mfg5 in undici 6.28.0;
+  component npm 11.21.0), their origin reason, and a review note.
+- [ ] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
+  registry with the real baselines (advisory); `evaluate.py report` over lane 007s1-a's scan output with the new
+  baselines and that result.
+- [ ] T045 Provenance: append 15 (on the send's instruction; the library's row is 4) with its `audit-log.md` row;
+  `cycle-report.md` § Cycle 5; the README status checked against the send's block; `reboot.md` brought up to date.
+
+**Order:** T034–T038 (built), then T039, then T040 before T041, T041 before T042 and T043, then T044, then T045.

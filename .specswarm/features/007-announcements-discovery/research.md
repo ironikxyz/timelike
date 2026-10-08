@@ -116,3 +116,25 @@ On the host, before the Dockerfile was written:
   - A bare `pip install --no-index <wheel>` of a test-built wheel then installed into
     `$HOME/.local/lib/python3.14/site-packages`.
   - `python3 -I` could not import it.
+
+## R10 · The bundled-library release check (Cycle 5; discovery revision 15)
+
+Measured 2026-10-08T20:24Z from the host, with the public registry:
+- **No route fixes all seven.** Node 24.21.0 is the newest 24.x. npm 11.20.0, 11.21.0 (`next-11`) and 12.2.0 (`latest`)
+  bundle brace-expansion 5.0.9 and undici 6.28.0. brace-expansion 5.0.10/5.0.11 (2026-09-14) and undici 6.28.1
+  (2026-09-04) are on the registry but in no npm release.
+- **npm's full packument** is 25.8 MB, with 609 versions and a `time` map. The abbreviated form (`application/vnd.npm.install-v1+json`)
+  has no publish times, so it cannot bound the candidates.
+- **The bound.** A release published before the fixed library version existed cannot ship it, so the candidates are the
+  stable releases published on or after the fix date: on 2026-10-08 that is 12.1.0, 11.20.0, 12.2.0, 11.21.0. Their
+  engines: `^20.17.0 || >=22.9.0` (11.x) and `^22.22.2 || ^24.15.0 || >=26.0.0` (12.x), both admitting Node 24.21.0.
+- **Exact bundled versions are only in the tarball** (`package/node_modules/<lib>/package.json`); the packument's
+  `dependencies` are ranges. Each tarball is about 3.3 MB and carries `dist.integrity` (sha512), checked before reading.
+- **Decision:** read the full packument once per scan per image; candidates as above; download each once; "ships the fix"
+  means every copy of the library in the tarball is at or above the fixed version, or there is none. Pre-release
+  (`-` in the version) and deprecated releases never count.
+- **Alternatives considered:** GitHub's npm/cli lockfile at a tag (a repository, not the released artifact: rejected by
+  the ruling, "never a branch"); the abbreviated packument (no times); trusting `dependencies` ranges (not what ships).
+- **pip, not implemented:** PyPI's JSON (`/pypi/pip/json`) gives releases, upload times and `requires_python`; the vendored
+  versions are in each wheel's `pip/_vendor/vendor.txt`. The check's component table answers `unknown` for pip, which
+  blocks, until that reader exists.
