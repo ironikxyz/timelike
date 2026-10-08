@@ -429,3 +429,15 @@ ASSUMED: file:// URLs stand in for the registry (urllib reads them; no server, n
 ABSENT: no test reaches the real registry (T044 runs that from the host, advisory); 38 tests fail until T041 (expected: tests first)
 Verification: ruff check and format clean; pytest: 38 failed, as expected before T041
 SCOPE: in (1 changed files)
+
+### T041: evaluate.py — bundled-class entries, the releases subcommand, and the verdict's use of it (FR-32, FR-33)
+**Started:** 2026-10-08T20:30:00Z | **Completed:** 2026-10-08T20:33:58Z | **Coordinator**
+
+INHERITED: T040's tests (the API they pin); T039's quality-standards text; research R10 (candidates bounded by the fix date, tarballs checked by integrity, every copy of the library counted) — (confidence: high)
+FLAGGED: a bundled-class entry is judged before the "stable fix blocks" rule, because under revision 15 the scanner's upstream fix is not "fix available" for it — but only that entry's finding, and only on the release check's no-release answer for the same fixed version; a missing, stale or unknown answer blocks (fails closed) — (confidence: high)
+FLAGGED: the entry is held to the image and the scanner: a library version other than the one recorded, or a fixed version other than the scanner's lowest stable fix, blocks with "re-review the entry", so an npm bump or a new advisory cannot ride an old review — (confidence: high)
+FLAGGED: generic over the component by a table — npm is read; pip answers unknown with what its reader would need (PyPI JSON for releases admitting the agent interpreter, each wheel's pip/_vendor/vendor.txt), so a pip entry blocks until then — (confidence: high)
+ASSUMED: the engines reader handles ||, comparators, ^, ~, x-ranges and hyphen ranges, and raises on anything else (pre-release tags included), which makes the check unknown; deprecated and pre-release npm versions never count; a release that no longer bundles the library counts as shipping the fix; urllib reads https:// and file:// only — (confidence: high)
+ASSUMED: release-check joins STEPS as its own row (between pip-audit-agent and govulncheck); propose() carries a bundled entry whole (its review is a person's) — (confidence: high)
+ABSENT: no assert (S101): types narrowed by passing the Bundled explicitly; single file kept (scan.sh runs it with -I); the network is used only by releases, never by report; tests/unit/test_scan_report.py's scan.sh cells fail until T042 adds the step to scan.sh
+Verification (host, advisory): test_scan_release_check.py 38 passed; ruff check and format, mypy (27 files) clean

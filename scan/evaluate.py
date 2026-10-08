@@ -22,12 +22,19 @@ It reads the scanners' JSON results, never their exit messages (H3), and applies
 - pip-audit carries no severity, so each of its findings is treated as High ("unrated"). It runs
   twice: over timelike's interpreter (step pip-audit) and over the agent interpreter, /opt/agent/python
   (step pip-audit-agent, discovery revision 14), each its own result line
+- a library bundled inside a component installed as one unit (npm's own node_modules; pip's vendored
+  packages) is fixable only when a stable release of that COMPONENT ships the fix (discovery revision 15).
+  Its baseline entry is of the bundled class: it names the component, the library and the upstream fix,
+  and carries its own review date at most 30 days out. `releases` checks the component's released
+  manifests on every scan, and `report` lets the finding through only when that check answered that no
+  release ships the fix; a release that does, or a check that could not run, blocks (it fails closed)
 - govulncheck (Adele only) carries no severity either (research R5): a vulnerable function Adele's
   code reaches is treated as High, so with a fix it blocks; one only imported or only required is
   recorded below High and never blocks
 
 Subcommands: `dists` lists the interpreter's installed distributions (and, with --requirements, writes
-them as exact pins for pip-audit -r); `report` writes the verdict.
+them as exact pins for pip-audit -r); `releases` runs the bundled-class release check (the one subcommand
+that uses the network); `report` writes the verdict.
 One file on purpose: scan.sh runs it with `-I`, which keeps the script directory off sys.path, so a
 second module could not be imported. That puts it over max_file_lines (300), which quality-standards
 allows for a single-file tool when the feature plan justifies it.
@@ -36,12 +43,17 @@ allows for a single-file tool when the feature plan justifies it.
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
+import hashlib
 import importlib.metadata
+import io
 import json
 import re
 import sys
 import sysconfig
+import tarfile
+import urllib.request
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -55,6 +67,9 @@ GATED = frozenset({"critical", "high", "unrated"})
 # only, that Adele requires the module without importing the package. The last two are below High.
 GO_LEVELS = ("required", "imported", "high")  # index = how far in: module, package, function
 CAP = dt.timedelta(days=90)  # discovery revision 4: a review date at most 90 days after the review
+BUNDLED_CAP = dt.timedelta(days=30)  # discovery revision 15: a bundled-class entry's own review
+NPM_REGISTRY = "https://registry.npmjs.org"
+BUNDLED_FIELDS = ("component", "component_version", "library_version", "fixed_version", "fixed_date")
 RULE = "reviewed baseline per image digest (discovery revision 5)"
 DEFAULT_IMAGE = "timelike-agent:local"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -108,14 +123,28 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class Bundled:
+    """A bundled-class entry's extra fields (discovery revision 15). The library is the entry's package."""
+
+    component: str
+    component_version: str
+    library_version: str
+    fixed_version: str
+    fixed_date: str
+
+
+@dataclass(frozen=True)
 class Entry:
-    """One baselined finding."""
+    """One baselined finding. A bundled-class entry also carries its own review dates."""
 
     identifier: str
     package: str
     severity: str
     origin: str
     reason: str = ""
+    bundled: Bundled | None = None
+    reviewed: dt.date | None = None
+    review_by: dt.date | None = None
 
     @property
     def key(self) -> tuple[str, str]:
@@ -193,7 +222,34 @@ def _entry(raw: Any, n: int, origins: dict[str, str], problems: list[tuple[str, 
         )
     if entry.severity == "critical" and _placeholder(entry.reason):
         problems.append((f"{name}: a Critical needs its own reason", f"{where}.reason"))
+    if "bundled" in raw:
+        entry = _bundled_entry(raw, entry, name, where, problems)
     return entry
+
+
+def _bundled_entry(
+    raw: dict[str, Any], entry: Entry, name: str, where: str, problems: list[tuple[str, str]]
+) -> Entry:
+    """A bundled-class entry: every field present, versions x.y.z, dates real, and a reason of its own."""
+    bundled = raw.get("bundled")
+    if not isinstance(bundled, dict):
+        problems.append((f'{name}: "bundled" is not an object', f"{where}.bundled"))
+        return entry
+    got = {k: str(bundled.get(k) or "").strip() for k in BUNDLED_FIELDS}
+    for key, value in got.items():
+        if not value:
+            problems.append((f'{name}: "bundled.{key}" is missing', f"{where}.bundled.{key}"))
+        elif key.endswith("_version") and _semver_or_none(value) is None:
+            problems.append((f'{name}: "bundled.{key}" {value!r} is not x.y.z', f"{where}.bundled.{key}"))
+    if got["fixed_date"] and not DATE_RE.match(got["fixed_date"]):
+        problems.append((f'{name}: "bundled.fixed_date" is not YYYY-MM-DD', f"{where}.bundled.fixed_date"))
+    if _placeholder(entry.reason):
+        problems.append((f"{name}: a bundled-class entry needs its own reason", f"{where}.reason"))
+    found: list[tuple[str, str]] = []
+    reviewed, review_by = _date(raw, "reviewed", found), _date(raw, "review_by", found)
+    problems += [(f"{name}: {message}", f"{where}.{key}") for message, key in found]
+    base = (entry.identifier, entry.package, entry.severity, entry.origin, entry.reason)
+    return Entry(*base, Bundled(**got), reviewed, review_by)
 
 
 def parse_baseline(text: str, path: str) -> Baseline:
@@ -301,10 +357,108 @@ def _unlisted(v: Vuln, image: str, b: Baseline) -> Finding:
     return Finding(v.source, v.identifier, v.component, v.severity, message, image, "", update)
 
 
-def _one(v: Vuln, image: str, b: Baseline, usable: bool, verdict: Verdict) -> Entry | None:
+Releases = dict[tuple[str, str], dict[str, Any]]
+
+
+def _bundled_block(v: Vuln, e: Entry, bd: Bundled, today: dt.date) -> str | None:
+    """Why a bundled-class entry cannot let its finding through today, or None when it can."""
+    lib = e.package
+    if e.reviewed and e.reviewed > today:
+        return f'the entry\'s "reviewed" {e.reviewed} is in the future'
+    if e.review_by and e.review_by < today:
+        return f"the entry is overdue since {e.review_by}: a person re-reviews it"
+    if e.reviewed and e.review_by and e.review_by - e.reviewed > BUNDLED_CAP:
+        latest = e.reviewed + BUNDLED_CAP
+        return f"the entry's review date {e.review_by} exceeds the 30-day cap (latest {latest})"
+    seen = v.component.split(" ", 1)[1] if " " in v.component else "?"
+    if seen != bd.library_version:
+        return (
+            f"the entry records {lib} {bd.library_version}, the image has {lib} {seen}: re-review the entry"
+        )
+    if v.stable_fixes and _min_version(v.stable_fixes) != bd.fixed_version:
+        said = _min_version(v.stable_fixes)
+        said = f"the scanner says {said}; re-review the entry"
+        return f"the entry's fixed version {bd.fixed_version} disagrees: {said}"
+    return None
+
+
+def _min_version(versions: tuple[str, ...]) -> str:
+    parsed = [(s, v) for v in versions if (s := _semver_or_none(v)) is not None]
+    return min(parsed)[1] if parsed else versions[0]
+
+
+def _bundled_one(
+    v: Vuln,
+    e: Entry,
+    bd: Bundled,
+    image: str,
+    b: Baseline,
+    today: dt.date,
+    releases: Releases | None,
+    verdict: Verdict,
+) -> None:
+    """A finding a bundled-class entry matches (discovery revision 15): it passes only on the release
+    check's answer that no release of the component ships the fix. Everything else blocks."""
+    lib = e.package
+    base = (v.source, v.identifier, v.component, v.severity)
+    date = str(e.review_by or "")
+    where = f"{b.path}, the entry for {e.identifier} in {e.package}"
+    blocked = _bundled_block(v, e, bd, today)
+    if blocked:
+        update = (
+            f'{where}, fields "reviewed", "review_by" and "bundled": a person re-reviews it (30 days at most)'
+        )
+        verdict.blocking.append(Finding(*base, f"bundled in {bd.component}: {blocked}", image, date, update))
+        return
+    got = (releases or {}).get(e.key)
+    fresh = got is not None and got.get("fixed_version") == bd.fixed_version
+    state = str(got.get("state")) if fresh and got else ""
+    if state == "no-release":
+        n = len(got.get("examined") or []) if got else 0
+        message = (
+            f"no {bd.component} release ships {lib} {bd.fixed_version} ({n} releases checked); "
+            f"baselined (bundled in {bd.component} {bd.component_version}) until {e.review_by}"
+        )
+        verdict.allowed.append(Finding(*base, message, image, date))
+    elif state == "fix-released" and got:
+        release = got.get("release")
+        message = f"fix available in {bd.component} {release}, which ships {lib} {bd.fixed_version} or later"
+        update = (
+            f"pins.env: NPM_VERSION={release} and NPM_SHA512 (the registry's integrity, as hex), then "
+            f"rebuild {image}; drop {e.identifier} in {e.package} from {b.path}"
+        )
+        verdict.blocking.append(Finding(*base, message, image, date, update))
+    else:
+        why = (got or {}).get("reason") if fresh else "no result for this entry in release-check.json"
+        message = (
+            f"release check could not run for {lib} bundled in {bd.component} {bd.component_version}: "
+            f"{why or 'no result'}; it fails closed"
+        )
+        update = (
+            f"run make scan where the scan can reach the {bd.component} registry ({NPM_REGISTRY}), or have a "
+            f"person re-review {where}"
+        )
+        verdict.blocking.append(Finding(*base, message, image, date, update))
+
+
+def _one(
+    v: Vuln,
+    image: str,
+    b: Baseline,
+    usable: bool,
+    verdict: Verdict,
+    today: dt.date,
+    releases: Releases | None,
+) -> Entry | None:
     """Judges one gated finding. Returns the baseline entry it matched, if any."""
     hit = b.find(v)
     base = (v.source, v.identifier, v.component, v.severity)
+    if hit is not None and hit.bundled is not None:
+        if not usable:
+            verdict.voided += 1
+        else:
+            _bundled_one(v, hit, hit.bundled, image, b, today, releases, verdict)
+        return hit
     if v.stable_fixes:
         verdict.blocking.append(_fixable(v, hit, image, b))
     elif hit is None:
@@ -322,8 +476,16 @@ def _one(v: Vuln, image: str, b: Baseline, usable: bool, verdict: Verdict) -> En
     return hit
 
 
-def judge(vulns: list[Vuln], b: Baseline, digest: str, today: dt.date, image: str = DEFAULT_IMAGE) -> Verdict:
-    """The H9 rule over vulnerabilities from any scanner, against one image's baseline."""
+def judge(
+    vulns: list[Vuln],
+    b: Baseline,
+    digest: str,
+    today: dt.date,
+    image: str = DEFAULT_IMAGE,
+    releases: Releases | None = None,
+) -> Verdict:
+    """The H9 rule over vulnerabilities from any scanner, against one image's baseline. `releases` is
+    the release check's result per bundled-class entry; None means it did not run, which blocks them."""
     verdict = Verdict()
     found = defects(b, image, digest, today) if b.present else []
     usable = b.present and not found
@@ -333,7 +495,7 @@ def judge(vulns: list[Vuln], b: Baseline, digest: str, today: dt.date, image: st
             verdict.ungated += 1
             continue
         verdict.gated += 1
-        hit = _one(v, image, b, usable, verdict)
+        hit = _one(v, image, b, usable, verdict, today, releases)
         matched.update({hit.key} if hit else set())
     for message, date, key in found:
         where = f'{b.path}, field "{key}"'
@@ -405,16 +567,22 @@ def propose(
     vulns: list[Vuln], b: Baseline, origins: dict[str, str], digest: str, image: str
 ) -> dict[str, Any]:
     """The baseline this scan would need: every gated finding without a stable fix, reasons carried over."""
-    entries: dict[tuple[str, str], dict[str, str]] = {}
+    entries: dict[tuple[str, str], dict[str, Any]] = {}
     for v in sorted(set(vulns), key=lambda x: (x.package, x.identifier)):
-        if v.severity not in GATED or v.stable_fixes:
-            continue
         hit = b.find(v)
+        bundled = hit is not None and hit.bundled is not None
+        if v.severity not in GATED or (v.stable_fixes and not bundled):
+            continue
         origin = origins.get(v.artifact_id) or (hit.origin if hit else "") or f"{v.source} package"
-        item = {"id": v.identifier, "package": v.package, "severity": v.severity, "origin": origin}
+        item: dict[str, Any] = {"id": v.identifier, "package": v.package, "severity": v.severity}
+        item["origin"] = origin
         if v.severity == "critical":
             item["reason"] = hit.reason if hit and not _placeholder(hit.reason) else PLACE_CRITICAL
-        if v.fix_versions:  # only pre-releases, or it would have a stable fix and not be here
+        if hit is not None and hit.bundled is not None:  # carried over whole: a person reviewed it
+            item["reason"] = hit.reason
+            item["bundled"] = asdict(hit.bundled)
+            item["reviewed"], item["review_by"] = str(hit.reviewed), str(hit.review_by)
+        elif v.fix_versions:  # only pre-releases, or it would have a stable fix and not be here
             item["note"] = (
                 f"fixed in pre-release {', '.join(v.fix_versions)}: upgrade if a stable release has it"
             )
@@ -429,6 +597,249 @@ def propose(
         "origins": reasons,
         "findings": list(entries.values()),
     }
+
+
+# --- the release check for bundled-class entries (discovery revision 15) --------------------------------
+
+
+SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+PARTIAL_RE = re.compile(r"^v?(\d+|[xX*])(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$")
+COMPARATOR_RE = re.compile(r"^(>=|<=|>|<|=|\^|~)?\s*(.*)$")
+Version = tuple[int, int, int]
+
+
+def _semver_or_none(text: str) -> Version | None:
+    m = SEMVER_RE.match(text.strip())
+    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def _partial(text: str) -> list[int]:
+    """The numbers of a partial version ("24", "24.21", "24.x"): fewer than three means a wildcard."""
+    m = PARTIAL_RE.match(text)
+    if not m:
+        raise ValueError(f"not a version: {text!r}")
+    out: list[int] = []
+    for part in m.groups():
+        if part is None or part in "xX*":
+            break
+        out.append(int(part))
+    return out
+
+
+def _bump(nums: list[int]) -> Version:
+    """The first version above every version the partial `nums` covers (24.21 → 24.22.0)."""
+    if not nums:
+        return (1 << 30, 0, 0)
+    return _floor([*nums[:-1], nums[-1] + 1])
+
+
+def _floor(nums: list[int]) -> Version:
+    padded = [*nums, 0, 0, 0]
+    return padded[0], padded[1], padded[2]
+
+
+def _comparator(text: str) -> tuple[Version, Version]:
+    """[low, high) for one comparator. Pre-release tags are refused: a range with one is unparseable."""
+    m = COMPARATOR_RE.match(text)
+    if m is None:
+        raise ValueError(f"not a comparator: {text!r}")
+    op, rest = m[1] or "", m[2]
+    nums = _partial(rest)
+    lo, hi = (0, 0, 0), (1 << 30, 0, 0)
+    if op in ("", "="):  # 24.21 covers 24.21.x; 24.21.0 covers itself
+        return _floor(nums), _bump(nums)
+    if op == ">=":
+        return _floor(nums), hi
+    if op == ">":
+        return _bump(nums), hi
+    if op == "<":
+        return lo, _floor(nums)
+    if op == "<=":
+        return lo, _bump(nums)
+    if op == "~":
+        return _floor(nums), _bump(nums[:2] if len(nums) >= 2 else nums)
+    # ^: the left-most non-zero part may not change
+    first = next((i for i, n in enumerate(nums) if n != 0), len(nums) - 1)
+    return _floor(nums), _bump(nums[: first + 1]) if nums else hi
+
+
+def engines_admit(spec: str, node: str) -> bool:
+    """Whether an npm `engines` range admits the exact version `node`. Raises ValueError when the range
+    uses anything this reader does not know, so the caller can fail closed instead of guessing."""
+    have = _semver_or_none(node)
+    if have is None:
+        raise ValueError(f"not an exact version: {node!r}")
+    for alternative in spec.split("||"):
+        text = alternative.strip()
+        if text in ("", "*", "x", "X"):
+            return True
+        if " - " in text:
+            left, right = (s.strip() for s in text.split(" - ", 1))
+            ranges = [(_floor(_partial(left)), _bump(_partial(right)))]
+        else:
+            parts = re.findall(r"(?:>=|<=|>|<|=|\^|~)?\s*[^\s<>=^~]+", text)
+            if not parts or "".join(p.replace(" ", "") for p in parts) != text.replace(" ", ""):
+                raise ValueError(f"unparseable range: {text!r}")
+            ranges = [_comparator(p.strip()) for p in parts]
+        if all(lo <= have < hi for lo, hi in ranges):
+            return True
+    return False
+
+
+def _fetch(url: str) -> bytes:
+    if not url.startswith(("https://", "file://")):  # the registry, or a test's file-served one
+        raise OSError(f"refusing to fetch {url!r}: only https:// and file:// are read")
+    req = urllib.request.Request(url, headers={"User-Agent": "timelike-scan release-check"})  # noqa: S310
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        data: bytes = resp.read()
+    return data
+
+
+def _bundled_copies(tarball: bytes, library: str) -> list[str]:
+    """Every version of `library` an npm release tarball bundles, nested copies included."""
+    name = re.compile(rf"^package/(?:.*/)?node_modules/{re.escape(library)}/package\.json$")
+    found: list[str] = []
+    with tarfile.open(fileobj=io.BytesIO(tarball), mode="r:gz") as tar:
+        for member in tar:
+            if member.isfile() and name.match(member.name):
+                handle = tar.extractfile(member)
+                if handle is None:
+                    raise ValueError(f"{member.name} could not be read")
+                found.append(str(json.loads(handle.read())["version"]))
+    return found
+
+
+class _Npm:
+    """npm's released manifests: the registry's packument, and each candidate release's tarball, checked
+    against its published integrity before it is read. Never a branch, never a pre-release."""
+
+    def __init__(self, registry: str, node: str) -> None:
+        self.registry, self.node = registry.rstrip("/"), node
+        self.packument: dict[str, Any] | None = None
+        self.tarballs: dict[str, bytes] = {}
+
+    def _doc(self) -> dict[str, Any]:
+        if self.packument is None:
+            try:
+                doc = json.loads(_fetch(f"{self.registry}/npm"))
+            except (OSError, ValueError) as exc:
+                raise LookupError(f"could not read npm's packument from {self.registry}: {exc}") from exc
+            if not isinstance(doc, dict):
+                raise LookupError("npm's packument is not an object")
+            self.packument = doc
+        return self.packument
+
+    def candidates(self, since: str) -> list[str]:
+        """Stable, non-deprecated releases published on or after `since` whose engines admit the Node."""
+        doc = self._doc()
+        versions, times = doc.get("versions"), doc.get("time")
+        if not isinstance(versions, dict) or not isinstance(times, dict):
+            raise LookupError("npm's packument has no versions or time map")
+        out: list[tuple[Version, str]] = []
+        for version, manifest in versions.items():
+            parsed = _semver_or_none(version)
+            if parsed is None or manifest.get("deprecated") or str(times.get(version, ""))[:10] < since:
+                continue
+            spec = str((manifest.get("engines") or {}).get("node") or "")
+            try:
+                if not engines_admit(spec, self.node):
+                    continue
+            except ValueError as exc:
+                raise LookupError(f"npm {version}'s engines range is unreadable ({exc})") from exc
+            out.append((parsed, version))
+        return [v for _, v in sorted(out)]
+
+    def copies(self, version: str, library: str) -> list[str]:
+        if version not in self.tarballs:
+            dist = self._doc()["versions"][version].get("dist") or {}
+            integrity = str(dist.get("integrity") or "")
+            if not integrity.startswith("sha512-"):
+                raise LookupError(f"npm {version} publishes no sha512 integrity")
+            try:
+                data = _fetch(str(dist["tarball"]))
+            except (OSError, KeyError) as exc:
+                raise LookupError(f"could not download npm {version}: {exc}") from exc
+            if base64.b64encode(hashlib.sha512(data).digest()).decode() != integrity[len("sha512-") :]:
+                raise LookupError(f"npm {version}'s tarball does not match its integrity")
+            self.tarballs[version] = data
+        try:
+            return _bundled_copies(self.tarballs[version], library)
+        except (tarfile.TarError, OSError, ValueError, KeyError) as exc:
+            raise LookupError(f"npm {version}'s tarball could not be read: {exc}") from exc
+
+
+# What a component's reader would need, for a component the check does not read yet. Each answers unknown,
+# which blocks (fails closed), until its reader exists.
+NOT_YET = {
+    "pip": (
+        "the release check reads npm's registry only; pip needs PyPI's JSON (/pypi/pip/json) for stable "
+        "releases whose requires_python admits the agent interpreter, and each candidate wheel's "
+        "pip/_vendor/vendor.txt"
+    ),
+}
+
+
+def check_entry(e: Entry, bd: Bundled, npm: _Npm) -> dict[str, Any]:
+    """One bundled-class entry's answer: no-release, fix-released (naming the release) or unknown."""
+    result: dict[str, Any] = {
+        "id": e.identifier,
+        "package": e.package,
+        "component": bd.component,
+        "component_version": bd.component_version,
+        "fixed_version": bd.fixed_version,
+        "state": "unknown",
+        "release": "",
+        "reason": "",
+        "examined": [],
+    }
+    if bd.component != "npm":
+        result["reason"] = NOT_YET.get(
+            bd.component, f"the release check does not read {bd.component!r} releases"
+        )
+        return result
+    fixed = _semver_or_none(bd.fixed_version)
+    try:
+        for version in npm.candidates(bd.fixed_date):
+            result["examined"].append(version)
+            copies = npm.copies(version, e.package)
+            parsed = [_semver_or_none(c) for c in copies]
+            if any(p is None for p in parsed):
+                raise LookupError(f"npm {version} bundles {e.package} at a version this check cannot read")
+            if fixed is not None and all(p is not None and p >= fixed for p in parsed):
+                result["state"], result["release"] = "fix-released", version
+                said = ", ".join(copies) if copies else f"does not bundle {e.package}"
+                result["reason"] = f"npm {version}: {said}"
+                return result
+    except LookupError as exc:
+        result["reason"] = str(exc)
+        return result
+    result["state"] = "no-release"
+    result["reason"] = f"no stable npm release since {bd.fixed_date} admitting Node {npm.node} ships it"
+    return result
+
+
+def releases(baseline: Path, out: Path, node: str, registry: str) -> int:
+    """Prints `<n> <summary>` for scan.sh and writes every bundled-class entry's answer to `out`."""
+    b = load_baseline(baseline, str(baseline))
+    npm = _Npm(registry, node)
+    results = [check_entry(e, e.bundled, npm) for e in b.entries if e.bundled is not None]
+    doc = {"registry": registry, "node": node, "results": results}
+    out.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    if not results:
+        print(f"0 no bundled-class entries in {baseline.name}")
+        return 0
+    states: dict[str, int] = defaultdict(int)
+    for r in results:
+        states[r["state"]] += 1
+    said = ", ".join(f"{n} {s}" for s, n in sorted(states.items()))
+    examined = sorted(
+        {v for r in results for v in r["examined"]}, key=lambda v: _semver_or_none(v) or (0, 0, 0)
+    )
+    print(
+        f"{len(results)} bundled-class entries checked against npm's released tarballs "
+        f"(Node {node}; releases examined: {', '.join(examined) or 'none'}): {said}"
+    )
+    return 0
 
 
 # --- scanner outputs ---------------------------------------------------------------------------------
@@ -544,7 +955,7 @@ def _load(path: Path) -> Any:
         raise ParseError(f"{path.name} unreadable: {exc}") from exc
 
 
-STEPS = ("sbom", "grype", "pip-audit", "pip-audit-agent", "govulncheck", "gitleaks")
+STEPS = ("sbom", "grype", "pip-audit", "pip-audit-agent", "release-check", "govulncheck", "gitleaks")
 
 
 @dataclass
@@ -557,6 +968,7 @@ class Collected:
     secrets: list[Finding] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     origins: dict[str, str] = field(default_factory=dict)
+    releases: Releases | None = None  # None: the release check did not run, so bundled entries block
 
 
 def _read_step(name: str, out: Path, image_id: str, got: Collected) -> None:
@@ -567,6 +979,11 @@ def _read_step(name: str, out: Path, image_id: str, got: Collected) -> None:
             raise ParseError(f"SBOM describes image {seen or '(none)'}, expected {image_id} (H3)")
         got.details[name] = f"{len(sbom['artifacts'])} packages catalogued from {image_id[:19]}"
         got.origins = origins_from_sbom(sbom)
+    elif name == "release-check":
+        doc = _load(out / "release-check.json")
+        if not isinstance(doc, dict) or not isinstance(doc.get("results"), list):
+            raise ParseError("release-check.json has no results list")
+        got.releases = {(str(r["id"]).lower(), str(r["package"]).lower()): r for r in doc["results"]}
     elif name == "gitleaks":
         got.secrets = gitleaks_findings(_load(out / "gitleaks.json"))
         got.details[name] = f"{len(got.secrets)} findings across git history"
@@ -651,7 +1068,7 @@ def report(out: Path, target: Target, today: dt.date) -> int:
         b, error = load_baseline(target.baseline, target.label), ""
     except ParseError as exc:
         b, error = Baseline(target.label, unreadable=str(exc)), str(exc)
-    verdict = judge(got.vulns, b, target.base_digest, today, target.image)
+    verdict = judge(got.vulns, b, target.base_digest, today, target.image, got.releases)
     verdict.blocking = sorted(verdict.blocking + got.secrets)
     rows = _rows(got, verdict, b, error)
     word = "PASS" if all(r[1] == "PASS" for r in rows) and verdict.passed else "FAIL"
@@ -710,6 +1127,11 @@ def main(argv: list[str]) -> int:
     dis = sub.add_parser("dists")
     dis.add_argument("--out", type=Path, required=True)
     dis.add_argument("--requirements", type=Path, help="also write the list as name==version lines here")
+    rel = sub.add_parser("releases", help="the bundled-class release check (uses the network)")
+    rel.add_argument("--baseline", type=Path, required=True)
+    rel.add_argument("--out", type=Path, required=True, help="where to write release-check.json")
+    rel.add_argument("--node-version", required=True, help="the pinned Node (pins.env NODE_VERSION)")
+    rel.add_argument("--registry", default=NPM_REGISTRY)
     rep = sub.add_parser("report")
     rep.add_argument("--out", type=Path, required=True, help="the scan/out directory")
     rep.add_argument("--baseline", type=Path, required=True, help="scan/baseline/<image>.json")
@@ -724,6 +1146,8 @@ def main(argv: list[str]) -> int:
     try:
         if args.cmd == "dists":
             return dists(args.out, args.requirements)
+        if args.cmd == "releases":
+            return releases(args.baseline, args.out, args.node_version, args.registry)
         label = args.baseline_label or f"scan/baseline/{args.baseline.name}"
         target = Target(args.image, args.image_id, args.base_digest, args.baseline, label)
         return report(args.out, target, args.today)

@@ -203,7 +203,7 @@ T031 follows them, then T032, then T033.
   it); none does (passes through the entry); the registry unreachable (blocks with the escalation); only a pre-release
   or a deprecated release ships it (passes); an engines range that excludes the Node (does not count); an entry past
   its 30-day date or over the cap (blocks); a pip-component entry (unknown, blocks); the engines reader.
-- [ ] T041 [US6] `scan/evaluate.py`: bundled-class entries (FR-32), the `releases` subcommand (FR-33), and `report`
+- [X] T041 [US6] `scan/evaluate.py`: bundled-class entries (FR-32), the `releases` subcommand (FR-33), and `report`
   consulting `release-check.json` for each finding a bundled-class entry matches; fails closed.
 - [ ] T042 [US6] `scan/scan.sh`: a `release-check` step per image, from the agent image, with network, after
   pip-audit-agent; `none` without bundled-class entries. `tests/unit/test_scan_report.py`: the fake docker and the step
