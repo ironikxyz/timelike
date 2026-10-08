@@ -120,7 +120,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   recorded.
 - [ ] T022 [US6] **HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is
   answered.
-- [ ] T023 `cycle-report.md` § Cycle 3 (the send's block), and implement steps 10 and 9b.
+- [X] T023 `cycle-report.md` § Cycle 3 (the send's block), and implement steps 10 and 9b.
 
 **Parallel:** T014 and T015 (delegates, test files only) run beside T016–T019. T016 comes before T017. T020 follows
 T016–T019 and T021 follows T020. T023 comes last.
