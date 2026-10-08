@@ -418,3 +418,4 @@ FLAGGED: constitution amended, not a no-change audit — H9 restates revision 5'
 ASSUMED: tech-stack 1.4.0 → 1.5.0 (MINOR: an addition, npm's own pin and constraint, and an npm line so the parser reads it as approved, which the plan's classification asked for); quality-standards states the bundled class, the 30-day entry review, the release check (fails closed) and npm/pip's constraints, with a dated audit note — (confidence: high)
 ABSENT: no threshold moved; the 90-day review for the rest of the baseline is unchanged; P1–P7, T1–T4 and H1–H8 checked, unchanged; no governance file is touched outside these three
 Verification: tech-stack-parser loads 1.5.0 with nothing unparsed and classifies npm APPROVED; each file's governance_audited_against reads [2..15]
+SCOPE: in (3 changed files)
