@@ -14,8 +14,15 @@ X in (a, b), with O the other session:
   X_out_files                    files named out-X-*.json anywhere under ROOT/X
   X_out_valid                    of those, how many hold a JSON object whose "tool" is "timelike"
   X_out_elsewhere                files named out-X-*.json anywhere under ROOT but outside ROOT/X
+  X_shell_records                lines in ROOT/X/shell.jsonl (009's shell record, one per bash -c/-lc)
+  X_shell_own_session            of those, JSON objects whose "session" is X
   X_holds_other_names            paths under ROOT/X whose name contains O
-  X_holds_other_content          files under ROOT/X whose bytes contain O
+  X_holds_other_content          files under ROOT/X whose bytes contain O, except ROOT/X/shell.jsonl
+
+shell.jsonl is left out of the byte search, and only of that: it records each command's text, and a
+peer's command may name a session without anything having leaked (the default-session cells' script
+holds the word "default"). Its isolation is checked by the session field of every record instead
+(lane batch-b; bridge/feedback/batch-20261006-234535-lane-b-three-failures.md).
   root_strays                    entries directly under ROOT other than the two session dirs
 """
 
@@ -75,9 +82,20 @@ def side(root: Path, me: str, other: str, tag: str) -> list[str]:
         f"{tag}_out_elsewhere={len(elsewhere)}",
     ]
 
+    shell = home / "shell.jsonl"
+    records = shell.read_text(encoding="utf-8", errors="replace").splitlines() if shell.is_file() else []
+    shell_own = 0
+    for line in records:
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            continue
+        shell_own += isinstance(obj, dict) and obj.get("session") == me
+    facts += [f"{tag}_shell_records={len(records)}", f"{tag}_shell_own_session={shell_own}"]
+
     names = [p for p in home.rglob("*") if other in p.name] if home.is_dir() else []
     needle = other.encode()
-    content = [p for p in files_under(home) if needle in p.read_bytes()]
+    content = [p for p in files_under(home) if p != shell and needle in p.read_bytes()]
     facts += [f"{tag}_holds_other_names={len(names)}", f"{tag}_holds_other_content={len(content)}"]
     for p in names + content:
         facts.append(f"{tag}_foreign={p}")

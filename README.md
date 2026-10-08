@@ -314,6 +314,34 @@ edit src/app.py --old 'return x' --new 'return x + 1' --dry-run       # the unif
   changed, so rule 9 does not confirm it (discovery revision 13). `--dry-run` is the look first;
   `snapshot` and `undo` cover a series.
 
+## journal — what happened in a session, in order
+
+`journal` reads a session's records and prints one timeline (feature 009, prompt 08 slice 1):
+
+```
+journal                          # the last 20 entries of this session, oldest first; ends with: more: journal --all
+journal --all-sessions --agent a1
+docker exec timelike-adele adeled ledger --json | docker exec -i timelike-agent journal --all-sessions --ledger -
+```
+
+- **What it shows:**
+  - every timelike tool call, with its arguments, exit and pointer (`run`'s log, a snapshot's id);
+  - every `bash -c` and `bash -lc` command, with its exit code;
+  - grant uses: the `adele` calls and, for the operator, Adele's ledger rows.
+
+  A shell line that only ran one tool is shown once, as that tool. The tools of a longer command line
+  are nested under it.
+- **Where the records live:** the session scratch (`/tmp/timelike/<session>/`). `events.jsonl` is written
+  by every tool (001). `shell.jsonl` is written by an EXIT trap that `/etc/timelike/shell-env.bash` sets in
+  `bash -c` / `bash -lc`. It shadows no command, and the shell's exit status is unchanged. The scratch is
+  disposable (rule 10).
+- **Not captured:** `sh -c`, interactive shells, direct execs, root's shells, and a command that sets its own
+  EXIT trap.
+- **Agents and sessions:** a harness running several agents gives each one `TIMELIKE_AGENT` and
+  `TIMELIKE_SESSION`. Without them, agents share session `default` and cannot be told apart.
+- **Secrets:** every printed command and path goes through rule 15's redaction rules. If the rules cannot
+  be loaded, commands are withheld, never printed raw.
+
 ## Speedup bench
 
 ```bash

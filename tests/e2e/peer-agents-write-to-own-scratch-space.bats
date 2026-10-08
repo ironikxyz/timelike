@@ -12,7 +12,12 @@
 # Then fixtures/sc6_check.py reads both trees and reports counts; this file asserts on them:
 #   - each events.jsonl has exactly 20 lines, all JSON, all with its own session id, all tool=timelike
 #   - each session's 20 artefacts are under its own directory and nowhere else under the root
-#   - neither tree holds a file named after, or containing, the other session's id
+#   - neither tree holds a file named after, or containing, the other session's id; shell.jsonl is
+#     left out of the content search only, because it records each command's text, and a peer's
+#     script may name a session (the default cells' holds "default") with nothing leaked
+#   - each peer's shell.jsonl (009's shell record; each peer runs a bash -c or -lc) has at least one
+#     record, and every record carries that peer's own session (lane batch-b,
+#     bridge/feedback/batch-20261006-234535-lane-b-three-failures.md)
 #   - each session directory is mode 0700, and nothing else appeared under the root
 # The two runs are also shown to have overlapped in time (start of each before the end of the other),
 # so "concurrently" is measured rather than assumed.
@@ -125,6 +130,13 @@ check_peers() {
     assert_value "${x}_out_elsewhere" 0
     assert_value "${x}_holds_other_names" 0
     assert_value "${x}_holds_other_content" 0
+    local records
+    records="$(value_of "${x}_shell_records")"
+    if ! [[ "$records" =~ ^[0-9]+$ ]] || ((records == 0)); then
+      printf '%s_shell_records: expected at least one shell record, got %q; output:\n%s\n' "$x" "$records" "$output" >&2
+      return 1
+    fi
+    assert_value "${x}_shell_own_session" "$records"
   done
   assert_value root_strays 0
 }

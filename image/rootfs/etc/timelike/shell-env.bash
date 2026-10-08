@@ -151,3 +151,18 @@
   __timelike_shell_env
   unset -f __timelike_shell_env
 } 2>/dev/null
+
+# ── Feature 009: the session journal's shell record (spec FR-7, FR-8; research R1) ──────────────────
+# In a non-interactive bash with an execution string (`bash -c`, `bash -lc`), set an EXIT trap that
+# sources the journal's exit file, which appends one line per command. Builtins only here (no fork at
+# shell start); set once, so the login path's second source (profile.d, then BASH_ENV) changes nothing.
+# Leaves one non-exported variable (the start time) and the trap. TIMELIKE_JOURNAL_EXIT is a test-only
+# override of the exit file's path (as TIMELIKE_CGROUP_CPU_MAX above); nothing in the image sets it.
+{
+  if [[ -z "${__timelike_journal_t0-}" && -n "${BASH_EXECUTION_STRING-}" && "$-" != *i* ]] &&
+    [[ -r "${TIMELIKE_JOURNAL_EXIT:-/etc/timelike/journal-exit.bash}" ]]; then
+    __timelike_journal_t0="${EPOCHREALTIME/./}"
+    # shellcheck disable=SC2064 # the path is fixed now, on purpose
+    trap ". '${TIMELIKE_JOURNAL_EXIT:-/etc/timelike/journal-exit.bash}'" EXIT
+  fi
+} 2>/dev/null

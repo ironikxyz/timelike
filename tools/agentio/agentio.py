@@ -98,6 +98,7 @@ class Tool:
     __slots__ = (
         "confirm_protocol",
         "destructive",
+        "event_ref",
         "exit_codes",
         "grant_envelope",
         "manifest_extra",
@@ -126,6 +127,7 @@ class Tool:
         passes_exit: bool = False,
         grant_envelope: bool = False,
         confirm_protocol: bool | None = None,
+        event_ref: tuple[str, str] | None = None,
     ) -> None:
         self.name = name
         self.target = target
@@ -151,6 +153,9 @@ class Tool:
         if confirm_protocol and not mutating:
             raise ValueError(f"{name}: confirm_protocol=True needs mutating=True")
         self.confirm_protocol = mutating if confirm_protocol is None else confirm_protocol
+        # Feature 009 (the session journal): the event's pointer, `ref: {kind: data[key]}`, taken from
+        # the result's own data, so the journal points at what the tool reported (run's log, a snapshot).
+        self.event_ref = event_ref
 
     def envelopes(self) -> list[str]:
         """The exit-4 envelopes this tool can print, by status (manifest `envelopes`, conform C9)."""
@@ -547,6 +552,7 @@ def run(
     session: str | None = None
     ctx: Context | None = None
     code = EXIT_FAILURE
+    ref: dict[str, Any] | None = None
     try:
         session = session_id()
         parser = _parser(tool, configure)
@@ -567,7 +573,9 @@ def run(
         elif args.agent_info:
             code = _emit_manifest(tool, parser)
         else:
-            code = _emit_result(main(args, ctx), ctx, started)
+            result = main(args, ctx)
+            code = _emit_result(result, ctx, started)
+            ref = _event_ref(tool, result)
     except ToolError as e:
         code = e.code
         _emit_error(tool, e, json_errors)
@@ -582,7 +590,7 @@ def run(
         )
     if session is not None:
         recorded = ctx.event_args if ctx is not None and ctx.event_args is not None else raw
-        _write_event(root, session, tool, recorded, code, started, verbose)
+        _write_event(root, session, tool, recorded, code, started, verbose, ref)
     with contextlib.suppress(Exception):
         sys.stdout.flush()
     sys.exit(code)
@@ -940,12 +948,38 @@ def _redact_arg(arg: str) -> str:
     return m.group(1) + redact(m.group(3), _SECRET_WORD_TYPE[m.group(2).lower()])
 
 
+def _event_ref(tool: Tool, r: Result) -> dict[str, Any] | None:
+    """The tool's declared pointer from its result's data (feature 009), or None."""
+    if tool.event_ref is None:
+        return None
+    kind, key = tool.event_ref
+    value = r.data.get(key)
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or value == "":
+        return None
+    return {kind: value}
+
+
+_AGENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
 def _write_event(
-    root: Path, session: str, tool: Tool, argv: list[str], code: int, started: float, verbose: bool
+    root: Path,
+    session: str,
+    tool: Tool,
+    argv: list[str],
+    code: int,
+    started: float,
+    verbose: bool,
+    ref: dict[str, Any] | None = None,
 ) -> None:
-    """Rule 16: one line per invocation. FR-11: a failure here never changes the tool's result."""
+    """Rule 16: one line per invocation. FR-11: a failure here never changes the tool's result.
+
+    Feature 009 adds optional fields the session journal reads: `t_ms` (the end, epoch ms), `ppid` (to
+    link a tool to the shell command that ran it), `agent` (TIMELIKE_AGENT, when valid) and `ref`.
+    """
     try:
-        event = {
+        now = time.time()
+        event: dict[str, Any] = {
             "v": 1,
             "tool": tool.name,
             "args": [_redact_arg(a) for a in argv],
@@ -953,9 +987,16 @@ def _write_event(
             "exit": code,
             "duration_ms": int((time.monotonic() - started) * 1000),
             "session": session,
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
             "pid": os.getpid(),
+            "t_ms": int(now * 1000),
+            "ppid": os.getppid(),
         }
+        agent = os.environ.get("TIMELIKE_AGENT", "")
+        if _AGENT_RE.match(agent):
+            event["agent"] = agent
+        if ref:
+            event["ref"] = ref
         line = (json.dumps(event, ensure_ascii=False) + "\n").encode()
         path = _session_dir(root, session) / "events.jsonl"
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC, 0o600)

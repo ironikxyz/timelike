@@ -1,0 +1,630 @@
+#!/opt/timelike/python/bin/python3 -I
+"""journal — a session's timeline: timelike tool calls, shell commands and grant uses, in order (P1, P4, P5).
+
+`journal` prints the last 20 entries of the current session, oldest first, ending with the command for
+the rest. `journal --all` prints the whole session, `--session S` another one, `--all-sessions` every
+session the caller can read, and `--agent A` one agent's entries. The operator merges Adele's ledger with
+`docker exec timelike-adele adeled ledger --json | docker exec -i timelike-agent journal --all-sessions
+--ledger -`.
+
+It reads, and writes nothing but its own session event:
+- the tool events every timelike tool appends (`<scratch>/<session>/events.jsonl`, 001's rule 16);
+- the shell record of `bash -c` / `bash -lc` commands (`<scratch>/<session>/shell.jsonl`, appended by
+  the EXIT trap 001's hook sets: /etc/timelike/journal-exit.bash);
+- ledger rows the operator pipes in (004's `adeled ledger --json`), never Adele's own files.
+
+Every printed command line and path goes through rule 15's redaction rules.
+
+Design: .specswarm/features/009-session-journal/ (spec, research R1-R7, data-model.md,
+contracts/journal-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import agentio
+
+TAIL = 20
+MAX_LEDGER_BYTES = 16 * 1024 * 1024
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_REDIRECT_RE = re.compile(r"^\d*[<>]")
+
+TOOL = agentio.Tool(
+    name="journal",
+    target="session",
+    summary="a session's timeline: tool calls, shell commands and grant uses, in order, by agent and session",
+    usage=[
+        "journal                     # the last 20 entries of this session, oldest first",
+        "journal -n N | --all        # the last N entries, or the whole session",
+        "journal --session S         # another session; --all-sessions: every one you can read",
+        "journal --agent A           # only agent A's entries (agents set TIMELIKE_AGENT)",
+        "journal --ledger FILE|-     # merge `adeled ledger --json` rows as grant entries (the operator)",
+        "captured: timelike tools, and bash -c / bash -lc commands (not sh -c or interactive shells)",
+        "records live in the session scratch (/tmp/timelike/<session>/) and are disposable (rule 10)",
+    ],
+    reads_stdin=True,
+    probe=(),
+    exit_codes={
+        agentio.EXIT_OK: "entries shown, or none found",
+        agentio.EXIT_FAILURE: "the ledger could not be read, or is not a JSON array",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such session",
+    },
+    manifest_extra=lambda: {
+        "tail": TAIL,
+        "sources": ["events.jsonl", "shell.jsonl", "ledger (stdin or file)"],
+        "captures": ["bash -c", "bash -lc"],
+        "not_captured": [
+            "sh -c",
+            "interactive shells",
+            "a command that sets its own EXIT trap",
+            "direct exec",
+        ],
+    },
+)
+
+
+class Outcome(Exception):
+    """A missing session or an unreadable ledger: a verdict on stdout (contract § Refusals)."""
+
+    def __init__(self, code: int, target: str, scope: str, verdict: str, remedy: str | None = None) -> None:
+        super().__init__(verdict)
+        self.code, self.target, self.scope, self.verdict, self.remedy = code, target, scope, verdict, remedy
+
+    def result(self) -> agentio.Result:
+        lines = [f"do instead: {self.remedy}"] if self.remedy else []
+        data: dict[str, Any] = {"entries": [], "remedy": self.remedy} if self.remedy else {"entries": []}
+        return agentio.Result(self.target, self.scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+# ── entries ────────────────────────────────────────────────────────────────────────────────────
+
+
+class Entry:
+    __slots__ = (
+        "agent", "children", "collapsed", "command", "duration_ms", "end", "exit", "kind", "nested", "pid",
+        "ppid", "ref", "seq", "session", "start", "style", "tool",
+    )  # fmt: skip
+
+    def __init__(
+        self,
+        *,
+        kind: str,
+        command: str,
+        exit: int | str,
+        duration_ms: int,
+        start: int,
+        end: int,
+        session: str,
+        seq: int,
+        agent: str | None = None,
+        tool: str | None = None,
+        style: str | None = None,
+        ref: dict[str, Any] | None = None,
+        pid: int | None = None,
+        ppid: int | None = None,
+    ) -> None:
+        self.kind, self.command, self.exit, self.duration_ms = kind, command, exit, duration_ms
+        self.start, self.end, self.session, self.seq = start, end, session, seq
+        self.agent, self.tool, self.style, self.ref, self.pid, self.ppid = agent, tool, style, ref, pid, ppid
+        self.children: list[Entry] = []
+        self.collapsed = False
+        self.nested = False
+
+
+def _int(v: Any) -> int | None:
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def _ts_ms(text: Any) -> int | None:
+    if not isinstance(text, str):
+        return None
+    try:
+        return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def tool_entry(ev: dict[str, Any], seq: int) -> Entry | None:
+    name, args, ex, dur = ev.get("tool"), ev.get("args"), _int(ev.get("exit")), _int(ev.get("duration_ms"))
+    if not isinstance(name, str) or not isinstance(args, list) or ex is None or dur is None:
+        return None
+    end = _int(ev.get("t_ms")) or _ts_ms(ev.get("ts"))
+    if end is None:
+        return None
+    agent = ev.get("agent") if isinstance(ev.get("agent"), str) else None
+    ref = ev.get("ref") if isinstance(ev.get("ref"), dict) and ev.get("ref") else None
+    return Entry(
+        kind="grant" if name == "adele" else "tool",
+        tool=name,
+        command=shlex.join([name, *(str(a) for a in args)]),
+        exit=ex,
+        duration_ms=dur,
+        start=end - dur,
+        end=end,
+        session=str(ev.get("session", "")),
+        agent=agent,
+        ref=ref,
+        pid=_int(ev.get("pid")),
+        ppid=_int(ev.get("ppid")),
+        seq=seq,
+    )
+
+
+def shell_entry(rec: dict[str, Any], seq: int) -> Entry | None:
+    if rec.get("kind") != "shell":
+        return None
+    cmd, ex = rec.get("cmd"), _int(rec.get("exit"))
+    s_us, e_us = _int(rec.get("start_us")), _int(rec.get("end_us"))
+    if not isinstance(cmd, str) or ex is None or s_us is None or e_us is None:
+        return None
+    cut = _int(rec.get("cut_bytes")) or 0
+    if cut:
+        cmd += f" …[cut {cut} bytes]"
+    agent = rec.get("agent") if isinstance(rec.get("agent"), str) and rec.get("agent") else None
+    return Entry(
+        kind="shell",
+        command=cmd,
+        exit=ex,
+        duration_ms=max(0, (e_us - s_us) // 1000),
+        start=s_us // 1000,
+        end=e_us // 1000,
+        session=str(rec.get("session", "")),
+        agent=agent,
+        style=rec.get("style") if isinstance(rec.get("style"), str) else None,
+        pid=_int(rec.get("pid")),
+        ppid=_int(rec.get("ppid")),
+        seq=seq,
+    )
+
+
+def ledger_entry(row: dict[str, Any], seq: int) -> Entry | None:
+    at = _ts_ms(row.get("at"))
+    outcome, session = row.get("outcome"), row.get("session")
+    if at is None or not isinstance(outcome, str) or not isinstance(session, str):
+        return None
+    what = f"{row.get('capability') or ''}.{row.get('action') or ''}".strip(".")
+    resource = row.get("resource") or ""
+    if outcome == "extended":
+        what = (
+            f"extend {row.get('grant') or ''} {row.get('limit_name') or ''} {row.get('needed') or ''}".strip()
+        )
+    command = f"{what} {resource}".strip() if outcome != "extended" else what
+    return Entry(
+        kind="grant",
+        command=command or outcome,
+        exit=outcome,
+        duration_ms=0,
+        start=at,
+        end=at,
+        session=session,
+        agent=None,
+        ref={"ledger": row.get("id"), "outcome": outcome, "grant": row.get("grant")},
+        seq=seq,
+    )
+
+
+# ── reading ────────────────────────────────────────────────────────────────────────────────────
+
+
+class Reader:
+    def __init__(self) -> None:
+        self.unreadable = 0
+        self.problems: list[str] = []
+        self.sources: dict[str, int] = {}
+        self.seq = 0
+
+    def jsonl(self, path: Path, make: Any) -> list[Entry]:
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            return []
+        except OSError as e:
+            self.problems.append(f"cannot read {path}: {e.strerror or e}")
+            return []
+        out: list[Entry] = []
+        lines = raw.decode("utf-8", "replace").splitlines()
+        self.sources[str(path)] = len(lines)
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                doc = json.loads(line)
+            except ValueError:
+                doc = None
+            entry = make(doc, self.seq) if isinstance(doc, dict) else None
+            self.seq += 1
+            if entry is None:
+                self.unreadable += 1
+            else:
+                out.append(entry)
+        return out
+
+
+def read_ledger(spec: str) -> list[dict[str, Any]]:
+    where = "stdin" if spec == "-" else spec
+    try:
+        if spec == "-":
+            if sys.stdin is None or sys.stdin.isatty():
+                raise agentio.UsageError(
+                    "--ledger - reads stdin, and stdin is a terminal",
+                    "pipe it: docker exec timelike-adele adeled ledger --json | journal --ledger -",
+                )
+            data = sys.stdin.buffer.read(MAX_LEDGER_BYTES + 1)
+        else:
+            with open(spec, "rb") as f:
+                data = f.read(MAX_LEDGER_BYTES + 1)
+    except OSError as e:
+        raise Outcome(
+            agentio.EXIT_FAILURE, "ledger", "refused", f"cannot read the ledger {where}: {e.strerror or e}"
+        ) from None
+    if len(data) > MAX_LEDGER_BYTES:
+        raise Outcome(
+            agentio.EXIT_FAILURE, "ledger", "refused", f"the ledger {where} is too large (over 16 MiB)"
+        )
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        raise Outcome(
+            agentio.EXIT_FAILURE, "ledger", "refused", f"the ledger {where} is not JSON: {e}"
+        ) from None
+    if not isinstance(doc, list):
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            "ledger",
+            "refused",
+            f"the ledger {where} is not a JSON array (adeled ledger --json prints one)",
+        )
+    return [r for r in doc if isinstance(r, dict)]
+
+
+# ── linking and order (research R3, R4) ────────────────────────────────────────────────────────
+
+
+def first_word(cmd: str) -> str | None:
+    try:
+        words = shlex.split(cmd, comments=True)
+    except ValueError:
+        return None
+    for w in words:
+        if w in ("exec", "env", "command", "time") or _ASSIGN_RE.match(w) or _REDIRECT_RE.match(w):
+            continue
+        return os.path.basename(w)
+    return None
+
+
+def link(entries: list[Entry]) -> list[Entry]:
+    shells = [e for e in entries if e.kind == "shell" and e.pid is not None]
+    by_pid: dict[tuple[str, int], list[Entry]] = {}
+    for s in shells:
+        if s.pid is not None:
+            by_pid.setdefault((s.session, s.pid), []).append(s)
+    for t in entries:
+        if t.kind == "shell" or t.ppid is None:
+            continue
+        for s in by_pid.get((t.session, t.ppid), []):
+            if s.start <= t.start and t.end <= s.end + 1:
+                s.children.append(t)
+                break
+    out: list[Entry] = []
+    for e in entries:
+        if e.kind == "shell" and len(e.children) == 1 and first_word(e.command) == e.children[0].tool:
+            child = e.children[0]
+            child.style, child.collapsed = e.style, True
+            continue  # the shell line is that one tool call: shown once (FR-9)
+        out.append(e)
+    for s in out:
+        if s.kind == "shell":
+            for c in s.children:
+                c.nested, c.style = True, s.style
+    return out
+
+
+def link_ledger(entries: list[Entry], rows: list[Entry]) -> list[Entry]:
+    calls = [e for e in entries if e.tool == "adele"]
+    used: set[int] = set()
+    out = list(entries)
+    for r in rows:
+        match = None
+        for i, c in enumerate(calls):
+            if i in used or c.session != r.session:
+                continue
+            if c.start <= r.start + 999 and r.start <= c.end:  # the row's second within the call
+                match = i
+                break
+        if match is None:
+            out.append(r)
+        else:
+            used.add(match)
+            calls[match].ref = r.ref
+    return out
+
+
+def order(entries: list[Entry]) -> list[Entry]:
+    return sorted(entries, key=lambda e: (e.start, e.end, e.seq))
+
+
+# ── output ─────────────────────────────────────────────────────────────────────────────────────
+
+
+def iso(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, UTC).strftime("%Y-%m-%dT%H:%M:%S.") + f"{ms % 1000:03d}Z"
+
+
+def hms(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, UTC).strftime("%H:%M:%S.") + f"{ms % 1000:03d}"
+
+
+def day(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, UTC).strftime("%Y-%m-%d")
+
+
+def pointer(e: Entry) -> str:
+    r = e.ref or {}
+    if "ledger" in r:
+        return f"ledger #{r['ledger']} {r.get('outcome', '')} {r.get('grant') or ''}".rstrip()
+    if "log" in r:
+        return f"log {r['log']}"
+    if "snapshot" in r:
+        return f"snapshot {r['snapshot']}"
+    return "—"
+
+
+class Redactor:
+    def __init__(self) -> None:
+        self.rules: agentio.RuleSet | None = None
+        self.why: str | None = None
+        try:
+            self.rules = agentio.load_redaction_rules(agentio.redaction_rules_path())
+        except agentio.RulesUnavailable as e:
+            self.why = str(e)
+
+    def __call__(self, text: str) -> str:
+        if self.rules is None:
+            return "[withheld: redaction rules unavailable]"
+        return agentio.redact_text(text, self.rules)[0]
+
+
+def render(
+    shown: list[Entry], labelled: bool, red: Redactor
+) -> tuple[list[str], list[dict[str, Any]], list[int]]:
+    lines: list[str] = []
+    docs: list[dict[str, Any]] = []
+    entry_line: list[int] = []  # index into lines of each entry's line
+    index = {id(e): i for i, e in enumerate(shown)}
+    last_day = None
+    for e in shown:
+        d = day(e.start)
+        if d != last_day:
+            lines.append(f"── {d} ──")
+            last_day = d
+        label = f"[{e.agent or '-'}/{e.session}] " if labelled else ""
+        indent = "  " if e.nested else ""
+        style = "—" if e.kind == "grant" and e.tool is None else ("" if e.nested else (e.style or ""))
+        command = red(e.command)
+        exit_col = e.exit if isinstance(e.exit, str) else f"exit {e.exit}"
+        point = red(pointer(e))
+        lines.append(
+            f"{hms(e.start)}  {label}{indent}{e.kind:<6} {style:<8} {command}  {exit_col}  "
+            f"{e.duration_ms / 1000:.2f} s  {point}"
+        )
+        entry_line.append(len(lines) - 1)
+        ref = dict(e.ref) if e.ref else None
+        if ref and "log" in ref:
+            ref["log"] = red(str(ref["log"]))
+        docs.append(
+            {
+                "start": iso(e.start),
+                "end": iso(e.end),
+                "kind": e.kind,
+                "style": e.style,
+                "agent": e.agent,
+                "session": e.session,
+                "command": command,
+                "exit": e.exit,
+                "duration_ms": e.duration_ms,
+                "ref": ref,
+                "pid": e.pid,
+                "ppid": e.ppid,
+                "children": [index[id(c)] for c in e.children if id(c) in index] if e.kind == "shell" else [],
+                "collapsed": e.collapsed,
+            }
+        )
+    return lines, docs, entry_line
+
+
+# ── the command ────────────────────────────────────────────────────────────────────────────────
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    p.add_argument("-n", dest="n", type=int, metavar="N", help="the last N entries (default 20)")
+    p.add_argument("--all", action="store_true", help="the whole session")
+    p.add_argument("--session", metavar="S", help="another session")
+    p.add_argument("--all-sessions", dest="all_sessions", action="store_true", help="every readable session")
+    p.add_argument("--agent", metavar="A", help="only agent A's entries")
+    p.add_argument("--ledger", metavar="FILE", help="merge `adeled ledger --json` rows; - = stdin")
+
+
+def _valid_name(name: str) -> bool:
+    return bool(_NAME_RE.match(name)) and name.strip(".") != ""
+
+
+def _more(args: argparse.Namespace, shown: int) -> str:
+    flags: list[str] = []
+    if args.session:
+        flags += ["--session", args.session]
+    if args.all_sessions:
+        flags.append("--all-sessions")
+    if args.agent:
+        flags += ["--agent", args.agent]
+    if args.ledger and args.ledger != "-":
+        flags += ["--ledger", args.ledger]
+    if args.n is not None:
+        return shlex.join(["journal", "-n", str(shown + TAIL), *flags])
+    return shlex.join(["journal", "--all", *flags])
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.n is not None and args.n < 1:
+        raise agentio.UsageError(f"-n {args.n}: N must be 1 or more", "journal -n 20, or journal --all")
+    if args.session is not None and not _valid_name(args.session):
+        raise agentio.UsageError(
+            f"--session {args.session!r} is not a session id",
+            "1-64 characters from [A-Za-z0-9._-], not only dots; see journal --all-sessions",
+        )
+    if args.agent is not None and not _NAME_RE.match(args.agent):
+        raise agentio.UsageError(
+            f"--agent {args.agent!r} is not an agent id", "1-64 characters from [A-Za-z0-9._-]"
+        )
+    if args.session and args.all_sessions:
+        raise agentio.UsageError("--session and --all-sessions are exclusive", "use one of them")
+    try:
+        return journal(args, ctx)
+    except Outcome as o:
+        return o.result()
+
+
+def journal(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    root = agentio.scratch_root()
+    rows = read_ledger(args.ledger) if args.ledger else []
+    reader = Reader()
+    if args.all_sessions:
+        target = "all sessions"
+        try:
+            names = sorted(d.name for d in os.scandir(root) if d.is_dir() and _valid_name(d.name))
+        except OSError:
+            names = []
+    else:
+        target = args.session or ctx.session
+        names = [target]
+        if not (root / target).is_dir() and not any(r.get("session") == target for r in rows):
+            if args.session:
+                raise Outcome(
+                    agentio.EXIT_NOT_FOUND,
+                    target,
+                    "not found",
+                    f"no such session: {target} (no {root / target})",
+                    "journal --all-sessions",
+                )
+            return agentio.Result(
+                target,
+                "none",
+                f"no records for session {target} in {root / target} (the scratch is disposable: rule 10)",
+                data=_data(target, [], [], 0, 0, reader, [], {}),
+            )
+    entries: list[Entry] = []
+    for name in names:
+        d = root / name
+        entries += reader.jsonl(d / "events.jsonl", tool_entry)
+        entries += reader.jsonl(d / "shell.jsonl", shell_entry)
+    ledger_rows = [x for x in (ledger_entry(r, 10**9 + i) for i, r in enumerate(rows)) if x is not None]
+    reader.unreadable += len(rows) - len(ledger_rows)
+    if not args.all_sessions:
+        ledger_rows = [r for r in ledger_rows if r.session == target]
+    entries = link(order(entries))
+    entries = order(link_ledger(entries, ledger_rows))
+    if args.agent:
+        entries = [e for e in entries if e.agent == args.agent]
+    total = len(entries)
+    keep = total if args.all else (args.n or TAIL)
+    shown = entries[-keep:] if keep < total else entries
+    agents = sorted({e.agent for e in entries if e.agent})
+    labelled = bool(args.all_sessions) or len(agents) > 1
+    red = Redactor()
+    lines, docs, at = render(shown, labelled, red)
+    if ctx.mode == "json":  # contract § JSON: the entry lines, without the date and label decoration
+        lines = [_undecorate(lines[i], labelled) for i in at]
+    counts = {k: sum(e.kind == k for e in shown) for k in ("tool", "shell", "grant")}
+    verdict = (
+        f"{len(shown)} of {total} entries in "
+        + ("all sessions" if args.all_sessions else f"session {target}")
+        + f" ({counts['tool']} tool{'s' if counts['tool'] != 1 else ''}, {counts['shell']} shell, "
+        + f"{counts['grant']} grant{'s' if counts['grant'] != 1 else ''})"
+    )
+    notes: list[str] = []
+    if len(agents) > 1:
+        notes.append("agents: " + ", ".join(agents))
+    unnamed = sum(e.agent is None for e in entries if e.kind != "grant" or e.tool is not None)
+    if agents and unnamed:
+        notes.append(f"no agent recorded for {unnamed} entries: separate agents with TIMELIKE_AGENT")
+    if reader.unreadable:
+        notes.append(f"{reader.unreadable} unreadable line{'s' if reader.unreadable != 1 else ''} skipped")
+    notes += reader.problems
+    if red.why:
+        notes.append(f"commands withheld: redaction rules unavailable ({red.why})")
+    verdict = "; ".join([verdict, *notes])
+    scope = f"all {total}" if args.all else f"last {len(shown)} of {total}"
+    data = _data(target, names, agents, total, len(shown), reader, docs, counts)
+    if len(shown) == total or not shown:
+        return agentio.Result(target, scope, verdict, lines=lines, data=data)
+    # Rule 3: the tail is a cut; the full output is every entry, in a file in the session scratch.
+    all_lines, _, _ = render(entries, labelled, red)
+    full = save(ctx, all_lines)
+    omitted = entries[: total - len(shown)]
+    omitted_lines = render(omitted, labelled, red)[0]
+    cut = agentio.Cut(
+        [(scope, lines)],
+        total - len(shown),
+        sum(len(x.encode()) + 1 for x in omitted_lines),
+        full,
+        _more(args, len(shown)),
+    )
+    return agentio.Result(target, scope, verdict, data=data, cut=cut)
+
+
+def _undecorate(line: str, labelled: bool) -> str:
+    if not labelled:
+        return line
+    head, sep, rest = line.partition("  [")
+    return head + "  " + rest.split("] ", 1)[1] if sep and "] " in rest else line
+
+
+def _data(
+    target: str,
+    names: list[str],
+    agents: list[str],
+    total: int,
+    shown: int,
+    reader: Reader,
+    docs: list[dict[str, Any]],
+    counts: dict[str, int],
+) -> dict[str, Any]:
+    return {
+        "session": target,
+        "sessions": names,
+        "agents": agents,
+        "total": total,
+        "shown": shown,
+        "counts": counts or {"tool": 0, "shell": 0, "grant": 0},
+        "unreadable": reader.unreadable,
+        "sources": reader.sources,
+        "entries": docs,
+    }
+
+
+def save(ctx: agentio.Context, lines: list[str]) -> str:
+    try:
+        d = ctx.scratch() / "artefacts"
+        d.mkdir(mode=0o700, exist_ok=True)
+        path = d / f"journal-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}.txt"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        return str(path)
+    except OSError as e:
+        return f"(not saved: {e.strerror or e})"
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

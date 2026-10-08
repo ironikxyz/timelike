@@ -284,6 +284,130 @@ else
   tap 0 "N2 sourced by ${sh_bin##*/}: printed nothing"
 fi
 
+# ── J: the session journal's shell record (feature 009; research R1) ─────────────────────────────
+# The hook sets an EXIT trap sourcing TIMELIKE_JOURNAL_EXIT (test-only override of
+# /etc/timelike/journal-exit.bash) in a non-interactive bash with an execution string. Each case gets
+# its own scratch root; the record is read back and parsed as JSON by the host's python3.
+jexit="${repo}/image/rootfs/etc/timelike/journal-exit.bash"
+[[ -r "${jexit}" ]] || { echo "Bail out! missing ${jexit}"; exit 1; }
+# jrun STYLE CMD [VAR=VALUE]... — run CMD under the hook with a fresh scratch root; prints "rc=N" then the
+# root's path on the next line. STYLE: c | lc-double (BASH_ENV plus an explicit source: the -lc path).
+jrun() {
+  local style="$1" cmd="$2" root rc
+  shift 2
+  # mktemp, not a counter: jrun runs in a command substitution, so a counter would never advance
+  root="$(mktemp -d "${tmp}/jroot.XXXXXX")" && rmdir "${root}"
+  if [[ "${style}" == c ]]; then
+    (cd "${tmp}" && env -i PATH=/usr/bin:/bin HOME="${tmp}" BASH_ENV="${hook_real}" TIMELIKE_JOURNAL_EXIT="${jexit}" \
+      TIMELIKE_SCRATCH_ROOT="${root}" "$@" "${BASH_BIN}" -c "${cmd}" </dev/null >/dev/null 2>&1) && rc=0 || rc=$?
+  else
+    # shellcheck disable=SC2016 # expanded by the bash under test
+    (cd "${tmp}" && env -i PATH=/usr/bin:/bin HOME="${tmp}" BASH_ENV="${hook_real}" TIMELIKE_JOURNAL_EXIT="${jexit}" \
+      TIMELIKE_SCRATCH_ROOT="${root}" HOOK="${hook_real}" "$@" "${BASH_BIN}" -c ". \"\$HOOK\"; ${cmd}" \
+      </dev/null >/dev/null 2>&1) && rc=0 || rc=$?
+  fi
+  printf 'rc=%s\n%s\n' "${rc}" "${root}"
+}
+# jread ROOT SESSION — one "key=value" line per fact of ROOT/SESSION/shell.jsonl
+jread() {
+  python3 -I - "$1" "$2" <<'PY'
+import json, os, stat, sys
+root, session = sys.argv[1], sys.argv[2]
+f = os.path.join(root, session, "shell.jsonl")
+if not os.path.exists(f):
+    print("lines=0")
+    sys.exit(0)
+raw = open(f, "rb").read().decode()
+lines = raw.splitlines()
+print(f"lines={len(lines)}")
+print(f"root_mode={stat.S_IMODE(os.stat(root).st_mode):o}")
+print(f"dir_mode={stat.S_IMODE(os.stat(os.path.dirname(f)).st_mode):o}")
+print(f"file_mode={stat.S_IMODE(os.stat(f).st_mode):o}")
+for i, line in enumerate(lines):
+    try:
+        d = json.loads(line)
+    except ValueError:
+        print(f"bad_json={i}")
+        continue
+    for k in ("exit", "style", "session", "agent", "cut_bytes", "kind", "v"):
+        print(f"{i}.{k}={d.get(k)}")
+    print(f"{i}.cmd_len={len(d.get('cmd', ''))}")
+    print(f"{i}.cmd={d.get('cmd')!r}")
+    print(f"{i}.ordered={int(d['end_us']) >= int(d['start_us']) > 0}")
+PY
+}
+
+# J1 exit status preserved, and the entry records it — each case its own shell
+for jc in 'false:1' 'exit 7:7' 'ls /nonexistent-dir-j1:2' 'sh -c "exit 3":3' 'set -e; false; echo no:1' 'true:0'; do
+  jcmd="${jc%:*}" jwant="${jc##*:}"
+  r="$(jrun c "${jcmd}" TIMELIKE_SESSION=j1)"
+  facts="$(jread "$(sed -n 2p <<<"${r}")" j1)"
+  check "J1 '${jcmd}': the shell still exits ${jwant}, and the one entry records exit ${jwant}" \
+    "$(head -1 <<<"${r}")
+${facts}" "rc=${jwant}" lines=1 "0.exit=${jwant}" 0.style='bash -c' 0.kind=shell 0.v=1 0.ordered=True
+done
+
+# J2 the login path sources the hook twice: still one entry; agent and session recorded
+r="$(jrun lc-double 'true' TIMELIKE_SESSION=j2 TIMELIKE_AGENT=a1)"
+facts="$(jread "$(sed -n 2p <<<"${r}")" j2)"
+check "J2 hook sourced twice (the bash -lc path): one entry, agent and session recorded" "${facts}" \
+  lines=1 0.session=j2 0.agent=a1 0.exit=0
+
+# J3 modes: the root as agentio makes it (1777), the session private (0700), the record 0600
+r="$(jrun c ':' TIMELIKE_SESSION=j3)"
+facts="$(jread "$(sed -n 2p <<<"${r}")" j3)"
+check "J3 a missing root is made 1777, the session 0700, the record 0600" "${facts}" \
+  root_mode=1777 dir_mode=700 file_mode=600
+
+# J4 a hostile command line: quotes, backslashes, control bytes, tab, newline, over 4096 characters
+long="$(printf 'x%.0s' $(seq 5000))"
+hostile=$'printf "%s" "a\\"b\\\\c\x01d\te" >/dev/null\n: '"${long}"
+r="$(jrun c "${hostile}" TIMELIKE_SESSION=j4)"
+facts="$(jread "$(sed -n 2p <<<"${r}")" j4)"
+check "J4 a hostile command line is one valid JSON line, cut at 4096 with its cut count" "${facts}" \
+  lines=1 0.cmd_len=4096 "0.cut_bytes=$((${#hostile} - 4096))"
+if grep -q '^bad_json' <<<"${facts}"; then tap 1 "J4b the hostile line is not valid JSON"; else tap 0 "J4b no invalid JSON line"; fi
+
+# J5 not captured: an interactive shell, a command with its own EXIT trap, an invalid session, an agent
+# value outside the character set (recorded as empty)
+r="$(jrun c 'trap "echo mine" EXIT; true' TIMELIKE_SESSION=j5)"
+check "J5 a command that sets its own EXIT trap replaces ours: no entry (a stated limit)" \
+  "$(jread "$(sed -n 2p <<<"${r}")" j5)" lines=0
+root="${tmp}/jroot-i"
+(cd "${tmp}" && env -i PATH=/usr/bin:/bin HOME="${tmp}" BASH_ENV="${hook_real}" TIMELIKE_JOURNAL_EXIT="${jexit}" \
+  TIMELIKE_SCRATCH_ROOT="${root}" TIMELIKE_SESSION=j5i "${BASH_BIN}" --norc -i -c 'true' </dev/null >/dev/null 2>&1) || true
+# an interactive shell ignores BASH_ENV; source the hook explicitly to test its own guard
+# shellcheck disable=SC2016 # expanded by the bash under test
+(cd "${tmp}" && env -i PATH=/usr/bin:/bin HOME="${tmp}" HOOK="${hook_real}" TIMELIKE_JOURNAL_EXIT="${jexit}" \
+  TIMELIKE_SCRATCH_ROOT="${root}" TIMELIKE_SESSION=j5i "${BASH_BIN}" --norc -i -c '. "$HOOK"; true' </dev/null >/dev/null 2>&1) || true
+check "J5b an interactive shell is not captured" "$(jread "${root}" j5i)" lines=0
+r="$(jrun c 'true' 'TIMELIKE_SESSION=bad session')"
+if [[ -e "$(sed -n 2p <<<"${r}")" ]]; then
+  tap 1 "J5c an invalid session id: something was written under the root"
+else
+  tap 0 "J5c an invalid session id: nothing written (no root made)"
+fi
+r="$(jrun c 'true' TIMELIKE_SESSION=j5d 'TIMELIKE_AGENT=has space')"
+check "J5d an agent outside the character set is recorded as empty" "$(jread "$(sed -n 2p <<<"${r}")" j5d)" \
+  lines=1 0.agent=
+
+# J6 no fork at shell start with the trap set (F1's probe); the session directory exists already, so
+# the exit file needs no mkdir either
+mkdir -p "${tmp}/jroot-f/j6" && chmod 700 "${tmp}/jroot-f/j6"
+# shellcheck disable=SC2016 # expanded by the bash under test
+out="$(cd "${tmp}" && timeout 5 env -i PATH=/nonexistent HOME="${tmp}" TIMELIKE_CGROUP_CPU_MAX="${cm}" \
+  TIMELIKE_PROC_STATUS="${st}" HOOK="${hook_real}" TIMELIKE_JOURNAL_EXIT="${jexit}" \
+  TIMELIKE_SCRATCH_ROOT="${tmp}/jroot-f" TIMELIKE_SESSION=j6 "${BASH_BIN}" -c \
+  'ulimit -u 1 2>/dev/null; . "$HOOK"; printf "TIMELIKE_CPUS=%s\n" "${TIMELIKE_CPUS-<unset>}"' \
+  </dev/null 2>/dev/null)" || out="rc=$?"
+if [[ "$(value_of TIMELIKE_CPUS "${control}")" == 2 ]]; then
+  tap 0 "J6 # SKIP the no-fork probe cannot fail here (as X2)"
+else
+  check "J6 with the journal's trap set, the hook and the exit file run with forking impossible" \
+    "${out}
+$(jread "${tmp}/jroot-f" j6)" TIMELIKE_CPUS=2 lines=1 0.exit=0
+fi
+
 # ── X1: the same C/E/S assertions against an EMPTY hook must all fail ───────────────────────────
 real_n=${n}
 real_failures=${failures}

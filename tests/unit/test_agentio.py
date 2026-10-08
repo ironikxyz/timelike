@@ -522,6 +522,66 @@ def test_rule16_exactly_one_event_per_invocation(
     assert ev["args"] == args
 
 
+# ── the session journal's event fields (feature 009) ────────────────────────────────────────────
+
+
+def test_event_carries_t_ms_ppid_and_agent_when_valid(py: str, tool: Path, scratch: Path) -> None:
+    import time as _time
+
+    before = int(_time.time() * 1000)
+    assert go(py, tool, scratch, TIMELIKE_AGENT="a1").returncode == 0
+    ev = events(scratch)[-1]
+    assert schema.errors(ev, schema.load("event.schema.json")) == []
+    assert ev["agent"] == "a1"
+    assert ev["ppid"] == os.getpid()  # the test process ran the tool
+    assert before <= ev["t_ms"] <= int(_time.time() * 1000)
+    for bad in ("", "has space", "x" * 65):
+        assert go(py, tool, scratch, TIMELIKE_AGENT=bad).returncode == 0
+        assert "agent" not in events(scratch)[-1]
+
+
+def test_event_ref_from_the_results_own_data(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    plain = make_tool(
+        "plain", 'return agentio.Result(target="t", scope="s", verdict="ok", data={"out": "x"})'
+    )
+    assert go(py, plain, scratch).returncode == 0
+    assert "ref" not in events(scratch)[-1]
+    t2 = make_tool(
+        "pointer2",
+        'return agentio.Result(target="t", scope="s", verdict="ok", data={"out": "/tmp/x.log", "n": 7})',
+        event_ref=("log", "out"),
+    )
+    assert go(py, t2, scratch).returncode == 0
+    ev = events(scratch)[-1]
+    assert ev["ref"] == {"log": "/tmp/x.log"}
+    assert schema.errors(ev, schema.load("event.schema.json")) == []
+    t3 = make_tool(
+        "pointer3",
+        'return agentio.Result(target="t", scope="s", verdict="ok", data={"n": 7})',
+        event_ref=("snapshot", "n"),
+    )
+    assert go(py, t3, scratch).returncode == 0
+    assert events(scratch)[-1]["ref"] == {"snapshot": 7}
+    for value in ("None", '""', "True"):
+        t4 = make_tool(
+            "pointer4",
+            f'return agentio.Result(target="t", scope="s", verdict="ok", data={{"n": {value}}})',
+            event_ref=("snapshot", "n"),
+        )
+        assert go(py, t4, scratch).returncode == 0
+        assert "ref" not in events(scratch)[-1], value
+    t5 = make_tool("failing", 'raise agentio.ToolError(1, "no", "again")', event_ref=("log", "out"))
+    assert go(py, t5, scratch).returncode == 1
+    assert "ref" not in events(scratch)[-1]  # no result, no pointer
+
+
+def test_old_event_lines_stay_valid() -> None:
+    old = {"v": 1, "tool": "run", "args": [], "cwd": "/", "exit": 0, "duration_ms": 3, "session": "s"}
+    assert schema.errors(old, schema.load("event.schema.json")) == []
+    bad = {**old, "ref": {"elsewhere": "a"}}
+    assert schema.errors(bad, schema.load("event.schema.json")) != []
+
+
 def test_fr11_event_failure_never_changes_the_result(py: str, tool: Path, tmp_path: Path) -> None:
     blocker = tmp_path / "not-a-dir"
     blocker.write_text("a file where the scratch root should be")
