@@ -409,3 +409,12 @@ ASSUMED: NPM_SHA512 is the registry's dist.integrity re-encoded as hex, so the b
 ABSENT: no package inside npm's tree is touched; no baseline entry for any fixable finding; the three remaining findings are not raised on FOR-MENTOR (the mentor routed them)
 Verification (host, advisory): the integrity (sha512-Zov8…) decodes to the tarball's sha512sum; the RUN's Node and npm lines replayed verbatim under a scratch root with the real Node 24.21.0 tarball: checksum OK, npm 11.21.0, npm and npx links resolve, tarballs removed; a tampered tarball is refused. npm's tree then holds brace-expansion 5.0.9, ip-address 10.5.0, tar 7.5.22, undici 6.28.0, http-cache-semantics 4.2.0, with no nested copies — GHSA-mwp4, GHSA-r292, GHSA-mh99 and GHSA-rgw5 should clear, and three should remain. make test-host: 1838 passed, 1 skipped; env 60/60, hook 44/44, handler 33/33; ruff, mypy, shellcheck clean
 SCOPE: in (6 changed files)
+
+### T039: governance audit, discovery 14 → 15 (constitution 1.4.3, tech-stack 1.5.0, quality-standards)
+**Started:** 2026-10-08T20:26:34Z | **Completed:** 2026-10-08T20:27:27Z | **Coordinator**
+
+INHERITED: ../bridge/governance-context.md at revision 15 (regovern 2026-10-08T20:17:29Z), its "What Changed In Those Revisions" (one clarification paragraph under "Fix available"; stack.md's Agent runtimes row), and plan's ruling in bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md § Resolution — (confidence: high)
+FLAGGED: constitution amended, not a no-change audit — H9 restates revision 5's "fix available" word for word, so it gains the clarification (PATCH 1.4.2 → 1.4.3, a clarification under the versioning rule), with a Sync Impact Report — (confidence: high)
+ASSUMED: tech-stack 1.4.0 → 1.5.0 (MINOR: an addition, npm's own pin and constraint, and an npm line so the parser reads it as approved, which the plan's classification asked for); quality-standards states the bundled class, the 30-day entry review, the release check (fails closed) and npm/pip's constraints, with a dated audit note — (confidence: high)
+ABSENT: no threshold moved; the 90-day review for the rest of the baseline is unchanged; P1–P7, T1–T4 and H1–H8 checked, unchanged; no governance file is touched outside these three
+Verification: tech-stack-parser loads 1.5.0 with nothing unparsed and classifies npm APPROVED; each file's governance_audited_against reads [2..15]

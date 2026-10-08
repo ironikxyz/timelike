@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -103,10 +103,17 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 > Tool (agent Python, Node), the Python note, uv's note, the Debian note, and Version Updates item 1.
 > Unchanged: prohibition 3 (timelike's tools still never use an agent interpreter or venv), the
 > prohibited list, the scanners. Revision 14 is appended to `governance_audited_against`.
+>
+> **Audited against discovery revision 15** (2026-10-08), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 15, header "> Discovery: plan/.discover/discovery.md (revision 15)"), § "What Changed In Those Revisions" (relied on), and `../bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` § Resolution.
+> **Amended (1.4.0 → 1.5.0, an addition):** stack.md's Agent runtimes row gains npm's own pin and constraint and the
+> bundled-library rule. Checked: the Agent runtimes entry, Node's line, Version Updates, the scanners. Changed: the Node
+> bullet under Agent runtimes (npm pinned separately by version and integrity hash; its constraint), a new **npm** line
+> so the parser reads it as approved, and Version Updates item 1. Unchanged: everything else. Revision 15 is appended to
+> `governance_audited_against`.
 
 # Tech Stack - Timelike
 
-**Version**: 1.4.0
+**Version**: 1.5.0
 **Last Updated**: 2026-10-08
 **Auto-Generated**: No. Derived from `../bridge/governance-context.md` (stack option A, discovery
 revision 2; audited against revisions 3 to 11, per the notes above)
@@ -163,11 +170,19 @@ stream upgrades.
   - Node: the official release tarball of the current Active LTS, pinned by version and SHA-256 in
     `pins.env` and verified at build. Its own `etc/npmrc` sets `prefix` under the agent's home. `node`,
     `npm`, `npx` on the agent's `PATH`
+  - npm: pinned separately from the Node tarball, by version and the registry's integrity hash
+    (`NPM_VERSION`, `NPM_SHA512`), and replacing Node's bundled npm whole. Its constraint: **any stable npm
+    whose `engines` admits the pinned Node**, another major line included. Its bundled `node_modules` are a
+    bundled tree: a fix counts only when an npm release ships it, and the tree is never patched package by
+    package *(discovery revision 15)*
   - `~/.local/bin` on `PATH` (the `ENV` block and profile.d). Never `PIP_BREAK_SYSTEM_PACKAGES`, and no
     wrapper around `pip` or `npm` (feature 15 sits in front of them later)
   - The bench's vanilla image carries the same binaries with stock behaviour (marker kept, npm's default
     prefix, no timelike configuration). Both images are scanned like everything else
 - **Node** (agent runtime, current Active LTS; the Agent runtimes entry above)
+  - Notes: named on its own line so the tech-stack parser reads it as approved; never used by timelike's
+    tools
+- **npm** (agent runtime, pinned on its own; the Agent runtimes entry above; discovery revision 15)
   - Notes: named on its own line so the tech-stack parser reads it as approved; never used by timelike's
     tools
 
@@ -302,8 +317,8 @@ Before adding a new dependency:
 
 ### Version Updates
 
-1. Pin the base image digest, uv, the Python interpreter, Node (version and SHA-256; discovery revision 14)
-   and Chromium. Bump them deliberately
+1. Pin the base image digest, uv, the Python interpreter, Node (version and SHA-256; discovery revision 14),
+   npm (version and integrity hash; discovery revision 15) and Chromium. Bump them deliberately
 2. Test thoroughly before updating major versions, including against the Docker Engine API version
    in use
 3. Document breaking changes in this file

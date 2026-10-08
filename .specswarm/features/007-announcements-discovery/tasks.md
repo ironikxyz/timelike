@@ -193,7 +193,7 @@ T031 follows them, then T032, then T033.
   `.specswarm/quality-standards.md` follow.
 - [X] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
   the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).
-- [ ] T039 Governance audit, discovery 14 → 15 (read `../bridge/governance-context.md`, revision 15):
+- [X] T039 Governance audit, discovery 14 → 15 (read `../bridge/governance-context.md`, revision 15):
   `.specswarm/quality-standards.md` (the bundled-component reading of "fix available", the 30-day class review, the
   fail-closed release check, npm and pip as components), `.specswarm/tech-stack.md` (npm's own pin and constraint),
   `.specswarm/constitution.md` (only if it restates the rule). Append 15 to each `governance_audited_against`, with its
