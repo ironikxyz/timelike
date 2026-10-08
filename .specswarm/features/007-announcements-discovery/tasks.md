@@ -211,7 +211,7 @@ T031 follows them, then T032, then T033.
 - [X] T043 [US6] `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: the three bundled-class
   entries (GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 in brace-expansion 5.0.9; GHSA-rfgv-xxqx-mfg5 in undici 6.28.0;
   component npm 11.21.0), their origin reason, and a review note.
-- [ ] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
+- [X] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
   registry with the real baselines (advisory); `evaluate.py report` over lane 007s1-a's scan output with the new
   baselines and that result.
 - [ ] T045 Provenance: append 15 (on the send's instruction; the library's row is 4) with its `audit-log.md` row;

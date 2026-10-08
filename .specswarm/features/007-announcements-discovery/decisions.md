@@ -462,3 +462,11 @@ ASSUMED: reviewed 2026-10-08 (the day plan ratified revision 15), review_by 2026
 ABSENT: none of these is an ordinary entry (they would block: the scanner reports a fix); no other entry changed
 Verification (host, advisory): both baselines load with no problems and 3 bundled entries each; evaluate.py releases against the real registry from the host, with these baselines: 3 no-release per image, releases examined 11.20.0, 11.21.0, 12.1.0, 12.2.0, about 3 s each; a live negative (a fixed version npm already ships) answers fix-released 11.19.1
 SCOPE: in (2 changed files)
+
+### T044: host verification (advisory) for Cycle 5
+**Started:** 2026-10-08T20:35:35Z | **Completed:** 2026-10-08T20:42:19Z | **Coordinator**
+
+INHERITED: T034–T043 — (confidence: high)
+ASSUMED: lane 007s1-a's scan output, edited to npm 11.21.0's bundled versions (brace-expansion 5.0.9, undici 6.28.0; ip-address, tar and the two cleared brace-expansion advisories removed, as T038's replay shows), stands in for the next lane's grype view; labelled synthetic — (confidence: medium)
+ABSENT: no image build, no Docker lane (the operator's lane 007s1-b); not verified that the image's timelike interpreter reaches registry.npmjs.org over TLS from inside the scan container (if it cannot, the three findings block, by design, and the escalation says why); the real grype view of npm 11.21.0's tree is the lane's
+Verification (host, advisory): make test-host passed — 1877 passed and 1 skipped units (load about 1), env layer 60/60, hook 44/44, handler 33/33; ruff check and format (79 files), mypy (27 files), shellcheck: clean; README reference current. Release check live from the host: 3 no-release per image (11.20.0, 11.21.0, 12.1.0, 12.2.0 examined); live negative answers fix-released 11.19.1. evaluate.py report over the synthetic npm-11.21.0 view with the real baselines and the live results: timelike-agent PASS (88 baselined, 0 blocking), timelike-vanilla PASS (87 baselined, 0 blocking); the three bundled findings pass as "no npm release ships … (4 releases checked); baselined (bundled in npm 11.21.0) until 2026-11-07"
