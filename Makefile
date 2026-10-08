@@ -72,6 +72,11 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/services-start-port-held-by-registered-service-refused-naming-holder.bats \
   tests/e2e/services-stop-terminates-every-process-in-its-tree.bats \
   tests/e2e/services-list-state-port-uptime-marks-died.bats tests/e2e/services-name-and-manifest.bats \
+  tests/e2e/symbols-outline-fixture-14-definitions-line-ranges-no-bodies.bats \
+  tests/e2e/symbols-def-file-and-line-first-exit-3-not-found-under-2s-warm.bats \
+  tests/e2e/symbols-callers-3-call-sites-grouped-text-based-header.bats \
+  tests/e2e/symbols-dependents-of-changed-file-ranked.bats \
+  tests/e2e/symbols-stale-cache-rebuilt-answers-from-new-content.bats tests/e2e/symbols-name-and-manifest.bats \
   image/rootfs/opt/timelike/libexec/entrypoint \
   tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \

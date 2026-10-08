@@ -883,3 +883,25 @@ question underneath.
 workspace clause is struck (prompts 01 and 04 → 13), so SC-1 as built (spec D-1, FR-7) meets the
 criterion, and its test's "workspace untouched" assertion stays. 007's spec records revision 13 in a modify
 cycle after the batch, not in this one (code-track § Resume after pause-06).
+
+## Item 20 — Feature 10 slice 1 (`011-code-intelligence`): the symbols index lives in the session scratch until the state root exists (not blocking)
+
+**Status:** open. Raised 2026-10-06 in dispatch batch `20261004-183704` (send
+`bridge/sends/10-rev1-20261004-183704.md`, seam 1, which asks for this item), on `011-code-intelligence`.
+
+**What was built.** `symbols` keeps its index at `<scratch>/<session>/symbols/<key>.json`:
+- outside the workspace and outside version control, per rule 10 at revision 11;
+- checked file by file on every call.
+
+**What that costs:**
+- The first call in each new session rebuilds the whole index: 1.9 s on a generated 1,000-file
+  repository, measured on the host.
+- Every call after that is warm (about 0.27 s), well within SC-2's 2 s.
+- Two agents in different sessions build two indexes of the same workspace.
+
+**What would change it:** the per-workspace state root (07 slice 1, held for an attended send). It is
+rule 10's place for caches that should outlive a session. Moving the index there is a one-path change in
+`tools/bin/symbols` (`Index.__init__`), plus a test that a second session finds the index warm.
+
+**For the mentor (route: code, or 07 slice 1's send):** move the index when the state root is built, in
+07 slice 1's cycle or 10's slice 2. Until then, the cold first call per session is the accepted cost.

@@ -740,5 +740,59 @@
       }
     },
     "lane": "pending: the mentor's Docker lane after the batch"
+  },
+  "011": {
+    "recorded_at": "2026-10-06T17:46:26+00:00",
+    "git_sha": "(the T007 commit; tree measured at the T006 commit 5bd3c08)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.35.0 (session-loaded), /specswarm:implement --dispatch step 10",
+    "send": "bridge/sends/10-rev1-20261004-183704.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; dispatch mode: warned, never asked"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores)",
+      "units": "1567 passed (make test-host, untraced); traced: 1552 passed, 1 skipped, 1 failed (adele conform timing under tracing; passes untraced 3/3), 697 s, before 12 symbols cases",
+      "coverage_python": "95% overall, line and branch (symbols 94% from test_symbols.py); merge bar 90%",
+      "lint": "ruff 0.16.7 check + format (71 files), mypy 2.4.0 strict (25 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (68): clean",
+      "make_test_host": "passed (60/60 files, 44/44 hook)",
+      "conformance_host": "pass, 12 tools (symbols included)",
+      "e2e_host_standin": "symbols files 26 of 28; the 2 type -a cells are image-only; warm def on 1,000 files 168-175 ms there; not image evidence",
+      "p95_ms": {
+        "symbols --help": 83,
+        "symbols outline (probe, 900-line file)": 130
+      },
+      "def_1000_files_ms": {
+        "cold": 1882,
+        "warm": [
+          259,
+          284
+        ]
+      }
+    },
+    "lane": "pending: the mentor's Docker lane after the batch"
   }
 }
