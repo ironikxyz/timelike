@@ -419,3 +419,12 @@ ASSUMED: tech-stack 1.4.0 → 1.5.0 (MINOR: an addition, npm's own pin and const
 ABSENT: no threshold moved; the 90-day review for the rest of the baseline is unchanged; P1–P7, T1–T4 and H1–H8 checked, unchanged; no governance file is touched outside these three
 Verification: tech-stack-parser loads 1.5.0 with nothing unparsed and classifies npm APPROVED; each file's governance_audited_against reads [2..15]
 SCOPE: in (3 changed files)
+
+### T040: tests first for the release check (FR-34; cross-stack P005)
+**Started:** 2026-10-08T20:27:33Z | **Completed:** 2026-10-08T20:29:33Z | **Coordinator**
+
+INHERITED: T039's quality-standards text (the bundled class, the 30-day entry review, the release check that fails closed); plan § Cycle 5 and research R10 (candidates bounded by the fix date; tarballs checked by integrity) — (confidence: high)
+FLAGGED: written by the coordinator, not a delegate — the API they pin (releases subcommand, judge's releases argument, engines_admit, the entry's bundled object) is new in this cycle and the tests are its specification; P005 holds because every registry, tarball, version and integrity is built by the test, never chosen by the code under test — (confidence: high)
+ASSUMED: file:// URLs stand in for the registry (urllib reads them; no server, no network); the unreachable case is a registry directory that does not exist — (confidence: high)
+ABSENT: no test reaches the real registry (T044 runs that from the host, advisory); 38 tests fail until T041 (expected: tests first)
+Verification: ruff check and format clean; pytest: 38 failed, as expected before T041

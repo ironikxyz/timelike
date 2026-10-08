@@ -198,7 +198,7 @@ T031 follows them, then T032, then T033.
   fail-closed release check, npm and pip as components), `.specswarm/tech-stack.md` (npm's own pin and constraint),
   `.specswarm/constitution.md` (only if it restates the rule). Append 15 to each `governance_audited_against`, with its
   prose note.
-- [ ] T040 [US6] Tests first (FR-34): `tests/unit/test_scan_release_check.py`, with a registry the test writes and
+- [X] T040 [US6] Tests first (FR-34): `tests/unit/test_scan_release_check.py`, with a registry the test writes and
   serves from files (packument, tarballs it packs, integrities it computes): a release ships the fix (blocks, naming
   it); none does (passes through the entry); the registry unreachable (blocks with the escalation); only a pre-release
   or a deprecated release ships it (passes); an engines range that excludes the Node (does not count); an entry past
