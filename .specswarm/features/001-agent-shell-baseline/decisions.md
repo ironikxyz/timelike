@@ -931,3 +931,4 @@ SCOPE: none — no files outside the feature's artifacts changed
 INHERITED: T082, T083; the criteria comparison (byte-identical to rev 10's) from impact-analysis.md § Cycle 8 — (confidence: high)
 ASSUMED: one row per revision, as the send asks, each repeating the shared basis so a row read alone stands — (confidence: high)
 ABSENT: prompt_revision (2), discovery_revision (3) and source_prompt untouched; no earlier row rewritten
+SCOPE: none — no files outside the feature's artifacts changed
