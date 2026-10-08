@@ -442,3 +442,12 @@ ASSUMED: release-check joins STEPS as its own row (between pip-audit-agent and g
 ABSENT: no assert (S101): types narrowed by passing the Bundled explicitly; single file kept (scan.sh runs it with -I); the network is used only by releases, never by report; tests/unit/test_scan_report.py's scan.sh cells fail until T042 adds the step to scan.sh
 Verification (host, advisory): test_scan_release_check.py 38 passed; ruff check and format, mypy (27 files) clean
 SCOPE: in (1 changed files)
+
+### T042: scan.sh — the release-check step per image; test_scan_report.py follows
+**Started:** 2026-10-08T20:34:04Z | **Completed:** 2026-10-08T20:34:14Z | **Coordinator**
+
+INHERITED: T041's releases subcommand (prints "<n> <summary>", writes release-check.json) and the release-check row in STEPS — (confidence: high)
+FLAGGED: the check runs from the AGENT image's timelike interpreter, like the verdict, with network on (the registry is the point), against the scanned image's baseline read from /scan; no baseline or no bundled entries is "none"; a run that fails is "error", never "nothing to check" (H3), and the verdict then blocks every bundled entry — (confidence: high)
+ASSUMED: the step's detail is the subcommand's summary, so the scan's output says what was checked (entries, Node, releases examined, states), as the send asks — (confidence: high)
+ABSENT: scan.sh passes no --registry (the default, https://registry.npmjs.org); the fake docker runs the real subcommand, so the scan cell uses a pip-component entry that answers without a registry; npm's path is tested against the file-served registry (T040)
+Verification (host, advisory): test_scan_report.py, test_scan_release_check.py, test_scan_baseline.py 153 passed (new: the four images' release-check rows, and a scan.sh run with a bundled entry: from the agent image, no --network flag, NODE_VERSION passed, "1 bundled-class entries checked … 1 unknown"); shellcheck scan/scan.sh clean

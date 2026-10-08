@@ -90,6 +90,7 @@ def scan_out(
         "grype": ("ran", "grype"),
         "pip-audit": ("ran", "1 distributions in /site"),
         "pip-audit-agent": ("none", NO_AGENT_PY),
+        "release-check": ("none", "no bundled-class entries in timelike-agent.json"),
         "govulncheck": ("none", "not a Go image: govulncheck runs over Adele's source only"),
         "gitleaks": ("ran", "gitleaks"),
     }
@@ -138,11 +139,11 @@ def test_clean_run_passes_writes_verdict_json_and_leads_with_the_verdict(
     verdict = json.loads((out / "verdict.json").read_text())
     assert verdict["verdict"] == "PASS"
     assert verdict["blocking"] == []
-    assert [s["status"] for s in verdict["steps"]] == ["PASS"] * 7
+    assert [s["status"] for s in verdict["steps"]] == ["PASS"] * 8
     assert step(out, "sbom")["detail"] == "2 packages catalogued from sha256:abababababab"
     assert step(out, "baseline")["detail"] == "none"
-    assert lines[8] == f"baseline: {LABEL} — none, accepts nothing"
-    assert verdict["baseline"]["summary"] == lines[8]
+    assert lines[9] == f"baseline: {LABEL} — none, accepts nothing"
+    assert verdict["baseline"]["summary"] == lines[9]
     assert verdict["rule"] == "reviewed baseline per image digest (discovery revision 5)"
     assert json.loads((out / "baseline.proposed.json").read_text())["findings"] == []
 
@@ -205,7 +206,7 @@ def test_baselined_unfixable_high_passes_and_is_listed(
     assert "baselined:" in lines
     assert step(out, "grype")["detail"].endswith("; 1 baselined")
     assert step(out, "baseline")["detail"] == "1 entries"
-    assert lines[8] == (
+    assert lines[9] == (
         f"baseline: {LABEL} — accepts 1 High; base digest {DIGEST[:19]}; "
         "reviewed 2026-09-20, review by 2026-12-01"
     )
@@ -232,7 +233,7 @@ def test_overdue_or_capped_baseline_is_an_escalation_in_text_and_json(
     assert entry["update"].startswith(f'{LABEL}, field "review_by"; have a person re-review')
     (text,) = [line for line in lines if line.startswith(f"  baseline  {LABEL}")]
     assert text.endswith(f"→ update: {entry['update']}")
-    assert lines[8] == f"baseline: {LABEL} — accepts nothing until re-reviewed (see blocking)"
+    assert lines[9] == f"baseline: {LABEL} — accepts nothing until re-reviewed (see blocking)"
 
 
 def test_unreadable_baseline_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -424,7 +425,7 @@ def test_main_report_runs_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert ev.main(argv) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == f"scan: {IMAGE} [supply-chain] — PASS"
-    assert lines[8] == f"baseline: {LABEL} — none, accepts nothing"
+    assert lines[9] == f"baseline: {LABEL} — none, accepts nothing"
     assert json.loads((out / "verdict.json").read_text())["today"] == "2026-09-28"
 
 
@@ -551,7 +552,7 @@ def test_adele_with_a_clean_govulncheck_and_no_interpreter_passes(
     assert f"  pip-audit-agent  PASS  {NO_AGENT_PY}" in "\n".join(lines)
     verdict = json.loads((out / "verdict.json").read_text())
     assert verdict["base_digest"] == GO_DIGEST
-    assert lines[8] == f"baseline: {ADELE_LABEL} — none, accepts nothing"
+    assert lines[9] == f"baseline: {ADELE_LABEL} — none, accepts nothing"
 
 
 def test_a_reachable_go_vulnerability_with_a_fix_blocks_and_names_go_image(
@@ -592,7 +593,7 @@ def test_a_reachable_go_vulnerability_without_a_fix_is_proposed_and_a_go_digest_
     # The same reviewed baseline under the Debian digest is for another base: it accepts nothing.
     code, lines = run_adele(out, capsys, reviewed, digest=DIGEST)
     assert code == 1
-    assert lines[8] == f"baseline: {ADELE_LABEL} — accepts nothing until re-reviewed (see blocking)"
+    assert lines[9] == f"baseline: {ADELE_LABEL} — accepts nothing until re-reviewed (see blocking)"
 
 
 @pytest.mark.parametrize(
@@ -785,9 +786,15 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
         expected = p["GO_IMAGE"] if img == ADELE else p["DEBIAN_IMAGE"]
         assert verdict["base_digest"] == expected.split("@")[1], img
         steps = {r.split("\t")[0]: r.split("\t")[1:] for r in (d / "steps.tsv").read_text().splitlines()}
-        assert list(steps) == ["sbom", "grype", "pip-audit", "pip-audit-agent", "govulncheck", "gitleaks"], (
-            img
-        )
+        assert list(steps) == [
+            "sbom",
+            "grype",
+            "pip-audit",
+            "pip-audit-agent",
+            "release-check",
+            "govulncheck",
+            "gitleaks",
+        ], img
         if img == ADELE:
             assert steps["govulncheck"] == [
                 "ran",
@@ -824,6 +831,11 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
     listings = [r for r in runs if r["opts"].get("--entrypoint") == [agent_py] and "dists" in r["args"]]
     assert [r["image"] for r in listings] == [IMAGE, "timelike-vanilla:local"]
     assert all(r["opts"]["--network"] == ["none"] for r in listings)
+    # release-check: no image here has a baseline, so none has bundled-class entries to check.
+    for img, d in dirs.items():
+        row = (d / "steps.tsv").read_text().splitlines()[4]
+        said = f"no baseline (scan/baseline/{img.split(':')[0]}.json), so no bundled-class entries to check"
+        assert row == f"release-check\tnone\t{said}", img
     (go,) = [r for r in runs if r["image"] == p["GO_IMAGE"]]
     assert go["opts"]["--entrypoint"] == ["go"]
     assert go["args"] == [
@@ -841,6 +853,52 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
     } <= set(go["opts"]["-e"])
     assert go["opts"]["-v"] == [f"{root}/adele:/src:ro"]
     assert (dirs[ADELE] / "govulncheck.json").read_text() == gv_stream()  # stdout, as written
+
+
+def test_scan_sh_runs_the_release_check_from_the_agent_image_with_network_and_records_what_it_checked(
+    tmp_path: Path,
+) -> None:
+    root, env = scan_tree(tmp_path, ALL_IMAGES[:2], gv_stream())
+    # A pip-component bundled entry: the check answers `unknown` without reaching any registry, which is
+    # what lets this run offline; npm's path is covered against a file-served registry in
+    # test_scan_release_check.py.
+    entry = {
+        "id": "PYSEC-2026-9",
+        "package": "urllib3",
+        "severity": "high",
+        "origin": "files under /opt/agent",
+        "reason": "vendored in pip",
+        "bundled": {
+            "component": "pip",
+            "component_version": "26.2.1",
+            "library_version": "2.5.0",
+            "fixed_version": "2.6.0",
+            "fixed_date": "2026-09-01",
+        },
+        "reviewed": "2026-10-08",
+        "review_by": "2026-11-07",
+    }
+    doc = {
+        "image": "timelike-agent",
+        "base_digest": pins()["DEBIAN_IMAGE"].split("@")[1],
+        "reviewed": "2026-10-01",
+        "review_by": "2026-12-27",
+        "origins": {"files under /opt/agent": "the agent runtimes"},
+        "findings": [entry],
+    }
+    (root / "scan" / "baseline" / "timelike-agent.json").write_text(json.dumps(doc))
+    done = run_scan(root, env)
+    out = root / "scan" / "out"
+    row = (out / "steps.tsv").read_text().splitlines()[4]
+    assert row.startswith("release-check\tran\t1 bundled-class entries checked"), done.stdout + done.stderr
+    assert row.endswith(": 1 unknown")
+    result = json.loads((out / "release-check.json").read_text())["results"][0]
+    assert (result["state"], result["component"]) == ("unknown", "pip")
+    runs = [json.loads(r) for r in (tmp_path / "state" / "runs.jsonl").read_text().splitlines()]
+    (check,) = [r for r in runs if "releases" in r["args"]]
+    assert check["image"] == IMAGE
+    assert "--network" not in check["opts"]  # the registry is the point
+    assert check["args"][check["args"].index("--node-version") + 1] == pins()["NODE_VERSION"]
 
 
 def test_scan_sh_publish_denylist_is_unknown_without_a_list_and_does_not_fail(tmp_path: Path) -> None:

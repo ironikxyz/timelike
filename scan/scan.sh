@@ -14,6 +14,12 @@
 #                  resolved or installed), because vanilla has no uv. An image without it records none.
 #                  Node with npm's bundled packages is in the agent and vanilla SBOMs, so Grype covers
 #                  it (and the agent Python again) under the same baseline rule
+#  3c. release-check  for each BUNDLED-CLASS entry in the image's baseline (a library bundled inside a
+#                  component, e.g. npm's own node_modules; discovery revision 15): does any stable release
+#                  of the component inside the stack's constraint ship the fix? evaluate.py releases reads
+#                  the registry's released tarballs, from the agent image, WITH network. The verdict lets
+#                  such a finding through only on its "no release" answer; a release that ships the fix,
+#                  or a check that could not run, blocks (fails closed). No bundled entries: none
 #   4. govulncheck Adele only: govulncheck GOVULNCHECK_VERSION over adele/ (source, symbol level), run
 #                  from GO_IMAGE. Other images record none (not a Go image)
 #   5. gitleaks    over the repository's git history (once; its report is shared by every image)
@@ -221,6 +227,28 @@ elif listing=$(docker run --rm --network none "${as_me[@]}" --entrypoint "$agent
   fi
 else
   record pip-audit-agent error "could not list the agent interpreter's distributions: $(reason "$aerr")"
+fi
+
+# --- 3c. The release check (discovery revision 15). It runs on the agent image's timelike interpreter,
+# like the verdict, because only that image is sure to have one; the scanned image's baseline is read from
+# /scan. It needs the registry (network on), and it records what it checked: its summary is the detail.
+# A failure to run is an error, never "nothing to check" (H3): the verdict then blocks every bundled entry.
+progress "[3/5] release check for the baseline's bundled-class entries"
+rerr=$out/release-check.err
+baseline_file=scan/baseline/${image%%:*}.json
+if [ ! -f "$baseline_file" ]; then
+  record release-check none "no baseline ($baseline_file), so no bundled-class entries to check"
+elif listing=$(docker run --rm "${as_me[@]}" --entrypoint "$py" -v "$root/scan:/scan:ro" -v "$root/$out:/out" \
+  "$agent" -I /scan/evaluate.py releases --baseline "/$baseline_file" --node-version "$NODE_VERSION" \
+  --out /out/release-check.json 2>"$rerr") \
+  && read -r count summary <<<"$listing" && [[ $count =~ ^[0-9]+$ ]]; then
+  if [ "$count" -eq 0 ]; then
+    record release-check none "$summary"
+  else
+    record release-check ran "$count $summary"
+  fi
+else
+  record release-check error "the release check could not run: $(reason "$rerr")"
 fi
 
 # --- 4. govulncheck, Adele only (research R5): over Adele's source, at symbol level, so evaluate.py can
