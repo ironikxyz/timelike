@@ -461,3 +461,4 @@ FLAGGED: each entry records the fixed version the scanner gives for THAT advisor
 ASSUMED: reviewed 2026-10-08 (the day plan ratified revision 15), review_by 2026-11-07 (30 days); the baseline's own dates unchanged; a review note says who added them, on whose ruling, and that the mentor reviews them at sign-off — (confidence: high)
 ABSENT: none of these is an ordinary entry (they would block: the scanner reports a fix); no other entry changed
 Verification (host, advisory): both baselines load with no problems and 3 bundled entries each; evaluate.py releases against the real registry from the host, with these baselines: 3 no-release per image, releases examined 11.20.0, 11.21.0, 12.1.0, 12.2.0, about 3 s each; a live negative (a fixed version npm already ships) answers fix-released 11.19.1
+SCOPE: in (2 changed files)
