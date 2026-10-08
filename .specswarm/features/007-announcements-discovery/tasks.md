@@ -48,6 +48,31 @@ manifest (SC-3).
 - [X] T008 Host lane: lint, units with coverage, `make test-host`, start-up. Results in `decisions.md`.
 - [X] T009 `cycle-report.md` § Cycle 1, implement step 10, `.specswarm/metrics.json`, the marker.
 
+## Phase 5: Cycle 2 — revision 13 recorded; the workspace clause struck (send `bridge/sends/04-rev13-20261008-095251.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 2): PASSED — plan.md § Tech Stack Compliance Report (Cycle 2) has no
+conflict or prohibition; the task scan (lib/tech-stack-parser.sh, ts_mentions) found no prohibited
+technology in the task text below. The tasks change Markdown only -->
+
+Governance is current at `[2..13]`, so there is no audit task. Nothing outside
+`.specswarm/features/007-announcements-discovery/` changes, so there is no Docker lane.
+
+- [X] T010 `spec.md` SC-1 (`:161–163`) and its note (`:170–171`): quote revision 13's criterion verbatim, the workspace
+  clause kept struck with its marker; the note becomes "struck at revision 13, nothing to build". FR-7's
+  "narrows the criterion" note (`:113–116`) and Out of scope (`:232`) say the clause is struck at revision 13.
+- [X] T011 `spec.md` D-1 (`:200–210`): keep the reasoning as written; append *resolved by discovery revision 13 (Q3,
+  option (b)), plan `394c33e` — the FLAGGED decision is now the rule, not a deviation from it*.
+- [X] T012 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode `scoped`
+  (revision 13 rewords one criterion by a strike, so `full` would list it as unverified; its own change is what this
+  cycle addresses), expecting 13 alone; write `audited_against` in `spec.md` frontmatter; create `audit-log.md` with
+  its header, a seed row for specify's `[1]` and this cycle's row. Never touch `prompt_revision`,
+  `discovery_revision` or `source_prompt`.
+- [X] T013 `cycle-report.md` § Cycle 2 (the send's block): Group A not applicable; Group B from the send; the three
+  slice-0 Automated criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree); D4 observed by the
+  operator (Addendum 2); implement steps 10 and 9b.
+
+**Parallel:** T010 and T011 touch the same file, so they run in order. T012 follows them, and T013 comes last.
+
 ## Dependencies
 
 - T001 → T004. T004 → T005 → T006 → T007 → T008 → T009.

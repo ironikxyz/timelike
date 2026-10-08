@@ -269,3 +269,121 @@ it cites, `bridge/.d4-demo-20261007T185100Z.txt` (with the harness's stream-json
 
 § Cycle 1's automated criteria are still recorded `unconfirmed` above. Lane batch-d (2026-10-07T03:26:28Z,
 e2e 537/537) ran their cells, but this addendum records D4 only.
+
+## Cycle 2 — bridge/sends/04-rev13-20261008-095251.md
+
+**Written:** 2026-10-08T10:12:16Z (read from the clock). Not in dispatch mode. Built with `/specswarm:modify 007 --from-send
+bridge/sends/04-rev13-20261008-095251.md`, then `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`,
+on `modify/007-rev13` from `master` at `c79facc` (= `public/main`). **Pushed nothing; not merged.** This is
+007's first modify cycle, so it creates `impact-analysis.md`, `modify.md` and `audit-log.md`.
+
+**specswarm version (lore specswarm Q002):** **4.0.1-botbaubble.2.37.0**. The expanded commands named its cache path,
+and the session's pid is in its `.in_use`.
+
+**Status in one line:** record only, `.specswarm/features/007-announcements-discovery/` only. Revision 13 struck
+SC-1's workspace clause, and the code already matches it. The spec's quotation of SC-1, its notes and D-1 are
+corrected by declared copy, and D-1 is resolved. `audited_against` gains 13.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/04-rev13-20261008-095251.md |
+| source_prompt | plan/.discover/prompts/04-announcements-discovery.md |
+| prompt_revision | 13 |
+| discovery_revision | 13 |
+| slice | 0 of [0, 1] (merged) (no new slice; an audit of what is merged) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**criteria_reestablished.** Slice 0's four criteria. This cycle changed only files under
+`.specswarm/features/007-announcements-discovery/` (`git diff master HEAD -- . ':!.specswarm/features/007-announcements-discovery'`
+is empty), and `master`'s tree at `c79facc` is `725b7a1f…`, identical to `10ddd3a`'s. So the three Automated
+criteria cite **the mentor's lane readme-c at `10ddd3a`, a lane on an identical tree** (history 2026-10-08T08:28:00Z:
+`make test` PASSED, e2e 537/537; log `bridge/.make-test-readme-c.log`). No lane ran for this cycle.
+- `04 · "a timelike announcement of at most 60 lines is present in each supported harness's user-level context location"` —
+  **executed [mentor's lane readme-c at 10ddd3a:
+  `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`, ok 41–46]** (cited,
+  not re-run; identical tree). Under revision 13 the criterion is user level only, and its cells test all of it,
+  including that no `CLAUDE.md` or `AGENTS.md` is created in the workspace (ok 45, 46). The cited text lies
+  outside the strike: Cycle 1's citation quoted the now-struck clause and no longer matches the send.
+- `04 · "and a test fails if any installed timelike tool is missing from it _(traces to: P3)_"` — **executed [mentor's
+  lane readme-c at 10ddd3a: `tests/e2e/announcement-generated-from-manifests-missing-tool-fails.bats`, ok 47–52]**
+  (cited, not re-run; identical tree)
+- `04 · "with fields for JSON support, interactivity risk and safer alternative _(traces to: P3)_"` — **executed
+  [mentor's lane readme-c at 10ddd3a: `tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats`,
+  ok 426–429, and its P6 cells ok 430–431]** (cited, not re-run; identical tree)
+- `04 · "uses a timelike tool it learned about from the environment's announcement _(traces to: D4)_"` — **observed by
+  the operator**, the mode Cycle 1's Addendum 2 recorded (the mentor's observation entry 2026-10-07T20:37:02Z; transcript
+  `bridge/.d4-demo-20261007T185100Z.txt`). This cycle observed nothing new.
+
+Each citation matches exactly one line of the send (`grep -cF` = 1 for all four).
+
+**reconcile_mode:** `scoped`. `audited_against` is now `[1, 13]` (T012, computed by the installed `audit-append`
+block: `MODE=scoped`, `UNVERIFIED=13`, `OUT_OF_SCOPE` empty → `MODE_USED=scoped`, `APPENDED=13`, no note).
+- **What revision 13 changed (lore P004: what was compared).** The prompt bodies of `04-rev1-20261004-183704` and
+  this send differ by revision 13's note and by one strike in the slice-0 criterion, "and in the workspace's agent
+  context file when none exists". Nothing else moved, and revisions 2–12 did not change prompt 04.
+- **Amended (struck clause), corrected in place, not regenerated.** The design was already user level only (FR-5–7,
+  D-1), and the cells assert that the workspace stays untouched. The body's *quotation* of SC-1 and its account of
+  D-1 as a raised deviation became false. The lines compared and corrected (numbers before T010): `spec.md:113–116`
+  (FR-7's note), `:161–163` (SC-1's quotation), `:170–171` (SC-1's note), `:200–210` (D-1, resolution appended,
+  T011), `:232` (Out of scope). The superseded notes are kept, struck through, each followed by a declared
+  *(Revised, revision 13 …)* note.
+- **Why `scoped`, not `full`.** Revision 13 rewords a criterion, so `full` lists it as unverified. Verified: it
+  would append 2–12 and leave out 13, the revision this cycle actually checked. `scoped` appends 13 alone, as the
+  send asks.
+- **Left as written** (records, true or append-only): `decisions.md:65`, T003's FLAGGED cell sense, which said
+  "the cells change if plan amends the criterion". Plan amended it in the direction already built, so the cells do
+  not change. Also left: Cycle 1's SC-1 citation (`cycle-report.md:86–90`) and `plan.md:38`.
+
+**not_verified**
+- **No test ran in this cycle**, on the host or in the image. The Automated criteria are cited from lane readme-c,
+  not re-executed. The citation holds only because nothing outside this feature's directory changed.
+- **SC-1's timing bound under load.** The mentor recorded that SC-1's 1 s placement bound failed in lane readme-b
+  (ok 41, 42 not ok: 11225 ms under host I/O load) and passed in readme-c. That is a watch item for a later 007 cycle.
+  This cycle does not touch it.
+
+**changed_other_features:** none. Only `.specswarm/features/007-announcements-discovery/` changed. FOR-MENTOR Item 19
+was already closed (2026-10-05, `FOR-MENTOR.md:858`), so the register needs nothing. Implement step 10j's
+`.specswarm/metrics.json` entry was not written (outside the feature directory, as the send directs).
+
+**process_failures_recorded**
+- None in this cycle's steps. **Plugin observations under 2.37.0:** the same as 002's Cycle 2 on this session
+  (`lib/tally.sh` with 0 bytes on stderr; the tallies print no trailing newline; `provenance-inputs` mechanises
+  row 7; `fnum_resolve` resolved `modify/007-rev13` to 007 with nothing on stderr).
+
+**retired_prompts_seen:** none.
+
+**One finding outside this cycle's scope, for the mentor (not changed: the send confines this cycle to the feature
+directory).** SC-1's six e2e cell names in
+`tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats` (`:400–405`) still quote
+the old criterion, with "and in the workspace's agent context file when none exists". The two workspace cells
+(`:404–405`, ok 45 and 46) are named "workspace part NOT built (D-1)". Their assertions are right under revision 13;
+only their names quote the struck text. Renaming them changes `tests/`, which needs a lane, so it belongs to a later
+007 cycle or a small maintenance send.
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+This is the same result as 002's Cycle 2 on this session, re-run on this branch: `run_tests` rc=2 (pytest declared,
+not installed for `/usr/bin/python3`), `run_coverage` `unknown`, browser `none`. The scale's output is identical
+byte for byte: `Quality Score: unknown — no component could be measured`. The six exclusions are attributed 2 to
+this install, 2 to this machine and 2 not applicable, with `block_merge_on_failure: false`
+(`quality-standards.md:295`). The gate is **UNKNOWN**, so it warns and does not halt. No component was filled in by
+hand.
+
+**Implement step 9b: decision log** (plugin `scope_tally` and `decision_tally` over the whole of 007's `tasks.md` and `decisions.md`, all cycles, before T013's own records):
+
+```
+scope: planned=13 recorded=12 unplanned=0 unrecorded=1 in=8 out=0 none=4 unknown=0 flagged=10 flagged_out=0 other=2 other_out=0
+decisions: sections=12 flagged_sections=10 non_flagged_sections=2 sections_without_absent=0 flagged=20 assumed=10 deferred=0 absent=12 inherited=10 low_confidence=0 flagged_low_confidence=0 flagged_delegate=1 assumed_delegate=0
+```
+
+Cycle 2 alone (T010–T012 at that point): 3 sections, 2 FLAGGED entries (T010's struck-and-kept notes; T012's mode),
+0 low-confidence. `SCOPE:` none 3.

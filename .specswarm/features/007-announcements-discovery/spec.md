@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/04-announcements-discovery.md
 source_send: bridge/sends/04-rev1-20261004-183704.md
 prompt_revision: 1
 discovery_revision: 12
-audited_against: [1]
+audited_against: [1, 13]
 slice: 0
 ---
 
@@ -111,9 +111,10 @@ not a harness reads it.
 - **FR-6** **Never overwrite what is not timelike's.** An absent file is written. A file whose first line is
   timelike's marker is replaced with the current announcement. Any other file is left byte for byte.
 - **FR-7** **Never inside the workspace.** The workspace's own `CLAUDE.md` / `AGENTS.md` are not created
-  or changed, whether or not they exist (rule 10, revision 11; send seam 1). *This narrows the
+  or changed, whether or not they exist (rule 10, revision 11; send seam 1). ~~*This narrows the
   criterion's "and in the workspace's agent context file when none exists"*: see Decisions D-1 and
-  FOR-MENTOR Item 19.
+  FOR-MENTOR Item 19.~~ *(Revised, revision 13: the criterion no longer asks for the workspace file; its
+  clause is struck, so FR-7 narrows nothing. D-1 resolved; Item 19 closed 2026-10-05.)*
 - **FR-8** **Never blocks the container.** A placement that fails (unwritable home, a directory where a
   file should be) is skipped, the reason is recorded, and the entrypoint still `exec`s the command.
   `timelike announce --status` reports each location: `placed`, `current` (already timelike's, at this
@@ -159,16 +160,20 @@ image, under `bash -c` and `bash -lc`.
 ### Automated
 
 - **SC-1:** "On container start, a timelike announcement of at most 60 lines is present in each supported
-  harness's user-level context location and in the workspace's agent context file when none exists,
-  without overwriting an existing one". **Tested for the user-level part**, against a freshly started
-  throwaway container from the verified image:
+  harness's user-level context location~~ and in the workspace's agent context file when none exists~~
+  _(struck, revision 13: user level only; a committed workspace announcement would announce tools that exist
+  only in timelike)_, without overwriting an existing one". *(Revised, revision 13: the quotation is the
+  criterion as revision 13 states it, copied by modify cycle 2, declared; the clause it struck is kept struck.)*
+  **Tested**, against a freshly started throwaway container from the verified image:
   - the files exist at FR-5's paths, are at most 60 lines, and are byte-identical to
     `/etc/timelike/announcement.md`;
   - a pre-existing non-timelike file at one location (a throwaway started with that file placed) is
     unchanged.
 
-  The workspace part is not built (D-1). The test asserts the workspace is left untouched, so the
-  narrowing is visible in the result rather than silent.
+  ~~The workspace part is not built (D-1). The test asserts the workspace is left untouched, so the
+  narrowing is visible in the result rather than silent.~~ *(Revised, revision 13: the workspace part is
+  struck from the criterion, so there is nothing to build. The test still asserts the workspace is left
+  untouched, which is now the criterion's own reading (D-1, resolved).)*
 - **SC-2:** "The announcement is generated from the installed tools' manifests, and a test fails if any
   installed timelike tool is missing from it". Every executable in `/opt/timelike/bin` appears with the
   summary its own `--agent-info` gives, and `timelike announce --check` exits 0. A copy of the
@@ -208,6 +213,12 @@ instruction for this batch, and the narrowing is visible. Raised as **FOR-MENTOR
 amend the criterion or overrule the seam. No pause file, because the decision has an informed basis: the
 send names it.
 
+**D-1 resolved by discovery revision 13 (Q3, option (b)), plan `394c33e`** *(appended by modify cycle 2,
+send `…-095251`, declared; the reasoning above is kept as written)*. Plan amended the criterion: its workspace clause
+is struck ("user level only; a committed workspace announcement would announce tools that exist only in timelike").
+The FLAGGED decision is now the rule, not a deviation from it. Nothing was built differently, and nothing is built
+now. FOR-MENTOR Item 19 has been closed since 2026-10-05.
+
 **D-2 · On container start, from an entrypoint.** Generating at build and placing at start (not at build
 into `/home/agent`) covers a home that is a volume or a mount, and a harness that recreates its
 directory. The entrypoint is best effort and always `exec`s the command (FR-8).
@@ -229,7 +240,8 @@ at build (FR-3). The marker line carries the revision.
 ## Out of scope (slice 0)
 
 Command-not-found guidance, unprivileged `pip`/`npm` installs, the resource-budget command (slice 1).
-The workspace context file (D-1, raised).
+~~The workspace context file (D-1, raised).~~ *(Revised, revision 13: not out of scope but struck from the
+criterion; D-1 resolved.)*
 
 ## Assumptions
 

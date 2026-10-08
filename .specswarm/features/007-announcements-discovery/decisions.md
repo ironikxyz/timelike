@@ -97,3 +97,40 @@ FLAGGED: SC-1 cited as built for its user-level part only, with Item 19 named be
 ABSENT: demo_points_reached — the mentor derives it
 Verification: four citations, grep -cF = 1 each against the send; step 10 run from the installed blocks (identical to 003's); metrics.json gains 007 only; deny-list PASS
 SCOPE: in (1 changed files)
+
+## Cycle 2 — send `bridge/sends/04-rev13-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T010: spec SC-1 quotes revision 13's criterion; SC-1's note, FR-7's note and Out of scope follow
+**Started:** 2026-10-08T10:10:29Z | **Completed:** 2026-10-08T10:10:29Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification in impact-analysis.md § Cycle 2 — (confidence: high)
+FLAGGED: the superseded notes are struck through and kept, each followed by a declared *(Revised, revision 13 …)* note — chose that over deleting them, so the record of the narrowing stays readable (the send: "declared copies, never silent edits") — (confidence: high)
+ASSUMED: SC-1's "Tested for the user-level part" becomes "Tested", because the criterion is now user-level only and the cells test all of it — (confidence: high)
+ABSENT: no other body line changes; decisions.md T003's cell sense and Cycle 1's citation are left as written (append-only records)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T011: spec D-1 — resolution appended, reasoning kept
+**Started:** 2026-10-08T10:10:45Z | **Completed:** 2026-10-08T10:10:45Z | **Coordinator**
+
+INHERITED: T010 (same file; SC-1 and FR-7 already name D-1 as resolved) — (confidence: high)
+ASSUMED: the resolution is a paragraph after D-1, not an edit inside it, so D-1's original FLAGGED reasoning reads as it did — (confidence: high)
+ABSENT: research.md's seam reasoning is unchanged (still true); FOR-MENTOR.md is not touched (Item 19 already closed; outside the feature directory)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T012: provenance — audited_against [1] → [1, 13] (scoped); audit-log.md created
+**Started:** 2026-10-08T10:11:12Z | **Completed:** 2026-10-08T10:11:12Z | **Coordinator**
+
+INHERITED: T010, T011 — (confidence: high)
+FLAGGED: scoped, not full — revision 13 rewords a criterion, so the installed block in full mode, given UNVERIFIED=13, appends 2–12 and leaves 13 out (verified); scoped appends 13 alone, which is what this cycle checked and what the send asks — (confidence: high)
+ASSUMED: the new audit-log.md opens with a seed row for specify's [1], dated by the spec's created_at and marked as written now, as 002's log did — (confidence: high)
+ABSENT: prompt_revision (1), discovery_revision (12) and source_prompt untouched; revisions 2–12 not appended
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T013: cycle report § Cycle 2; implement steps 10 and 9b recorded
+**Started:** 2026-10-08T10:12:16Z | **Completed:** 2026-10-08T10:12:16Z | **Coordinator**
+
+INHERITED: T010–T012; lane readme-c from bridge/history.md and its log (ok 41–52, 426–431) — (confidence: high)
+FLAGGED: SC-1 cited by text outside the strike, not by Cycle 1's text — Cycle 1's quoted the struck clause and matches no line of this send; the new text matches exactly one — (confidence: high)
+ASSUMED: D4 keeps "observed by the operator" (Cycle 1 Addendum 2) — (confidence: high)
+ABSENT: the stale e2e cell names are reported, not renamed (tests/ is outside the feature directory); no demo_points_reached; no .implement-complete; metrics.json not written
+SCOPE: none — no files outside the feature's artifacts changed
