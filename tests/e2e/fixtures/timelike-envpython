@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """A new timelike tool written the everyday way, with `#!/usr/bin/env python3` (SC-5 e2e fixture).
 
-Common failure (slice 1, T053): the image has no python3 on PATH — the pinned interpreter lives at
-/opt/timelike/python and constitution H5 requires tools to name it — so /usr/bin/env exits 127 on
-every call. timelike-conform must name this tool and the rules it breaks. Should a python3 ever be on
-PATH, the body still breaks C1 (no self-labelling header) and C7 (no session event), so the
-expectation holds either way. Copied into a per-test directory; never shipped on PATH.
+Common failure (slice 1, T053): /usr/bin/env cannot resolve python3, so it exits 127 on every call;
+timelike's pinned interpreter lives at /opt/timelike/python and constitution H5 requires tools to name
+it. timelike-conform must name this tool and the rules it breaks (C6 among them). Since discovery
+revision 14 the image does put the agent's python3 on PATH, so the cell runs conform with every PATH
+entry that holds a python3 removed, and checks that premise first (007, lane 007s1-a). Should a python3
+resolve anyway, the body still breaks C1 (no self-labelling header) and C7 (no session event).
+Copied into a per-test directory; never shipped on PATH.
 """
 
 print("hello from a tool that ignores the contract")

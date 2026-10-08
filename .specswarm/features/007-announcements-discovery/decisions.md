@@ -367,3 +367,12 @@ ASSUMED: docker's choice of stream is not the criterion's subject, so the cell r
 ABSENT: no change to FR-14 or the handler; exit code still asserted non-zero, not 127 (126 on older releases)
 Verification (host, advisory): the cell's three functions, run under bats 1.14.0 against a stub docker — message on stdout: ok; on stderr: ok; a timelike line: not ok; exit 0: not ok; an unrelated daemon error: not ok
 SCOPE: in (1 changed files)
+
+### T035: 001's broken-interpreter conformance cell, its premise restored (lane 007s1-a, item 2)
+**Started:** 2026-10-08T20:01:54Z | **Completed:** 2026-10-08T20:02:24Z | **Coordinator**
+
+INHERITED: lane 007s1-a not ok 108/109 — revision 14 put the agent's python3 on PATH (/usr/local/bin), so the `#!/usr/bin/env python3` fixture ran and C6 had nothing to find; the other 12 findings were correct — (confidence: high)
+FLAGGED: the PATH route, not a renamed interpreter — the fixture stays the everyday `#!/usr/bin/env python3` it was written as; the cell drops every PATH entry holding an executable python3 and fails with "premise:" (exit 3) if python3 still resolves. Applied in the shared check, so the two timelike-nointerp cells (absolute interpreter path) run the same way, unaffected. 001's test, so changed_other_features — (confidence: high)
+ASSUMED: timelike-conform and the shipped tools need nothing from /usr/local/bin or ~/.local/bin (they name /opt/timelike/python, H5; /opt/timelike/bin, /usr/bin and /bin stay) — (confidence: high)
+ABSENT: the cell is not deleted, C1 and C6 are still asserted, and the shipped tools are still judged and must pass
+Verification (host, advisory): the generated command run under env -i in a scratch layout — a PATH dir holding python3 is dropped, `/usr/bin/env python3` then exits 127; the stub conform sees no python3

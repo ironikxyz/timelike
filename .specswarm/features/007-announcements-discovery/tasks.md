@@ -177,7 +177,7 @@ T031 follows them, then T032, then T033.
 - [X] T034 [US5] `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`: the direct-exec
   SC-5 cell looks for docker's not-found message on either stream (measured on Docker 29.4.2: stdout), and keeps
   non-zero, `tree`, "not found" and no timelike line.
-- [ ] T035 `tests/e2e/conformance-check-over-every-timelike-tool-on-path.bats` and
+- [X] T035 `tests/e2e/conformance-check-over-every-timelike-tool-on-path.bats` and
   `tests/e2e/fixtures/timelike-envpython`: 001's broken-interpreter cell runs with a PATH that excludes the agent
   runtimes, so its premise (no python3 on PATH) holds again; C1 and C6 stay asserted (001's test:
   `changed_other_features`).
