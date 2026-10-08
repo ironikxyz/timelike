@@ -100,3 +100,72 @@ simulated, byte-for-byte against bash). e2e in the image: SC-5's file (per style
 known limits, and the agent container), and SC-1's renamed cells. The mentor's Docker lane is the merge bar.
 
 **Risk level:** medium (the shell hook's reach). **Proceed:** yes, with SC-6 held.
+
+# Cycle 4: discovery revision 14 — the agent runtimes (send `bridge/sends/04-rev14-20261008-174220.md`)
+
+**Analysis date:** 2026-10-08T17:52Z. specswarm **4.0.1-botbaubble.2.37.0**, the same session as Cycle 3: the expanded `PLUGIN_DIR`
+is 2.37.0's cache. 2.38.0 is published but not installed, and is not reloaded, as the send says. Continued on
+`modify/007-slice-1` from `e0fb5a3`; Item 21 closed in `9b90a74`. The governance audit to 14 is on this branch:
+`e58dd36` (tech-stack 1.4.0, quality-standards) and `07b914d` (constitution, no change).
+
+**Provenance:** modify **row 7**, computed by the installed blocks: `source_prompt` agrees; the prompt is at
+revision 14; `prompt_revision` is 1; `audited_against` is `[1, 13]`.
+
+**What changed (lore P004: what was compared).** The prompt bodies of `04-rev13-20261008-161802` and this send,
+diffed from `# Announcements & discovery` to the end, differ in three places:
+- revision 14's note;
+- the Feature text: "work in their default locations without privilege" becomes "work without privilege in user
+  locations made the default, so the bare command needs no flag";
+- the Environment constraint on PEP 668 is struck, and a new one added (the image ships an agent Python and
+  Node, no marker, runtime-scoped configuration, never `PIP_BREAK_SYSTEM_PACKAGES`).
+
+**No criterion changed**, and the Acceptance Criteria are byte-identical. Revisions 2–12 did not touch prompt 04;
+13 was audited in Cycle 2.
+
+**Classification: amended (a constraint struck and replaced, a feature sentence clarified), corrected by declared
+copy as the send directs; no regeneration.** The slice-0 design is untrue in one place, and the held parts of
+Cycle 3's slice-1 text now state a decision that has been made:
+
+| Body lines (before this cycle) | What it said | Against revision 14 |
+|---|---|---|
+| `spec.md:152–155` FR-13 | the vanilla image is not changed | **false**: it gains the same runtimes with stock behaviour |
+| `spec.md:294` FR-15 | no `user` rows until Item 21 | false: answered |
+| `spec.md:310–320` FR-18 | held; recommendation (b), configured "through the environment" | false: ruled (a); configuration scoped to each runtime |
+| `spec.md:322–335` FR-19 | recovery facts | true; seam 5's choice added (no exclusion: none reachable) |
+| `spec.md:384–385` SC-6 | held | false: built |
+| `spec.md:409–411` python3 carried | `installed: false` | false after this cycle |
+| `spec.md:433–436` D-11 | held | resolved |
+
+**Proposed changes** (spec § Slice 1, cycle 4: FR-25 to FR-31, D-12 to D-15):
+- `image/Dockerfile`: a runtime build stage; the two prefixes; `pip.conf`, `npmrc`, links; `ENV` PATH.
+- `image/rootfs/etc/profile.d/00-timelike-path.sh`: `~/.local/bin`.
+- `pins.env`: `NODE_VERSION`, `NODE_SHA256`.
+- `compose.yaml`, `Makefile`, `tests/run.sh`: pass the new build arguments.
+- `bench/vanilla/Dockerfile`: the same runtimes, stock (002).
+- `image/rootfs/etc/timelike/missing-commands.tsv`: runtime rows out, `user` rows in.
+- `scan/scan.sh`: comments and the pip-audit record.
+- `README.md`: the status block (all four slice-1 criteria built) and the vanilla description.
+- Tests: SC-6 e2e (new), the P6 vanilla cell and unit test (revised), test_missing_commands (user rows),
+  test_env_layer if its PATH checks move.
+
+## Affected components
+
+| Component | Feature | Change | Impact |
+|---|---|---|---|
+| `image/Dockerfile`, `pins.env`, `compose.yaml` | 001 | two runtimes, two pins, `PATH` | **High:** the image's contents and scan surface |
+| `bench/vanilla/Dockerfile`, `Makefile` | 002 | same binaries, stock | medium: both bench arms change together (RB1) |
+| `profile.d/00-timelike-path.sh` | 001 | one more `PATH` entry | low. `test_env_layer.sh` is checked |
+| `scan/scan.sh` | 001/002 | comments, one record message | low |
+| 007's data and tests | 007 | as above | — |
+
+**Breaking changes:** none to any contract. The agent now *finds* `python3`, `pip`, `node` and `npm` where it
+used to get the 127 answer.
+
+**Risks:**
+- **Scan findings in Node's npm tree or CPython** with no fix: they surface in the lane and are raised, never
+  silently exempted.
+- **Image size:** about 100 MB more for Node, and about 80 MB for Python.
+- **The vanilla image grows the same way.**
+- **Network at build:** uv's Python download and the Node tarball, both pinned.
+
+**Risk level:** medium. **Proceed:** yes.

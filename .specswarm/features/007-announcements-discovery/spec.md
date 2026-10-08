@@ -149,10 +149,18 @@ not a harness reads it.
 
 ### P6 and the bench (send seam 2)
 
-- **FR-13** The **vanilla** bench image (`bench/vanilla/Dockerfile`) is not changed. A unit test checks
+- **FR-13** ~~The **vanilla** bench image (`bench/vanilla/Dockerfile`) is not changed. A unit test checks
   it references none of this feature's paths, and an e2e cell checks the vanilla image's home holds no
-  announcement. The timelike arm of the bench uses the agent image, so its agents now see the
+  announcement.~~ The timelike arm of the bench uses the agent image, so its agents now see the
   announcement. That is the *told by the environment* condition this feature creates.
+  *(Revised, discovery revision 14, modify cycle 4, declared: the vanilla image is no longer untouched. It
+  gains **the same agent runtime binaries** as the agent image (FR-25), **with stock behaviour**: its agent
+  interpreter keeps the `EXTERNALLY-MANAGED` marker, npm keeps its default prefix, and none of timelike's
+  configuration goes in (no `pip.conf`, no `npmrc`, no `~/.local/bin` on `PATH`, no announcement, no
+  missing-commands data, no entrypoint). RB1 ("a prerequisite goes into both images or neither") stays whole.
+  The unit test checks the vanilla Dockerfile references none of timelike's configuration paths and does
+  carry the runtime pins; the e2e cell checks the same runtimes are present at the same versions, with stock
+  behaviour, and still no announcement.)*
 
 ## Success Criteria
 
@@ -291,7 +299,8 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
      - an OS package: `timelike: NAME is in the Debian package PKG, which is not installed. The agent
        cannot install OS packages (no root): the operator adds PKG to the image.`;
      - a user-level install the agent can run itself: `timelike: install it yourself: <command>  (<note>)`.
-       **None ships until Item 21 is answered** (FR-18).
+       ~~**None ships until Item 21 is answered** (FR-18).~~ *(Revised, discovery revision 14: Item 21 is
+       answered; `user` rows ship for Python and Node CLIs (FR-29).)*
   3. **An unknown name gets line 1 alone:** exactly the shell's usual line, with nothing invented.
 - **FR-16 · The data.** `/etc/timelike/missing-commands.tsv`, shipped in the image: one answer per line,
   `name<TAB>kind<TAB>value<TAB>note`, with `kind` one of `instead`, `debian` or `user`, `-` for an empty note,
@@ -307,7 +316,7 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
   JSON error shape does not apply. A harness sees exit 127 and the stderr lines above, as it would see
   bash's line alone.
 
-### Unprivileged package installs (criterion 5; send seams 1, 4 and 5) — HELD on FOR-MENTOR Item 21
+### Unprivileged package installs (criterion 5; send seams 1, 4 and 5) — ~~HELD on FOR-MENTOR Item 21~~ *(Revised, discovery revision 14: ruled; built in cycle 4, FR-25 to FR-31)*
 
 - **FR-18 · Not built until Item 21 is answered.** The image ships no agent-facing Python or Node (only
   timelike's own interpreter, run with `-I`, and `uv`). Every reading changes the image's contents or reads
@@ -319,6 +328,11 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
   - package registries are reached under P4's standing grant;
   - "succeeded" means the package imports, or is on PATH, in a **new** shell, from the user location, with
     nothing under a root-owned path changed (P004); never the installer's exit code.
+
+  *(Revised, discovery revision 14, modify cycle 4, declared: Item 21 is answered — Q1 option (a), Q2
+  reading (ii), Q3 no `PIP_BREAK_SYSTEM_PACKAGES`. The three bullets above still hold, with one correction:
+  the configuration is **scoped to each runtime** (its own `pip.conf`, its own `npmrc`), never the
+  environment (Q3). What is built is FR-25 to FR-31.)*
 - **FR-19 · Installs under `$HOME`, and recovery (seam 5), as built today.** User-level installs live under
   `~/.local`, and the image sets `WORKDIR /home/agent`:
   - with no repository in `~`, the workspace is `~` itself (005 FR-1). `snapshot` and `undo` refuse it
@@ -331,6 +345,13 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
   The home is not a volume, so installs end with the container. 07 slice 1's state root is for timelike's
   state, not for packages. Neither the announcement nor the budget says anything about persistence beyond
   new shells.
+
+  *(Confirmed, discovery revision 14, modify cycle 4: plan noted that excluding `~/.local` from the snapshot
+  scope would fit T2's capped scope. **Chosen: no exclusion, because none is reachable.** A workspace that
+  could contain `~/.local` is `~` itself or an ancestor of it, and 005 refuses both. A workspace below `~`
+  never contains it. So no snapshot captures installed packages, and no contract changes. `verify changed`
+  sees `~/.local` only in a git repository rooted at `~`, an agent's own unusual choice; it then lists
+  installed files as untracked, as git would.)*
 
 ### The resource budget (criterion 6; send seam 6)
 
@@ -382,7 +403,8 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
   - the unknown cell compares the handler's stderr byte for byte with the same command run with the handler
     unset.
 - **SC-6:** "A bare Python package install and a global Node package install each succeed as the agent's user
-  without privilege and persist across new shells". **HELD on Item 21 (FR-18).**
+  without privilege and persist across new shells". ~~**HELD on Item 21 (FR-18).**~~ *(Revised, discovery
+  revision 14: built in cycle 4; tested as FR-31 says.)*
 - **SC-7:** "One command prints the agent's resource budget: memory limit and use, CPU limit, process limit,
   and free space on the workspace and scratch filesystems". Tested:
   - by units against cgroup files the test writes under `TIMELIKE_CGROUP_ROOT`, with values chosen apart from
@@ -408,7 +430,8 @@ runtime that is absent, a cgroup file that cannot be read. Edge-case hardening i
   The placement time is still printed in the cell's output, as a measurement, not a bound.
 - **`python3` in `standard-tools.json`:** it stays a curated entry (its REPL trap is real wherever a Python
   exists). It is `installed: false` in the image today, computed and not curated. Item 21 settles whether
-  that changes.
+  that changes. *(Revised, discovery revision 14: the image now ships `python3` and `node`, so both entries
+  read `installed: true`, computed; their REPL risk and `instead` stay.)*
 
 ### Slice 1 decisions
 
@@ -433,4 +456,111 @@ as `budget` would also need conformance and its own announcement line, for no ga
 **D-11 · SC-6 is held, not narrowed (seam 1).** FOR-MENTOR Item 21 is raised. The parts of the cycle it does
 not block (FR-14–FR-17, FR-20–FR-24) are built meanwhile. If it is still open when everything else is done,
 the cycle report says SC-6 is not built, and `README.md` is left untouched, as the send's README block
-instructs.
+instructs. *(Resolved, discovery revision 14 (plan `e800ef3`): Item 21 closed; SC-6 built in cycle 4.)*
+
+---
+
+## Slice 1, cycle 4 — the agent runtimes (discovery revision 14; send `bridge/sends/04-rev14-20261008-174220.md`), declared
+
+> Added by `/specswarm:modify 007` from the send above. Revision 14 (plan `e800ef3`) changed prompt 04's Feature
+> text ("work without privilege in user locations made the default, so the bare command needs no flag") and
+> struck its PEP 668 constraint, replacing it. **No criterion changed.** The ruling is
+> `../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md` § Resolution (Q1–Q3). FR-13,
+> FR-15, FR-18, FR-19, SC-6, the `python3` carried item and D-11 are corrected above by declared copy.
+
+### The runtimes (FR-25 to FR-28)
+
+- **FR-25 · Two runtimes for the agent, never for timelike's tools.**
+  - **Agent Python:** uv-managed CPython at the pinned `PYTHON_VERSION` (the same 3.14.x as timelike's), in
+    its **own prefix** `/opt/agent/python` (a link to the uv install directory), not `/opt/timelike/python`.
+  - **Node:** the official `node-v<NODE_VERSION>-linux-x64.tar.gz`, the current Active LTS (24.x "Krypton" on
+    2026-10-08; 26 is not LTS yet), unpacked to `/opt/agent/node`. `NODE_VERSION` and `NODE_SHA256` are pinned
+    in `pins.env`. The build checks the tarball against `NODE_SHA256` with `sha256sum -c`, and a mismatch fails
+    the build.
+  - On the agent's `PATH`, as links in `/usr/local/bin`: `python3`, `python`, `pip`, `pip3` (to the agent
+    prefix) and `node`, `npm`, `npx` (to Node's). `corepack` is not linked.
+  - Root owns both prefixes: the agent cannot change them.
+- **FR-26 · Python's user location is the default, by the interpreter's own configuration.**
+  - The agent prefix ships **without** its `EXTERNALLY-MANAGED` marker. No external manager owns it (Q3).
+  - Its own `pip.conf` (`/opt/agent/python/pip.conf`, pip's *site* configuration for that prefix) sets
+    `[install]` `user = true`.
+  - So a bare `pip install X` goes to `~/.local`, scripts to `~/.local/bin`. A venv the agent makes has its
+    own prefix and does not read this file.
+- **FR-27 · Node's global prefix is the agent's, by Node's own configuration.** `/opt/agent/node/etc/npmrc`
+  (npm's global config file for that Node, which npm finds from the real path of `node`) sets
+  `prefix=${HOME}/.local`. So `npm install -g X` goes to `~/.local/lib/node_modules`, binaries to
+  `~/.local/bin`. This was measured on the host with the pinned tarball and a locally packed package.
+- **FR-28 · `~/.local/bin` on `PATH`.**
+  - In the image's `ENV` block, as the literal `/home/agent/.local/bin`, since the block takes no `$`.
+  - In `/etc/profile.d/00-timelike-path.sh`, for login shells.
+  - It goes after `/opt/timelike/bin`, so an install never shadows a timelike tool, and before `/usr/local/bin`,
+    so a package the agent upgrades for itself (`pip install -U pip`) wins over the image's.
+  - **Never `PIP_BREAK_SYSTEM_PACKAGES`**, anywhere. **No wrapper** around `pip` or `npm`: the links are to
+    the runtimes' own executables (seam 4; feature 15 sits in front later).
+
+### Isolation, the data, the bench and the scan (FR-29 to FR-30)
+
+- **FR-29 · timelike's interpreter is untouched (stack note 3), and the data follows the image.**
+  - User installs land in `~/.local/lib/python3.14/site-packages`. timelike's tools run their interpreter with
+    `-I`, which never reads the user site, so an agent install cannot reach them.
+  - Nothing installs into `/opt/timelike/python`'s site-packages: it stays root-owned, and the agent's pip is
+    another interpreter.
+  - `missing-commands.tsv` drops the rows for names the image now ships (`python3`, `python`, `pip`, `pip3`,
+    `node`, `npm`, `npx`).
+  - It gains `user` rows for common Python and Node CLIs (`pip install X`, `npm install -g X`), each a command
+    the agent can run as itself. The unit test now requires every `user` value to start with `pip install `
+    or `npm install -g `.
+- **FR-30 · Bench parity and the scan.**
+  - **The vanilla image** gains the same runtime binaries from the same pins (FR-13, revised), with stock
+    behaviour. That changes **002's** `bench/vanilla/Dockerfile` and its header (recorded in
+    `changed_other_features`). 002's spec is not modified here; 02 s1 records it. The bench catalog's
+    "only what both images contain" rule is about the tasks' prerequisites, not the images' contents, so it
+    stands as written. No package-install bench task is part of this slice.
+  - **`make scan`** already scans the agent and vanilla images. Grype over Syft's SBOM sees the CPython and
+    Node binaries, pip, and npm's bundled packages, under the same baseline rule. A new finding with no fix is
+    a baseline change, raised for review after the lane, never exempted silently. `scan.sh`'s comments and the
+    pip-audit "no interpreter" record are corrected: vanilla has an interpreter, but not timelike's.
+
+### How SC-6 is tested (FR-31; cross-stack P004, P005; nodejs Q001)
+
+- **FR-31** An e2e file in the image, as `agent`, one cell per style (`bash -c`, `bash -lc`):
+  - **Python:** a wheel built by the test (stdlib `zipfile`, no network, a version unique per run), installed
+    with a bare `pip install --no-index <wheel>`. In a **new** `docker exec` shell, from a directory that does
+    not hold the source, it must import and its console script must run from `~/.local/bin`.
+  - **Node:** a package packed by the test (`npm pack`, a unique version per run, nodejs Q001), installed with
+    a bare `npm install -g --offline <tgz>`. In a new shell its binary must run.
+  - **Only the agent's home changed:** no file outside `/home/agent` (with `/proc`, `/sys`, `/dev`, `/run` and
+    `/tmp` excluded) is newer than a marker written before the installs.
+  - **timelike's interpreter is unchanged:** a listing of `/opt/timelike/python`'s site-packages is equal
+    before and after, and `/opt/timelike/python/bin/python3 -I` cannot import the installed module.
+  - **No `PIP_BREAK_SYSTEM_PACKAGES`:** not in the environment of any style, not in `pip config list`, and
+    not in any `pip.conf`, profile.d file, the hook or the `npmrc`.
+  - **The runtimes:** `python3`, `pip`, `node` and `npm` resolve to the agent prefixes, never to
+    `/opt/timelike`. The agent prefix has no `EXTERNALLY-MANAGED` marker.
+
+  The vanilla cell (FR-13, revised) checks:
+  - the same `python3 --version` and `node --version` as the agent image;
+  - the marker present;
+  - `npm prefix -g` is `/opt/agent/node`;
+  - a bare `pip install` of the same kind of wheel is refused;
+  - no announcement.
+
+### Cycle 4 decisions
+
+**D-12 · Links in `/usr/local/bin`, not the prefixes' `bin` on `PATH`.** Only the seven names the ruling lists
+appear on `PATH`, so the prefixes' other executables (`idle3`, `pydoc3`, `python3-config`, `corepack`) don't.
+npm finds its global config from Node's real path, which a link keeps (measured).
+
+**D-13 · `${HOME}/.local` in the `npmrc`, the literal `/home/agent/.local/bin` in `ENV`.** npm expands
+`${HOME}`, and pip's user base is `~/.local` too, so both follow an operator's different `HOME`. The `ENV`
+block cannot expand variables (001's `test_env_layer.sh` forbids `$`). So `PATH` names the image's home, and
+profile.d names the same literal path, to stay one value.
+
+**D-14 · The checksum is checked by `sha256sum -c` in a `RUN`, not only `ADD --checksum`.** It works in any
+builder, and the failure names the file. The tarball is fetched with `ADD`, because the slim image has no
+`curl`, and `.tar.gz` because it has no `xz`.
+
+**D-15 · The vanilla image gets its Python from a build stage.** It has no `uv` of its own and must not gain
+one (stock behaviour). A builder stage from the same pinned base and `uv` image installs the interpreter, and
+only `/opt/agent` is copied. The agent image does the same, so the two prefixes come from identical steps.
+

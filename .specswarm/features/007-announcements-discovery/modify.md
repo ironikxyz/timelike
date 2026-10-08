@@ -56,3 +56,32 @@ failure class, 24.1% in Terminal-Bench 2.0) and P2 (the budget names the limits 
 
 Additive, with no breaking change. A missing command still exits 127, with bash's own line first. `run` and
 `snapshot` behave as before, and their suites run unchanged.
+
+# Cycle 4: discovery revision 14, the agent runtimes (send `bridge/sends/04-rev14-20261008-174220.md`)
+
+**Status:** Active. **Created:** 2026-10-08. **Impact analysis:** `impact-analysis.md` § Cycle 4. **Spec:** § Slice 1, cycle 4.
+
+## Modification summary
+
+**What:** build SC-6 under plan's ruling.
+- The agent image ships an agent Python (uv, its own prefix, no marker, its own `pip.conf`) and Node (the
+  pinned Active LTS tarball, its own `npmrc`). Bare installs land in `~/.local`.
+- The vanilla bench image carries the same binaries with stock behaviour.
+- Record revision 14.
+
+**Why:** G6, the largest measured failure class: command not found, then module not found and installs that do
+not persist. P1. And Item 21, answered as Q1 (a), Q2 (ii) and Q3.
+
+## Proposed changes
+
+- **F006 · The runtimes** (FR-25 to FR-28).
+- **F007 · The data and isolation** (FR-29).
+- **F008 · Bench parity and the scan** (FR-30, FR-13 revised).
+- **F009 · The SC-6 tests** (FR-31).
+- **F010 · Corrections by declared copy:** FR-13, FR-15, FR-18, FR-19, SC-6, the `python3` item, D-11.
+- **F011 · Provenance:** append 14, scoped, with its `audit-log.md` row.
+
+## Backward compatibility
+
+Additive. A missing `python3`, `pip`, `node` or `npm` now resolves instead of answering 127. Every other tool
+behaves as before.
