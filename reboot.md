@@ -5,66 +5,68 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-06T20:04:26Z (read from the clock). **Dispatch batch `20261004-183704`: all 8 prompts built.** Done: 06 s0
-(`008-edit`, `62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`;
-pause-09 answered (a)), 10 s1 (`011-code-intelligence`, `6d523d4`), 11 s1 (`012-verify-changed`, `d075404`). The
-batch's final report went to the operator in chat (2026-10-06); repeat it if the mentor asks. **Lane batch-b ran at
-`1dfc6b7`** (bridge/history 2026-10-06T20:03:07Z): not signable, three failures for the mentor to route (§ Lane
-batch-b below). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
+**Snapshot:** 2026-10-08T05:56:46Z (read from the clock). **Dispatch batch `20261004-183704` is done: all 8 slices
+built, lane-verified, demo-observed, merged and pushed.** `master` = `public/main` = **`0a02771`** (pushed
+2026-10-08 per the discharge, bridge/history 2026-10-08T05:43:02Z: a fast-forward from `aa8127d`, 137 commits).
+Governance [2..13] (`27600de`) is in it. **specswarm:** the batch ran on 2.35.0 (`4ff8dcb`). **2.36.0 (`40d7149`)
+was installed 2026-10-08T05:52:01Z** and is what a new session loads; 2.35.0's cache is marked orphaned (§ Plugin
+below). **This repository is public**: push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
-## Lane batch-b (2026-10-06, at `1dfc6b7`): result and this instance's reading
+## How the batch closed (2026-10-06 to 10-08)
 
-`make test` FAILED: e2e 534/537, units 1 failed / 1637 passed / 2 skipped, Go pass, start-up p95 97.8 ms
-(budget 100). `make scan` PASS ×4 (agent 83 baselined, adele 0, vanilla 82, bench-driver 54); deny-list pass
-(P1–P7, 449 files). Every new tool held in the image: symbols 28/28, services 22/22, journal 16/16, edit 28/28,
-verify all but one, so real pytest/ruff/mypy via uv at the pins **does** reach PyPI from the agent container.
+- **Lane batch-b** at `1dfc6b7`: 3 failures, all test-side, routed by
+  `bridge/feedback/batch-20261006-234535-lane-b-three-failures.md` (closed):
+  1. 001's SC-6 default cells: 009's shell record holds the command text, so the byte grep matched
+     `default`. Fixed on 009 (`2e3f483`): `shell.jsonl` out of the byte grep, its `session` field asserted.
+     Cascade 010 → 011 → 012.
+  2. 012's `test_verify` probe assumed `python3` on `/usr/bin:/bin` (`2a0ca75`).
+  3. 432 / 448 (lanes b and c) were one finding: `pyq`'s throwaway `docker run` killed at the 30 s
+     `RUN_TIMEOUT`. Fixed with `PYQ_TIMEOUT` (120 s, `pyq` only), and `jpy` decides a timeout by elapsed time
+     (`f6cf7da`, `244c4a8`). **The runner's `timeout` is BusyBox's** (bats/bats is Alpine): a killed command
+     reports 143, never 124. Decide timeouts by elapsed time, never by exit code.
+- **Lane batch-d** at `244c4a8`: PASS (e2e 537/537, units 1638 + 2 skipped, scan PASS ×4, deny-list PASS).
+- **Demos**, all observed by the operator: D12 (003), D14 (006), D4 (007), D6 (008), D17 (009), D18 (010),
+  D19 (011), D20 (012). Each is in its feature's cycle report, committed on 012's tip as records only
+  (`d932c1c` … `5684391`), placement stated in each.
+- **Sign-off** 2026-10-08T05:39:01Z (its `{exp}` placeholder corrected at 05:40:49Z, after this instance
+  raised it before merging). Eight `--no-ff` merges in stack order: `b1cfb49` … `0a02771`, tree
+  `d177c142839b…` as expected.
+- **Pre-push checks that worked:**
+  - the cleared list diffed against `git rev-list aa8127d..0a02771` (137 = 137);
+  - the object scan of the new objects, path names and messages (P1–P7 0), with the control on
+    `archive/pre-publish` firing P1, P2, P6 and P7 (the recipe in § Publishing recipes);
+  - the askpass push.
+- **The feature branches stay local and are fully merged.** The old scratch worktree of `master` is
+  removed.
 
-The three failures, read from `tests/out/` (no fix until the mentor routes them; each on the branch owning the file):
-1. **not ok 249, 250** — 001's SC-6 `peer-agents-write-to-own-scratch-space.bats`, the `default`-session cells.
-   Diagnosis (not a leak): 009's shell record (`journal-exit.bash`) writes the command text as `"cmd"`, and the
-   test's `PEER_SCRIPT` contains `${TIMELIKE_SESSION:-default}`, so peer b's `shell.jsonl` holds the needle
-   `default` that `fixtures/sc6_check.py:79-80` greps for. Every other isolation count is clean; the two
-   named-peer cells pass because random ids never occur in the script. Fix options: the content check skips
-   `shell.jsonl` and checks its `session` field instead, or the peer script stops containing the literal.
-2. **not ok 432** — 012 SC-4 `[bash -c]` JSON clean tree: verify's JSON is complete and correct (exit 0);
-   `jpy` failed with no stderr after ~30 s, consistent with `pyq`'s throwaway `docker run` killed by
-   `timeout $RUN_TIMEOUT`. Its `-lc` twin and the rest of the file passed. Unconfirmed (no Docker here).
-3. **unit `test_verify.py::test_not_found_steps_are_not_run_exit_1`** (012, line 756): the skip probe runs
-   `python3` on `PATH=/usr/bin:/bin`; the image has none there (`FileNotFoundError`). Fix: guard with
-   `shutil.which("python3", path=bare)` (no python3 there means pytest cannot be imported either).
+## Open items after the batch (for the next sends; none blocks)
 
-**The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
-1. `modify/003-slice-1` — 03 s1 done (`4857215`).
-2. `modify/006-slice-1` — 05 s1 done (`eb5c8e2`).
-3. `007-announcements-discovery` — 04 s0 done (`60f0d73`), then lane batch-a's fix `449cb29` (SC-2's
-   check_check_passes: one copy per cell; 007 § Cycle 1 Addendum 1).
-4. `008-edit` — 06 s0 done (`62d1820`), rebased onto `449cb29`. `edit`; `confirm_protocol` in agentio,
-   schema, conform C2, 001's contracts; `undo` confirm_protocol=True.
-5. `009-session-journal` — 08 s1 done (`d27bec7`): `journal`; agentio event + agent/ppid/t_ms/ref; the
-   shell record (EXIT trap from 001's hook, `/etc/timelike/journal-exit.bash`, COPY after the last RUN).
-6. `010-services-interactive` — 09 s1 done (`c4f8aed`): `services`; agentio `takes_command` (accepted, 001's
-   contract paragraph); loads run's process helpers.
-7. `011-code-intelligence` — 10 s1 done (`6d523d4`): `symbols` (outline/def/callers/dependents; index in the scratch;
-   FOR-MENTOR Item 20).
-8. `012-verify-changed` — 11 s1 done (`d075404`): `verify` (test: through run, pytest/jest/vitest/go/cargo,
-   exit passed through; changed: symbols dependents at 011's `6d523d4`, lint/type-check of changed files only).
-   Fixtures recorded from the real runners in `tests/fixtures/verify/recorded/` with `.source` sidecars;
-   e2e run real pytest/ruff/mypy in the image via uv at the pins (`install_uv_tool_wrappers`).
-
-**`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
-Resume section). Unpushed, not cleared.
-
-Each done feature: cycle report § Cycle N, marker committed, metrics entry (`003-cycle-2`, `006-cycle-2`,
-`007`, `008`). All criteria `unconfirmed` until the mentor's lane after the batch. Remaining cycle reports'
-Group B copies `discovery_revision: 12` and says in prose the cycle was built under revision 13.
+- **Records:** each feature's automated slice criteria are still recorded `unconfirmed` in its cycle
+  report, although lane batch-d ran their cells. Recording them `executed` is a records-only pass, and only
+  if the mentor asks.
+- **Mentor findings for later cycles:**
+  - the singular/plural defects `1 lines` (003 run), `1 files` (006 search) and `[1 services]` (010's list
+    header);
+  - `view …:10-14` on a 21-line file offers `more: …:15-134` (not clamped) and prints the full-output path
+    twice (05);
+  - Adele's ledger rows carry `agent: None` with `TIMELIKE_AGENT` set (08/12);
+  - `python3` is not on the agent's PATH in the image (the announcement, or a decision).
+- **The mentor's reconcile (2026-10-07T05:04:07Z):**
+  - 010, 011 and 012 cite pre-rebase SHAs; the mapping is in that row;
+  - 008 T007's stale TASK_START (self-reported);
+  - 007 is UNAUDITED at 13; 001 at 11–13.
+- **Slices still to come:** 07 s1 (state-root volume) and 15 s1 (Adele's standing grant) were held for
+  attended sends; 04 s1 and 06 s1 wait. FOR-MENTOR Item 20 (the symbols index in the scratch until 07 s1)
+  is open.
 
 ## Next actions
 
-1. **Wait for the mentor to route lane batch-b's three failures** (a `bridge/feedback/` file or a history
-   row). Fix only what is routed, on the owning branch, then rebase or cascade the stack as the mentor says.
-   Nothing in the bridge is to be written except pause files.
-2. Then a re-run of the lane, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
-   (`human-track.md`), hand merges, pushes on the operator's OK.
+1. **Check the bridge** (memory: check-bridge-before-building): `../bridge/history.md`'s newest rows,
+   `../bridge/active-prompt.md`'s Status line, `../bridge/feedback/`, and `../bridge/dispatch/`.
+2. Build only from a new send. Start each feature branch from `master` (`0a02771`), unless the send says
+   otherwise.
+3. **This file has uncommitted updates** (2026-10-08). Commit them with the next code work, as the
+   operator said.
 
 **Batch recipes (scratchpad, gone after a clear; rebuild them):**
 - **Expanded command text is not safe to run.** 2.35.0's implement expansion turns awk's `$0` into
@@ -102,7 +104,7 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 **Open items from this batch, for the batch's final report:**
 - **012:** the send's premise "pytest runs in the image" was false (the image has no pytest, ruff or
   mypy); the e2e fetch them via the image's uv at the pins, so they need PyPI from inside the agent
-  container (not yet proved by the lane). `verify`'s children run with a scratch root inside the session's
+  container (proved by lanes batch-b, c and d). `verify`'s children run with a scratch root inside the session's
   scratch so a call writes one event (C7). The D104 note: T001–T003 shared one start read from HEAD, so
   T001's scope range includes T003's commit (true, and wider than the task).
 - **Traced-run timing failures outside the features:** 011's adele conform, 012's bench runner; both pass
@@ -180,14 +182,16 @@ lines, `quality-gate`) with `textwrap.dedent` into one script, `MODULES` = 001's
 - the baselines' `review_by` 2026-12-27; vanilla's libcurl Criticals; feature 12's credential-class
   Criticals
 - the 40 KB uncapped-output question (002 slice 1); bench driver hardening (02 slice 1)
-- 2.24.0 observations for the mentor to relay (004 § Cycle 1): specify's expanded text still clobbers
-  `$1`; the scope matcher misses dotfiles; specify's reuse path takes the slug from the description; D74
+- 2.24.0 observations for the mentor to relay (004 § Cycle 1): specify's expanded text clobbering
+  `$1` (gone: `specify.md` has had no `$1` since 2.32.0 at the latest); the scope matcher misses dotfiles; specify's reuse path takes the slug from the description; D74
   counts visual-alignment's own literal as unattributed
 - plugin defects relayed upstream:
   - the four from Cycle 6 are fixed in 2.24.0: the modify-branch fallback (now `lib/features-location.sh`,
     which says so on stderr), positional parameters, the scope matcher, and gap attribution. Verify
     them in the field on 12's cycle.
-  - `ship.md` never assigns `FEATURE_DIR` (relayed 2026-10-02)
+  - `ship.md` never assigned `FEATURE_DIR` (relayed 2026-10-02): **fixed as D77**. Its `quality-source`
+    block derives it from the branch when unset (`lib/features-location.sh`). `ship.md` is byte-identical
+    from 2.32.0 to 2.36.0.
 
 ## How work is done here (facts that aren't obvious)
 
@@ -517,7 +521,27 @@ follow-up did.
 - **Not linked:** push-to-checkout, proc-receive, fsmonitor-watchman. Under `env -i`, hooks run
   unbounded (T4, revision 8). P2 then rests on `run` and the harness's timeout.
 
-### Plugin: specswarm (2.32.0 installed 2026-10-04, unread; the last session ran 2.27.0; notes below date from 2.21–2.27)
+### Plugin: specswarm (2.36.0 installed 2026-10-08; checked against these notes 2026-10-08)
+
+- **2.36.0** (`40d7149`, `4.0.1-botbaubble.2.36.0`) differs from 2.35.0 in `implement.md` and `specify.md`
+  only, and only for D104 (values that were composed, now read from the clock):
+  - implement 6a's `TASK_START=$(git rev-parse HEAD)` is now an executed fence, no longer prose. This
+    instance's `start.sh` already read it.
+  - specify gains the named block `spec-created-at` (`CREATED_AT` from the clock) and reads
+    `REGENERATED_AT` in `regenerate-keep`. **Run both from the installed file**, as with every block.
+- **Unchanged in 2.36.0, so these recipes still hold:**
+  - implement's blocks still use awk `$0` and `$1` (`scope-tally`, `decision-tally`), which the
+    expansion clobbers;
+  - specify still pastes the description into `DESCRIPTION="$ARGUMENTS"`, so a quoted description breaks
+    the expanded text (the 007 occurrence);
+  - `scope-check` is identical to 2.32.0's;
+  - `ship.md`, `analyze-quality.md`, `lib/quality-standards-parser.sh` and `lib/tech-stack-parser.sh` are
+    identical to 2.32.0's, so the ship recipe and step 10 hold;
+  - every named block they use exists (`tech-stack-classify` and `tech-stack-taskscan` are in
+    `plan.md` and `tasks.md`).
+- **Upstream, still open** (bridge/history 2026-10-06T17:17:44Z): `$ARGUMENTS` (the 007 occurrence is
+  owed), and `complete` (D102) has not been asked.
+- The notes below date from 2.21–2.27, as written then.
 
 - The session loaded 2.21.0, which the send called 2.20.0. Say which version ran in the cycle report
   (lore Q002: a session keeps the version it loaded). 2.21.0 fixes build's Stop hook, but build is
