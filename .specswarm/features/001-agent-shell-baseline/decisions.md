@@ -905,3 +905,38 @@ ABSENT: no host lane, lint or coverage (nothing outside `.specswarm/` changed); 
 ABSENT: the two contract observations (rule 8 unchecked for grant clients; `mutating` with `grant_envelope` not forbidden) are reported, not built
 Verification: all 13 citations in § Cycle 7 match exactly one line of the send (`grep -cF` = 1); no local path in the added text; deny-list pass before commit
 SCOPE: in (1 changed files)
+
+## Cycle 8 — send `bridge/sends/01-rev13-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T082: spec rule 10 — revision 11's struck clause corrected in place, declared
+**Started:** 2026-10-08T10:06:09Z | **Completed:** 2026-10-08T10:06:09Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification in impact-analysis.md § Cycle 8 (diff of the rev-10 and rev-13 sends) — (confidence: high)
+FLAGGED: corrected in place rather than stopping for regeneration — the command's row 7 says to stop on an amended, false body line; chose the send's instruction ("one copied constraint line, not a criterion and not the body's design: correct it in place … do not regenerate"), which is how revision 7's struck hooks clause was handled in cycle 5 — (confidence: high)
+ASSUMED: the revision's words are copied as the prompt has them, with the strike kept visible as ~~…~~ and the revision note verbatim; the closing note on what 001 builds is this cycle's, marked as such — (confidence: high)
+ABSENT: no other body line changes (the scratch-space lines 97, 201, 287, 330 stay true); no contract change (the contract's missing state root is reported for 07 s1)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T083: spec rules 9 and 13 — revisions 13 and 12 appended in place, declared
+**Started:** 2026-10-08T10:06:28Z | **Completed:** 2026-10-08T10:06:28Z | **Coordinator**
+
+INHERITED: T082 (same file); revision 10's annotation pattern on rule 9 (T079) — (confidence: high)
+ASSUMED: each clarification is copied verbatim from the send's prompt bytes, then a provenance note naming where the contract already carries it (re-read at output-contract.md:20, :81–83, :131–140, conformance.md:27) — (confidence: high)
+ABSENT: neither rule's existing text is changed (both stay true); no contract change
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T084: provenance — audited_against gains 11, 12, 13 (full); three audit-log rows
+**Started:** 2026-10-08T10:06:53Z | **Completed:** 2026-10-08T10:06:53Z | **Coordinator**
+
+INHERITED: T082, T083; the criteria comparison (byte-identical to rev 10's) from impact-analysis.md § Cycle 8 — (confidence: high)
+ASSUMED: one row per revision, as the send asks, each repeating the shared basis so a row read alone stands — (confidence: high)
+ABSENT: prompt_revision (2), discovery_revision (3) and source_prompt untouched; no earlier row rewritten
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T085: cycle report § Cycle 8; implement steps 10 and 9b recorded
+**Started:** 2026-10-08T10:08:04Z | **Completed:** 2026-10-08T10:08:04Z | **Coordinator**
+
+INHERITED: T082–T084; the delegate's rule-10 findings, re-read at their key lines; lane readme-c from bridge/history.md and its log (0 `not ok`) — (confidence: high)
+ASSUMED: D1 and SC-11 keep Cycle 7's mode (unconfirmed): no later addendum or history entry records an observation — (confidence: high)
+ABSENT: no demo_points_reached; no .implement-complete (not dispatch); metrics.json not written (outside the feature directory)
+SCOPE: none — no files outside the feature's artifacts changed

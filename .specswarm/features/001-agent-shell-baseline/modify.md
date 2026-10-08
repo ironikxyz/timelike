@@ -322,3 +322,29 @@ contract at `b7a6ea6`; this cycle is where 001's own record catches up (`impact-
 
 None. The contract was amended by 004 (`b7a6ea6`), and it already agrees with revision 10 clause by
 clause (`impact-analysis.md` § Cycle 7). The spec now quotes the same rule.
+
+---
+
+# Cycle 8: revisions 11, 12 and 13 recorded (send `bridge/sends/01-rev13-20261008-095251.md`)
+
+## Modification summary
+
+**What:** record discovery revisions 11, 12 and 13 against 001's spec, and correct the one copied line revision 11
+made false. No criterion changes, and no behaviour changes.
+
+**Why:** each revision revised one rule of the output contract, and the spec's contract list copies all three
+(`impact-analysis.md` § Cycle 8). Revision 11 **struck** a clause of rule 10 ("and an optional git-excluded project
+cache"), so `spec.md:189` says something false.
+
+## Proposed changes
+
+- **F001 · Rule 10, corrected in place.** Current: "State lives only under a scratch directory and an optional
+  git-excluded project cache." Proposed: revision 11's words, the struck clause kept struck, declared *(Revised,
+  revision 11)*. Breaking: no.
+- **F002 · Rule 9.** Revision 13's clarification appended, declared. Breaking: no.
+- **F003 · Rule 13.** Revision 12's clarification appended, declared. Breaking: no.
+
+## Contract changes
+
+None. 001's contract names no project cache, and it already carries revisions 12 and 13. It does not name revision
+11's state root. That is reported for the cycle that builds the state root (07 s1), not changed here.

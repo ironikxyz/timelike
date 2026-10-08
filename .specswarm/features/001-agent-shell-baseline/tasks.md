@@ -440,3 +440,31 @@ nothing outside `.specswarm/` changes, so there is no Docker lane (send § 2).
   recorded as the plugin reports it.
 
 **Parallel:** none. T080 follows T079, and T081 comes last.
+
+## Phase 17: Cycle 8 — revisions 11, 12 and 13 recorded; rule 10's struck clause corrected (send `bridge/sends/01-rev13-20261008-095251.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 8): PASSED — plan.md § Tech Stack Compliance Report (Cycle 8) has no
+conflict or prohibition; the task scan (lib/tech-stack-parser.sh, ts_mentions) found no prohibited
+technology in the task text below. The tasks change Markdown only -->
+
+Governance is current at `[2..13]`, so there is no audit task. No criterion changes, and nothing outside
+`.specswarm/features/001-agent-shell-baseline/` changes, so there is no Docker lane (send § How this cycle runs).
+
+- [X] T082 Spec contract rule 10 (`spec.md:189`): correct in place by declared copy — revision 11's words, with
+  "and an optional git-excluded project cache" kept struck and marked *(Revised, revision 11)*, and revision 11's note.
+  Name it in the line's note as amended (struck clause), corrected in place by cycle 8. No other body line names a
+  project cache (impact analysis § Cycle 8).
+- [X] T083 Spec contract rules 9 (`spec.md:181–188`) and 13 (`spec.md:192`): append revision 13's and revision 12's
+  clarifications in place, declared, as T079 did for revision 10. Note that the contract already carries both
+  (`contracts/output-contract.md:20`, `:131–140`, `:81–83`).
+- [X] T084 Provenance (modify Step 9): compute the append with the installed `audit-append` block in `full` mode
+  (revisions 11–13 changed no criterion; the criteria are byte-identical to the rev-10 send's, so removals are
+  visible); write `audited_against` in `spec.md` frontmatter and one `audit-log.md` row per revision, rule 10's as
+  *amended (struck clause), corrected in place*. Never touch `prompt_revision`, `discovery_revision` or
+  `source_prompt`.
+- [X] T085 Cycle report § Cycle 8 (the send's block): Group A not applicable; Group B from the send; the 11 Automated
+  criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree); D1 and SC-11 with the modes Cycle 7
+  recorded; the rule-10 code check (the symbols index, Item 20, cited; the two tool-initiated writes and the
+  contract's missing state root reported); implement steps 10 and 9b.
+
+**Parallel:** T082 and T083 touch the same file, so they run in order. T084 follows them, and T085 comes last.
