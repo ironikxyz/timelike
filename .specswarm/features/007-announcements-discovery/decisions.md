@@ -377,3 +377,12 @@ ASSUMED: timelike-conform and the shipped tools need nothing from /usr/local/bin
 ABSENT: the cell is not deleted, C1 and C6 are still asserted, and the shipped tools are still judged and must pass
 Verification (host, advisory): the generated command run under env -i in a scratch layout — a PATH dir holding python3 is dropped, `/usr/bin/env python3` then exits 127; the stub conform sees no python3
 SCOPE: in (2 changed files)
+
+### T036: two reviewed baseline entries for the findings with no fix (lane 007s1-a, item 3, second half)
+**Started:** 2026-10-08T20:03:15Z | **Completed:** 2026-10-08T20:04:02Z | **Coordinator**
+
+INHERITED: the mentor's ruling under quality-standards' baseline rule — GHSA-ch52-4w7c-c8xp (npm's bundled http-cache-semantics 4.2.0) and CVE-2026-77214 (libexpat1 2.8.3-1~deb13u1, via git) into both baselines, with reason, layer and the neighbours' review date — (confidence: high)
+ASSUMED: the gate files the npm finding under a new origin, "files under /opt/agent" (evaluate.py names non-deb artifacts by their first two path parts), so that origin gets a reason in each baseline; CVE-2026-77214 sits under the existing "git" origin, whose reason already names expat's WebDAV-only use. Each entry also carries its own reason, since both are new and individually reviewed — (confidence: high)
+ASSUMED: reviewed 2026-10-01 and review_by 2026-12-27 left unchanged ("the same review date as their neighbours"); a review note records who added them and on whose ruling — (confidence: high)
+ABSENT: none of the seven fixable findings is baselined (the gate would block them anyway: a baselined finding with a fix still blocks)
+Verification (host, advisory): evaluate.py report over lane 007s1-a's own scan output with the new baselines — agent: 85 baselined, 7 blocking; vanilla: 84 baselined, 7 blocking; the 7 are exactly the fixable npm findings. tests/unit/test_scan_baseline.py and test_scan_report.py: 112 passed

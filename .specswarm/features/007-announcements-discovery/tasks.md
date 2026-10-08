@@ -181,7 +181,7 @@ T031 follows them, then T032, then T033.
   `tests/e2e/fixtures/timelike-envpython`: 001's broken-interpreter cell runs with a PATH that excludes the agent
   runtimes, so its premise (no python3 on PATH) holds again; C1 and C6 stay asserted (001's test:
   `changed_other_features`).
-- [ ] T036 `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: reviewed entries for the two
+- [X] T036 `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: reviewed entries for the two
   findings with no fix (GHSA-ch52-4w7c-c8xp in npm's bundled http-cache-semantics; CVE-2026-77214 in the base
   layer's libexpat1, via git), with reason, layer and the neighbours' review date.
 - [ ] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
