@@ -939,3 +939,4 @@ SCOPE: none — no files outside the feature's artifacts changed
 INHERITED: T082–T084; the delegate's rule-10 findings, re-read at their key lines; lane readme-c from bridge/history.md and its log (0 `not ok`) — (confidence: high)
 ASSUMED: D1 and SC-11 keep Cycle 7's mode (unconfirmed): no later addendum or history entry records an observation — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); metrics.json not written (outside the feature directory)
+SCOPE: none — no files outside the feature's artifacts changed
