@@ -258,3 +258,4 @@ FLAGGED: 24.21.0 over v26.11.1 — 26 is the newest release but `lts: false` on 
 ASSUMED: the Makefile's `include pins.env` + `export` makes NODE_VERSION and NODE_SHA256 reach compose's ${NODE_VERSION:-} interpolation and tests/run.sh (which runs make), as for PYTHON_VERSION — (confidence: high)
 ABSENT: no signature check of SHASUMS256.txt (GPG release keys) — the ruling asks for a pinned version and SHA-256, which is what the build checks; bench/driver/Dockerfile unchanged (the driver runs no task)
 Verification: grep of pins.env, compose.yaml args, Makefile bench-images (four args added); built in T027/T028
+SCOPE: in (3 changed files)
