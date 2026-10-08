@@ -366,3 +366,4 @@ INHERITED: the mentor's measurement on the lane host (Docker 29.4.2): `docker ex
 ASSUMED: docker's choice of stream is not the criterion's subject, so the cell reads stdout and stderr together; non-zero, `tree`, "not found" and no timelike line (on either stream, as before) are kept — (confidence: high)
 ABSENT: no change to FR-14 or the handler; exit code still asserted non-zero, not 127 (126 on older releases)
 Verification (host, advisory): the cell's three functions, run under bats 1.14.0 against a stub docker — message on stdout: ok; on stderr: ok; a timelike line: not ok; exit 0: not ok; an unrelated daemon error: not ok
+SCOPE: in (1 changed files)
