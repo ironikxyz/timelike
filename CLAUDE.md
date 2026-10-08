@@ -41,12 +41,33 @@ This is the **implementation** instance of the Timelike mentored project. It use
        `git log public/main..master --format='%an %ae %cn %ce'` shows only it.
    - **Never write a deny-list pattern or matched string** into a tracked file, a commit message or a
      test. Refer to entries by id (P1–P7).
+   - **Status tags, until 1.0** (the operator, 2026-10-08): each germane push also carries one annotated
+     tag on the pushed commit, `v0.<slices built>.<n>`, with the message
+     `N of 38 slices built; this push: <what it carried>`. `<slices built>` is the README Status's count,
+     which only a send's `## README status` block changes; `<n>` counts pushes at that level, from 0. The
+     tag is the one other ref that is pushed, on the same discharge and OK, and never moved once pushed.
+     Its message goes through the deny-list too. `v0.15.0` marks `0a02771`.
    - Feature and maintenance branches stay local unless the operator decides otherwise.
    - **Never force-push, and never push to `history`** (`ironikxyz/timelike-history`, the closed private
      archive, which is fetch-only here). `archive/pre-publish` keeps the pre-publication lineage, and
      every hash cited in `bridge/` is reachable there.
    - The token is read only through a throwaway `GIT_ASKPASS` script with `-c credential.helper=`, and
      the script is deleted afterwards. Never put it in a URL, an argument, printed output or a file here.
+
+## README: keeping it current (standing rule, `bridge/sends/maint-readme-20261008-060811.md`)
+
+`README.md` is the public landing page, and code/ owns the file. Three parts change in three ways:
+- **The command reference** is generated from the tools' own `--help` by `scripts/readme_reference.py`, and
+  `tests/unit/test_readme_reference.py` fails when it is stale. After any tool change that moves its help,
+  run `python3 scripts/readme_reference.py --write` in the same cycle. Never edit the generated block by hand.
+- **The intro's What and Status** change only through the mentor. A send or dispatch that changes a
+  feature's state carries a `## README status` block: the table rows that change and the new Status
+  paragraph. Apply it in that same cycle. Never edit those rows on your own reading: the slice count and
+  the plan live in `plan/`.
+- **The Why** changes only when discovery's pain statement or success vision does, also through a send.
+
+Constitution P6 binds the README: no "faster", "fewer turns" or "more reliable" as fact. Bench results
+are cited only as the bench reports them, with the run that produced them.
 
 ## Workflow
 

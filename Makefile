@@ -118,8 +118,8 @@ lint: docker-check
 	@docker image inspect timelike-agent:local >/dev/null 2>&1 || $(MAKE) build
 	docker run --rm -v "$(CURDIR)":/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) $(SHELLCHECK_FILES)
 	$(PY_IN_IMAGE) 'set -e; P=/opt/timelike/python/bin/python3; \
-	  uv tool run --python $$P ruff@$(RUFF_VERSION) check --no-cache tools tests scan bench; \
-	  uv tool run --python $$P ruff@$(RUFF_VERSION) format --no-cache --check tools tests scan bench; \
+	  uv tool run --python $$P ruff@$(RUFF_VERSION) check --no-cache tools tests scan bench scripts; \
+	  uv tool run --python $$P ruff@$(RUFF_VERSION) format --no-cache --check tools tests scan bench scripts; \
 	  uv tool run --python $$P mypy@$(MYPY_VERSION) --cache-dir /tmp/mypy'
 	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/adele":/src:ro -w /src -e HOME=/tmp \
 	  -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod -e GOFLAGS=-mod=readonly -e GOTOOLCHAIN=local \
@@ -128,7 +128,7 @@ lint: docker-check
 
 # Fallback when no daemon is reachable: whatever of ruff/mypy/shellcheck the host has. Advisory.
 lint-host:
-	@command -v ruff >/dev/null && ruff check tools tests scan bench && ruff format --check tools tests scan bench || echo "lint-host: ruff not available"
+	@command -v ruff >/dev/null && ruff check tools tests scan bench scripts && ruff format --check tools tests scan bench scripts || echo "lint-host: ruff not available"
 	@$(PYTHON) -m mypy --version >/dev/null 2>&1 && $(PYTHON) -m mypy || echo "lint-host: mypy not available"
 	@command -v shellcheck >/dev/null && shellcheck $(SHELLCHECK_FILES) || echo "lint-host: shellcheck not available"
 	@command -v go >/dev/null && (cd adele && test -z "$$(gofmt -l .)" && go vet ./...) || echo "lint-host: go not available (or gofmt/vet failed)"
