@@ -12,7 +12,8 @@
     "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T05:52:09Z), FOR-MENTOR Item 11: CVE-2026-72897, CVE-2026-84782 and CVE-2026-84784 (OpenSSL 3.5.7, High, no stable fix) accepted into all three baselines on the reason that timelike's images are TLS clients and run no TLS server, DTLS or QUIC service. review_by stays 2026-12-27, aligned across the three baselines. Revisit when Debian ships a fix. Entries applied by the code instance on that instruction, from scan/out baseline.proposed.json.",
     "Reviewed 2026-10-01 by interview with the mentor instance (2026-10-01T21:05:37Z and 21:09:43Z), FOR-MENTOR Item 12. CVE-2026-102010 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator: a narrow trigger (a specific libstdc++ API under attacker control), base layer, and timelike ships no C++ that uses it. The Item 11 OpenSSL entries (CVE-2026-72897, -84782, -84784) are removed: Debian fixed them in 3.5.7-1~deb13u3, which every image now carries (the agent through its apt install, vanilla and bench-driver through a targeted --only-upgrade, operator's option (b′)), so they match nothing. review_by stays 2026-12-27. Applied by the code instance on that instruction.",
     "Reviewed 2026-10-04 by interview with the mentor instance (bridge/history.md, 2026-10-04T02:43:09Z, operator-approved; bridge/sends/maint-baseline-cve-2026-95619-20261004-024309.md). CVE-2026-95619 (gcc-14-base, libgcc-s1, libstdc++6 14.2.0-19; High; no Debian fix) accepted by the operator, for the same reason as CVE-2026-102010: base layer, no Debian fix, and the trigger needs attacker-controlled sizes reaching C++ code, which timelike does not run. review_by stays 2026-12-27. Applied by the code instance on that instruction.",
-    "Entries added 2026-10-08 by the code instance on the mentor's ruling (bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md, item 3), lane 007s1-a: GHSA-ch52-4w7c-c8xp (npm's bundled http-cache-semantics 4.2.0, origin 'files under /opt/agent', new) and CVE-2026-77214 (libexpat1, origin git, not this slice's). Both High, no fix available. reviewed and review_by are unchanged, as the ruling asked (the neighbours' dates); the mentor reviews every new entry at sign-off and the operator can object there."
+    "Entries added 2026-10-08 by the code instance on the mentor's ruling (bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md, item 3), lane 007s1-a: GHSA-ch52-4w7c-c8xp (npm's bundled http-cache-semantics 4.2.0, origin 'files under /opt/agent', new) and CVE-2026-77214 (libexpat1, origin git, not this slice's). Both High, no fix available. reviewed and review_by are unchanged, as the ruling asked (the neighbours' dates); the mentor reviews every new entry at sign-off and the operator can object there.",
+    "Bundled-class entries added 2026-10-08 by the code instance under discovery revision 15 (bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md § Resolution; send bridge/sends/04-rev14-20261008-201729.md): GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 (brace-expansion 5.0.9) and GHSA-rfgv-xxqx-mfg5 (undici 6.28.0), bundled in npm 11.21.0. Each carries its own reviewed (2026-10-08) and review_by (2026-11-07, 30 days); the baseline's own dates are unchanged. The mentor reviews them at sign-off and the operator can object there."
   ],
   "origins": {
     "base layer": "Essential packages of the pinned Debian trixie-slim base (glibc, util-linux, ncurses, acl, zlib, perl-base), identical to the agent image's base-layer group in scan/baseline/timelike-agent.json, whose reasoning applies. Debian publishes no fixed package in trixie or trixie-security (Grype: wont-fix or not-fixed), so no fix is available. Unlike the agent image, the vanilla image keeps Debian's 11 setuid/setgid binaries (mount, umount, su, passwd, chfn, chsh, gpasswd, newgrp, chage, expiry, unix_chkpwd), deliberately: it is the unmodified baseline timelike is compared against. The local privilege-escalation findings therefore rely on no-new-privileges, not on the binaries' absence: In the bench, every task container runs as uid 1000 with --network none, --cap-drop ALL and no-new-privileges (bench/benchlib/docker.py), and bench/run.sh refuses a run with any key-shaped variable in the driver, either image's ENV or a task container. The rest are memory or resource bugs in library calls the bench's tasks do not reach with hostile input.",
@@ -533,6 +534,54 @@
       "severity": "high",
       "origin": "files under /opt/agent",
       "reason": "npm's bundled http-cache-semantics 4.2.0 (GHSA-ch52-4w7c-c8xp, alias CVE-2026-93748): max-stale handling can serve a cached response across users. No fixed release exists. In npm it decides freshness for npm's own registry cache, which here is per user (~/.npm of the one agent user) and holds public package metadata: there is no second user whose responses could be disclosed. Revisit when a fixed release ships in npm."
+    },
+    {
+      "id": "GHSA-6j4f-fj2g-mc7p",
+      "package": "brace-expansion",
+      "severity": "high",
+      "origin": "files under /opt/agent",
+      "reason": "Bundled in npm 11.21.0, which ships brace-expansion 5.0.9; npm expands brace patterns in its own globs (file lists, workspaces), on input the agent's own commands supply. The fix (brace-expansion 5.0.10, 2026-09-14) is upstream only: no stable npm release whose engines admit Node 24.21.0 ships it (11.20.0, 11.21.0, 12.1.0 and 12.2.0 checked on 2026-10-08), so under discovery revision 15 no fix is available. Bundled trees are never patched package by package. The scan's release check voids this entry as soon as an npm release ships the fix.",
+      "bundled": {
+        "component": "npm",
+        "component_version": "11.21.0",
+        "library_version": "5.0.9",
+        "fixed_version": "5.0.10",
+        "fixed_date": "2026-09-14"
+      },
+      "reviewed": "2026-10-08",
+      "review_by": "2026-11-07"
+    },
+    {
+      "id": "GHSA-qhr7-859c-m2p7",
+      "package": "brace-expansion",
+      "severity": "high",
+      "origin": "files under /opt/agent",
+      "reason": "Bundled in npm 11.21.0, which ships brace-expansion 5.0.9; npm expands brace patterns in its own globs (file lists, workspaces), on input the agent's own commands supply. The fix (brace-expansion 5.0.11, 2026-09-14) is upstream only: no stable npm release whose engines admit Node 24.21.0 ships it (11.20.0, 11.21.0, 12.1.0 and 12.2.0 checked on 2026-10-08), so under discovery revision 15 no fix is available. Bundled trees are never patched package by package. The scan's release check voids this entry as soon as an npm release ships the fix.",
+      "bundled": {
+        "component": "npm",
+        "component_version": "11.21.0",
+        "library_version": "5.0.9",
+        "fixed_version": "5.0.11",
+        "fixed_date": "2026-09-14"
+      },
+      "reviewed": "2026-10-08",
+      "review_by": "2026-11-07"
+    },
+    {
+      "id": "GHSA-rfgv-xxqx-mfg5",
+      "package": "undici",
+      "severity": "high",
+      "origin": "files under /opt/agent",
+      "reason": "Bundled in npm 11.21.0, which ships undici 6.28.0; npm's HTTP client; it talks to the registries the agent's npm commands name, under the standing network grant. The fix (undici 6.28.1, 2026-09-04) is upstream only: no stable npm release whose engines admit Node 24.21.0 ships it (11.20.0, 11.21.0, 12.1.0 and 12.2.0 checked on 2026-10-08), so under discovery revision 15 no fix is available. Bundled trees are never patched package by package. The scan's release check voids this entry as soon as an npm release ships the fix.",
+      "bundled": {
+        "component": "npm",
+        "component_version": "11.21.0",
+        "library_version": "6.28.0",
+        "fixed_version": "6.28.1",
+        "fixed_date": "2026-09-04"
+      },
+      "reviewed": "2026-10-08",
+      "review_by": "2026-11-07"
     }
   ]
 }

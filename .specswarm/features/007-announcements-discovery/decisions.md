@@ -452,3 +452,12 @@ ASSUMED: the step's detail is the subcommand's summary, so the scan's output say
 ABSENT: scan.sh passes no --registry (the default, https://registry.npmjs.org); the fake docker runs the real subcommand, so the scan cell uses a pip-component entry that answers without a registry; npm's path is tested against the file-served registry (T040)
 Verification (host, advisory): test_scan_report.py, test_scan_release_check.py, test_scan_baseline.py 153 passed (new: the four images' release-check rows, and a scan.sh run with a bundled entry: from the agent image, no --network flag, NODE_VERSION passed, "1 bundled-class entries checked … 1 unknown"); shellcheck scan/scan.sh clean
 SCOPE: in (2 changed files)
+
+### T043: three bundled-class entries in both baselines (revision 15)
+**Started:** 2026-10-08T20:34:20Z | **Completed:** 2026-10-08T20:35:29Z | **Coordinator**
+
+INHERITED: T041's entry shape (bundled object; its own reviewed/review_by, 30 days at most); T038's npm 11.21.0, whose tree holds brace-expansion 5.0.9 and undici 6.28.0 (host replay); T036's "files under /opt/agent" origin reason — (confidence: high)
+FLAGGED: each entry records the fixed version the scanner gives for THAT advisory (GHSA-6j4f-fj2g-mc7p 5.0.10, GHSA-qhr7-859c-m2p7 5.0.11, GHSA-rfgv-xxqx-mfg5 6.28.1, from lane 007s1-a's grype), not one version per library: the send's summary gave brace-expansion 5.0.11 for both, and the gate holds each entry to the scanner's lowest stable fix. Dates read from the registry (brace-expansion 5.0.10 and 5.0.11 both 2026-09-14; undici 6.28.1 2026-09-04) — (confidence: high)
+ASSUMED: reviewed 2026-10-08 (the day plan ratified revision 15), review_by 2026-11-07 (30 days); the baseline's own dates unchanged; a review note says who added them, on whose ruling, and that the mentor reviews them at sign-off — (confidence: high)
+ABSENT: none of these is an ordinary entry (they would block: the scanner reports a fix); no other entry changed
+Verification (host, advisory): both baselines load with no problems and 3 bundled entries each; evaluate.py releases against the real registry from the host, with these baselines: 3 no-release per image, releases examined 11.20.0, 11.21.0, 12.1.0, 12.2.0, about 3 s each; a live negative (a fixed version npm already ships) answers fix-released 11.19.1

@@ -208,7 +208,7 @@ T031 follows them, then T032, then T033.
 - [X] T042 [US6] `scan/scan.sh`: a `release-check` step per image, from the agent image, with network, after
   pip-audit-agent; `none` without bundled-class entries. `tests/unit/test_scan_report.py`: the fake docker and the step
   lists follow.
-- [ ] T043 [US6] `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: the three bundled-class
+- [X] T043 [US6] `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: the three bundled-class
   entries (GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 in brace-expansion 5.0.9; GHSA-rfgv-xxqx-mfg5 in undici 6.28.0;
   component npm 11.21.0), their origin reason, and a review note.
 - [ ] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
