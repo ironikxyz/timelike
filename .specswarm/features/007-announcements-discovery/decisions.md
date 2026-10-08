@@ -220,3 +220,4 @@ FLAGGED: the 1 s bound is replaced, not re-measured another way — host load de
 ASSUMED: the six cell names take revision 13's criterion text exactly (the struck clause removed from the name, the strike explained in the header), and the two workspace cells say "the workspace is left untouched: no CLAUDE.md or AGENTS.md is created there"; their assertions are unchanged — (confidence: high)
 ABSENT: no change to what the cells assert beyond the removed `last >= 1000` failure; the header's struck-criterion account replaces the "NOT BUILT (D-1)" paragraph; no other 007 e2e file changes
 Verification: shellcheck clean; @test names counted (6 renamed, 2 workspace names replaced). Not run: no Docker here; the mentor's lane runs it
+SCOPE: in (1 changed files)
