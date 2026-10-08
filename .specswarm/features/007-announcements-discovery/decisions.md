@@ -179,3 +179,4 @@ ASSUMED: interactive bash prints argv0's base name (`/usr/bin/bash` → `bash:`;
 ASSUMED: a directory at the data path is "unreadable" (line 1 alone), not an error; `-f` is tested beside `-r`, so bash's `read: read error … Is a directory` no longer leaks — (confidence: high)
 ABSENT: the contract's two rows are corrected (interactive base name; a directory means line 1 alone) — no other format changed
 Verification (host, advisory): tests/host/test_command_not_found.sh 33/33 (A interactive-path ×2 and D2 now pass), tests/host/test_shell_env_hook.sh 44/44
+SCOPE: in (1 changed files)
