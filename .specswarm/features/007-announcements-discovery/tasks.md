@@ -148,7 +148,7 @@ bar.** US6 = SC-6.
   `npmrc` only in the agent Dockerfile; no `PIP_BREAK_SYSTEM_PACKAGES` in `image/`, `bench/`, `compose.yaml`,
   `Makefile`; the `ENV` PATH order), `tests/unit/test_missing_commands.py` (user rows allowed; each starts
   `pip install ` or `npm install -g `; none of the seven runtime names listed).
-- [ ] T026 [US6] `pins.env` (`NODE_VERSION`, `NODE_SHA256`), `compose.yaml` (agent build args), `Makefile`
+- [X] T026 [US6] `pins.env` (`NODE_VERSION`, `NODE_SHA256`), `compose.yaml` (agent build args), `Makefile`
   (`bench-images` passes `UV_IMAGE`, `PYTHON_VERSION` and the Node pins to the vanilla build).
 - [ ] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
   links, the `ENV` PATH with `/home/agent/.local/bin`. `image/rootfs/etc/profile.d/00-timelike-path.sh`: the

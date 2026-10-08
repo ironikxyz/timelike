@@ -146,6 +146,8 @@ demo: up
 #   make bench TASKS=git-rebase-continue    one task (space-separated for several)
 bench-images: build
 	docker build -f bench/vanilla/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
+	  --build-arg UV_IMAGE=$(UV_IMAGE) --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  --build-arg NODE_VERSION=$(NODE_VERSION) --build-arg NODE_SHA256=$(NODE_SHA256) \
 	  --build-arg GIT_SHA=$(GIT_SHA) -t timelike-vanilla:local .
 	docker build -f bench/driver/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
 	  --build-arg UV_IMAGE=$(UV_IMAGE) --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \

@@ -249,3 +249,12 @@ FLAGGED: every Automated criterion is cited `unconfirmed` with host results besi
 ASSUMED: SC-6 is cited `unconfirmed: NOT BUILT` rather than omitted, so the mentor's derivation sees it — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); T022 stays open (Item 21)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T026: Node pins in pins.env; the agent build args in compose.yaml; the vanilla build args in the Makefile
+**Started:** 2026-10-08T17:54:47Z | **Completed:** 2026-10-08T17:54:56Z | **Coordinator**
+
+INHERITED: research R9 (Node 24.21.0 is the newest LTS on nodejs.org/dist/index.json read 2026-10-08; its SHA-256 from SHASUMS256.txt equals the downloaded tarball's) — (confidence: high)
+FLAGGED: 24.21.0 over v26.11.1 — 26 is the newest release but `lts: false` on 2026-10-08; the ruling says "current Active LTS" — (confidence: high)
+ASSUMED: the Makefile's `include pins.env` + `export` makes NODE_VERSION and NODE_SHA256 reach compose's ${NODE_VERSION:-} interpolation and tests/run.sh (which runs make), as for PYTHON_VERSION — (confidence: high)
+ABSENT: no signature check of SHASUMS256.txt (GPG release keys) — the ruling asks for a pinned version and SHA-256, which is what the build checks; bench/driver/Dockerfile unchanged (the driver runs no task)
+Verification: grep of pins.env, compose.yaml args, Makefile bench-images (four args added); built in T027/T028
