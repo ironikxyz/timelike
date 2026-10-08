@@ -108,6 +108,7 @@ class Tool:
         "probe",
         "reads_stdin",
         "summary",
+        "takes_command",
         "target",
         "usage",
     )  # fmt: skip
@@ -128,6 +129,7 @@ class Tool:
         grant_envelope: bool = False,
         confirm_protocol: bool | None = None,
         event_ref: tuple[str, str] | None = None,
+        takes_command: bool = False,
     ) -> None:
         self.name = name
         self.target = target
@@ -156,6 +158,11 @@ class Tool:
         # Feature 009 (the session journal): the event's pointer, `ref: {kind: data[key]}`, taken from
         # the result's own data, so the journal points at what the tool reported (run's log, a snapshot).
         self.event_ref = event_ref
+        # Feature 010 (services): everything after the first `--` is a command the tool starts, not
+        # its options, and is given as `args.command`. Split here, before argparse, which rejects options
+        # followed by `--` and a command on a positional (3.12), and whose REMAINDER differs by version.
+        # Not a pass-through: the tool's exits stay its own.
+        self.takes_command = takes_command
 
     def envelopes(self) -> list[str]:
         """The exit-4 envelopes this tool can print, by status (manifest `envelopes`, conform C9)."""
@@ -560,6 +567,10 @@ def run(
             own, command = _split_command(parser, raw)
             args = parser.parse_args(own)
             args.command = command
+        elif tool.takes_command:
+            cut = raw.index("--") if "--" in raw else len(raw)
+            args = parser.parse_args(raw[:cut])
+            args.command = raw[cut + 1 :]
         else:
             args = parser.parse_args(raw)
         if args.json and args.text:

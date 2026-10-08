@@ -693,5 +693,52 @@
       }
     },
     "lane": "pending: the mentor's Docker lane after the batch"
+  },
+  "010": {
+    "recorded_at": "2026-10-06T17:12:35+00:00",
+    "git_sha": "(the T006 commit; tree measured at the T005 commit dbf357c)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.35.0 (session-loaded), /specswarm:implement --dispatch step 10",
+    "send": "bridge/sends/09-rev1-20261004-183704.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; dispatch mode: warned, never asked"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores)",
+      "units": "1512 passed (make test-host, untraced); traced: 1495 passed, 1 skipped, 611 s, before 17 services cases",
+      "coverage_python": "95% overall, line and branch (services 95% from test_services.py, agentio 95%); merge bar 90%",
+      "lint": "ruff 0.16.7 check + format (69 files), mypy 2.4.0 strict (24 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (62): clean (after T005's fix)",
+      "make_test_host": "passed (60/60 files, 44/44 hook)",
+      "conformance_host": "pass, 11 tools (services included)",
+      "e2e_host_standin": "services files 20 of 22; the 2 type -a cells are image-only; not image evidence",
+      "p95_ms": {
+        "services --help": 86,
+        "services list --json (probe)": 92
+      }
+    },
+    "lane": "pending: the mentor's Docker lane after the batch"
   }
 }

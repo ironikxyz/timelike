@@ -575,6 +575,22 @@ def test_event_ref_from_the_results_own_data(py: str, make_tool: ToolMaker, scra
     assert "ref" not in events(scratch)[-1]  # no result, no pointer
 
 
+def test_takes_command_splits_at_the_first_double_dash(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    """Feature 010: options, then `--`, then a command with its own options; the tool's exits stay its own."""
+    body = """
+return agentio.Result(target="t", scope="s", verdict="ok", data={"command": args.command, "n": args.lines})
+"""
+    t = make_tool("starter", body, takes_command=True)
+    r = go(py, t, scratch, "--json", "--lines", "3", "--", "python3", "-m", "http.server", "--", "x")
+    assert r.returncode == 0, r.stderr
+    doc = json.loads(r.stdout)
+    assert doc["command"] == ["python3", "-m", "http.server", "--", "x"] and doc["n"] == 3
+    r = go(py, t, scratch, "--json")
+    assert r.returncode == 0 and json.loads(r.stdout)["command"] == []
+    info = json.loads(go(py, t, scratch, "--agent-info").stdout)
+    assert "passes_exit" not in info
+
+
 def test_old_event_lines_stay_valid() -> None:
     old = {"v": 1, "tool": "run", "args": [], "cwd": "/", "exit": 0, "duration_ms": 3, "session": "s"}
     assert schema.errors(old, schema.load("event.schema.json")) == []
