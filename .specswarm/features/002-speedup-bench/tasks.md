@@ -246,7 +246,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
   `:227`; `data-model.md:125`; T016) and that plan's ruling (b) carries the change to 02 slice 1. The
   slice-1 criterion is not copied: the spec keeps no later-slice criterion list (`spec.md:216–218`). No other
   body line changes; `report.py` and `data-model.md` are not edited.
-- [ ] T029 `decisions.md` T016: below its fourth ASSUMED line (the hung call counted twice), add an
+- [X] T029 `decisions.md` T016: below its fourth ASSUMED line (the hung call counted twice), add an
   annotation: *superseded by discovery revision 8 (ruling (b)), code change carried to 02 s1*. The ASSUMED
   line is kept as written.
 - [ ] T030 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode
