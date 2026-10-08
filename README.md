@@ -30,7 +30,7 @@ Whether it works is a measured claim: see Status.
 | 01 | Shell baseline & output contract | The container, an unprivileged `agent` user, non-interactive defaults, and one contract every tool speaks: verdict first, bounded output, JSON when piped, and `timelike-conform` to check it | complete (0, 1) |
 | 02 | Speedup bench | Runs the same tasks in a vanilla and a timelike container and reports turns, failed commands and hangs, losing cases first | slice 0 of 0–2 |
 | 03 | `run` | Every command ends with a verdict: the whole process tree is stopped at its limit, memory kills and full disks are named, and secrets are redacted | slices 0, 1 of 0–2 |
-| 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all | slice 0 of 0–1 |
+| 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all; a missing command names how to get it, package installs need no privilege, and `timelike budget` shows the resource budget | complete (0, 1) |
 | 05 | `view`, `search` | Bounded reads and searches, each ending with the next command; a directory overview within a budget | complete (0, 1) |
 | 06 | `edit` | One exact replacement per call, tolerant of CRLF and tab/space indentation; the nearest candidates on a miss | slice 0 of 0–1 |
 | 07 | `snapshot`, `undo` | Snapshot the workspace, git-ignored files too, and restore it | slice 0 of 0–2 |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**15 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+**16 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
-Features 01 and 05 are complete. Features 02–04, 06–12 have their first slice or slices. Features 13–17
-are not started.
+Features 01, 04 and 05 are complete. Features 02, 03 and 06–12 have their first slice or slices. Features
+13–17 are not started.
 
-**Next:** 07 slice 1 (a persistent state root), 15 slice 1, 04 slice 1, 06 slice 1.
+**Next:** 07 slice 1 (a persistent state root), 15 slice 1, 06 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -925,8 +925,8 @@ less bench/out/<run-id>/report.txt      # the report
 
 `make bench` builds three images from the pinned base, all stamped with the checkout's revision:
 - the agent image
-- a **vanilla** baseline: the same base, the same unprivileged user and git, without any of
-  timelike's layers
+- a **vanilla** baseline: the same base, the same unprivileged user and git, and the same agent
+  runtimes (Python and Node) with their stock behaviour, without any of timelike's layers
 - the bench **driver**, the only container that holds the Docker socket
 
 The driver refuses any image whose revision label differs from the checkout, and refuses to start if

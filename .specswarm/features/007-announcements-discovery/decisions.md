@@ -338,3 +338,12 @@ ASSUMED: the 12 tests/unit/test_bench_catalog.py setup timeouts seen in T027 wer
 ABSENT: no image build or image test (no Docker daemon): every SC-6 and P6 cell, and the scan over the two new runtimes, wait for the mentor's lane. No coverage run this cycle: no Python source under tools/ changed in Cycle 4
 Verification (host, advisory): make test-host passed — 1825 passed and 1 skipped units (load 2.0–2.6), env layer 60/60, hook 44/44, handler 33/33; ruff check/format (77 files), mypy (27 files), shellcheck over every shell file: clean; README reference current; npm prefix -g through a /usr/local/bin link reports $HOME/.local
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T032: README — the send's README status block; the vanilla description
+**Started:** 2026-10-08T18:10:09Z | **Completed:** 2026-10-08T18:10:30Z | **Coordinator**
+
+INHERITED: all four slice-1 criteria built (SC-5, SC-7 in Cycle 3; SC-6 in T024–T029); the send applies the block "only if all four slice-1 criteria are met (the Manual one may be unconfirmed)" — (confidence: medium)
+FLAGGED: applied now, on built-and-host-verified, before the image lane — the README's Status counts built slices, and the lane decides the merge; if a lane failure leaves a criterion unmet, these rows revert in that fix's cycle — (confidence: medium)
+ASSUMED: row 04's "What it does" names `timelike budget` by its real name; the Status paragraph is the send's text verbatim; the vanilla bullet becomes "the same agent runtimes (Python and Node) with their stock behaviour"; "The vanilla bench image gets none of this (P6)" (§ announcements) stays true and is unchanged — (confidence: high)
+ABSENT: no value claim (P6); no other README change; the generated reference unchanged (no help moved this cycle)
+Verification: scripts/readme_reference.py --check current; tests/unit/test_readme_reference.py passed
