@@ -5,12 +5,104 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T05:56:46Z (read from the clock). **Dispatch batch `20261004-183704` is done: all 8 slices
-built, lane-verified, demo-observed, merged and pushed.** `master` = `public/main` = **`0a02771`** (pushed
-2026-10-08 per the discharge, bridge/history 2026-10-08T05:43:02Z: a fast-forward from `aa8127d`, 137 commits).
-Governance [2..13] (`27600de`) is in it. **specswarm:** the batch ran on 2.35.0 (`4ff8dcb`). **2.36.0 (`40d7149`)
-was installed 2026-10-08T05:52:01Z** and is what a new session loads; 2.35.0's cache is marked orphaned (§ Plugin
-below). **This repository is public**: push only on a discharge and the operator's OK (CLAUDE.md rule 5).
+**Snapshot:** 2026-10-08T16:13:28Z (read from the clock), folded in on `modify/007-slice-1` with 04 s1's first work. The sections below it, from "How the batch closed" on, date from 05:56:46Z. **This repository is public**: push only on a discharge and the operator's OK (CLAUDE.md rule 5). **04 s1** (send `04-rev13-20261008-161802`) is in progress on `modify/007-slice-1`: see its feature directory and FOR-MENTOR Item 21.
+
+## State (folded from the staged note written 2026-10-08T16:13:28Z)
+
+- **`master` = `f6faf01`**, tree `4837d3a7a98805d4389a8fc4a2ad862421a25af2` (mentor-checked), clean. **Not pushed.**
+- **`public/main` = `c79facc`** (pushed 2026-10-08 per the discharge at 09:43:06Z). Tags `v0.15.0` → `0a02771` and
+  `v0.15.1` → `c79facc` are public.
+- **Ahead of public:** three `--no-ff` audit merges, per the sign-off at 12:58:18Z: `225a55c` (002), `39c8ae2` (001),
+  `f6faf01` (007). Records only. They **ride with the next germane push and share its tag**: no tag of their own,
+  no push now.
+- **specswarm 2.37.0** (`d523530`) is loaded. Check that the session's pid is in its cache `.in_use`.
+- Local branches kept, all merged: `maint/readme`, `modify/002-rev8`, `modify/001-rev13`, `modify/007-rev13`.
+
+## What happened since b10f32c (2026-10-08)
+
+1. **README maintenance** (send `maint-readme-20261008-060811`): built on `maint/readme`.
+   - The README was reorganised, with a generated command reference (`scripts/readme_reference.py --check|--write`)
+     and its test (`tests/unit/test_readme_reference.py`).
+   - CLAUDE.md gained the README rule and the status-tag rule.
+   - Lane readme-c passed. Merged as `c79facc`. Pushed with `v0.15.0` and `v0.15.1`.
+2. **Audit send** (`maint-audit-rev8-13-20261008-095251`): three record-only modify cycles, each touching only its
+   feature directory:
+   - **002, Cycle 2 (rev 8).** The verdict-order constraint is in the spec, declared. Slice 0's code doesn't meet it
+     (`report.py:119`, `:227`, `data-model` step 3, T016), and plan's ruling (b) carries it to **02 s1**. Scoped
+     reconcile, `[1, 8]`.
+   - **001, Cycle 8 (revs 11–13).** Rule 10's struck project-cache clause is corrected in place; rules 9 and 13 are
+     annotated. Full reconcile, `[2..13]`.
+   - **007, Cycle 2 (rev 13).** SC-1's workspace clause is struck and D-1 resolved. Scoped reconcile, `[1, 13]`.
+   - The mentor reconciled all three and signed off; they merged to master (above).
+
+## Open items (none blocks)
+
+- **The mentor's carried findings** (history 12:58:18Z):
+  - (a) `verify` runs `git status` without `--no-optional-locks` (`tools/bin/verify:878`). Cheap hardening for
+    012's next cycle. Runner caches stay in the workspace, which 012's contract admits.
+  - (b) `output-contract.md` doesn't name the per-workspace state root. For 07 s1.
+  - (c) 007's SC-1 e2e cell names (`announcement-…-on-start.bats:400–405`) still quote the struck clause. For a later
+    007 cycle, together with SC-1's 1 s timing bound, which trips under host I/O load (lane readme-b).
+  - (d) `announce --install` writes under `$HOME`, which is also the image's WORKDIR.
+- **Still open from the batch** (see `reboot.md` § Open items): the singular/plural defects; `view` `more:` not
+  clamped; Adele ledger `agent: None`; `python3` not on the agent's PATH; FOR-MENTOR **Item 20** (the symbols index
+  in the scratch until 07 s1).
+- **Slices to come:** 07 s1 (state root) and 15 s1 (Adele's standing grant), both held for attended sends; 02 s1
+  (carries the rev-8 verdict order); 04 s1; 06 s1.
+- **A rule question I raised, not ruled on:** the specswarm `audit-append` rule has no mode for "revision N's change
+  recorded, but carried to a later slice". 002 appended 8 per the send's reading.
+
+## Next actions
+
+1. **Check the bridge** (memory: check-bridge-before-building): the newest rows in `../bridge/history.md`,
+   `../bridge/active-prompt.md`'s Status line, `../bridge/feedback/`, `../bridge/dispatch/`.
+2. Build only from a new send. Branch from `master` (`f6faf01`) unless the send says otherwise.
+3. At the next germane push: the tag is `v0.<slices built>.<n>`. The slice count comes from the README Status,
+   **15 of 38** now, unless a send's README status block changes it. At 15 the next tag is **`v0.15.2`**. The push
+   carries the three audit merges too.
+4. Fold this file into `reboot.md` with that work's first commit (also update its § Plugin for 2.37.0).
+
+## How the audit cycles were run (recipes; the scripts lived in the memory staging folder, removed once folded here: rebuild them from this text)
+
+- **Per cycle:**
+  - branch `modify/NNN-revM` from master;
+  - `Skill specswarm:modify` with `NNN --from-send bridge/sends/…`, which loads the text;
+  - run its blocks from `modify_s12.sh "<args>"`, which gives the row;
+  - classify by diffing the prompt bodies of the archived sends;
+  - append `# Cycle N` sections to `impact-analysis.md` and `modify.md` (create them on a first modify), and commit;
+  - `Skill specswarm:plan`: append the Cycle plan section and commit;
+  - `Skill specswarm:tasks`: add a Phase with tasks, run the `ts_mentions` scan, and commit;
+  - `Skill specswarm:implement`, per task: `git rev-parse HEAD > ts`, edit, append to `decisions.md`, tick the
+    task, then `precommit.sh msgfile && git commit -F msgfile`, then `scope.sh FEATURE_DIR $(cat ts)` appended to
+    `decisions.md` and a "scope record, task ticked" commit.
+- **Provenance:** run `audit_append.sh` with the env vars `PROMPT_REV`, `AUDITED`, `N`, `MODE`, `OUT_OF_SCOPE`,
+  `UNVERIFIED` and `REMOVALS_VISIBLE`. **A revision that rewords a criterion gets `scoped`**; `full` would skip it.
+- **Step 10:** `step10.sh` then `step10g.sh`. The result is always unknown, warned (pytest is not installed for
+  `/usr/bin/python3`). **Do not write `.specswarm/metrics.json`** when a send confines the cycle to the feature
+  directory.
+- **The 9b tallies:** `source lib/tally.sh; scope_tally tasks decisions; decision_tally decisions`. Wrap each in
+  `echo "$(…)"`, because they print no trailing newline.
+- **Deny-list:**
+  - `precommit.sh [msgfile]` checks the staged tree and the message, by id;
+  - `objscan.py "<range>" <outdir> ../bridge/publish-denylist.txt` checks objects, path names and messages. Run it
+    from `code/`;
+  - the control is the range `archive/pre-publish`, which fires P1, P2, P6 and P7.
+  - **Run the check before every commit.** I slipped once this session (`4f634c6`; scanned clean straight after).
+- **Push recipe** (`reboot.md` § Publishing recipes): a throwaway `GIT_ASKPASS` script in the scratchpad (mode 700).
+  It answers `Username*` with `x-access-token`, and anything else with `GITHUB_IRONICXYZ_PAT` read from
+  `~/projects/ironik.xyz/.env`. Run `GIT_ASKPASS=… GIT_TERMINAL_PROMPT=0 git -c credential.helper= push public
+  master:main`, then the tags. Delete the script afterwards, check the output holds no token, and verify with
+  `git ls-remote`.
+- **Subagents:** a read-only general-purpose agent did 001's rule-10 code search well. Brief it: no edits, nothing
+  under bridge/ or plan/, cite file:line. Re-read its key citations before using them.
+
+## specswarm 2.37.0 observations (already relayed to the mentor)
+
+- D105: the tallies live in `lib/tally.sh`, with 0 bytes on stderr. D107: `flagged_delegate` counts work.
+- `provenance-inputs` (D89) mechanises modify row 7.
+- `fnum_resolve` handles `modify/NNN-*` silently.
+- Step 10e reads `package.json` (no more `quality-gates.sh` error).
+- Cosmetic: the tallies print no trailing newline.
 
 ## How the batch closed (2026-10-06 to 10-08)
 
@@ -521,7 +613,7 @@ follow-up did.
 - **Not linked:** push-to-checkout, proc-receive, fsmonitor-watchman. Under `env -i`, hooks run
   unbounded (T4, revision 8). P2 then rests on `run` and the harness's timeout.
 
-### Plugin: specswarm (2.36.0 installed 2026-10-08; checked against these notes 2026-10-08)
+### Plugin: specswarm (2.37.0 `d523530` loaded since the audit cycles, 2026-10-08; 2.36.0 notes below)
 
 - **2.36.0** (`40d7149`, `4.0.1-botbaubble.2.36.0`) differs from 2.35.0 in `implement.md` and `specify.md`
   only, and only for D104 (values that were composed, now read from the clock):

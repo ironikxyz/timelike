@@ -33,6 +33,8 @@ announce itself, by default, in the places agents already read at start-up:
 **Slices:** slice 0 (this spec, skeletal) is the announcement, its placement and the manifest command.
 Slice 1 (not built here) adds command-not-found guidance, unprivileged package installs and the
 resource-budget command.
+*(Revised, modify cycle 3, send `…-161802`: slice 1 is now specified in § Slice 1 below, declared. Slice 0's
+text above is kept as built.)*
 
 **Harness-agnostic (P7, T3):** the announcement only *announces*. Every tool works the same whether or
 not a harness reads it.
@@ -239,7 +241,7 @@ at build (FR-3). The marker line carries the revision.
 
 ## Out of scope (slice 0)
 
-Command-not-found guidance, unprivileged `pip`/`npm` installs, the resource-budget command (slice 1).
+Command-not-found guidance, unprivileged `pip`/`npm` installs, the resource-budget command (slice 1). *(Revised, modify cycle 3: specified in § Slice 1.)*
 ~~The workspace context file (D-1, raised).~~ *(Revised, revision 13: not out of scope but struck from the
 criterion; D-1 resolved.)*
 
@@ -250,3 +252,185 @@ criterion; D-1 resolved.)*
   where it is observed.
 - The agent's `$HOME` is `/home/agent`, writable by the agent, unless an operator mounts something else
   (FR-8 covers that).
+
+---
+
+## Slice 1 (natural) — added by modify cycle 3 (send `bridge/sends/04-rev13-20261008-161802.md`), declared
+
+> Added by `/specswarm:modify 007` from the send above, at prompt revision 13. Nothing above this line changes
+> meaning, apart from the annotated SC-1 notes (§ Slice 1 carried items). `prompt_revision`, `discovery_revision`
+> and `source_prompt` are untouched. Revision 13 was already in `audited_against` (modify row 4), so this cycle
+> appends nothing. It adds the criteria marked `_(slice 1)_`, which were in the prompt from revision 1 and out
+> of scope until now.
+
+**Intensity: natural.** The common failures are included: an unknown command with no known source, a
+runtime that is absent, a cgroup file that cannot be read. Edge-case hardening is not.
+
+### The command-not-found answer (criterion 4; send seams 2 and 3)
+
+- **FR-14 · Where it is reached.** A bash `command_not_found_handle`, defined by 001's hook
+  `/etc/timelike/shell-env.bash`, so it is reached exactly where that hook is:
+  - `bash -c` (through `BASH_ENV`);
+  - `bash -lc` (profile.d, then `BASH_ENV`);
+  - interactive bash (the `/etc/bash.bashrc` line);
+  - a bash script run by any of them (each bash reads `BASH_ENV`).
+
+  **Not reached, and said:** `sh -c` (dash, which has no such hook) prints `sh: 1: NAME: not found`. A
+  harness that `execve`s a missing binary directly gets `ENOENT` from the kernel, and the harness's own
+  message. Both exit 127 as before. Nothing works only through a harness's hook (P7, T3). Each claimed
+  style has its own e2e cell, and so does each unclaimed one, asserting what it gets (stack note 4).
+- **FR-15 · What it prints.** On stderr, then exit 127. The handler never installs anything, never asks and
+  never reads stdin (P2, P4).
+  1. **First, bash's own line, byte for byte:** `bash: line N: NAME: command not found` from `bash -c`,
+     `SCRIPT: line N: NAME: command not found` from a script, and `bash: NAME: command not found`
+     interactively. The handler rebuilds it from `$0`, `BASH_LINENO[0]` and `$-`, so an agent, or a harness
+     matching that text, sees exactly what it would see without timelike.
+  2. **Then, only when the name is known, one line per answer,** each starting `timelike: `, in the data
+     file's order:
+     - a timelike equivalent: `timelike: instead: <command>  (<what it is>)`, with the command first;
+     - an OS package: `timelike: NAME is in the Debian package PKG, which is not installed. The agent
+       cannot install OS packages (no root): the operator adds PKG to the image.`;
+     - a user-level install the agent can run itself: `timelike: install it yourself: <command>  (<note>)`.
+       **None ships until Item 21 is answered** (FR-18).
+  3. **An unknown name gets line 1 alone:** exactly the shell's usual line, with nothing invented.
+- **FR-16 · The data.** `/etc/timelike/missing-commands.tsv`, shipped in the image: one answer per line,
+  `name<TAB>kind<TAB>value<TAB>note`, with `kind` one of `instead`, `debian` or `user`, `-` for an empty note,
+  and `#` comments. A name can have several lines (`tree`: `view DIR`, and the Debian package `tree`).
+  `TIMELIKE_MISSING_COMMANDS` replaces the path for tests only, like the hook's other overrides.
+  **How it grows:** one line per answer. Checks in the tests:
+  - every `instead` names a command whose first word is an installed timelike tool;
+  - no listed name is installed in the image (e2e), or its answer could never be reached.
+- **FR-17 · Cost.** The handler uses bash builtins only (`read`, `printf`), so a typo costs no fork. Its cost
+  per call is measured (plan § Measurements). It is defined once per bash start, like the hook's other parts.
+  Defining a function forks nothing, which keeps the hook's rule of no fork at shell start.
+- **FR-17a · A harness that parses JSON.** The hook is the shell's and not a timelike tool, so rule 14's
+  JSON error shape does not apply. A harness sees exit 127 and the stderr lines above, as it would see
+  bash's line alone.
+
+### Unprivileged package installs (criterion 5; send seams 1, 4 and 5) — HELD on FOR-MENTOR Item 21
+
+- **FR-18 · Not built until Item 21 is answered.** The image ships no agent-facing Python or Node (only
+  timelike's own interpreter, run with `-I`, and `uv`). Every reading changes the image's contents or reads
+  the criterion as conditional, so the send says to raise it first. The options and the facts measured with
+  the pinned `uv` are in Item 21. The recommendation is (b): the configuration, not the runtimes. Whichever
+  reading is chosen, these hold:
+  - installs go through the standard commands (`pip install`, `npm install -g`), configured through the
+    environment, never through a wrapper that shadows `pip` or `npm`, so feature 15 can sit in front of them;
+  - package registries are reached under P4's standing grant;
+  - "succeeded" means the package imports, or is on PATH, in a **new** shell, from the user location, with
+    nothing under a root-owned path changed (P004); never the installer's exit code.
+- **FR-19 · Installs under `$HOME`, and recovery (seam 5), as built today.** User-level installs live under
+  `~/.local`, and the image sets `WORKDIR /home/agent`:
+  - with no repository in `~`, the workspace is `~` itself (005 FR-1). `snapshot` and `undo` refuse it
+    (005 D-2: the home directory is refused), and `verify changed` needs a git repository, so neither covers
+    installed packages there;
+  - inside a repository below `~`, `~/.local` is outside the workspace, so neither covers them either;
+  - so an install is undone by the installer's own uninstall (`pip uninstall`, `npm uninstall -g`). Nothing
+    in this slice promises otherwise.
+
+  The home is not a volume, so installs end with the container. 07 slice 1's state root is for timelike's
+  state, not for packages. Neither the announcement nor the budget says anything about persistence beyond
+  new shells.
+
+### The resource budget (criterion 6; send seam 6)
+
+- **FR-20 · The command: `timelike budget`.** A subcommand of the environment's own command, as D-4 chose
+  for `tools` and `announce`: no new name on PATH, nothing shadowed. It is announced by its own line in the
+  announcement (FR-24). It follows the output contract (header, verdict, `--json`, exit 0 for a report,
+  whatever it could read).
+- **FR-21 · One reader, not three.** The cgroup readers move into `agentio`:
+  - `cgroup_dir()`, `/proc/self/cgroup`'s `0::` path under `/sys/fs/cgroup`, with `TIMELIKE_CGROUP_ROOT`
+    overriding it;
+  - the integer-or-`max` file reader;
+  - the CPU figure.
+
+  `run` (003) imports them in place of its own, unchanged in behaviour (recorded as
+  `changed_other_features`). 005's workspace finder (FR-1) moves into `agentio` too, so `budget` and
+  `snapshot` name the same workspace (005 is recorded as changed as well).
+- **FR-22 · The figures, from cgroup v2** (stack note 6; never `ps` RSS or `os.cpu_count()`):
+  - **memory:** limit (`memory.max`), in use (`memory.current`), peak (`memory.peak`, where the kernel has it);
+  - **CPU:** limit as CPUs (`cpu.max` quota ÷ period, two decimals), plus the job-count figure
+    `TIMELIKE_CPUS` the hook computes. That is ⌈quota ÷ period⌉ capped by the affinity count, never below 1,
+    computed by **the same rule in `agentio`**. A test feeds the same files to both and asserts they agree. The
+    output also names the shell's `$TIMELIKE_CPUS`, when set, and whether it agrees;
+  - **processes:** limit (`pids.max`), running (`pids.current`);
+  - **disk:** free and total bytes (`statvfs`) on the **workspace** (005 FR-1: the nearest ancestor holding
+    `.git`, else the current directory) and on the **scratch root** (`TIMELIKE_SCRATCH_ROOT`, default
+    `/tmp/timelike`). When the scratch root does not exist yet, the figure is for its nearest existing
+    ancestor. Both paths are named in the output, and so is the measured path when it differs.
+- **FR-23 · Results that are not numbers.** `max` prints as **no limit**, never as a number. An unreadable
+  file, a missing one (a cgroup v1 host, or a kernel without `memory.peak`) or an unparseable one is
+  **unknown**, with the file and the reason named, never 0. Each figure carries `state` (`value`, `none` or
+  `unknown`), `value`, `source` (the file or path read) and `reason`.
+
+### The announcement (FR-2, extended)
+
+- **FR-24** Two rule lines are added, inside the 60-line bound (28 lines at slice 0, 30 now):
+  - `` `timelike budget`: this container's memory, CPU, process and disk limits, and what is in use. ``
+  - "In bash, a command that is not installed says what to use instead, or who can install it." It says
+    "in bash" because `sh -c` and direct execs do not get the answer (FR-14).
+
+### Slice 1 success criteria (the send's text, copied exactly)
+
+- **SC-5:** "Typing a command that is not installed exits 127 and prints the install command for the package
+  that provides it or the equivalent timelike tool, when either is known". One e2e file in the image:
+  - one cell per claimed style (`bash -c`, `bash -lc`, interactive bash, a script), each for a known name with
+    an equivalent (`tree`), a known name with a package only (`jq`), and an unknown, guaranteed-absent name;
+  - one cell each for `sh -c` and a direct exec, asserting exit 127 and the shell's or harness's own message,
+    with no `timelike:` line;
+  - one cell that every listed name is absent in the image;
+  - the unknown cell compares the handler's stderr byte for byte with the same command run with the handler
+    unset.
+- **SC-6:** "A bare Python package install and a global Node package install each succeed as the agent's user
+  without privilege and persist across new shells". **HELD on Item 21 (FR-18).**
+- **SC-7:** "One command prints the agent's resource budget: memory limit and use, CPU limit, process limit,
+  and free space on the workspace and scratch filesystems". Tested:
+  - by units against cgroup files the test writes under `TIMELIKE_CGROUP_ROOT`, with values chosen apart from
+    the reader, including `max`, an unreadable file and a missing file (P005);
+  - by e2e against a throwaway container started with a known `--memory`, `--cpus` and `--pids-limit`, and
+    against the running agent container; the CPU figure equals that shell's `$TIMELIKE_CPUS`.
+- **SC-8 (Manual):** "DEMO: the Agent types a command that is not installed and is told the install command or
+  the equivalent timelike tool" (D13). The mentor captures it after the lane. It stays `unconfirmed` until
+  then.
+
+### Slice 1 carried items (007's own; send § Carried)
+
+- **SC-1's e2e cell names** take revision 13's text: the struck clause is gone, and the two workspace cells
+  say "the workspace is left untouched". The assertions do not change.
+- **SC-1's placement bound (Measurable outcomes, "not delayed by more than 1 second") is replaced, declared.**
+  It failed in lane readme-b at 11225 ms under host I/O load and passed in readme-c, so host load decided it,
+  not the feature. The criterion says "on container start". The cell now asserts the **ordering**:
+  - every file is present and current when the container's command first runs (the entrypoint places them,
+    then `exec`s the command);
+  - none predates the container's start by more than the existing 1 s clock tolerance (placed on this
+    start, not baked into the image).
+
+  The placement time is still printed in the cell's output, as a measurement, not a bound.
+- **`python3` in `standard-tools.json`:** it stays a curated entry (its REPL trap is real wherever a Python
+  exists). It is `installed: false` in the image today, computed and not curated. Item 21 settles whether
+  that changes.
+
+### Slice 1 decisions
+
+**D-7 · The answer lives in the shell hook, reached by every bash style 001's hook reaches (seam 2).** A
+wrapper around the harness, or a harness hook, would work in one harness only (P7). `sh -c` cannot be
+reached without replacing `/bin/sh`, which changes every system script. So it is named, and tested, as not
+reached.
+
+**D-8 · The data is a tab-separated file, not `standard-tools.json` (seam 3).** The handler runs on every
+typo, in bash, with no fork (FR-17), and bash cannot read JSON without a process. One file is read by the
+handler and validated by the tests. Debian's `command-not-found` index is not used: it needs `apt-file` data
+fetched from the network and an index rebuilt as root, which suits neither an agent without root nor an image
+that does not change after build.
+
+**D-9 · OS packages are named with who can install them (seam 3, P1).** The agent has no root (R7), so
+`apt-get install X` is a command it cannot follow. The answer names the package and the operator, not a
+command that fails.
+
+**D-10 · `timelike budget`, a subcommand (seam 6).** It follows D-4: no new name on PATH. A new name such
+as `budget` would also need conformance and its own announcement line, for no gain.
+
+**D-11 · SC-6 is held, not narrowed (seam 1).** FOR-MENTOR Item 21 is raised. The parts of the cycle it does
+not block (FR-14–FR-17, FR-20–FR-24) are built meanwhile. If it is still open when everything else is done,
+the cycle report says SC-6 is not built, and `README.md` is left untouched, as the send's README block
+instructs.
