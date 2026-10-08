@@ -124,3 +124,4 @@ INHERITED: T010, T011 — (confidence: high)
 FLAGGED: scoped, not full — revision 13 rewords a criterion, so the installed block in full mode, given UNVERIFIED=13, appends 2–12 and leaves 13 out (verified); scoped appends 13 alone, which is what this cycle checked and what the send asks — (confidence: high)
 ASSUMED: the new audit-log.md opens with a seed row for specify's [1], dated by the spec's created_at and marked as written now, as 002's log did — (confidence: high)
 ABSENT: prompt_revision (1), discovery_revision (12) and source_prompt untouched; revisions 2–12 not appended
+SCOPE: none — no files outside the feature's artifacts changed
