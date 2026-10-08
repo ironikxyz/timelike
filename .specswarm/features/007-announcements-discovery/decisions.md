@@ -134,3 +134,13 @@ FLAGGED: SC-1 cited by text outside the strike, not by Cycle 1's text — Cycle 
 ASSUMED: D4 keeps "observed by the operator" (Cycle 1 Addendum 2) — (confidence: high)
 ABSENT: the stale e2e cell names are reported, not renamed (tests/ is outside the feature directory); no demo_points_reached; no .implement-complete; metrics.json not written
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T016: agentio gains cgroup_dir, cgroup_value, cpu_figure, workspace; run and snapshot use them
+**Started:** 2026-10-08T16:28:58Z | **Completed:** 2026-10-08T16:31:57Z | **Coordinator**
+
+INHERITED: (none from this cycle's tasks; T014/T015 are delegated test files, landing separately) — the moved code is `run`'s cgroup_dir/_read_bytes (003 R16) and `snapshot`'s find_workspace (005 FR-1), read before the move (confidence: high)
+ASSUMED: `cgroup_value` keeps `_read_bytes`'s contract exactly (int, None for `max`, OSError/ValueError raised), so `run`'s memory_reading is unchanged; the ValueError message says "not a number" (was "not a number of bytes"), which only reaches `run`'s data.reason on a garbage memory file — (confidence: high)
+ASSUMED: `cpu_figure` reads cpu.max at TIMELIKE_CGROUP_CPU_MAX, else `cgroup_dir()/cpu.max`; the hook's default is /sys/fs/cgroup/cpu.max. In a container with a private cgroup namespace (Docker's default on v2) `/proc/self/cgroup` is `0::/`, so both read the same file; the e2e agreement cell (T014) checks it in the image — (confidence: medium)
+FLAGGED: snapshot keeps a one-line `find_workspace` that calls agentio, rather than replacing its two call sites — chose the thin shim over editing call sites because it keeps 005's names and diff minimal, and its refusal logic (check_workspace) stays in snapshot — (confidence: high)
+ABSENT: no direct unit tests for the new agentio functions in this task (test_budget.py, T015, covers them through `timelike budget`, and run/snapshot suites cover the moved paths); `undo` unchanged (it loads snapshot); the hook's bash copy of the CPU rule is not touched
+Verification: host, venv python 3.12 + pytest 8.4.2: tests/unit/test_run.py, test_run_slice1.py, test_snapshot.py, test_undo.py, test_agentio.py — 232 passed, unchanged suites; ruff check + format --check over tools: clean; mypy (pyproject config): no issues in 27 source files. Advisory: host, not the image

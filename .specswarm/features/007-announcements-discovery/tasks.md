@@ -101,7 +101,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   unreadable, missing; disks; text and JSON; the CPU rule against the bash hook on the same files),
   `tests/unit/test_missing_commands.py` (the shipped TSV's validity), and `tests/host/test_command_not_found.sh`
   (the handler per style, byte for byte against bash, under `set -eux` callers, with an empty PATH).
-- [ ] T016 [US7] `tools/agentio/agentio.py`: `cgroup_dir`, `cgroup_value`, `cpu_figure` and `workspace`. `tools/bin/run`
+- [X] T016 [US7] `tools/agentio/agentio.py`: `cgroup_dir`, `cgroup_value`, `cpu_figure` and `workspace`. `tools/bin/run`
   and `tools/bin/snapshot` use them, and their own copies go. Their existing suites (`tests/unit/test_run*.py`,
   `tests/unit/test_snapshot.py`, `tests/unit/test_undo.py`) pass unchanged.
 - [ ] T017 [US7] `tools/bin/timelike`: `timelike budget` (contract § `timelike budget`) and the announcement's two
