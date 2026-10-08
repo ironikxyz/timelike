@@ -314,3 +314,4 @@ ASSUMED (delegate): the npmrc's ${HOME} must reach the file literally (single-qu
 FLAGGED: the coordinator added test_the_two_runtimes_stages_are_identical (D-15: the agent and vanilla `runtimes` stages byte-identical), which the vanilla Dockerfile's header claims — (confidence: high)
 ABSENT (delegate): root ownership of /opt/agent (e2e territory); the stage name `runtimes` beyond the identity test; the vanilla header's wording
 Verification: 141 passed, 1 skipped (tests/unit/test_agent_runtimes.py, test_announce.py, test_missing_commands.py) against T026–T029's files; ruff check and format clean. The delegate checked the tests fail on mutated Dockerfiles (npmrc double-quoted, corepack linked, marker kept, the pre-cycle file)
+SCOPE: in (3 changed files)
