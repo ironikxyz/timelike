@@ -1873,3 +1873,144 @@ decisions: sections=85 flagged_sections=49 non_flagged_sections=36 sections_with
 Cycle 7 alone (T079–T081): 3 sections, 3 FLAGGED entries (T080's in-cycle append; T081's version and
 reworded-reasons calls), 0 low-confidence. `SCOPE:` none 2 (T079, T080: `.specswarm/features/001-…`
 only), in 1 (T081: `.specswarm/metrics.json`).
+
+## Cycle 8 — bridge/sends/01-rev13-20261008-095251.md
+
+**Written:** 2026-10-08T10:08:04Z (read from the clock). Not in dispatch mode. Built with `/specswarm:modify 001 --from-send
+bridge/sends/01-rev13-20261008-095251.md`, then `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`,
+on `modify/001-rev13` from `master` at `c79facc` (= `public/main`). **Pushed nothing; not merged.**
+
+**specswarm version (lore specswarm Q002):** **4.0.1-botbaubble.2.37.0**. The expanded commands named its cache path,
+and the session's pid is in its `.in_use`.
+
+**Status in one line:** record only, `.specswarm/features/001-agent-shell-baseline/` only. Rule 10's struck
+project-cache clause, the one false line, is corrected in place, declared. Rules 9 and 13 carry revisions 13 and 12,
+declared. `audited_against` gains 11, 12, 13.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/01-rev13-20261008-095251.md |
+| source_prompt | plan/.discover/prompts/01-agent-shell-baseline.md |
+| prompt_revision | 13 |
+| discovery_revision | 13 |
+| slice | 1 of [0, 1] (merged) (no new slice; an audit of what is merged) |
+
+### Group C — written by the code instance
+
+**delegations:** one.
+- A general-purpose subagent, read-only (no edits, no commits, nothing under `../bridge` or `../plan` read or
+  written, no Docker). It answered the send's two rule-10 questions with citations: what 001's contracts say for rule
+  10, and whether any tool writes state inside the workspace or its `.git`. Its key citations were re-read here
+  before use: `output-contract.md:3` and `:175`; 0 hits for "project cache" and for "state root" across every
+  feature's contracts; `tools/bin/verify:848` and `:878` with 0 hits for `optional-locks`; 012's
+  `verify-cli.md:130–132`; `tools/bin/symbols:355`; `image/Dockerfile:215`. Its findings are condensed into
+  `impact-analysis.md` § Cycle 8.
+
+**criteria_reestablished.** Revisions 11–13 changed no criterion. The Acceptance Criteria of the rev-10 send and this
+one are byte-identical. This cycle changed only files under `.specswarm/features/001-agent-shell-baseline/`
+(`git diff master HEAD -- . ':!.specswarm/features/001-agent-shell-baseline'` is empty), and `master`'s tree at
+`c79facc` is `725b7a1f…`, identical to `10ddd3a`'s. So the 11 Automated criteria cite **the mentor's lane readme-c
+at `10ddd3a`, a lane on an identical tree** (history 2026-10-08T08:28:00Z: `make test` PASSED, e2e 537/537, 0
+`not ok` in `bridge/.make-test-readme-c.log`). No lane ran for this cycle.
+- `01 · "each exit within 20 seconds without opening a pager or editor"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "the environment's pager, editor, prompt and colour defaults are all in effect, verified by one test per invocation style"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "fails fast with a non-zero exit instead of prompting"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "a commit a pre-commit hook rejects fails with the hook's output, as it would without timelike"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "is killed and the git command exits non-zero within the limit plus a few seconds, with a verdict naming the hook"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "cannot run any command as root, cannot change firewall rules, and cannot read files owned by Adele"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "fails when any tool lacks `--help` within 40 lines"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "each write to their own scratch space, and neither's output files or event log entries appear in the other's"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "are derived from the container's CPU limit rather than the host's CPU count"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "are absent from the agent's environment unless explicitly allow-listed"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "The timezone defaults to UTC and interactive language REPLs default to their basic, scriptable prompt mode"` — **executed [mentor's lane readme-c at 10ddd3a: `make test`, e2e 537/537, 001's e2e files]** (cited, not re-run; identical tree)
+- `01 · "each returns within seconds instead of waiting on an editor, pager or prompt"` — **unconfirmed**. Manual (D1),
+  the mode Cycle 7 recorded; this cycle observed nothing.
+- `01 · "can predict, for a tool they have not seen, what its first line, last line and exit codes will be"` —
+  **unconfirmed**. Manual (SC-11), the mode Cycle 7 recorded; this cycle observed nothing.
+
+Each citation matches exactly one line of the send (`grep -cF` = 1 for all 13). The one with backticks is written
+in the same form as Cycle 7's.
+
+**reconcile_mode:** `full`. `audited_against` is now `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]` (T084, computed by
+the installed `audit-append` block: `MODE=full`, `REMOVALS_VISIBLE=yes`, `OUT_OF_SCOPE` and `UNVERIFIED` empty →
+`MODE_USED=full`, `APPENDED=11 12 13`, no note). There is one `audit-log.md` row per revision.
+- **11: amended (struck clause), corrected in place.** Spec rule 10 named "an optional git-excluded project cache" as
+  allowed state, and revision 11 struck it, so the line was false. It is corrected by declared copy (T082), with the
+  strike kept visible. **Not regenerated**, per the send. The command's row 7 says to stop on an amended false line;
+  the send, and cycle 5's handling of revision 7's struck hooks clause, say to correct a copied constraint line in
+  place. Recorded as FLAGGED in T082.
+- **12, 13: need no body change.** Rules 13 and 9 stayed true. Their clarifications are appended, declared (T083).
+- **Line numbers:** the audit-log rows and the impact analysis cite the spec as it was before T082 and T083 (rule 9
+  at `:181`, rule 10 at `:189`, rule 13 at `:192`), except where a row says "now". After this cycle rule 9 starts at
+  `:181`, rule 10 at `:195` and rule 13 at `:204`.
+
+**The send's items:**
+1. **The three copies** (T082 `rule 10`, T083 `rules 9 and 13`), each declared and naming where the contract
+   already says it.
+2. **The code against rule 10 as revised, read-only (lore P004: what was compared):**
+   - **timelike's own state is written only to the session scratch**
+     (`${TIMELIKE_SCRATCH_ROOT:-/tmp/timelike}/<session>/`, `output-contract.md:175`): agentio's artefacts,
+     tracebacks and `events.jsonl`, and `run`, `search`, `journal`, `services`, `snapshot`,
+     `timelike-conform` and the bash EXIT trap. Nothing writes a git config or a hooks path into a repository.
+   - **011's symbols index** is in the scratch (`tools/bin/symbols:355`). This is **FOR-MENTOR Item 20**, waiting
+     on 07 s1's state root. Cited, not resolved.
+   - **Two tool-initiated writes that can land inside the workspace or its `.git`.** Neither is a timelike state
+     file. Reported, not decided:
+     - `verify` runs `git status` (`tools/bin/verify:878`, through `:848`) without `--no-optional-locks`,
+       so git may rewrite `.git/index` when its stat cache is stale.
+     - `verify changed` runs pytest, ruff and mypy with their default caches (`__pycache__`, `.pytest_cache`,
+       `.mypy_cache`, `.ruff_cache`), which 012's `contracts/verify-cli.md:130–132` already admits and filters.
+     - Whether either is "state" under rule 10 is a reading of the rule for the mentor or plan.
+   - **A default worth knowing:** `announce --install` writes the harnesses' user-level files under `$HOME`. The
+     image's `WORKDIR` is `/home/agent` (`image/Dockerfile:215`), which is also `$HOME`, so an agent working
+     directly in `~` sees them in its working directory.
+3. **`output-contract.md` against rule 10 as revised.** It names **no project cache**: 0 hits across every
+   feature's contracts, so the send's stop condition does not fire. It **does not name the per-workspace state root**
+   either: `:3` points at the send's rules without restating rule 10, and `:175` defines only the scratch. This is
+   a gap, not a contradiction. It is reported for the cycle that builds the state root (07 s1), and the contract is
+   not changed here.
+
+**not_verified**
+- **No test ran in this cycle**, on the host or in the image. The 11 Automated criteria are cited from lane readme-c,
+  not re-executed. The citation holds only because nothing outside this feature's directory changed.
+- **The code check is read-only and by search**, not a run. It names what writes where by reading the source. No
+  tool was exercised to watch its writes, so the conditional `.git/index` refresh in particular was not observed.
+- The two Manual criteria (D1, SC-11) stay `unconfirmed`.
+
+**changed_other_features:** none. Only `.specswarm/features/001-agent-shell-baseline/` changed, and implement step
+10j's `.specswarm/metrics.json` entry was not written (outside the feature directory, as the send directs).
+
+**process_failures_recorded**
+1. **A wrong feature number, corrected in the cycle.** The modify-step impact analysis named 012's `verify`
+   contract as 009's. It was fixed in `d223069` before plan ran.
+2. **Plugin observations under 2.37.0:** the same as 002's Cycle 2 on the same session (D105's `lib/tally.sh` with
+   0 bytes on stderr; the tallies print without a trailing newline; `provenance-inputs` mechanises row 7;
+   `fnum_resolve` resolved `modify/001-rev13` to 001 with nothing on stderr). No workaround beyond running the
+   blocks from scratch scripts.
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+The result is the same as 002's Cycle 2 on this session (`.specswarm/features/002-speedup-bench/cycle-report.md`
+§ Cycle 2), re-run on this branch: `run_tests` rc=2 (pytest declared, not installed for `/usr/bin/python3`), parse
+`total=unknown`, `run_coverage` rc=1 `unknown`, browser `none`. The scale's output is identical byte for byte:
+`Quality Score: unknown — no component could be measured`. The six exclusions are attributed 2 to this install, 2 to
+this machine and 2 not applicable, with `block_merge_on_failure: false` (`quality-standards.md:295`). The gate is
+**UNKNOWN**, so it warns and does not halt. No component was filled in by hand.
+
+**Implement step 9b: decision log** (plugin `scope_tally` and `decision_tally` over the whole of 001's `tasks.md` and `decisions.md`, all cycles, before T085's own records):
+
+```
+scope: planned=85 recorded=77 unplanned=0 unrecorded=8 in=55 out=12 none=18 unknown=0 flagged=50 flagged_out=8 other=35 other_out=4
+decisions: sections=88 flagged_sections=50 non_flagged_sections=38 sections_without_absent=8 flagged=87 assumed=113 deferred=6 absent=101 inherited=89 low_confidence=0 flagged_low_confidence=0 flagged_delegate=0 assumed_delegate=0
+```
+
+Cycle 8 alone (T082–T084 at that point): 3 sections, 1 FLAGGED entry (T082's in-place correction), 0 low-confidence.
+`SCOPE:` none 3.

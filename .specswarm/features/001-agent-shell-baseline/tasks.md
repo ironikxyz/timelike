@@ -462,7 +462,7 @@ Governance is current at `[2..13]`, so there is no audit task. No criterion chan
   visible); write `audited_against` in `spec.md` frontmatter and one `audit-log.md` row per revision, rule 10's as
   *amended (struck clause), corrected in place*. Never touch `prompt_revision`, `discovery_revision` or
   `source_prompt`.
-- [ ] T085 Cycle report § Cycle 8 (the send's block): Group A not applicable; Group B from the send; the 11 Automated
+- [X] T085 Cycle report § Cycle 8 (the send's block): Group A not applicable; Group B from the send; the 11 Automated
   criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree); D1 and SC-11 with the modes Cycle 7
   recorded; the rule-10 code check (the symbols index, Item 20, cited; the two tool-initiated writes and the
   contract's missing state root reported); implement steps 10 and 9b.

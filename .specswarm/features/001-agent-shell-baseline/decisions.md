@@ -932,3 +932,10 @@ INHERITED: T082, T083; the criteria comparison (byte-identical to rev 10's) from
 ASSUMED: one row per revision, as the send asks, each repeating the shared basis so a row read alone stands — (confidence: high)
 ABSENT: prompt_revision (2), discovery_revision (3) and source_prompt untouched; no earlier row rewritten
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T085: cycle report § Cycle 8; implement steps 10 and 9b recorded
+**Started:** 2026-10-08T10:08:04Z | **Completed:** 2026-10-08T10:08:04Z | **Coordinator**
+
+INHERITED: T082–T084; the delegate's rule-10 findings, re-read at their key lines; lane readme-c from bridge/history.md and its log (0 `not ok`) — (confidence: high)
+ASSUMED: D1 and SC-11 keep Cycle 7's mode (unconfirmed): no later addendum or history entry records an observation — (confidence: high)
+ABSENT: no demo_points_reached; no .implement-complete (not dispatch); metrics.json not written (outside the feature directory)
