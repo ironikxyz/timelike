@@ -291,3 +291,4 @@ FLAGGED: a name the agent can install itself gets the `user` row only, not also 
 ASSUMED: 14 `user` rows (8 pip, 6 npm), each the prefix plus one package token (T025's unit rule); `http` → `pip install httpie`, `tsc` → `npm install -g typescript` (command name differs from the package); none of the names is in the image (the SC-5 e2e absence cell checks it) — (confidence: high)
 ABSENT: no change to standard-tools.json — python3 and node keep their REPL risk and `instead`, and `installed` is computed (true now); `uv` not listed (it is on PATH at /bin/uv); no network-dependent check that each package exists on PyPI or npm
 Verification: tests/unit/test_missing_commands.py 16 passed, 1 skipped (the pre-ruling "no user rows" check, off by flag)
+SCOPE: in (1 changed files)
