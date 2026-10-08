@@ -244,3 +244,38 @@ decisions: sections=8 flagged_sections=8 non_flagged_sections=0 sections_without
 - `unrecorded=1` is T009, this report. The marker's tallies are taken after it.
 - There is no low-confidence entry, so no pause file was written **for this feature** in this run. The
   pause before it, `pause-06.md`, was the send's named seam and was answered.
+
+### Addendum 1 — D6 observed by the operator (2026-10-08T05:37:01Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T22:38:49Z) and the transcript
+it cites, `bridge/.d6-demo-20261007T212743Z.txt` (bridge `2d5180e`), which this instance read.
+
+- `06 · "on a failed match is shown the nearest candidates _(traces to: D6)_"` — **observed by the
+  operator**, by interview with the mentor instance on `edit`'s real output. The image was the one lane
+  batch-d passed (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway with `--cap-drop ALL`,
+  `no-new-privileges` and `--init`. Everything ran as user `agent` under `bash -lc`. It was a tool-level
+  demo, as its header says.
+  - **The file:** `legacy/Invoice.cs`, with CRLF line endings and tab indentation (`cat -A`; a census of
+    21 lines found 21 CRLF, 14 starting with a tab, none with a space). The `--old` text was written the way
+    an agent copies it: LF endings and four spaces per level.
+  - **The edit:** exit 0, `edited lines 10-16 of 23 (matched ignoring line endings and indentation
+    (4 spaces = 1 tab))`. In JSON: `level` indentation, `line_ending` CRLF, and the mapping
+    {agent: 4 spaces, file: 1 tab}.
+  - **Afterwards:** 23 of 23 lines CRLF, 0 LF-only, 16 starting with a tab, none with a space; the two new
+    lines are `^I…^M$`; `git diff --stat` shows 2 insertions.
+  - **The failed match** (`0.25m` for the file's `0.2m`): exit 3, `--old matches nowhere (tried exact,
+    line endings, indentation); 2 nearest candidates; nothing written`. Candidate 1 is line 20 at
+    similarity 0.95, then `do instead: copy the text from a candidate (view legacy/Invoice.cs:20-20)`.
+    The sha256 was the same before and after.
+  - **Interview:** answers 1 and 3 matched. Answers 2 and 4 first cited the tool's own claims (the mapping
+    field; "nothing written"). The mentor challenged them, and the operator answered from the independent
+    evidence (all 23 lines CRLF, 2 insertions; the sha256 unchanged). The operator accepts D6 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Noted by the mentor, a finding for 05 (`view`), not D6:** on the 21-line file,
+  `view --text legacy/Invoice.cs:10-14` prints `more: view legacy/Invoice.cs:15-134`, a 120-line window
+  past the end rather than one clamped to 15-21. It also prints the full-output path twice. That is for a
+  later 05 cycle.
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12, D14 and D4 addenda
+  (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+  The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
+  first option). A revert of 012 by branch topology would carry this addendum with it.
