@@ -428,3 +428,4 @@ FLAGGED: written by the coordinator, not a delegate — the API they pin (releas
 ASSUMED: file:// URLs stand in for the registry (urllib reads them; no server, no network); the unreachable case is a registry directory that does not exist — (confidence: high)
 ABSENT: no test reaches the real registry (T044 runs that from the host, advisory); 38 tests fail until T041 (expected: tests first)
 Verification: ruff check and format clean; pytest: 38 failed, as expected before T041
+SCOPE: in (1 changed files)
