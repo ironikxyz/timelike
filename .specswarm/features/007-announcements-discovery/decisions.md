@@ -358,3 +358,11 @@ FLAGGED: T022 closed here, not ticked — superseded by Phase 7 (T024–T033), w
 ASSUMED: every Automated criterion cited unconfirmed with host results labelled advisory; D4 kept "observed by the operator"; D13 unconfirmed — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); prompt_revision, discovery_revision and source_prompt untouched; no commit after the cycle is reported done (send rule)
 SCOPE: in (2 changed files)
+
+### T034: SC-5 direct-exec cell reads both streams (lane 007s1-a, item 1)
+**Started:** 2026-10-08T20:00:22Z | **Completed:** 2026-10-08T20:00:49Z | **Coordinator**
+
+INHERITED: the mentor's measurement on the lane host (Docker 29.4.2): `docker exec <agent> tree </dev/null` exits 127, 0 bytes on stderr, the OCI not-found message on stdout; Cycle 3's not_verified named this premise — (confidence: high)
+ASSUMED: docker's choice of stream is not the criterion's subject, so the cell reads stdout and stderr together; non-zero, `tree`, "not found" and no timelike line (on either stream, as before) are kept — (confidence: high)
+ABSENT: no change to FR-14 or the handler; exit code still asserted non-zero, not 127 (126 on older releases)
+Verification (host, advisory): the cell's three functions, run under bats 1.14.0 against a stub docker — message on stdout: ok; on stderr: ok; a timelike line: not ok; exit 0: not ok; an unrelated daemon error: not ok

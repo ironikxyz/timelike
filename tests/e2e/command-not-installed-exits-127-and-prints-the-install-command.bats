@@ -273,9 +273,10 @@ check_sh_not_reached() {
 
 # A direct exec has no shell: runc's execve fails with ENOENT and docker prints the runtime's error,
 # of the form `OCI runtime exec failed: exec failed: unable to start container process: exec: "tree":
-# executable file not found in $PATH: unknown`. Its exit status is docker's own: 127 on current
-# releases, 126 on some older ones (read from docker's behaviour as recalled, NOT verified here — no
-# daemon), so the cell asserts non-zero and prints what it got.
+# executable file not found in $PATH`. Measured by the mentor on Docker 29.4.2 (lane 007s1-a): exit 127,
+# the message on STDOUT and 0 bytes on stderr. Which stream carries it is docker's choice, not this
+# criterion's, so the cell reads both; it asserts non-zero (126 on some older releases), the message
+# naming `tree` and "not found", and no timelike line.
 direct_exec() {
   timeout "$RUN_TIMEOUT" docker exec "$AGENT_CONTAINER" "$1" </dev/null
 }
@@ -283,8 +284,10 @@ direct_exec() {
 check_direct_exec_not_reached() {
   sc5_ready
   run ! --keep-empty-lines --separate-stderr direct_exec tree
-  if [[ "$stderr" != *tree* || "$stderr" != *"not found"* ]]; then
-    printf 'direct exec (exit %s): expected docker'"'"'s not-found message naming tree, got:\n%s\n' "$status" "$stderr" >&2
+  local both="${output}"$'\n'"${stderr}"
+  if [[ "$both" != *tree* || "$both" != *"not found"* ]]; then
+    printf 'direct exec (exit %s): expected docker'"'"'s not-found message naming tree on either stream, got:\nstdout: %s\nstderr: %s\n' \
+      "$status" "$output" "$stderr" >&2
     return 1
   fi
   assert_no_timelike_line

@@ -171,3 +171,22 @@ bar.** US6 = SC-6.
 **Parallel:** T024 and T025 (delegates, test files only) run beside T026–T030. T026 comes before T027 and T028.
 T031 follows them, then T032, then T033.
 
+
+## Phase 8: Lane 007s1-a fixes (feedback `bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`, by hand on Cycle 4's tasks)
+
+- [X] T034 [US5] `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`: the direct-exec
+  SC-5 cell looks for docker's not-found message on either stream (measured on Docker 29.4.2: stdout), and keeps
+  non-zero, `tree`, "not found" and no timelike line.
+- [ ] T035 `tests/e2e/conformance-check-over-every-timelike-tool-on-path.bats` and
+  `tests/e2e/fixtures/timelike-envpython`: 001's broken-interpreter cell runs with a PATH that excludes the agent
+  runtimes, so its premise (no python3 on PATH) holds again; C1 and C6 stay asserted (001's test:
+  `changed_other_features`).
+- [ ] T036 `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: reviewed entries for the two
+  findings with no fix (GHSA-ch52-4w7c-c8xp in npm's bundled http-cache-semantics; CVE-2026-77214 in the base
+  layer's libexpat1, via git), with reason, layer and the neighbours' review date.
+- [ ] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
+  in every image that carries it, as a second result line; `tests/unit/test_scan_gate.py` and
+  `.specswarm/quality-standards.md` follow.
+- [ ] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
+  the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).
+- [ ] T039 `cycle-report.md` § Cycle 4, `### Lane 007s1-a fixes`; `reboot.md` brought up to date.
