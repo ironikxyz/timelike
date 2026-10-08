@@ -551,5 +551,52 @@
       }
     },
     "lane": "pending: the mentor's Docker lane after the batch"
+  },
+  "007": {
+    "recorded_at": "2026-10-04T20:23:08+00:00",
+    "git_sha": "(the T009 commit; tree measured at the T008 commit 2b4aac4)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.35.0 (session-loaded), /specswarm:implement --dispatch step 10",
+    "send": "bridge/sends/04-rev1-20261004-183704.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; dispatch mode: warned, never asked"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores)",
+      "units": "1309 passed, 1 skipped (venv Python 3.12.3, pytest 8.4.2, 530 s, subprocess coverage)",
+      "coverage_python": "95% overall, line and branch (timelike 92%); merge bar 90%",
+      "lint": "ruff check + format (63 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats and the entrypoint: clean",
+      "make_test_host": "passed",
+      "p95_ms": {
+        "timelike --help": 76,
+        "timelike announce --status": 72,
+        "timelike tools": 688,
+        "timelike announce": 675
+      }
+    },
+    "lane": "pending: the mentor's Docker lane after the batch"
   }
 }

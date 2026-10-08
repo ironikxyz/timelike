@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "note": "Curated standard tools for `timelike tools` (feature 007, spec FR-11, research R4). json: yes | partial: <how> | no. interactive_risk: none, or a comma list of pager, editor, prompt, repl, waits, unbounded output. instead: a safer command, or empty.",
+  "tools": [
+    {
+      "name": "cat",
+      "summary": "print a file",
+      "json": "no",
+      "interactive_risk": "unbounded output",
+      "instead": "view FILE"
+    },
+    {
+      "name": "curl",
+      "summary": "transfer a URL",
+      "json": "no",
+      "interactive_risk": "waits, unbounded output",
+      "instead": "run curl … (concludes, keeps the full output in a log)"
+    },
+    {
+      "name": "find",
+      "summary": "list files below a directory",
+      "json": "no",
+      "interactive_risk": "unbounded output",
+      "instead": "view DIR (budgeted overview)"
+    },
+    {
+      "name": "git",
+      "summary": "version control",
+      "json": "partial: --porcelain, --format",
+      "interactive_risk": "pager, editor",
+      "instead": "git --no-pager … (timelike already pins the pager and editor off)"
+    },
+    {
+      "name": "grep",
+      "summary": "search text",
+      "json": "no",
+      "interactive_risk": "unbounded output",
+      "instead": "search PATTERN DIR (capped, grouped by file)"
+    },
+    {
+      "name": "less",
+      "summary": "page through text",
+      "json": "no",
+      "interactive_risk": "pager",
+      "instead": "view FILE"
+    },
+    {
+      "name": "ls",
+      "summary": "list a directory",
+      "json": "no",
+      "interactive_risk": "unbounded output",
+      "instead": "view DIR (budgeted overview)"
+    },
+    {
+      "name": "make",
+      "summary": "build",
+      "json": "no",
+      "interactive_risk": "waits, unbounded output",
+      "instead": "run make …"
+    },
+    {
+      "name": "more",
+      "summary": "page through text",
+      "json": "no",
+      "interactive_risk": "pager",
+      "instead": "view FILE"
+    },
+    {
+      "name": "nano",
+      "summary": "edit a file",
+      "json": "no",
+      "interactive_risk": "editor",
+      "instead": "edit the file non-interactively (sed -i, or a heredoc)"
+    },
+    {
+      "name": "node",
+      "summary": "JavaScript runtime",
+      "json": "no",
+      "interactive_risk": "repl",
+      "instead": "node script.js, or node -e '…' (never bare node)"
+    },
+    {
+      "name": "npm init",
+      "summary": "create package.json",
+      "json": "no",
+      "interactive_risk": "prompt",
+      "instead": "npm init -y"
+    },
+    {
+      "name": "npm test",
+      "summary": "run a project's tests",
+      "json": "no",
+      "interactive_risk": "waits, unbounded output",
+      "instead": "run npm test"
+    },
+    {
+      "name": "pytest",
+      "summary": "run Python tests",
+      "json": "partial: --junitxml",
+      "interactive_risk": "waits, unbounded output",
+      "instead": "run pytest …"
+    },
+    {
+      "name": "python3",
+      "summary": "Python interpreter",
+      "json": "no",
+      "interactive_risk": "repl",
+      "instead": "python3 script.py, or python3 -c '…' (never bare python3)"
+    },
+    {
+      "name": "sed -n",
+      "summary": "print a line range",
+      "json": "no",
+      "interactive_risk": "none",
+      "instead": "view FILE:A-B (numbered, says what is left)"
+    },
+    {
+      "name": "ssh",
+      "summary": "remote shell",
+      "json": "no",
+      "interactive_risk": "prompt",
+      "instead": "not available without a grant (Adele)"
+    },
+    {
+      "name": "sudo",
+      "summary": "run as root",
+      "json": "no",
+      "interactive_risk": "prompt",
+      "instead": "not available: the agent has no root; ask the operator"
+    },
+    {
+      "name": "tree",
+      "summary": "list a directory tree",
+      "json": "partial: -J",
+      "interactive_risk": "unbounded output",
+      "instead": "view DIR (budgeted overview)"
+    },
+    {
+      "name": "vi",
+      "summary": "edit a file",
+      "json": "no",
+      "interactive_risk": "editor",
+      "instead": "edit the file non-interactively (sed -i, or a heredoc)"
+    }
+  ]
+}

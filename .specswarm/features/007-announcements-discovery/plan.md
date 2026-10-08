@@ -1,0 +1,69 @@
+# Implementation Plan: 007 Announcements and discovery (prompt 04, slice 0)
+
+**Branch:** `007-announcements-discovery` (from `modify/006-slice-1` `eb5c8e2`; specify's parent route:
+`default` → `master`) · **Spec:** `spec.md` · **Send:** `bridge/sends/04-rev1-20261004-183704.md`
+(prompt revision 1, discovery revision 12; dispatch 3 of 8) · **specswarm:** 4.0.1-botbaubble.2.35.0
+(`4ff8dcb`)
+
+## Summary
+
+`timelike` (001's environment command) gains two subcommands:
+- `announce`: generate the announcement from the manifests, check it, place it, report it;
+- `tools`: the manifest of timelike and curated standard tools.
+
+The image runs `timelike announce --write` and `--check` after the build stamp. A new POSIX `entrypoint`
+places the announcement on every container start and then `exec`s the command. A curated
+`standard-tools.json` ships in the image. The vanilla bench image is untouched.
+
+## Technical Context
+
+| Item | Value |
+|---|---|
+| Language | Python 3.14.x (image), host lane 3.12; the entrypoint is POSIX sh |
+| Dependencies | stdlib only (`subprocess` for `--agent-info`, `json`, `tempfile`) |
+| Image | `image/Dockerfile`: COPY `standard-tools.json`, the entrypoint; RUN `timelike announce --write /etc/timelike/announcement.md && timelike announce --check` after the stamp; `ENTRYPOINT ["/opt/timelike/libexec/entrypoint"]` |
+| Changes to other features | the agent image's entrypoint (compose and throwaways run it; `docker exec` does not); `make scan`'s agent image; the bench's timelike arm sees the announcement |
+| Testing | pytest units (`tests/unit/test_announce.py`, new); bats e2e, one file per automated criterion, the placement cases on throwaway containers |
+| Performance | the entrypoint adds one Python start (about 60–80 ms on the host) to each container start; `timelike --help` start-up unchanged |
+| Unknowns | none (R1–R4); whether each harness reads its file is the D4 demo's question |
+
+## Constitution Check
+
+| Principle | Check | Result |
+|---|---|---|
+| P1 | The manifest's `instead` turns a trap into a next step | ✅ |
+| P2 | Placement never blocks the container; every subcommand concludes with a verdict | ✅ |
+| P3 | The point of the feature: announced where agents read, by default | ✅ |
+| P4 | Nothing reaches out; files only in the agent's own home | ✅ |
+| P5 | Not touched (no workspace write; D-1) | n/a |
+| P6 | The vanilla image is untouched (checked) | ✅ |
+| P7 / T3 | The files only announce; nothing works only through them | ✅ |
+| H2 | The subcommands follow the output contract | ✅ |
+| H3 | Placement verified by reading the files back (e2e), not by the verdict | ✅ |
+| H5 | stdlib | ✅ |
+| H7 | SC-1 to SC-3 one e2e file each; SC-4 Manual | ✅ |
+| H8 | The announcement carries the build revision | ✅ |
+
+## Phase 0: Research
+
+`research.md` R1–R4.
+
+## Phase 1: Design
+
+`contracts/timelike-announce-tools.md`. `data-model.md`: the entities are in the spec, and the contract
+gives their fields, so no separate file is added. `quickstart.md`: none (the README section serves).
+There is no agent context file in this repository.
+
+## Tech Stack Compliance Report
+
+### ✅ Approved Technologies (already in stack)
+Python (stdlib), POSIX sh (the image's `/bin/sh`, dash), bats-core, pytest.
+
+### ➕ New Technologies (auto-added)
+None.
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None.

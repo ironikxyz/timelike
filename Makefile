@@ -54,6 +54,10 @@ test-host:
 SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh tests/host/run.sh \
   tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats \
   tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats \
+  tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats \
+  tests/e2e/announcement-generated-from-manifests-missing-tool-fails.bats \
+  tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats \
+  image/rootfs/opt/timelike/libexec/entrypoint \
   tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \
   tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats \

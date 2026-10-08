@@ -238,6 +238,25 @@ snapshot list                       # this workspace's snapshots, newest first
   survive a container restart, not a recreate, and each `TIMELIKE_SESSION` has its own.
 - Slice 1 adds automatic snapshots before destructive commands and a restorable trash.
 
+## Announcements — the environment says what it offers
+
+An agent cannot use a tool it does not know about (P3), so timelike tells it, by default:
+
+- **The announcement** (`/etc/timelike/announcement.md`, at most 60 lines) is generated at image build
+  from every installed tool's own `--agent-info`. It names the build revision, and the build fails if it
+  misses a tool (`timelike announce --check`).
+- **On container start** the entrypoint places it in each harness's user-level context file:
+  `~/.claude/CLAUDE.md` (Claude Code), `${CODEX_HOME:-~/.codex}/AGENTS.md` (Codex CLI) and
+  `~/.config/opencode/AGENTS.md` (OpenCode). A file there that is not timelike's is never touched.
+  `timelike announce --status` says what was placed and why not. Nothing is written inside the
+  workspace.
+- **`timelike tools`** prints the manifest: every timelike tool, plus curated standard tools, each with
+  whether it speaks JSON, what can make it wait for a person (pager, editor, prompt, REPL), and what to
+  use instead.
+
+The announcement only announces: every tool works the same whether or not a harness reads it (P7).
+The vanilla bench image gets none of this (P6).
+
 ## view and search — bounded reads, each ending with the next command
 
 `view` shows a numbered window of a file. `search` finds a pattern and groups the hits by file. Both say
