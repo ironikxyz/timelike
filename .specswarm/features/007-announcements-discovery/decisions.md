@@ -180,3 +180,18 @@ ASSUMED: a directory at the data path is "unreadable" (line 1 alone), not an err
 ABSENT: the contract's two rows are corrected (interactive base name; a directory means line 1 alone) — no other format changed
 Verification (host, advisory): tests/host/test_command_not_found.sh 33/33 (A interactive-path ×2 and D2 now pass), tests/host/test_shell_env_hook.sh 44/44
 SCOPE: in (1 changed files)
+
+### T015: units (test_budget.py, test_missing_commands.py) and the host handler test, from the contract
+**Started:** 2026-10-08T16:27Z (delegate launched, before T016) | **Completed:** 2026-10-08T16:42:44Z | **Delegate (general-purpose), reviewed and committed by the coordinator**
+
+INHERITED: the contract § Slice 1 and research R5; the coordinator's message that agentio puts `data` at the top level — (confidence: high)
+FLAGGED (delegate): line 1 is never written into the host test; it is captured from the same bash with no handler (P005), so the comparison is against bash itself — (confidence: high)
+FLAGGED (delegate): the absolute-path interactive case is a real failure, not a TODO, because FR-15 says byte for byte — it found that interactive bash prints argv0's base name; fixed in T018 (follow-up) — (confidence: medium)
+FLAGGED (delegate): interactive cases use --noediting, PS1/PS2 set by the launcher, and filter bash's two job-control lines and the closing `exit` — (confidence: high)
+ASSUMED (delegate): free space may differ by up to 256 MiB between the tool's statvfs and the test's; total bytes must match exactly — (confidence: medium)
+ASSUMED (delegate): COLUMNS=4000 keeps rule 13 from cutting long temp paths, as test_run_slice1 does — (confidence: high)
+FLAGGED: the coordinator added the host test's step to tests/host/run.sh (the delegate was not allowed to edit it), so `make test-host` runs it; run.sh is not named in tasks.md, so the scope record may read out — (confidence: high)
+ASSUMED: the delegate's two handler findings (interactive base name; a directory at the data path) were checked on host bash before the fix (T018 follow-up) — (confidence: high)
+ABSENT (delegate): `bash -lc` on the host (reads the host's /etc/profile; the e2e covers it); a statvfs failure case (cannot be caused on the host); sh -c and direct exec (e2e only)
+ABSENT: the delegate's contract findings settled: no `data` key (contract amended in T017); interactive base name and directory-as-unreadable (contract amended in T018 follow-up); quota/period absent when the CPU limit is not a value (as built: absent); PATH empty never reaches the handler (bash's own behaviour, recorded in T018)
+Verification (host, advisory): test_budget.py 73 + test_missing_commands.py 13 = 86 passed against the implementation; tests/host/test_command_not_found.sh 33/33; ruff check/format clean; shellcheck clean (run.sh too)

@@ -96,7 +96,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   with the handler unset; every listed name absent) and
   `tests/e2e/one-command-prints-the-agents-resource-budget.bats` (SC-7: a throwaway with known `--memory`, `--cpus`,
   `--pids-limit`; the agent container; the CPU figure equals the shell's `$TIMELIKE_CPUS`).
-- [ ] T015 [P] [US5, US7] Units and the host test from the contract, written by a delegate before the code:
+- [X] T015 [P] [US5, US7] Units and the host test from the contract, written by a delegate before the code:
   `tests/unit/test_budget.py` (figures from files the test writes under `TIMELIKE_CGROUP_ROOT`: values, `max`,
   unreadable, missing; disks; text and JSON; the CPU rule against the bash hook on the same files),
   `tests/unit/test_missing_commands.py` (the shipped TSV's validity), and `tests/host/test_command_not_found.sh`
