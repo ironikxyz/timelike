@@ -72,6 +72,25 @@ if "--agent-info" in args:
         m["envelopes"] = ["please_confirm"]
     if MUT == "manifest_envelopes_mutating":
         m["envelopes"] = ["confirmation_required"]  # but not mutating
+    if MUT.startswith("rule9_"):
+        # discovery revision 13: edit's shape, then each way of getting it wrong (all C2)
+        m.update(mutating=True, confirm_protocol=False, destructive=True, dry_run=True)
+        m["flags"].append("--dry-run")
+        if MUT == "rule9_no_dry_run":
+            m.update(destructive=False, dry_run=False)
+            m["flags"].remove("--dry-run")
+        if MUT == "rule9_yes_without_confirm":
+            m["flags"].append("--yes")
+        if MUT == "rule9_confirm_not_mutating":
+            m.update(mutating=False, confirm_protocol=True, envelopes=["confirmation_required"])
+            m["flags"].append("--yes")
+        if MUT == "rule9_dry_run_disagrees":
+            m["flags"].remove("--dry-run")
+            m["destructive"] = False
+        if MUT == "rule9_envelope_not_confirming":
+            m["envelopes"] = ["confirmation_required"]
+        if MUT == "rule9_not_bool":
+            m["confirm_protocol"] = "no"
     if MUT == "manifest_order":
         m = dict(reversed(list(m.items())))
     print("not json" if MUT == "manifest_text" else json.dumps(m))
@@ -177,6 +196,14 @@ CASES = {
     "env_grant_status": {"C9"},
     "env_grant_text": {"C3", "C9"},
     "manifest_envelopes": {"C2"},
+    # discovery revision 13: confirm_protocol and rule 8 (quality-standards § Output contract)
+    "rule9_edit_ok": set(),
+    "rule9_no_dry_run": {"C2"},  # mutating, not confirmed, and no --dry-run: the ruling's negative case
+    "rule9_yes_without_confirm": {"C2"},
+    "rule9_confirm_not_mutating": {"C2"},
+    "rule9_dry_run_disagrees": {"C2"},
+    "rule9_envelope_not_confirming": {"C2"},
+    "rule9_not_bool": {"C2"},
     "manifest_envelopes_mutating": {"C2"},
     "ansi": {"C8"},
     "two_events": {"C7"},

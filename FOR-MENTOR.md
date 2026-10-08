@@ -799,9 +799,11 @@ criterion more narrowly, so I am building on them; each can be changed behind th
 
 ## Item 18 — Feature 05 slice 0 (`006-bounded-read`): two readings of rule 3 to confirm before they are built; the other seams decided
 
-**Status:** open for Q3 only. **Q1 and Q2 closed 2026-10-04: both answered (a)** by the mentor in
-`../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md` (route code; no revision). **Q3** (is a window bounded in bytes in JSON, spec FR-7) was raised by
-the mentor and routed to plan; it is pending there, and FR-7's JSON branch waits for it. Raised
+**Status:** closed 2026-10-05. **Q1 and Q2 closed 2026-10-04: both answered (a)** by the mentor in
+`../bridge/feedback/05-20261004-062732-view-search-rule3-and-byte-bound.md` (route code; no revision).
+**Q3 closed 2026-10-05**, at code-track § Resume after pause-06 ("Close FOR-MENTOR Item 18's Q3"): plan
+answered it with **discovery revision 12** (plan `24bd89c`; answer of record in the same feedback file,
+§ Resolution), built in 006's Cycle 1 (spec D-12, FR-7 amended). Raised
 2026-10-04 on `006-bounded-read` (send `bridge/sends/05-rev1-20261004-061518.md`).
 Each seam is decided in `spec.md` § Decisions, with its reason. The send asks for anything near 001's
 contract to be raised before that part is built, so **Q1 and Q2 wait for an answer.** The rest of 05 is
@@ -847,10 +849,16 @@ rule 3's order has no slot for.
   line stays last. `count`, `shown` and `truncated.omitted_lines` stay consistent (in hits).
 - **Q3: open, with plan.** The mentor recommends (a), JSON follows text: a line longer than `COLUMNS` is
   cut in JSON too, and its full length is carried as data. Not built until plan answers.
+- **Q3: closed, (a)** (2026-10-04T08:54:22Z, discovery revision 12). Rule 13's line cut applies in both
+  modes; in JSON it cuts each content string with the same marker and carries `cut_bytes`. Built in
+  006's Cycle 1 (D-12); 006 was signed off and merged at `aa8127d`.
 
 ## Item 19 — Feature 04 slice 0 (`007-announcements-discovery`): the workspace part of SC-1, narrowed by the send's seam (not blocking)
 
-**Status:** open. Raised 2026-10-04 in dispatch batch `20261004-183704` (send
+**Status:** closed 2026-10-05, at code-track § Resume after pause-06 ("Close FOR-MENTOR Item 19").
+Answered (b), user level only, by **discovery revision 13** (plan `394c33e`); the answer of record is
+`../bridge/feedback/batch-20261004-232148-rule9-scope-and-workspace-context-file.md` § Resolution (Q3).
+See *Resolution* at the end of this item. Raised 2026-10-04 in dispatch batch `20261004-183704` (send
 `bridge/sends/04-rev1-20261004-183704.md`), on `007-announcements-discovery`.
 
 **What disagrees.** The criterion reads: *"…is present in each supported harness's user-level context
@@ -870,3 +878,8 @@ informed basis (medium confidence). Nothing else in 04 depends on it.
 workspace file is wanted when absent, and on what terms against rule 10. Then a later cycle builds it.
 Revision 11's rule 10 speaks of *state* locations. Whether a context file counts as state is the
 question underneath.
+
+**Resolution (2026-10-05).** Plan ruled (b): the announcement goes at the user level only. Prompt 04's
+workspace clause is struck (prompts 01 and 04 → 13), so SC-1 as built (spec D-1, FR-7) meets the
+criterion, and its test's "workspace untouched" assertion stays. 007's spec records revision 13 in a modify
+cycle after the batch, not in this one (code-track § Resume after pause-06).

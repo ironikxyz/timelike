@@ -1,0 +1,880 @@
+#!/opt/timelike/python/bin/python3 -I
+"""edit — replace text that occurs exactly once in a file, and show the edited lines (P1, P2, P5).
+
+`edit FILE --old TEXT --new TEXT` applies only when TEXT matches once. Matching tries three levels and the
+first with any match decides: exact bytes; then line endings (CRLF or CR against LF) and trailing
+whitespace; then, over whole lines, indentation under one consistent mapping (4 spaces = 1 tab). The new
+text takes the file's line ending and, at the third level, its indentation. More than one match, or none,
+is exit 3 with the line numbers or the nearest candidates; nothing is written. The write is atomic:
+a temporary file beside the target, the target's mode and owner, a hash check against a concurrent
+change, then a rename. `--dry-run` prints the unified diff and writes nothing.
+
+Rule 9 (discovery revision 13): an edit names its target exactly, applies whole or not at all and shows
+what it changed, so it is not confirmed: mutating, confirm_protocol false, no --yes; --dry-run binds.
+
+Design: .specswarm/features/008-edit/ (spec, research R1-R8, data-model.md, contracts/edit-cli.md).
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import errno
+import hashlib
+import importlib.machinery
+import importlib.util
+import math
+import os
+import re
+import shlex
+import stat
+import tempfile
+import time
+from types import ModuleType
+from typing import Any
+
+import agentio
+
+CONTEXT = 3
+MAX_BYTES = 16 * 1024 * 1024
+SNIFF = 8192
+CANDIDATES = 3
+CANDIDATE_FLOOR = 0.5
+CANDIDATE_RERANK = 20
+CANDIDATE_DEADLINE_S = 5.0
+LEVEL_NAMES = {"exact": "exact", "line_endings": "line endings", "indentation": "indentation"}
+_ENDING_RE = re.compile(rb"\r\n|\r|\n")
+_TOKEN_RE = re.compile(r"\w+|[^\w\s]")
+# Rule 13, as agentio and view apply it, plus any ESC its pattern leaves behind (conform C8).
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
+_ENDING_NAME = {b"\r\n": "CRLF", b"\n": "LF", b"\r": "CR"}
+
+TOOL = agentio.Tool(
+    name="edit",
+    target="file",
+    summary="replace text that occurs exactly once in a file; tolerates CRLF and tab/space indentation",
+    usage=[
+        "edit FILE --old TEXT --new TEXT            # applies only if TEXT matches exactly once",
+        "edit FILE --old TEXT --new TEXT --dry-run  # the unified diff; nothing written",
+        "multi-line TEXT: --old $'line 1\\nline 2'; TEXT starting with '-': --old=TEXT",
+        "matching: exact, then ignoring line endings, then indentation (4 spaces = 1 tab, one mapping)",
+        "the new text takes the file's line endings and indentation; the edited lines are shown after",
+        "no match: exit 3 with up to 3 nearest candidates; several: exit 3 with their line numbers",
+        "atomic: the file is fully changed or byte-identical; no --yes (one call; rule 9, revision 13)",
+    ],
+    mutating=True,
+    destructive=True,
+    confirm_protocol=False,
+    probe=("/etc/os-release", "--old", "PRETTY_NAME=", "--new", "PRETTY_NAME=", "--dry-run"),
+    exit_codes={
+        agentio.EXIT_OK: "edited, or nothing to change",
+        agentio.EXIT_FAILURE: "refused: binary, unwritable, too large, or changed meanwhile; nothing written",
+        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_NOT_FOUND: "no such file, no match, or more than one match; nothing written",
+    },
+    manifest_extra=lambda: {
+        "levels": list(LEVEL_NAMES.values()),
+        "context": CONTEXT,
+        "candidates": CANDIDATES,
+        "candidate_floor": CANDIDATE_FLOOR,
+    },
+)
+
+
+class Outcome(Exception):
+    """A refusal or a failed match: a verdict on stdout (contract § Outcomes), never a stderr error."""
+
+    def __init__(
+        self,
+        code: int,
+        scope: str,
+        verdict: str,
+        remedy: str | None = None,
+        lines: list[str] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(verdict)
+        self.code, self.scope, self.verdict, self.remedy = code, scope, verdict, remedy
+        self.lines, self.data = list(lines or []), dict(data or {})
+
+    def result(self, target: str) -> agentio.Result:
+        lines = [*self.lines, f"do instead: {self.remedy}"] if self.remedy else self.lines
+        data = {**self.data, "remedy": self.remedy} if self.remedy else self.data
+        return agentio.Result(target, self.scope, self.verdict, lines=lines, data=data, exit=self.code)
+
+
+# ── the file as lines ──────────────────────────────────────────────────────────────────────────────
+
+
+class Line:
+    """One line: where it starts in the file, its content, and its ending (b"" on a last line without one)."""
+
+    __slots__ = ("content", "ending", "start")
+
+    def __init__(self, start: int, content: bytes, ending: bytes) -> None:
+        self.start, self.content, self.ending = start, content, ending
+
+    @property
+    def stripped(self) -> bytes:
+        return self.content.rstrip(b" \t")
+
+
+def split_lines(raw: bytes) -> list[Line]:
+    out: list[Line] = []
+    at = 0
+    for m in _ENDING_RE.finditer(raw):
+        out.append(Line(at, raw[at : m.start()], m.group()))
+        at = m.end()
+    if at < len(raw):
+        out.append(Line(at, raw[at:], b""))
+    return out
+
+
+def line_of(lines: list[Line], offset: int) -> int:
+    """The 0-based index of the line holding byte `offset` (or the last line, at the end of the file)."""
+    lo, hi = 0, len(lines) - 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if lines[mid].start <= offset:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
+def common_ending(lines: list[Line]) -> bytes:
+    counts: dict[bytes, int] = {}
+    for ln in lines:
+        if ln.ending:
+            counts[ln.ending] = counts.get(ln.ending, 0) + 1
+    return max(counts, key=lambda e: counts[e]) if counts else b"\n"
+
+
+def norm_lines(text: bytes) -> list[bytes]:
+    """Text split at any line ending, each line without trailing spaces and tabs (levels 2 and 3)."""
+    return [x.rstrip(b" \t") for x in _ENDING_RE.split(text)]
+
+
+# ── matching (research R2) ─────────────────────────────────────────────────────────────────────────
+
+
+class Match:
+    __slots__ = ("byte_end", "byte_start", "drop_last_newline", "level", "mapping")
+
+    def __init__(
+        self,
+        level: str,
+        byte_start: int,
+        byte_end: int,
+        mapping: tuple[tuple[str, int], tuple[str, int]] | None = None,
+        drop_last_newline: bool = False,
+    ) -> None:
+        self.level, self.byte_start, self.byte_end = level, byte_start, byte_end
+        self.mapping = mapping
+        self.drop_last_newline = drop_last_newline
+
+
+def find_exact(raw: bytes, old: bytes) -> list[Match]:
+    out: list[Match] = []
+    at = raw.find(old)
+    while at != -1:
+        out.append(Match("exact", at, at + len(old)))
+        at = raw.find(old, at + len(old))
+    return out
+
+
+def find_line_endings(lines: list[Line], old: bytes) -> list[Match]:
+    """Level 2: a substring search on the file with every ending as LF and trailing whitespace stripped.
+
+    Each normalised line maps back to its file line, so a match maps back to bytes: a match ending at a
+    line's stripped end takes that line's trailing whitespace with it; one ending on a newline takes the
+    whole ending.
+    """
+    pattern = b"\n".join(norm_lines(old))
+    if not pattern:
+        return []
+    starts: list[int] = []  # normalised offset of each line
+    parts: list[bytes] = []
+    at = 0
+    for ln in lines:
+        starts.append(at)
+        parts.append(ln.stripped)
+        at += len(ln.stripped)
+        if ln.ending:
+            parts.append(b"\n")
+            at += 1
+    norm = b"".join(parts)
+
+    def locate(off: int) -> tuple[int, int]:
+        lo, hi = 0, len(starts) - 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if starts[mid] <= off:
+                lo = mid
+            else:
+                hi = mid - 1
+        return lo, off - starts[lo]
+
+    out: list[Match] = []
+    hit = norm.find(pattern)
+    while hit != -1:
+        i, j = locate(hit)
+        ln = lines[i]
+        byte_start = ln.start + j if j < len(ln.stripped) else ln.start + len(ln.stripped)
+        k, e = locate(hit + len(pattern) - 1)
+        last = lines[k]
+        if e >= len(last.stripped):  # the last matched byte is the newline: the whole ending goes
+            byte_end = last.start + len(last.content) + len(last.ending)
+        elif e + 1 == len(last.stripped):  # ends at the stripped end: its trailing whitespace goes too
+            byte_end = last.start + len(last.content)
+        else:
+            byte_end = last.start + e + 1
+        out.append(Match("line_endings", byte_start, byte_end))
+        hit = norm.find(pattern, hit + len(pattern))
+    return out
+
+
+def _lead(text: bytes) -> tuple[bytes, bytes]:
+    rest = text.lstrip(b" \t")
+    return text[: len(text) - len(rest)], rest
+
+
+def infer_mapping(pairs: list[tuple[bytes, bytes]]) -> tuple[tuple[str, int], tuple[str, int]] | None:
+    """One mapping of the agent's indentation unit to the file's, over (agent lead, file lead) pairs.
+
+    Each lead is all spaces or all tabs; a mixed lead must be identical on both sides. The file's unit is a
+    tab, or the GCD of its space runs; each line's level k = len(file lead) / unit must give the agent's
+    lead as exactly k agent units. Identity (no difference) is not a mapping: level 2 covers it.
+    """
+    agent_char = file_char = None
+    file_lens: list[int] = []
+    usable: list[tuple[int, int]] = []
+    for la, lf in pairs:
+        mixed_a = b" " in la and b"\t" in la
+        mixed_f = b" " in lf and b"\t" in lf
+        if mixed_a or mixed_f:
+            if la != lf:
+                return None
+            continue
+        if la:
+            c = "tab" if la[0:1] == b"\t" else "space"
+            if agent_char not in (None, c):
+                return None
+            agent_char = c
+        if lf:
+            c = "tab" if lf[0:1] == b"\t" else "space"
+            if file_char not in (None, c):
+                return None
+            file_char = c
+            file_lens.append(len(lf))
+        usable.append((len(la), len(lf)))
+    if agent_char is None or file_char is None or not file_lens:
+        return None
+    file_unit = 1 if file_char == "tab" else math.gcd(*file_lens)
+    agent_unit = None
+    for na, nf in usable:
+        if nf == 0:
+            if na != 0:
+                return None
+            continue
+        k, r = divmod(nf, file_unit)
+        if r or na % k:
+            return None
+        unit = na // k
+        if unit == 0 or agent_unit not in (None, unit):
+            return None
+        agent_unit = unit
+    if agent_unit is None:
+        return None
+    if agent_char == file_char and agent_unit == file_unit:
+        return None
+    return (agent_char, agent_unit), (file_char, file_unit)
+
+
+def find_indentation(lines: list[Line], old: bytes) -> list[Match]:
+    """Level 3: whole lines, the text after the indentation equal, the indentation under one mapping."""
+    olds = norm_lines(old)
+    trailing_newline = len(olds) > 1 and olds[-1] == b""
+    if trailing_newline:
+        olds = olds[:-1]
+    k = len(olds)
+    if k == 0 or k > len(lines):
+        return []
+    old_split = [_lead(x) for x in olds]
+    anchor = next((j for j, (_, rest) in enumerate(old_split) if rest), None)
+    if anchor is None:
+        return []
+    want = old_split[anchor][1]
+    file_split = [_lead(ln.stripped) for ln in lines]
+    out: list[Match] = []
+    for idx, (_, rest) in enumerate(file_split):
+        if rest != want:
+            continue
+        i = idx - anchor
+        if i < 0 or i + k > len(lines):
+            continue
+        pairs: list[tuple[bytes, bytes]] = []
+        for j, (la, ra) in enumerate(old_split):
+            lf, rf = file_split[i + j]
+            if ra != rf:
+                break
+            if ra:
+                pairs.append((la, lf))
+        else:
+            mapping = infer_mapping(pairs)
+            if mapping is None:
+                continue
+            first, last = lines[i], lines[i + k - 1]
+            out.append(
+                Match(
+                    "indentation",
+                    first.start,
+                    last.start + len(last.content),
+                    mapping=mapping,
+                    drop_last_newline=trailing_newline,
+                )
+            )
+    return out
+
+
+def unit_phrase(unit: tuple[str, int]) -> str:
+    kind, n = unit
+    return f"{n} tab{'s' if n != 1 else ''}" if kind == "tab" else f"{n} space{'s' if n != 1 else ''}"
+
+
+def level_phrase(m: Match) -> str:
+    if m.level == "exact":
+        return "matched exactly"
+    if m.level == "line_endings":
+        return "matched ignoring line endings"
+    if m.mapping is None:
+        raise ValueError("an indentation match carries its mapping")
+    a, f = m.mapping
+    return f"matched ignoring line endings and indentation ({unit_phrase(a)} = {unit_phrase(f)})"
+
+
+# ── the new text in the file's conventions (research R3) ──────────────────────────────────────────
+
+
+def reindent(line: bytes, mapping: tuple[tuple[str, int], tuple[str, int]]) -> bytes:
+    (a_kind, a_n), (f_kind, f_n) = mapping
+    a_char = b"\t" if a_kind == "tab" else b" "
+    f_unit = (b"\t" if f_kind == "tab" else b" ") * f_n
+    run = len(line) - len(line.lstrip(a_char))
+    if run == 0:
+        return line
+    k = run // a_n
+    return f_unit * k + line[k * a_n :] if k else line
+
+
+def convert_new(new: bytes, m: Match, lines: list[Line]) -> tuple[bytes, bytes]:
+    """The bytes to insert, and the ending they use (b"" when inserted as given)."""
+    if m.level == "exact":
+        return new, b""
+    ending = region_ending(lines, m.byte_start)
+    parts = _ENDING_RE.split(new)
+    if m.drop_last_newline and len(parts) > 1 and parts[-1] == b"":
+        parts = parts[:-1]
+    if m.mapping is not None:
+        parts = [reindent(p, m.mapping) for p in parts]
+    return ending.join(parts), ending
+
+
+# ── candidates (research R4) ───────────────────────────────────────────────────────────────────────
+
+
+def _decode(b: bytes) -> str:
+    return b.decode("utf-8", "replace")
+
+
+def candidates(lines: list[Line], old: bytes, deadline: float) -> tuple[list[dict[str, Any]], int, bool]:
+    """Up to three windows as long as --old, nearest first: token overlap, then SequenceMatcher's ratio."""
+    import difflib  # deferred: only a failed match needs it (start-up budget)
+
+    olds = norm_lines(old)
+    if len(olds) > 1 and olds[-1] == b"":
+        olds = olds[:-1]
+    k = max(1, len(olds))
+    n = len(lines)
+    if n == 0:
+        return [], 0, False
+    o_text = [_decode(x) for x in olds]
+    o_tok = [frozenset(_TOKEN_RE.findall(x)) for x in o_text]
+    f_text = [_decode(ln.stripped) for ln in lines]
+    f_tok = [frozenset(_TOKEN_RE.findall(x)) for x in f_text]
+    width = min(k, n)
+    scored: list[tuple[float, int]] = []
+    searched, limited = n, False
+    for i in range(n - width + 1):
+        if i % 1000 == 0 and time.monotonic() > deadline:
+            searched, limited = i, True
+            break
+        s = 0.0
+        for j in range(width):
+            a, b = f_tok[i + j], o_tok[j] if j < len(o_tok) else frozenset()
+            u = len(a | b)
+            s += len(a & b) / u if u else 1.0
+        scored.append((s / width, i))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    sm = difflib.SequenceMatcher(None, autojunk=False)
+    sm.set_seq2("\n".join(o_text))
+    ranked: list[tuple[float, int]] = []
+    for _, i in scored[:CANDIDATE_RERANK]:
+        sm.set_seq1("\n".join(f_text[i : i + width]))
+        ranked.append((sm.ratio(), i))
+    ranked.sort(key=lambda x: (-x[0], x[1]))
+    chosen: list[tuple[float, int]] = []
+    for ratio, i in ranked:
+        if ratio < CANDIDATE_FLOOR:
+            break
+        if any(i < j + width and j < i + width for _, j in chosen):
+            continue  # overlaps a nearer one
+        chosen.append((ratio, i))
+        if len(chosen) == CANDIDATES:
+            break
+    total = n
+    out = []
+    for ratio, i in chosen:
+        out.append(
+            {
+                "start": i + 1,
+                "end": i + width,
+                "similarity": round(ratio, 2),
+                "difference": difference(lines[i : i + width], olds),
+                "lines": numbered(lines, i, i + width - 1, total, set()),
+            }
+        )
+    return out, searched, limited
+
+
+def difference(window: list[Line], olds: list[bytes]) -> str:
+    raw_contents = [ln.content for ln in window]
+    if [c.rstrip(b"\r") for c in raw_contents] == olds and any(ln.ending != b"\n" for ln in window[:-1]):
+        return "line endings"
+    if [ln.stripped for ln in window] == olds:
+        return "trailing whitespace"
+    if len(olds) == len(window) and [_lead(ln.stripped)[1] for ln in window] == [_lead(x)[1] for x in olds]:
+        return "indentation"
+    for j, (ln, o) in enumerate(zip(window, olds, strict=False)):
+        if _lead(ln.stripped)[1] != _lead(o)[1]:  # the text after the indentation: what the agent must fix
+            return f"line {j + 1} differs"
+    return "length differs"
+
+
+# ── display (view's numbering) ─────────────────────────────────────────────────────────────────────
+
+
+def clean(text: str) -> str:
+    return _ANSI_RE.sub("", text).replace("\x1b", "") if "\x1b" in text else text
+
+
+def numbered(lines: list[Line], a: int, b: int, total: int, marked: set[int]) -> list[str]:
+    """Lines a..b (0-based, inclusive), numbered and right-aligned as `view` prints them."""
+    width = len(str(max(total, 1)))
+    out = []
+    for i in range(max(0, a), min(b, len(lines) - 1) + 1):
+        mark = ">" if i in marked else " "
+        out.append(f"{i + 1:>{width}}{mark} {clean(_decode(lines[i].content))}")
+    return out
+
+
+# ── reading and writing (research R5) ──────────────────────────────────────────────────────────────
+
+
+def _view() -> ModuleType | None:
+    """view's file-type sniffing, from the file beside this one (as undo loads snapshot)."""
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "view")
+    try:
+        loader = importlib.machinery.SourceFileLoader("timelike_view", path)
+        spec = importlib.util.spec_from_loader("timelike_view", loader)
+        if spec is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+    except (OSError, ImportError, SyntaxError):
+        return None
+    return module
+
+
+def human(n: int) -> str:
+    size = float(n)
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KiB", "MiB", "GiB"):
+        size /= 1024
+        if size < 1024 or unit == "GiB":
+            return f"{size:.1f} {unit}"
+    raise AssertionError("unreachable")
+
+
+def read_target(path: str) -> tuple[str, os.stat_result, bytes]:
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            "not found",
+            f"no such file: {path}",
+            "edit changes an existing file; create one with: "
+            + f"printf '%s\\n' 'TEXT' > {shlex.quote(path)}"
+            + f"; or find it: search -F {shlex.quote(os.path.basename(path))} .",
+        ) from None
+    except OSError as e:
+        raise Outcome(agentio.EXIT_FAILURE, "refused", f"cannot read {path}: {e.strerror or e}") from None
+    if stat.S_ISDIR(st.st_mode):
+        raise agentio.UsageError(f"{path} is a directory", "edit a file in it; view it with: view DIR")
+    if not stat.S_ISREG(st.st_mode):
+        raise Outcome(agentio.EXIT_FAILURE, "refused", f"{path} is not a regular file; nothing written")
+    real = os.path.realpath(path)
+    if st.st_size > MAX_BYTES:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            "refused",
+            f"too large to edit: {human(st.st_size)} (limit 16 MiB)",
+        )
+    try:
+        with open(real, "rb") as f:
+            raw = f.read(MAX_BYTES + 1)
+    except OSError as e:
+        raise Outcome(agentio.EXIT_FAILURE, "refused", f"cannot read {path}: {e.strerror or e}") from None
+    if b"\x00" in raw[:SNIFF]:
+        view = _view()
+        kind = view.file_type(raw[:SNIFF]) if view is not None else "data"
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            "refused",
+            f"binary file: {kind}, {human(st.st_size)}; edit changes text files",
+        )
+    return real, st, raw
+
+
+def _reread(real: str) -> bytes:
+    with open(real, "rb") as f:
+        return f.read(MAX_BYTES + 1)
+
+
+def write_atomic(path: str, real: str, st: os.stat_result, before: bytes, data: bytes) -> None:
+    """Temp file beside the target, flushed, mode and owner kept, re-checked, renamed (P2, P5)."""
+    d = os.path.dirname(real) or "."
+    try:
+        fd, tmp = tempfile.mkstemp(dir=d, prefix=f".{os.path.basename(real)}.edit-")
+    except OSError as e:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            "refused",
+            f"cannot write beside {path} ({d}): {e.strerror or e}; nothing written",
+        ) from None
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+            os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
+            tst = os.fstat(f.fileno())
+            if (tst.st_uid, tst.st_gid) != (st.st_uid, st.st_gid):
+                try:
+                    os.fchown(f.fileno(), st.st_uid, st.st_gid)
+                except OSError as e:
+                    if e.errno not in (errno.EPERM, errno.EACCES):
+                        raise
+                    raise Outcome(
+                        agentio.EXIT_FAILURE,
+                        "refused",
+                        f"cannot keep {path}'s owner (uid {st.st_uid}, gid {st.st_gid}); nothing written",
+                    ) from None
+                os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))  # chown may clear set-id bits
+        if hashlib.sha256(_reread(real)).digest() != hashlib.sha256(before).digest():
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                "refused",
+                f"{path} changed while editing; nothing written",
+                "view it again, then rerun the edit",
+            )
+        os.replace(tmp, real)
+        tmp = ""
+        try:
+            dfd = os.open(d, os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            os.fsync(dfd)
+        except OSError:
+            pass
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        raise Outcome(
+            agentio.EXIT_FAILURE, "refused", f"cannot write {path}: {e.strerror or e}; nothing written"
+        ) from None
+    finally:
+        if tmp:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+
+
+# ── the command ────────────────────────────────────────────────────────────────────────────────────
+
+
+def configure(p: argparse.ArgumentParser) -> None:
+    # Optional to argparse, required by main(): a required argument would make argparse refuse --help
+    # and --agent-info before agentio handles them (the view pattern).
+    p.add_argument("file", nargs="?", metavar="FILE", help="the file to change")
+    p.add_argument("--old", metavar="TEXT", help="the text to replace (must match exactly once)")
+    p.add_argument("--new", metavar="TEXT", help="the replacement")
+
+
+def _arg_bytes(text: str) -> bytes:
+    return os.fsencode(text)  # argv's bytes, as the shell passed them (surrogateescape)
+
+
+def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if not args.file:
+        raise agentio.UsageError("edit needs a FILE", "edit FILE --old TEXT --new TEXT")
+    if args.old is None or args.new is None:
+        raise agentio.UsageError(
+            "edit needs --old TEXT and --new TEXT",
+            "edit FILE --old TEXT --new TEXT (use --old=TEXT for '-…')",
+        )
+    if args.old == "":
+        raise agentio.UsageError(
+            "--old is empty", "include a line of context to anchor the insertion, and repeat it in --new"
+        )
+    path = args.file
+    try:
+        return edit(ctx, path, _arg_bytes(args.old), _arg_bytes(args.new), args.dry_run)
+    except Outcome as o:
+        return o.result(path)
+
+
+def find(raw: bytes, lines: list[Line], old: bytes) -> tuple[list[Match], list[str]]:
+    tried = ["exact"]
+    found = find_exact(raw, old)
+    if not found:
+        tried.append("line endings")
+        found = find_line_endings(lines, old)
+    if not found:
+        tried.append("indentation")
+        found = find_indentation(lines, old)
+    return found, tried
+
+
+def edit(ctx: agentio.Context, path: str, old: bytes, new: bytes, dry_run: bool) -> agentio.Result:
+    real, st, raw = read_target(path)
+    if not dry_run and not os.access(real, os.W_OK):
+        raise Outcome(
+            agentio.EXIT_FAILURE, "refused", f"cannot write {path}: permission denied; nothing written"
+        )
+    lines = split_lines(raw)
+    sha_before = hashlib.sha256(raw).hexdigest()
+    found, tried = find(raw, lines, old)
+    if not found:
+        deadline = time.monotonic() + CANDIDATE_DEADLINE_S
+        cands, searched, limited = candidates(lines, old, deadline)
+        raise no_match(path, cands, searched, limited, len(lines), tried)
+    if old == new:  # nothing to do: the text is there, however often (spec edge cases)
+        m = found[0]
+        return agentio.Result(
+            path,
+            "no change",
+            "no change: --old and --new are the same",
+            data={
+                "path": path,
+                "abs_path": real,
+                "changed": False,
+                "sha256_before": sha_before,
+                "sha256_after": None,
+                "level": m.level,
+                "matches": len(found),
+            },
+        )
+    if len(found) > 1:
+        at = [line_of(lines, m.byte_start) + 1 for m in found]
+        phrase = level_phrase(found[0])
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            "ambiguous",
+            f"--old matches {len(found)} times ({phrase}), at lines {', '.join(map(str, at))}"
+            + "; nothing written",
+            "add lines of context to --old until it matches once; "
+            + shlex.join(["view", f"{path}:{at[0]}"])
+            + " shows the first",
+            data={
+                "matches": [
+                    {
+                        "start": line_of(lines, m.byte_start) + 1,
+                        "end": line_of(lines, max(m.byte_start, m.byte_end - 1)) + 1,
+                    }
+                    for m in found
+                ],
+                "level": found[0].level,
+            },
+        )
+    m = found[0]
+    insert, ending = convert_new(new, m, lines)
+    end = m.byte_end
+    if m.drop_last_newline and not new.endswith((b"\n", b"\r")):
+        # --old ended with a newline and --new does not: the region's own ending goes too.
+        last = lines[line_of(lines, max(m.byte_start, m.byte_end - 1))]
+        end = last.start + len(last.content) + len(last.ending)
+    after = raw[: m.byte_start] + insert + raw[end:]
+    return applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run)
+
+
+def no_match(
+    path: str, cands: list[dict[str, Any]], searched: int, limited: bool, total: int, tried: list[str]
+) -> Outcome:
+    body: list[str] = []
+    for n, c in enumerate(cands, 1):
+        body.append(
+            f"── candidate {n}: lines {c['start']}-{c['end']}, "
+            + f"similarity {c['similarity']:.2f}: {c['difference']} ──"
+        )
+        body.extend(c["lines"])
+    if cands:
+        what = f"{len(cands)} nearest candidate{'s' if len(cands) != 1 else ''}"
+        first = cands[0]
+        remedy = (
+            "copy the text from a candidate ("
+            + shlex.join(["view", f"{path}:{first['start']}-{first['end']}"])
+            + ")"
+        )
+    else:
+        what = f"no candidate above {CANDIDATE_FLOOR} similarity"
+        remedy = "view the file, or search for a word of the text: " + shlex.join(
+            ["search", "-F", "WORD", path]
+        )
+    verdict = f"--old matches nowhere (tried {', '.join(tried)}); {what}; nothing written"
+    if limited:
+        verdict += f"; candidates searched in lines 1-{searched} of {total} (time limit)"
+    return Outcome(
+        agentio.EXIT_NOT_FOUND,
+        "no match",
+        verdict,
+        remedy,
+        lines=body,
+        data={"candidates": cands, "searched_lines": searched, "time_limited": limited},
+    )
+
+
+def _tally(b: bytes) -> dict[str, int]:
+    t: dict[str, int] = {}
+    for e in _ENDING_RE.findall(b):
+        t[_ENDING_NAME[e]] = t.get(_ENDING_NAME[e], 0) + 1
+    return t
+
+
+def _fmt(t: dict[str, int]) -> str:
+    return " + ".join(f"{v} {k}" for k, v in sorted(t.items()))
+
+
+def _endings_note(region_before: bytes, inserted: bytes, region_end: bytes) -> str | None:
+    """A change of line endings in the region is never silent (level 1 inserts --new as given)."""
+    b = _tally(inserted)
+    if not b or set(b) == {_ENDING_NAME[region_end]}:
+        return None
+    a = _tally(region_before)
+    return f"line endings: {_fmt(a) if a else _ENDING_NAME[region_end]} → {_fmt(b)}"
+
+
+def region_ending(lines: list[Line], offset: int) -> bytes:
+    """The ending of the region's first line, or the file's most common one (R3)."""
+    if not lines:
+        return b"\n"
+    return lines[line_of(lines, offset)].ending or common_ending(lines)
+
+
+def undecodable(raw: bytes) -> int:
+    """Bytes that are not UTF-8 (kept byte for byte; counted for the verdict)."""
+    n = 0
+    at = 0
+    while True:
+        try:
+            raw[at:].decode("utf-8")
+            return n
+        except UnicodeDecodeError as e:
+            n += e.end - e.start
+            at += e.end
+
+
+def applied(
+    ctx: agentio.Context,
+    path: str,
+    real: str,
+    st: os.stat_result,
+    raw: bytes,
+    after: bytes,
+    m: Match,
+    lines: list[Line],
+    insert: bytes,
+    ending: bytes,
+    region_end: int,
+    sha_before: str,
+    dry_run: bool,
+) -> agentio.Result:
+    new_lines = split_lines(after)
+    total = len(new_lines)
+    first = line_of(new_lines, m.byte_start) if new_lines else 0
+    removed_all = not insert
+    last = line_of(new_lines, m.byte_start + len(insert) - 1) if insert and new_lines else first
+    match_start = line_of(lines, m.byte_start) + 1
+    match_end = line_of(lines, max(m.byte_start, region_end - 1)) + 1
+    notes: list[str] = []
+    if os.path.realpath(path) != os.path.abspath(path):
+        notes.append(f"via symlink to {real}")
+    if st.st_nlink > 1 and not dry_run:
+        notes.append(f"hard link broken ({st.st_nlink} links)")
+    note = _endings_note(raw[m.byte_start : region_end], insert, region_ending(lines, m.byte_start))
+    if note:
+        notes.append(note)
+    bad = undecodable(raw)
+    if bad:
+        notes.append(f"{bad} undecodable byte{'s' if bad != 1 else ''} kept")
+    if removed_all:
+        gone = match_end - match_start + 1
+        rng = f"edited at line {first + 1} ({gone} line{'s' if gone != 1 else ''} removed)"
+        scope = f"line {first + 1} of {total}"
+    else:
+        rng = f"edited lines {first + 1}-{last + 1} of {total}"
+        scope = f"lines {first + 1}-{last + 1} of {total}"
+    data: dict[str, Any] = {
+        "path": path,
+        "abs_path": real,
+        "level": m.level,
+        "mapping": (
+            {"agent": unit_phrase(m.mapping[0]), "file": unit_phrase(m.mapping[1])} if m.mapping else None
+        ),
+        "start": first + 1,
+        "end": last + 1,
+        "total": total,
+        "match_start": match_start,
+        "match_end": match_end,
+        "line_ending": _ENDING_NAME[ending or region_ending(lines, m.byte_start)],
+        "sha256_before": sha_before,
+    }
+    if dry_run:
+        import difflib  # deferred: only a dry run needs it
+
+        diff = list(
+            difflib.unified_diff(
+                [_decode(x.content) for x in lines],
+                [_decode(x.content) for x in new_lines],
+                f"a/{path}",
+                f"b/{path}",
+                n=CONTEXT,
+                lineterm="",
+            )
+        )
+        data.update(dry_run=True, sha256_after=None, changed=False)
+        would = "dry run: would " + rng.replace("edited", "edit", 1)
+        verdict = "; ".join([f"{would} ({level_phrase(m)})", *notes, "nothing written"])
+        return agentio.Result(path, scope, verdict, lines=[clean(x) for x in diff], data=data)
+    write_atomic(path, real, st, raw, after)
+    data.update(changed=True, sha256_after=hashlib.sha256(after).hexdigest())
+    marked = set(range(first, last + 1)) if not removed_all else {first}
+    shown = numbered(new_lines, first - CONTEXT, last + CONTEXT, total, marked)
+    verdict = "; ".join([f"{rng} ({level_phrase(m)})", *notes])
+    return agentio.Result(path, scope, verdict, lines=shown, data=data)
+
+
+if __name__ == "__main__":
+    agentio.run(TOOL, main, configure=configure)

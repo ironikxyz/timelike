@@ -16,8 +16,8 @@ formats that the rules leave open, so the implementation and the conformance che
 | `--agent-info` | Print the manifest (`agent-info.schema.json`) as JSON, exit 0 | every tool |
 | `--limit N` | Override the output cap, in lines. `0` means no cap | every tool |
 | `--verbose` | May add timestamps, and a tool's timing of its own work. Nothing else may add them (rule 11). A duration a tool measures as its result (a wrapped command's run time) is not a timestamp | every tool |
-| `--dry-run` | Print the plan and change nothing | tools whose manifest says `"destructive": true` |
-| `--yes` | Confirm a mutation | tools whose manifest says `"mutating": true` |
+| `--dry-run` | Print the plan and change nothing | tools whose manifest says `"destructive": true` (`"dry_run": true`) |
+| `--yes` | Confirm a mutation | tools whose manifest says `"confirm_protocol": true` (absent: `"mutating": true`). Never on a tool that does not confirm (discovery revision 13) |
 
 **Mode selection (rule 1):** `--json` or `--text` if given. Otherwise JSON when stdout is not a
 terminal, text when it is. Under a harness, stdout is always a pipe, so the default there is JSON.
@@ -120,9 +120,21 @@ the cause may be `command`, `memory` or `disk`, feature 003 slice 1).
 
 ## Confirmation (rule 9)
 
-A mutating tool run without `--yes` exits 4 and prints the envelope (`confirm-envelope.schema.json`)
-on stdout. It names the plan and the exact command that confirms it. It never prompts, and it never
-falls back to the terminal (rule 4).
+A tool that confirms (`"confirm_protocol": true`) run without `--yes` exits 4 and prints the envelope
+(`confirm-envelope.schema.json`) on stdout. It names the plan and the exact command that confirms it. It
+never prompts, and it never falls back to the terminal (rule 4).
+
+**Which changes are confirmed (discovery revision 13, a clarification; changed in feature 008).** Rule
+9's confirmation binds a change whose scope the agent's arguments do not name exactly (wildcards,
+recursion, `--all`, "everything since"), that touches another agent's or session's work, or that cannot be
+reversed from what the tool shows; reaching changes use the grant envelope (revision 10). A change to a
+target the agent named exactly, applied whole or not at all, that shows what it changed, is not
+confirmed. Such a tool declares `"mutating": true` and `"confirm_protocol": false`: it has no `--yes`
+and never prints the confirmation envelope. Rule 8 still binds it when it overwrites or removes:
+`"dry_run": true`, with `--dry-run`. `confirm_protocol` is report 03 Appendix B's field, restored; absent,
+it means the same as `mutating`, so a manifest written before revision 13 keeps rule 9 whole. `undo`
+(005) confirms (case 1); `edit` (008) does not. Conformance C2 checks both shapes, and each way of
+breaking them.
 
 **A missing grant is the other exit-4 envelope (discovery revision 10; changed in feature 004).** A
 request beyond its grant prints `grant-envelope.schema.json` on stdout (`status: grant_required`):

@@ -14,7 +14,7 @@
     "flags": {
       "type": "array",
       "items": { "type": "string", "pattern": "^--[a-z][a-z0-9-]*$" },
-      "description": "Must include --help, --json, --text, --agent-info, --limit, --verbose; plus --dry-run if destructive and --yes if mutating"
+      "description": "Must include --help, --json, --text, --agent-info, --limit, --verbose; plus --dry-run if destructive, and --yes exactly when the tool confirms (confirm_protocol, or mutating when absent; discovery revision 13)"
     },
     "exit_codes": {
       "type": "object",
@@ -23,7 +23,9 @@
       "description": "Codes this tool can return as its OWN outcomes, each with its meaning. Any key outside the vocabulary fails conformance. A pass-through tool lists only its own outcomes here; the command's codes are declared by passes_exit"
     },
     "mutating": { "type": "boolean" },
+    "confirm_protocol": { "type": "boolean", "description": "true if mutating and honours --yes / the exit-4 confirmation envelope (report 03 Appendix B, restored at discovery revision 13). A mutating tool whose change is named exactly, applied whole or not at all, and shows what it changed declares false, and then needs dry_run true. Absent means: equal to mutating" },
     "destructive": { "type": "boolean" },
+    "dry_run": { "type": "boolean", "description": "true exactly when --dry-run is among the flags (rule 8). Required true for a mutating tool with confirm_protocol false (discovery revision 13). Absent means: --dry-run in flags" },
     "reads_stdin": { "type": "boolean" },
     "probe": {
       "type": "array",
@@ -34,7 +36,7 @@
     "envelopes": {
       "type": "array",
       "items": { "enum": ["confirmation_required", "grant_required"] },
-      "description": "The exit-4 envelopes this tool can print, by status (discovery revision 10). confirmation_required exactly when mutating; grant_required for a client whose requests an authority brokers (Adele). Conformance C9 checks every exit-4 output against the envelope its status names, and that the status is declared here. Absent means: confirmation_required if mutating, else none"
+      "description": "The exit-4 envelopes this tool can print, by status (discovery revision 10). confirmation_required exactly when the tool confirms (confirm_protocol, or mutating when absent; discovery revision 13); grant_required for a client whose requests an authority brokers (Adele). Conformance C9 checks every exit-4 output against the envelope its status names, and that the status is declared here. Absent means: confirmation_required if the tool confirms, else none"
     },
     "revision": { "type": "string", "minLength": 1, "description": "Build revision (constitution H8). REQUIRED for the timelike tool itself, where an empty value is a failure" }
   }

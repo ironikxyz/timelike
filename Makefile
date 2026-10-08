@@ -57,6 +57,11 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats \
   tests/e2e/announcement-generated-from-manifests-missing-tool-fails.bats \
   tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats \
+  tests/e2e/edit-replacing-text-appearing-once-changes-only-that-text-prints-edited-region.bats \
+  tests/e2e/edit-crlf-tab-indented-file-given-lf-and-spaces-preserves-crlf-and-tabs.bats \
+  tests/e2e/edit-matches-more-than-once-refused-exit-3-listing-line-numbers.bats \
+  tests/e2e/edit-matches-nowhere-refused-exit-3-nearest-candidates.bats \
+  tests/e2e/edit-dry-run-prints-unified-diff-file-byte-identical.bats tests/e2e/edit-name-and-manifest.bats \
   image/rootfs/opt/timelike/libexec/entrypoint \
   tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \

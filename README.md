@@ -289,6 +289,31 @@ view --anchors src/app.py:40-60 # each line with a 6-hex anchor of its content: 
   SHA-256 of its raw bytes. The same content keeps its anchor wherever the line moves; changed content
   gets a new one. `N:anchor` is the form the edit tool (feature 06) is to accept from its slice 1.
 
+## edit — one exact change, in one call
+
+`edit` replaces text that occurs exactly once in a file, and shows the edited lines numbered as `view`
+numbers them (feature 008, prompt 06 slice 0):
+
+```
+edit src/app.py --old 'return x' --new 'return x + 1'                 # edited lines 42-42 of 120 (matched exactly)
+edit win.c --old $'    if (x) {\n        y();' --new $'    if (x) {\n        y(1);'
+                                  # a CRLF, tab-indented file: CRLF and tabs kept (4 spaces = 1 tab)
+edit src/app.py --old 'return x' --new 'return x + 1' --dry-run       # the unified diff; nothing written
+```
+
+- **Unique or refused:** matching tries the exact bytes, then line endings and trailing whitespace, then
+  (over whole lines) indentation under one consistent mapping, and the first level with any match
+  decides. Several matches: exit 3 with their line numbers. None: exit 3 with up to three nearest
+  candidate regions, numbered, saying what differs. Nothing is written in either case.
+- **The file's conventions:** the new text takes the region's line ending and, when the match was by
+  indentation, the file's indentation unit.
+- **Atomic:** a temporary file beside the target, the target's mode and owner, a check that the file did
+  not change meanwhile, then a rename. The file is either fully changed or byte-identical. A hard link
+  is broken by the rename, as with `sed -i`, and the verdict says so.
+- **No `--yes`:** an edit names its target exactly, applies whole or not at all, and shows what it
+  changed, so rule 9 does not confirm it (discovery revision 13). `--dry-run` is the look first;
+  `snapshot` and `undo` cover a series.
+
 ## Speedup bench
 
 ```bash

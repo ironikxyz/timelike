@@ -83,6 +83,7 @@ UNDO_TOOL = agentio.Tool(
         "never touches any .git; files left out of the snapshot are left alone",
     ],
     mutating=True,
+    confirm_protocol=True,  # discovery revision 13, case 1: "everything since" is not named exactly
     destructive=True,
     probe=("--dry-run",),
     exit_codes={

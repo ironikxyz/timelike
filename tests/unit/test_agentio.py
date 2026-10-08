@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import agentio
 import pytest
 import schema
 from conftest import base_env, events, run
@@ -257,6 +258,62 @@ return agentio.Result(target="thing", scope="all", verdict="deleted")
     assert {"--yes", "--dry-run"} <= set(info["flags"])
     assert info["envelopes"] == ["confirmation_required"]
     assert "grant" not in env  # discovery revision 10: a missing grant has its own envelope
+
+
+# ── rule 9 at discovery revision 13: confirm_protocol ─────────────────────────────────────────
+
+
+def test_rule9_confirm_protocol_defaults_to_mutating(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    """A tool written before revision 13 keeps rule 9 whole: confirm_protocol absent means mutating."""
+    t = make_tool("mutator", 'return agentio.Result(target="t", scope="s", verdict="ok")', mutating=True)
+    info = json.loads(go(py, t, scratch, "--agent-info").stdout)
+    assert info["confirm_protocol"] is True
+    assert "--yes" in info["flags"] and info["exit_codes"]["4"].startswith("confirmation required")
+    assert schema.errors(info, schema.load("agent-info.schema.json")) == []
+    plain = make_tool("plain", 'return agentio.Result(target="t", scope="s", verdict="ok")')
+    info = json.loads(go(py, plain, scratch, "--agent-info").stdout)
+    assert info["confirm_protocol"] is False and "--yes" not in info["flags"]
+
+
+def test_rule9_mutating_without_confirm_protocol(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    """edit's shape: mutating, applied in one call; no --yes, no exit 4, no confirmation envelope."""
+    body = 'return agentio.Result(target="t", scope="s", verdict="edited")'
+    t = make_tool("editor", body, mutating=True, destructive=True, confirm_protocol=False)
+    info = json.loads(go(py, t, scratch, "--agent-info").stdout)
+    assert info["mutating"] is True and info["confirm_protocol"] is False
+    assert info["dry_run"] is True and "--dry-run" in info["flags"]
+    assert "--yes" not in info["flags"]
+    assert "4" not in info["exit_codes"]
+    assert info["envelopes"] == []
+    assert schema.errors(info, schema.load("agent-info.schema.json")) == []
+    r = go(py, t, scratch, "--json")
+    assert r.returncode == 0 and json.loads(r.stdout)["verdict"] == "edited"
+    r = go(py, t, scratch, "--yes", "--json")  # a --yes that would do nothing is refused (exit 2)
+    assert r.returncode == 2
+
+
+def test_rule9_undeclared_confirmation_is_refused(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    """A tool with confirm_protocol=False cannot print a confirmation envelope: internal error, not 4."""
+    body = 'return agentio.confirm_required(ctx, target="t", scope="s", plan=["x"])'
+    t = make_tool("editor", body, mutating=True, destructive=True, confirm_protocol=False)
+    r = go(py, t, scratch, "--json")
+    assert r.returncode == 1 and r.stdout == ""
+    assert "confirmation_required" in r.stderr
+
+
+def test_rule9_confirm_protocol_needs_mutating() -> None:
+    with pytest.raises(ValueError, match="needs mutating=True"):
+        agentio.Tool("x", "t", "s", confirm_protocol=True)
+    assert agentio.Tool("x", "t", "s", mutating=True, confirm_protocol=True).confirm_protocol is True
+    assert agentio.Tool("x", "t", "s", mutating=True).confirm_protocol is True
+    assert agentio.Tool("x", "t", "s").confirm_protocol is False
+
+
+def test_manifest_dry_run_follows_the_flag(py: str, make_tool: ToolMaker, scratch: Path) -> None:
+    body = 'return agentio.Result(target="t", scope="s", verdict="ok")'
+    for kwargs, want in (({}, False), ({"destructive": True}, True)):
+        info = json.loads(go(py, make_tool("t", body, **kwargs), scratch, "--agent-info").stdout)
+        assert info["dry_run"] is want and ("--dry-run" in info["flags"]) is want
 
 
 def test_confirm_required_takes_no_grant(py: str, make_tool: ToolMaker, scratch: Path) -> None:

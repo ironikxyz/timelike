@@ -96,6 +96,7 @@ class UsageError(ToolError):
 
 class Tool:
     __slots__ = (
+        "confirm_protocol",
         "destructive",
         "exit_codes",
         "grant_envelope",
@@ -124,6 +125,7 @@ class Tool:
         manifest_extra: Callable[[], dict[str, Any]] | None = None,
         passes_exit: bool = False,
         grant_envelope: bool = False,
+        confirm_protocol: bool | None = None,
     ) -> None:
         self.name = name
         self.target = target
@@ -141,14 +143,22 @@ class Tool:
         # Discovery revision 10: a client whose requests an authority (Adele) brokers. Its exit 4 is the
         # grant envelope, and it is not --yes-confirmed by the agent: the grant is the confirmation.
         self.grant_envelope = grant_envelope
+        # Discovery revision 13: rule 9 confirms a change whose scope the arguments do not name exactly,
+        # that touches another agent's or session's work, or that cannot be reversed from what the tool
+        # shows. A mutating tool outside those cases (edit) declares confirm_protocol=False: no --yes, no
+        # confirmation envelope, and rule 8's --dry-run still binds it. None: the same as mutating, so a
+        # tool written before revision 13 keeps rule 9 whole (report 03 Appendix B's field, restored).
+        if confirm_protocol and not mutating:
+            raise ValueError(f"{name}: confirm_protocol=True needs mutating=True")
+        self.confirm_protocol = mutating if confirm_protocol is None else confirm_protocol
 
     def envelopes(self) -> list[str]:
         """The exit-4 envelopes this tool can print, by status (manifest `envelopes`, conform C9)."""
-        return [CONFIRMATION_REQUIRED] * self.mutating + [GRANT_REQUIRED] * self.grant_envelope
+        return [CONFIRMATION_REQUIRED] * self.confirm_protocol + [GRANT_REQUIRED] * self.grant_envelope
 
     def codes(self) -> dict[int, str]:
         codes = dict(self.exit_codes or {EXIT_OK: "ok", EXIT_FAILURE: "failure", EXIT_USAGE: "usage"})
-        if self.mutating:
+        if self.confirm_protocol:
             codes.setdefault(EXIT_CONFIRM, "confirmation required: rerun with --yes")
         if self.grant_envelope:
             codes.setdefault(EXIT_CONFIRM, "beyond the grant: nothing performed; the operator extends it")
@@ -606,7 +616,7 @@ def _parser(tool: Tool, configure: Configure | None) -> _Parser:
     p.add_argument("--verbose", action="store_true", help="add timing; warn about event-log failures")
     if tool.destructive:
         p.add_argument("--dry-run", action="store_true", help="show the plan, change nothing")
-    if tool.mutating:
+    if tool.confirm_protocol:  # discovery revision 13: --yes only where rule 9 confirms
         p.add_argument("--yes", action="store_true", help="confirm the mutation")
     if configure is not None:
         configure(p)
@@ -713,7 +723,9 @@ def _emit_manifest(tool: Tool, p: argparse.ArgumentParser) -> int:
         "flags": _long_flags(p),
         "exit_codes": {str(k): v for k, v in tool.codes().items()},
         "mutating": tool.mutating,
+        "confirm_protocol": tool.confirm_protocol,  # discovery revision 13
         "destructive": tool.destructive,
+        "dry_run": tool.destructive,  # the parser adds --dry-run exactly when destructive (rule 8)
         "reads_stdin": tool.reads_stdin,
         "probe": list(tool.probe),
     }
