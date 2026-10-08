@@ -118,9 +118,56 @@ C = carried items. Tests are written from the contract **before** the code (the 
 - [X] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
   block is applied **only if** SC-6 is built too (the send's condition); otherwise untouched, with the reason
   recorded.
-- [ ] T022 [US6] **HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is
-  answered.
+- [ ] T022 [US6] ~~**HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is
+  answered.~~ *(Superseded by Phase 7, Cycle 4: Item 21 answered by discovery revision 14; the installs are
+  T024–T033. T022 itself is closed there, in T033's record.)*
 - [X] T023 `cycle-report.md` § Cycle 3 (the send's block), and implement steps 10 and 9b.
 
 **Parallel:** T014 and T015 (delegates, test files only) run beside T016–T019. T016 comes before T017. T020 follows
 T016–T019 and T021 follows T020. T023 comes last.
+
+## Phase 7: Cycle 4 — the agent runtimes (send `bridge/sends/04-rev14-20261008-174220.md`, via `/specswarm:modify` → plan → tasks)
+
+<!-- Tech Stack Validation (cycle 4): PASSED — plan.md § Tech Stack Compliance Report (Cycle 4) has no conflict or
+prohibition; the installed tech-stack-taskscan block scanned the 10 task lines below and found no prohibited
+technology -->
+
+Spec § Slice 1, cycle 4 (FR-25 to FR-31, D-12 to D-15), plan § Cycle 4, research R9. Governance was audited to
+14 on this branch (`e58dd36`, `07b914d`), so there is no audit task here. **The mentor's Docker lane is the merge
+bar.** US6 = SC-6.
+
+- [ ] T024 [P] [US6] e2e from the spec, by a delegate, before the images change:
+  `tests/e2e/a-bare-python-package-install-and-a-global-node-package-install-succeed-without-privilege.bats`
+  (FR-31: per style; a test-built wheel and npm package, unique versions; new shell; only `/home/agent` changed;
+  timelike's interpreter unchanged; no `PIP_BREAK_SYSTEM_PACKAGES`; the runtimes resolve to `/opt/agent`), and the
+  P6 vanilla cell in `tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats` revised to
+  FR-13 (same versions, marker kept, `npm prefix -g` default, bare pip refused, no announcement).
+- [ ] T025 [P] [US6] Units by a delegate: `tests/unit/test_announce.py`'s vanilla test (FR-13 revised: no timelike
+  configuration path; the runtime pins present), `tests/unit/test_agent_runtimes.py` (new: `pins.env` carries
+  `NODE_VERSION` and a 64-hex `NODE_SHA256`; both Dockerfiles verify it with `sha256sum -c`; `pip.conf` and
+  `npmrc` only in the agent Dockerfile; no `PIP_BREAK_SYSTEM_PACKAGES` in `image/`, `bench/`, `compose.yaml`,
+  `Makefile`; the `ENV` PATH order), `tests/unit/test_missing_commands.py` (user rows allowed; each starts
+  `pip install ` or `npm install -g `; none of the seven runtime names listed).
+- [ ] T026 [US6] `pins.env` (`NODE_VERSION`, `NODE_SHA256`), `compose.yaml` (agent build args), `Makefile`
+  (`bench-images` passes `UV_IMAGE`, `PYTHON_VERSION` and the Node pins to the vanilla build).
+- [ ] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
+  links, the `ENV` PATH with `/home/agent/.local/bin`. `image/rootfs/etc/profile.d/00-timelike-path.sh`: the
+  same entry. `tests/host/test_env_layer.sh` still passes, or its PATH checks move with the declared order.
+- [ ] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says
+  so (002's file; `changed_other_features`).
+- [ ] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
+  Python and Node CLIs. `image/rootfs/etc/timelike/standard-tools.json` checked (python3 and node keep their risk
+  and `instead`).
+- [ ] T030 `scan/scan.sh`: its comments and the pip-audit "no interpreter" record say timelike's interpreter, not
+  any interpreter.
+- [ ] T031 Host verification: the units, the host lane, lint, and an advisory host build check of the runtime
+  steps (the uv prefix and Node tarball, as in R9). Results go in `decisions.md`.
+- [ ] T032 `README.md`: the send's `## README status` block (all four slice-1 criteria are now built); the vanilla
+  description (Debian + git + the agent runtimes, stock); the reference regenerated if any help moved.
+- [ ] T033 Provenance (modify Step 9): append 14 with the installed `audit-append` block, scoped, and its
+  `audit-log.md` row. Then `cycle-report.md` § Cycle 4, implement steps 10 and 9b, and `reboot.md` brought up
+  to date for a clear.
+
+**Parallel:** T024 and T025 (delegates, test files only) run beside T026–T030. T026 comes before T027 and T028.
+T031 follows them, then T032, then T033.
+
