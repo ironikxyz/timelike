@@ -343,3 +343,66 @@ re-read here:
 **Breaking changes:** none. **Risk:** low; documentation only.
 
 **Proceed:** yes.
+
+---
+
+# Cycle 8: revisions 11, 12 and 13 recorded; rule 10's struck clause corrected (send `bridge/sends/01-rev13-20261008-095251.md`, discovery revision 13)
+
+**Analysis date:** 2026-10-08T10:04Z. specswarm **4.0.1-botbaubble.2.37.0** loaded (expanded `PLUGIN_DIR`; the session's pid
+in 2.37.0's `.in_use`; lore specswarm Q002).
+
+**Provenance:** modify row 7, computed by the command's `provenance-inputs` and `provenance-row` blocks:
+`source_prompt` agrees with the send's `> Source:`; the prompt is at revision 13, `prompt_revision` is 2,
+`audited_against` is `[2, 3, 4, 5, 6, 7, 8, 9, 10]`. Unaudited: 11, 12, 13.
+
+**What changed (lore P004: what was compared).** The prompt bodies of `01-rev10-20261003-003933.md` and this send,
+diffed from `# Agent shell baseline & output contract` to the end: three revision notes added, and three rule lines
+changed — rule 9 gains revision 13's clarification, rule 10 is revised with a clause struck, rule 13 gains revision
+12's clarification. **No criterion changed:** the two Acceptance Criteria sections are byte-identical (13 criteria,
+sha256 `227b7275…` over each section from `## Acceptance Criteria` to `## Discovery Traceability`), so removals and
+rewordings are visible and none occurred.
+
+| Rev | Rule | Spec body line (before this cycle) | Finding |
+|---|---|---|---|
+| 11 | 10 | `spec.md:189` "No daemons. State lives only under a scratch directory and an optional git-excluded project cache." | **Amended (struck clause): the clause is now false.** One copied constraint line, not a criterion and not the body's design; corrected in place by declared copy, as revision 7's struck hooks clause was (Cycle 5). **Not regenerated**, per the send |
+| 12 | 13 | `spec.md:192` "ANSI stripped. Long lines are cut at `COLUMNS` …" | needs no body change (names no mode, so states nothing false); revision 12's sentence copied in, declared |
+| 13 | 9 | `spec.md:181–188` the confirmation envelope, with revision 10's note | needs no body change (revision 13 narrows which changes confirm; nothing the line says is false); copied in, declared |
+
+**The other body lines that mention state, read against revision 11:** `spec.md:97–98` (Scenario: each agent's
+output in its own scratch space), FR-12 `:201–202`, Session entity `:287–288`, Assumption 4 `:329–331`. All describe a
+per-session scratch space, which revision 11 keeps ("the scratch directory is per session and disposable"). None names
+a project cache or an in-workspace location. **True as written.**
+
+**001's contracts against the revised rules (read here, the code check by a read-only delegate, its citations re-read):**
+
+| File | What it says | Against |
+|---|---|---|
+| `contracts/output-contract.md:3` | "rules 1–16 from the send, in every feature" — the contract points at the send's rules and never restates rule 10's wording | rule 10: no project cache named |
+| `contracts/output-contract.md:175` | "Scratch space: `${TIMELIKE_SCRATCH_ROOT:-/tmp/timelike}/<session>/`, created with mode `0700`" — the only state location the contract defines | rule 10: agrees on the scratch; **does not name the per-workspace state root** (no hit for "state root" in any feature's contracts) |
+| `grep -rn -i "project cache" .specswarm/features/*/contracts/` | 0 hits | **the send's stop condition does not fire** |
+| `contracts/output-contract.md:81–83` | "The line cut applies in both modes (discovery revision 12 …)" | rule 13: agrees |
+| `contracts/output-contract.md:20`, `:131–140`; `conformance.md:27` (C2) | `confirm_protocol`; "Which changes are confirmed (discovery revision 13 …)"; C2's confirmation-scope checks | rule 9: agrees |
+
+**Code against rule 10 as revised, read-only** (does any tool write state inside the workspace or its `.git`?):
+- **timelike's own state: none inside.** Every tool writes under the session scratch: agentio's artefacts, tracebacks
+  and `events.jsonl`; `run`, `search`, `journal`, `services`, `snapshot`, `timelike-conform`; the bash EXIT trap's
+  `shell.jsonl`. **011's symbols index** is in the scratch too (`tools/bin/symbols:355`
+  `ctx.scratch() / "symbols" / f"{key}.json"`): FOR-MENTOR Item 20, known, waiting on 07 s1's state root. Cited, not
+  resolved. No `git config` write and no hooks path written into a repository (`core.hooksPath` comes from the image's
+  environment and `/etc/gitconfig`).
+- **Two tool-initiated writes that can land inside, which are not timelike state files** (for the mentor, not acted on):
+  - `tools/bin/verify:878` runs `git status --porcelain=v1 -z --untracked-files=all` (via `:848`) without
+    `--no-optional-locks` (0 hits in `verify`). git may refresh and rewrite `.git/index` when its stat cache is stale.
+  - `verify changed` runs pytest, ruff and mypy in the workspace with their default caches (`__pycache__`,
+    `.pytest_cache`, `.mypy_cache`, `.ruff_cache`). 009's `contracts/verify-cli.md:130–132` already admits it and filters
+    them from the change set.
+  - Whether either counts as "state" under rule 10 is a reading of the rule, so it is reported, not decided.
+- **Defaults, noted:** `announce --install` writes the harnesses' user-level files under `$HOME`, and the image's
+  `WORKDIR` is `/home/agent` (`image/Dockerfile:215`), also `$HOME`. An agent working directly in `~` would see them in
+  its working directory. That is a fact about the defaults, not a tool writing into a project.
+
+**Proposed change:** the spec only. Rules 9, 10 and 13 receive their revisions' words, declared (rule 10 with the
+struck clause kept struck); `audited_against` gains 11, 12, 13. No code, test or contract change, so nothing outside
+`.specswarm/features/001-agent-shell-baseline/` changes and no Docker lane is needed.
+
+**Breaking changes:** none. **Risk:** low; documentation only. **Proceed:** yes.
