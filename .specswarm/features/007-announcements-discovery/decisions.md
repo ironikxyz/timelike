@@ -125,3 +125,11 @@ FLAGGED: scoped, not full — revision 13 rewords a criterion, so the installed 
 ASSUMED: the new audit-log.md opens with a seed row for specify's [1], dated by the spec's created_at and marked as written now, as 002's log did — (confidence: high)
 ABSENT: prompt_revision (1), discovery_revision (12) and source_prompt untouched; revisions 2–12 not appended
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T013: cycle report § Cycle 2; implement steps 10 and 9b recorded
+**Started:** 2026-10-08T10:12:16Z | **Completed:** 2026-10-08T10:12:16Z | **Coordinator**
+
+INHERITED: T010–T012; lane readme-c from bridge/history.md and its log (ok 41–52, 426–431) — (confidence: high)
+FLAGGED: SC-1 cited by text outside the strike, not by Cycle 1's text — Cycle 1's quoted the struck clause and matches no line of this send; the new text matches exactly one — (confidence: high)
+ASSUMED: D4 keeps "observed by the operator" (Cycle 1 Addendum 2) — (confidence: high)
+ABSENT: the stale e2e cell names are reported, not renamed (tests/ is outside the feature directory); no demo_points_reached; no .implement-complete; metrics.json not written

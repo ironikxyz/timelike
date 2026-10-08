@@ -67,7 +67,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
   cycle addresses), expecting 13 alone; write `audited_against` in `spec.md` frontmatter; create `audit-log.md` with
   its header, a seed row for specify's `[1]` and this cycle's row. Never touch `prompt_revision`,
   `discovery_revision` or `source_prompt`.
-- [ ] T013 `cycle-report.md` § Cycle 2 (the send's block): Group A not applicable; Group B from the send; the three
+- [X] T013 `cycle-report.md` § Cycle 2 (the send's block): Group A not applicable; Group B from the send; the three
   slice-0 Automated criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree); D4 observed by the
   operator (Addendum 2); implement steps 10 and 9b.
 
