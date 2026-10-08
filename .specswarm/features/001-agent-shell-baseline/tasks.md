@@ -457,7 +457,7 @@ Governance is current at `[2..13]`, so there is no audit task. No criterion chan
 - [X] T083 Spec contract rules 9 (`spec.md:181–188`) and 13 (`spec.md:192`): append revision 13's and revision 12's
   clarifications in place, declared, as T079 did for revision 10. Note that the contract already carries both
   (`contracts/output-contract.md:20`, `:131–140`, `:81–83`).
-- [ ] T084 Provenance (modify Step 9): compute the append with the installed `audit-append` block in `full` mode
+- [X] T084 Provenance (modify Step 9): compute the append with the installed `audit-append` block in `full` mode
   (revisions 11–13 changed no criterion; the criteria are byte-identical to the rev-10 send's, so removals are
   visible); write `audited_against` in `spec.md` frontmatter and one `audit-log.md` row per revision, rule 10's as
   *amended (struck clause), corrected in place*. Never touch `prompt_revision`, `discovery_revision` or

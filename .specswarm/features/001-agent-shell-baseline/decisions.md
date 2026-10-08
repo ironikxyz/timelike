@@ -924,3 +924,10 @@ INHERITED: T082 (same file); revision 10's annotation pattern on rule 9 (T079) �
 ASSUMED: each clarification is copied verbatim from the send's prompt bytes, then a provenance note naming where the contract already carries it (re-read at output-contract.md:20, :81–83, :131–140, conformance.md:27) — (confidence: high)
 ABSENT: neither rule's existing text is changed (both stay true); no contract change
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T084: provenance — audited_against gains 11, 12, 13 (full); three audit-log rows
+**Started:** 2026-10-08T10:06:53Z | **Completed:** 2026-10-08T10:06:53Z | **Coordinator**
+
+INHERITED: T082, T083; the criteria comparison (byte-identical to rev 10's) from impact-analysis.md § Cycle 8 — (confidence: high)
+ASSUMED: one row per revision, as the send asks, each repeating the shared basis so a row read alone stands — (confidence: high)
+ABSENT: prompt_revision (2), discovery_revision (3) and source_prompt untouched; no earlier row rewritten

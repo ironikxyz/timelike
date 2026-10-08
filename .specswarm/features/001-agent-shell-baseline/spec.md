@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/01-agent-shell-baseline.md
 source_send: bridge/sends/01-rev7-20260929-094055.md
 prompt_revision: 2
 discovery_revision: 3
-audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 slice: 1
 ---
 
