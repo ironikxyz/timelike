@@ -77,3 +77,50 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
 
 - T001 → T004. T004 → T005 → T006 → T007 → T008 → T009.
 - T002 and T003 depend only on the contract, and run beside T004–T006.
+
+## Phase 6: Cycle 3 — slice 1 (send `bridge/sends/04-rev13-20261008-161802.md`, via `/specswarm:modify` → plan → tasks)
+
+<!-- Tech Stack Validation (cycle 3): PASSED — plan.md § Tech Stack Compliance Report (Cycle 3) has no conflict or
+prohibition; the installed tech-stack-taskscan block (lib/tech-stack-parser.sh, ts_mentions) scanned the 10 task
+lines below and found no prohibited technology -->
+
+Spec § Slice 1, contract § Slice 1, plan § Cycle 3. Governance is current at `[2..13]`, so there is no audit task.
+This cycle changes `image/`, `tools/` and `tests/`, so **the mentor's Docker lane is the merge bar**.
+
+**Stories:** US5 = SC-5 (the command-not-found answer), US7 = SC-7 (the budget), US6 = SC-6 (installs, **held**),
+C = carried items. Tests are written from the contract **before** the code (the 003/005 pattern), by delegates.
+
+- [ ] T014 [P] [US5, US7] e2e from the contract, written by a delegate before the code:
+  `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats` (SC-5: per style `bash -c`,
+  `bash -lc`, interactive, a script; `sh -c` and direct exec unreached; the unknown name byte for byte against bash
+  with the handler unset; every listed name absent) and
+  `tests/e2e/one-command-prints-the-agents-resource-budget.bats` (SC-7: a throwaway with known `--memory`, `--cpus`,
+  `--pids-limit`; the agent container; the CPU figure equals the shell's `$TIMELIKE_CPUS`).
+- [ ] T015 [P] [US5, US7] Units and the host test from the contract, written by a delegate before the code:
+  `tests/unit/test_budget.py` (figures from files the test writes under `TIMELIKE_CGROUP_ROOT`: values, `max`,
+  unreadable, missing; disks; text and JSON; the CPU rule against the bash hook on the same files),
+  `tests/unit/test_missing_commands.py` (the shipped TSV's validity), and `tests/host/test_command_not_found.sh`
+  (the handler per style, byte for byte against bash, under `set -eux` callers, with an empty PATH).
+- [ ] T016 [US7] `tools/agentio/agentio.py`: `cgroup_dir`, `cgroup_value`, `cpu_figure` and `workspace`. `tools/bin/run`
+  and `tools/bin/snapshot` use them, and their own copies go. Their existing suites (`tests/unit/test_run*.py`,
+  `tests/unit/test_snapshot.py`, `tests/unit/test_undo.py`) pass unchanged.
+- [ ] T017 [US7] `tools/bin/timelike`: `timelike budget` (contract § `timelike budget`) and the announcement's two
+  rule lines (FR-24). `tests/unit/test_announce.py` is updated only where it counts lines.
+- [ ] T018 [US5] `image/rootfs/etc/timelike/shell-env.bash`: `command_not_found_handle` (contract § The
+  command-not-found answer), with the header rules updated. `image/rootfs/etc/timelike/missing-commands.tsv` (R6).
+  `image/Dockerfile`: one COPY. Measure the handler's cost per call and record it. `tests/host/test_shell_env_hook.sh`
+  and `tests/host/test_env_layer.sh` still pass.
+- [ ] T019 [C] `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`: the cell
+  names take revision 13's criterion text, and the workspace cells say "the workspace is left untouched". The
+  1 s bound becomes the ordering assertion (spec § Slice 1 carried items), and the time is printed, not asserted.
+- [ ] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed
+  files, conformance, coverage. Results go in `decisions.md`, labelled advisory (no image).
+- [ ] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
+  block is applied **only if** SC-6 is built too (the send's condition); otherwise untouched, with the reason
+  recorded.
+- [ ] T022 [US6] **HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is
+  answered.
+- [ ] T023 `cycle-report.md` § Cycle 3 (the send's block), and implement steps 10 and 9b.
+
+**Parallel:** T014 and T015 (delegates, test files only) run beside T016–T019. T016 comes before T017. T020 follows
+T016–T019 and T021 follows T020. T023 comes last.
