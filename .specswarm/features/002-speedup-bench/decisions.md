@@ -328,3 +328,4 @@ INHERITED: (none — first task of the cycle); the classification is impact-anal
 FLAGGED: the constraint is placed under § Reporting after FR-9a as a declared bullet, not as a new numbered FR — chose that over an FR-9b because slice 0 does not meet it and an FR reads as a requirement this slice claims; the bullet says so in its own text — (confidence: high)
 ASSUMED: the constraint's text is copied verbatim from the send's prompt bytes (the *From Principles* list), quoted, with the revision marker moved into the bullet's lead — (confidence: high)
 ABSENT: report.py and data-model.md are not edited (send § 1); no other spec line changes, because none states a verdict order (impact analysis table); the slice-1 criterion is not copied (the spec carries no later-slice criteria)
+SCOPE: none — no files outside the feature's artifacts changed
