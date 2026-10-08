@@ -451,3 +451,4 @@ FLAGGED: the check runs from the AGENT image's timelike interpreter, like the ve
 ASSUMED: the step's detail is the subcommand's summary, so the scan's output says what was checked (entries, Node, releases examined, states), as the send asks — (confidence: high)
 ABSENT: scan.sh passes no --registry (the default, https://registry.npmjs.org); the fake docker runs the real subcommand, so the scan cell uses a pip-component entry that answers without a registry; npm's path is tested against the file-served registry (T040)
 Verification (host, advisory): test_scan_report.py, test_scan_release_check.py, test_scan_baseline.py 153 passed (new: the four images' release-check rows, and a scan.sh run with a bundled entry: from the agent image, no --network flag, NODE_VERSION passed, "1 bundled-class entries checked … 1 unknown"); shellcheck scan/scan.sh clean
+SCOPE: in (2 changed files)
