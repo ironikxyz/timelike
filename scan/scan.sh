@@ -7,9 +7,13 @@
 #   2. grype       Grype over that SBOM, JSON only
 #   3. pip-audit   over timelike's interpreter's installed distributions, via uv inside the image. An
 #                  image without timelike's interpreter (vanilla; Adele's scratch stage) records none.
-#                  The agent runtimes (an agent Python with its pip, Node with npm's bundled packages;
-#                  discovery revision 14) are in the agent and vanilla SBOMs, so Grype covers them under
-#                  the same baseline rule
+#  3b. pip-audit-agent  over the AGENT interpreter's (/opt/agent/python; discovery revision 14) installed
+#                  distributions, in every image that carries it (agent, vanilla), as a result line of
+#                  its own. The scanned image's agent interpreter lists them as exact pins; the agent
+#                  image's uv runs pip-audit over that list (-r, --no-deps --disable-pip: nothing is
+#                  resolved or installed), because vanilla has no uv. An image without it records none.
+#                  Node with npm's bundled packages is in the agent and vanilla SBOMs, so Grype covers
+#                  it (and the agent Python again) under the same baseline rule
 #   4. govulncheck Adele only: govulncheck GOVULNCHECK_VERSION over adele/ (source, symbol level), run
 #                  from GO_IMAGE. Other images record none (not a Go image)
 #   5. gitleaks    over the repository's git history (once; its report is shared by every image)
@@ -27,7 +31,8 @@
 #   timelike-adele:local          → scan/out/timelike-adele/        required. FROM scratch: no interpreter,
 #                                    so pip-audit records none; its base digest is GO_IMAGE's (below)
 #   timelike-vanilla:local        → scan/out/timelike-vanilla/      (bench baseline; no timelike interpreter,
-#                                    so pip-audit records none; its agent runtimes are in its SBOM)
+#                                    so pip-audit records none; pip-audit-agent audits its agent
+#                                    interpreter, and its runtimes are in its SBOM)
 #   timelike-bench-driver:local   → scan/out/timelike-bench-driver/ (holds the docker CLI, a Go binary:
 #                                    grype may report fixable Go-stdlib Highs that block until
 #                                    DOCKER_CLI_IMAGE is bumped, research RB10)
@@ -66,6 +71,7 @@ image=$agent
 top=scan/out
 out=$top
 py=/opt/timelike/python/bin/python3
+agent_py=/opt/agent/python/bin/python3
 as_me=(--user "$(id -u):$(id -g)")
 
 die() {
@@ -98,7 +104,8 @@ image=$agent
 rm -rf "$top"
 mkdir -p "$top"
 
-# scan_image IMAGE OUT — steps 1-3 for one image, into OUT/steps.tsv (step 4 is appended by the caller).
+# scan_image IMAGE OUT — steps 1-4 (3b included) for one image, into OUT/steps.tsv (step 5, gitleaks,
+# is appended by the caller).
 scan_image() {
 image=$1
 out=$2
@@ -176,6 +183,44 @@ elif listing=$(docker run "${py_opts[@]}" "$image" -I /scan/evaluate.py dists --
   fi
 else
   record pip-audit error "could not list the image's distributions: $(reason "$out/pip-audit.err")"
+fi
+
+# --- 3b. pip-audit over the agent interpreter (lane 007s1-a, item 4: quality-standards says the scan
+# covers the runtimes). The same probe as step 3, for $agent_py. The listing runs in the scanned image's
+# own agent interpreter, so it names what that image ships; the audit runs from the agent image, which
+# holds uv and timelike's interpreter, over that list alone. pip-audit exits 1 when it finds something,
+# so the JSON decides, not the code.
+progress "[3/5] pip-audit $PIP_AUDIT_VERSION over the agent interpreter's distributions"
+aerr=$out/pip-audit-agent.err
+probe=0
+docker run --rm --network none --entrypoint "$agent_py" "$image" -I -c '' >/dev/null 2>"$aerr" || probe=$?
+if [ "$probe" -eq 126 ] || [ "$probe" -eq 127 ]; then
+  record pip-audit-agent none \
+    "no agent interpreter in image: $image has no $agent_py, so pip-audit had nothing to audit"
+elif [ "$probe" -ne 0 ]; then
+  record pip-audit-agent error "could not probe $image for $agent_py (docker exit $probe): $(reason "$aerr")"
+elif listing=$(docker run --rm --network none "${as_me[@]}" --entrypoint "$agent_py" \
+  -v "$root/scan:/scan:ro" -v "$root/$out:/out" "$image" -I /scan/evaluate.py dists \
+  --out /out/dists-agent.json --requirements /out/agent-requirements.txt 2>"$aerr") \
+  && read -r count purelib <<<"$listing" && [[ $count =~ ^[0-9]+$ && -n $purelib ]]; then
+  if [ "$count" -eq 0 ]; then
+    record pip-audit-agent none "no distributions in the agent interpreter — pip-audit had nothing to audit"
+  elif docker run --rm "${as_me[@]}" -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv-cache \
+    -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint /bin/uv -v "$root/$out:/out" "$agent" \
+    tool run --python "$py" "pip-audit==$PIP_AUDIT_VERSION" -r /out/agent-requirements.txt --no-deps \
+    --disable-pip --format json --output /out/pip-audit-agent.json --progress-spinner off 2>>"$aerr"; then
+    record pip-audit-agent ran "$count distributions in $purelib (agent interpreter)"
+  else
+    rc=$?
+    if [ -s "$out/pip-audit-agent.json" ]; then
+      record pip-audit-agent ran \
+        "$count distributions in $purelib (agent interpreter; pip-audit exit $rc; its JSON decides)"
+    else
+      record pip-audit-agent error "pip-audit wrote no report (exit $rc): $(reason "$aerr")"
+    fi
+  fi
+else
+  record pip-audit-agent error "could not list the agent interpreter's distributions: $(reason "$aerr")"
 fi
 
 # --- 4. govulncheck, Adele only (research R5): over Adele's source, at symbol level, so evaluate.py can

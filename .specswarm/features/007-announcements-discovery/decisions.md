@@ -387,3 +387,14 @@ ASSUMED: reviewed 2026-10-01 and review_by 2026-12-27 left unchanged ("the same 
 ABSENT: none of the seven fixable findings is baselined (the gate would block them anyway: a baselined finding with a fix still blocks)
 Verification (host, advisory): evaluate.py report over lane 007s1-a's own scan output with the new baselines — agent: 85 baselined, 7 blocking; vanilla: 84 baselined, 7 blocking; the 7 are exactly the fixable npm findings. tests/unit/test_scan_baseline.py and test_scan_report.py: 112 passed
 SCOPE: in (2 changed files)
+
+### T037: pip-audit over the agent interpreter, a result line of its own (lane 007s1-a, item 4)
+**Started:** 2026-10-08T20:05:44Z | **Completed:** 2026-10-08T20:09:36Z | **Coordinator**
+
+INHERITED: the mentor's reading of lane 007s1-a's scan — pip-audit ran over /opt/timelike/python only, and recorded "no interpreter" for vanilla, which now carries /opt/agent/python; quality-standards (13 → 14) says the scan covers the runtimes — (confidence: high)
+FLAGGED: extended pip-audit rather than judging Grype sufficient — pip-audit reads PyPI's advisory service (PYSEC/OSV) for the exact versions, which Grype's database may lag; the cost is one more network step per image that carries the runtime — (confidence: high)
+FLAGGED: the audit runs over a pinned list, not --path — the scanned image's own agent interpreter lists its distributions (evaluate.py dists --requirements, no network), and the AGENT image's uv runs pip-audit -r that list with --no-deps --disable-pip (nothing resolved or installed), because vanilla has no /bin/uv. The same pattern as the verdict, which already runs on the agent image. pip-audit 2.10.1 checked on the host: the flags exist and the JSON has the same shape — (confidence: high)
+ASSUMED: step name pip-audit-agent, its own row in steps.tsv and verdict.json, its findings attributed to it (pip_audit_vulns takes the step name); the report's step column widened from 13 to 17 so the name fits — (confidence: high)
+ASSUMED: quality-standards amended (dated note, not a discovery revision; governance_audited_against unchanged) and the scan.sh header and image list say what each pip-audit covers — (confidence: high)
+ABSENT: no change to the gate rule, the baselines, or step 3 (timelike's interpreter)
+Verification (host, advisory): tests/unit/test_scan_report.py and test_scan_baseline.py 116 passed (new: the agent finding blocks on its own row while pip-audit passes, its skip note, a missing record fails, dists --requirements writes exact pins, and the four-image scan under the fake docker: agent and vanilla audited from the agent image with -r/--no-deps/--disable-pip, Adele and the bench driver none); ruff check and format, mypy (27 files), shellcheck scan/scan.sh: clean. The real run is lane 007s1-b's

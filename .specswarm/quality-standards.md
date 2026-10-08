@@ -156,6 +156,12 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 > names the four images and says the runtimes, Node's bundled npm dependencies included, are in each
 > SBOM that Grype reads, under the same baseline rule; pip-audit stays over timelike's own interpreter.
 > No threshold moved. Revision 14 is appended to `governance_audited_against`.
+>
+> **Amended 2026-10-08** per `../bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`
+> item 4 (lane 007s1-a; 007, T037). Not a discovery revision, so `governance_audited_against` is unchanged.
+> The scan's pip-audit covered timelike's interpreter only, so the agent Python's own distributions were
+> checked by Grype's SBOM alone. pip-audit now also runs over the agent interpreter (`/opt/agent/python`) in
+> every image that carries it, as a result line of its own (`pip-audit-agent`). No threshold moved.
 
 # Quality Standards - Timelike
 
@@ -399,7 +405,8 @@ These gates guard P2, P4, P5 and P7. They are pass/fail and do not count toward 
   (agent and Adele, and the bench's vanilla and driver images when built), their dependencies and the
   repository:
   - `govulncheck` for Adele
-  - `pip-audit` for Python dependencies and tooling (timelike's own interpreter)
+  - `pip-audit` for Python dependencies and tooling: timelike's own interpreter, and (since lane 007s1-a)
+    the agent interpreter, `/opt/agent/python`, in every image that carries it, on a line of its own
   - Grype over a Syft SBOM for each image's OS packages and the language packages in it. Since discovery
     revision 14 that includes the agent runtimes in the agent and vanilla images: the agent Python and its
     bundled pip, and Node with npm's bundled dependencies. They go through the same baseline rule as

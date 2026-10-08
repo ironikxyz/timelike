@@ -184,8 +184,8 @@ T031 follows them, then T032, then T033.
 - [X] T036 `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: reviewed entries for the two
   findings with no fix (GHSA-ch52-4w7c-c8xp in npm's bundled http-cache-semantics; CVE-2026-77214 in the base
   layer's libexpat1, via git), with reason, layer and the neighbours' review date.
-- [ ] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
-  in every image that carries it, as a second result line; `tests/unit/test_scan_gate.py` and
+- [X] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
+  in every image that carries it, as a second result line; `tests/unit/test_scan_report.py` and
   `.specswarm/quality-standards.md` follow.
 - [ ] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
   the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).

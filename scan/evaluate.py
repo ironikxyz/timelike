@@ -19,12 +19,15 @@ It reads the scanners' JSON results, never their exit messages (H3), and applies
 - every scan prints one baseline summary line, and writes scan/out/baseline.proposed.json: the
   baseline as this scan would need it, reasons carried over, new ones left as placeholders
 - any gitleaks finding blocks; Medium and below never block, nor does Grype's "Unknown"
-- pip-audit carries no severity, so each of its findings is treated as High ("unrated")
+- pip-audit carries no severity, so each of its findings is treated as High ("unrated"). It runs
+  twice: over timelike's interpreter (step pip-audit) and over the agent interpreter, /opt/agent/python
+  (step pip-audit-agent, discovery revision 14), each its own result line
 - govulncheck (Adele only) carries no severity either (research R5): a vulnerable function Adele's
   code reaches is treated as High, so with a fix it blocks; one only imported or only required is
   recorded below High and never blocks
 
-Subcommands: `dists` lists the interpreter's installed distributions; `report` writes the verdict.
+Subcommands: `dists` lists the interpreter's installed distributions (and, with --requirements, writes
+them as exact pins for pip-audit -r); `report` writes the verdict.
 One file on purpose: scan.sh runs it with `-I`, which keeps the script directory off sys.path, so a
 second module could not be imported. That puts it over max_file_lines (300), which quality-standards
 allows for a single-file tool when the feature plan justifies it.
@@ -448,18 +451,19 @@ def grype_vulns(grype_json: Any) -> list[Vuln]:
     return out
 
 
-def pip_audit_vulns(doc: Any, notes: list[str]) -> list[Vuln]:
+def pip_audit_vulns(doc: Any, notes: list[str], source: str = "pip-audit") -> list[Vuln]:
+    """pip-audit's findings, named by the step that produced them, so each blocks on its own line."""
     if not isinstance(doc, dict) or not isinstance(doc.get("dependencies"), list):
-        raise ParseError("pip-audit JSON has no dependencies list")
+        raise ParseError(f"{source} JSON has no dependencies list")
     out: list[Vuln] = []
     for dep in doc["dependencies"]:
         comp = f"{dep.get('name', '?')} {dep.get('version', '?')}"
         if dep.get("skip_reason"):
-            notes.append(f"pip-audit skipped {comp}: {dep['skip_reason']}")
+            notes.append(f"{source} skipped {comp}: {dep['skip_reason']}")
         for v in dep.get("vulns") or []:
             aliases = tuple(str(a) for a in v.get("aliases") or [])
             fixes = tuple(str(x) for x in v.get("fix_versions") or [])
-            out.append(Vuln("pip-audit", str(v["id"]), aliases, comp, "unrated", fixes))
+            out.append(Vuln(source, str(v["id"]), aliases, comp, "unrated", fixes))
     return out
 
 
@@ -540,7 +544,7 @@ def _load(path: Path) -> Any:
         raise ParseError(f"{path.name} unreadable: {exc}") from exc
 
 
-STEPS = ("sbom", "grype", "pip-audit", "govulncheck", "gitleaks")
+STEPS = ("sbom", "grype", "pip-audit", "pip-audit-agent", "govulncheck", "gitleaks")
 
 
 @dataclass
@@ -579,7 +583,7 @@ def _read_step(name: str, out: Path, image_id: str, got: Collected) -> None:
         found = (
             grype_vulns(_load(out / "grype.json"))
             if name == "grype"
-            else pip_audit_vulns(_load(out / "pip-audit.json"), got.notes)
+            else pip_audit_vulns(_load(out / f"{name}.json"), got.notes, name)
         )
         got.vulns += found
         got.details[name] += f"; {len(found)} matches"
@@ -654,7 +658,7 @@ def report(out: Path, target: Target, today: dt.date) -> int:
     summary = summary_line(b, verdict, target.base_digest)
     text = [
         f"scan: {target.image} [supply-chain] — {word}",
-        *(f"  {n:<13}{s:<6}{d}" for n, s, d in rows),
+        *(f"  {n:<17}{s:<6}{d}" for n, s, d in rows),
         summary,
     ]
     text += ["blocking:", *map(_line, verdict.blocking)] if verdict.blocking else []
@@ -683,10 +687,13 @@ def report(out: Path, target: Target, today: dt.date) -> int:
     return 0 if word == "PASS" else 1
 
 
-def dists(out: Path) -> int:
-    """Prints `<count> <purelib>` for scan.sh, and records the list itself in `out`."""
+def dists(out: Path, requirements: Path | None = None) -> int:
+    """Prints `<count> <purelib>` for scan.sh, and records the list itself in `out` (and, when asked,
+    as `name==version` lines in `requirements`, which pip-audit audits with --no-deps --disable-pip)."""
     found = sorted({(d.metadata["Name"], d.version) for d in importlib.metadata.distributions()})
     out.write_text(json.dumps([{"name": n, "version": v} for n, v in found]) + "\n", encoding="utf-8")
+    if requirements is not None:
+        requirements.write_text("".join(f"{n}=={v}\n" for n, v in found), encoding="utf-8")
     print(len(found), sysconfig.get_path("purelib"))
     return 0
 
@@ -700,7 +707,9 @@ def _digest(value: str) -> str:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="evaluate.py", description="supply-chain gate evaluator (H9)")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("dists").add_argument("--out", type=Path, required=True)
+    dis = sub.add_parser("dists")
+    dis.add_argument("--out", type=Path, required=True)
+    dis.add_argument("--requirements", type=Path, help="also write the list as name==version lines here")
     rep = sub.add_parser("report")
     rep.add_argument("--out", type=Path, required=True, help="the scan/out directory")
     rep.add_argument("--baseline", type=Path, required=True, help="scan/baseline/<image>.json")
@@ -714,7 +723,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     try:
         if args.cmd == "dists":
-            return dists(args.out)
+            return dists(args.out, args.requirements)
         label = args.baseline_label or f"scan/baseline/{args.baseline.name}"
         target = Target(args.image, args.image_id, args.base_digest, args.baseline, label)
         return report(args.out, target, args.today)
