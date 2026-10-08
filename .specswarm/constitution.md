@@ -1,9 +1,34 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: none (1.4.2 stands; a no-change audit amends nothing)
+- Audit against discovery revision 14, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern for revision 14, header "> Discovery: plan/.discover/discovery.md (revision 14)"),
+  § "What Changed In Those Revisions" (relied on), and
+  ../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md § Resolution (Q1–Q3).
+  Revision 14 appended to governance_audited_against: a no-change audit is a recorded result
+- What revision 14 moved: discovery's Soft Constraints "Base image" bullet (the PEP 668 clause struck:
+  the slim image carries no system Python; the agent image ships the agent's own Python and Node, and
+  the bench's vanilla arm the same binaries with stock behaviour) and stack.md's new Agent runtimes row.
+  Principles, hard constraints, the output contract and demo points did not move
+- Checked: no article restates the base-image constraint or PEP 668. H5 says timelike's tools run
+  #!/opt/timelike/python/bin/python3 -I and "never use the system Python or an agent venv": the agent
+  interpreter added at revision 14 is neither timelike's interpreter nor usable by its tools under H5's
+  first sentence, so H5 holds as written (tech-stack.md's prohibition 3 and stack note 3 say the same).
+  P6 (claims measured against a vanilla environment) holds: both bench arms gain the same runtimes. H9's
+  "fix available" rule already covers "a runtime or library", so Node and the agent Python fall under it
+  unchanged
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (per the evidence section)
+- HOW H1–H9: checked, unchanged
+- Dependent artifacts: tech-stack.md audited, amended to 1.4.0 (Agent runtimes entry; PEP 668 and uv
+  notes corrected); quality-standards.md audited, amended (the supply-chain scan gate names the four
+  scanned images and the runtimes in their SBOMs). In flight: 007-announcements-discovery (04 s1, Cycle
+  4) builds the runtimes, on modify/007-slice-1, where this audit is committed (send 04-rev14)
+- Deferred TODOs: none
+
 - Version change: none (1.4.2 stands; a no-change audit amends nothing)
 - Audit against discovery revision 13, no change needed. Source: ../bridge/governance-context.md
   (/mentor:regovern 2026-10-04T23:28:30Z), § "What Changed In Those Revisions", and
