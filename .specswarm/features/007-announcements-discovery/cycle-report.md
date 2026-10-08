@@ -387,3 +387,138 @@ decisions: sections=12 flagged_sections=10 non_flagged_sections=2 sections_witho
 
 Cycle 2 alone (T010–T012 at that point): 3 sections, 2 FLAGGED entries (T010's struck-and-kept notes; T012's mode),
 0 low-confidence. `SCOPE:` none 3.
+
+## Cycle 3 — bridge/sends/04-rev13-20261008-161802.md
+
+Slice 1 of prompt 04, as a modify cycle of 007 on `modify/007-slice-1` from `master` `f6faf01`. Written
+2026-10-08T17:04:49Z (from the clock). specswarm **4.0.1-botbaubble.2.37.0** ran: every expanded command's `PLUGIN_DIR` is 2.37.0's
+cache path (lore specswarm Q002). **Not merged, not pushed.** This cycle changes `image/`, `tools/` and `tests/`,
+so the mentor's Docker lane comes before sign-off, and this instance makes no commit until the mentor says the lane
+has ended.
+
+**One criterion is not built.** The install criterion (SC-6) is held on **FOR-MENTOR Item 21** (send seam 1: the
+image has no agent-facing Python or Node). Everything else in the slice is built (spec D-11).
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path.
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/04-rev13-20261008-161802.md |
+| source_prompt | plan/.discover/prompts/04-announcements-discovery.md |
+| prompt_revision | 13 |
+| discovery_revision | 13 |
+| slice | 1 of [0, 1] (intensity: natural) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used. Two general-purpose subagents wrote the tests from the contract
+before the code: T014 (both e2e files) and T015 (the two unit files and the host handler test). Their decisions are in
+`decisions.md`, marked `(delegate)`. The coordinator reviewed both, ran T015's suites, and committed each delegate's
+files. T015's host test found two handler defects, fixed in T018's follow-up.
+
+**criteria_reestablished.** All eight of prompt 04's criteria: slice 0's four, because this cycle changed the
+announcement and SC-1's cells, and slice 1's four. **No image lane has run on this branch yet**, so every Automated
+criterion is `unconfirmed`. The host-lane results are listed beside each, labelled advisory; they are not image
+evidence.
+- `04 · "a timelike announcement of at most 60 lines is present in each supported harness's user-level context location"` —
+  **unconfirmed** (image lane pending). The cells
+  (`tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`) were renamed to revision
+  13's text, and the 1 s bound became an ordering (T019, declared in spec § Slice 1 carried items).
+- `04 · "and a test fails if any installed timelike tool is missing from it _(traces to: P3)_"` — **unconfirmed** (image
+  lane pending). Host advisory: `tests/unit/test_announce.py` passed with the two new rule lines (T017, T020).
+- `04 · "with fields for JSON support, interactivity risk and safer alternative _(traces to: P3)_"` — **unconfirmed**
+  (image lane pending). Host advisory: test_announce passed. `timelike tools` is unchanged.
+- `04 · "exits 127 and prints the install command for the package that provides it"` — **unconfirmed** (image lane
+  pending: `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`, 17 cells). Host advisory:
+  `tests/host/test_command_not_found.sh` 33/33 (nine invocation styles, byte for byte against bash) and
+  `tests/unit/test_missing_commands.py` 13/13.
+- `04 · "persist across new shells _(traces to: P1)_"` (the bare Python and Node installs) — **unconfirmed: NOT BUILT**,
+  held on FOR-MENTOR Item 21 (T022). Nothing in the image or the tests addresses it.
+- `04 · "free space on the workspace and scratch filesystems _(traces to: P2)_"` — **unconfirmed** (image lane pending:
+  `tests/e2e/one-command-prints-the-agents-resource-budget.bats`, 10 cells). Host advisory: `tests/unit/test_budget.py`
+  73/73, including the CPU rule against the bash hook on the same files.
+- `04 · "uses a timelike tool it learned about from the environment's announcement _(traces to: D4)_"` — **observed by the
+  operator**, the mode Cycle 1's Addendum 2 recorded (2026-10-07, on slice 0's announcement). This cycle added two rule
+  lines to that announcement and observed nothing new.
+- `04 · "is told the install command or the equivalent timelike tool _(traces to: D13)_"` — **unconfirmed**. The mentor
+  captures D13 after the lane, as the send says.
+
+Each citation matches exactly one line of the send (`grep -cF` = 1 for all eight). Three were lengthened to their
+`_(traces to: …)_` endings because the send's "In scope" list repeats their opening words.
+
+**reconcile_mode:** `scoped`. Modify **row 4**: revision 13 was already in `audited_against` `[1, 13]`, so Step 9
+appended nothing and the frontmatter is unchanged. This cycle examined slice 1's four criteria. Slice 0's are carried
+from Cycle 2's audit.
+
+**not_verified:**
+- **Anything in the image.** No Docker daemon here: all 27 new e2e cells and SC-1's six changed cells are written and
+  shellcheck-clean, but have not been run.
+- **Two premises of T014's cells:**
+  - the direct-exec cell asserts non-zero, not 127; docker's status for a missing exec binary was not verified;
+  - the limited throwaway needs a host with at least 2 CPUs, for `--cpus 1.5`.
+- **Every listed command is absent from the image.** The TSV rows were chosen as names trixie-slim plus this image's
+  packages do not install. The e2e cell `… every listed name is absent in the image …` is the check, and a failure
+  there means removing a row.
+- **The handler in the image's bash 5.2.37.** It was measured and compared on host bash 5.2.21.
+- **SC-6**, in full (held).
+
+**changed_other_features:**
+- **003 `run`:** `cgroup_dir`, the byte reader and `size()` moved into agentio, and `run` uses them. Behaviour is unchanged;
+  test_run and test_run_slice1 pass unchanged.
+- **005 `snapshot`:** `find_workspace` calls `agentio.workspace()`. Unchanged; test_snapshot and test_undo pass.
+- **001's hook** `image/rootfs/etc/timelike/shell-env.bash`: it defines `command_not_found_handle`, and its "leaves
+  nothing behind" rule is amended. `tests/host/test_shell_env_hook.sh` Q2 now allows exactly that function.
+- **001's agentio:** new shared readers.
+- **`image/Dockerfile`:** one COPY.
+- **`README.md`:** the generated command reference only (one line).
+- **`tests/host/run.sh`:** runs the new host test.
+- **FOR-MENTOR.md:** Item 21.
+- **reboot.md:** the operator's staged note folded in.
+- **`bench/vanilla/Dockerfile`:** untouched (FR-13).
+
+**process_failures_recorded:**
+1. T021 was committed before T020's record. T021 changes no README content; T020's record says so.
+2. T014's `decisions.md` section puts its plain `ABSENT:` mid-line after `ABSENT (delegate):`, so the plugin's
+   `decision_tally` reports `sections_without_absent=1` for it. The section does carry an ABSENT, and records are
+   append-only, so it is left as written.
+3. The traced coverage run's TOTAL (59%) used a wrong `[paths]` alias for the bench's temp copies, so it is not
+   reported. The four changed files' figures are unaffected: agentio 95%, run 93%, snapshot 92%, timelike 93%.
+4. A timing command was refused by the harness's removal check (an inline `bash -c` script); it was re-run from a
+   script file. No removal was involved.
+
+**retired_prompts_seen:** none.
+
+**For the mentor:**
+- **Item 21** is open and holds SC-6 and the README status block.
+- **The handler's cost:** about 1.9 ms more per missing command than bash alone (host).
+- **The README status block is not applied** (send: "only if all four slice-1 criteria are met").
+- **Delegate contract findings,** settled in the contract:
+  - JSON keys are at the top level;
+  - the interactive line uses argv0's base name;
+  - a directory at the data path means line 1 alone;
+  - an empty `PATH` never reaches the handler (bash's own behaviour).
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+- `run_tests` rc=2 (pytest declared, not installed for `/usr/bin/python3`). `run_coverage` printed `unknown` (rc 1).
+  Browser framework: `none`.
+- `Quality Score: unknown — no component could be measured, so there is no score to compare`.
+- The six exclusions: 2 attributed to this install, 2 to this machine, 2 not applicable.
+- The gate is **UNKNOWN**: warned, not halted.
+- Recorded as `.specswarm/metrics.json` → `007-cycle-3`, with the project's host figures beside it, unscored (T020).
+  No component was filled in by hand.
+
+**Implement step 9b: decision log** (the plugin's `scope_tally` and `decision_tally` over all of 007's `tasks.md` and
+`decisions.md`, every cycle, before T023's own records):
+
+```
+scope: planned=23 recorded=21 unplanned=0 unrecorded=2 in=16 out=0 none=6 unknown=0 flagged=19 flagged_out=0 other=3 other_out=0
+decisions: sections=22 flagged_sections=19 non_flagged_sections=3 sections_without_absent=1 flagged=31 assumed=23 deferred=0 absent=21 inherited=19 low_confidence=0 flagged_low_confidence=0 flagged_delegate=7 assumed_delegate=4
+```
+
+`unrecorded=2` is T022 (held) and T023 (this record). There are no low-confidence decisions. Every `SCOPE:` record in
+Cycle 3 is `in` or `none`.
