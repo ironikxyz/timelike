@@ -908,7 +908,9 @@ rule 10's place for caches that should outlive a session. Moving the index there
 
 ## Item 21 — Feature 04 slice 1 (`007-announcements-discovery`, Cycle 3): there is no Python and no Node for "a bare install" to reach; which reading? (blocks one criterion only)
 
-**Status:** open. Raised 2026-10-08 on `modify/007-slice-1`, from send
+**Status:** closed 2026-10-08T17:46:27Z (read from the clock). Answered by plan as discovery revision 14 (plan `e800ef3`): Q1 option (a), the agent image ships a uv-managed agent Python in its own prefix and the official Node LTS tarball, pinned; Q2 reading (ii), user locations made the default by configuration scoped to each runtime; Q3, no `PIP_BREAK_SYSTEM_PACKAGES` anywhere (the agent interpreter is provisioned without its `EXTERNALLY-MANAGED` marker instead), and vanilla gains the same runtime binaries with stock behaviour. Copy of record: `../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md` § Resolution (Q1–Q3); built from `bridge/sends/04-rev14-20261008-174220.md` (007 Cycle 4). The text below is kept as raised.
+
+**Raised:** 2026-10-08 on `modify/007-slice-1`, from send
 `bridge/sends/04-rev13-20261008-161802.md`, seam 1, which asks for this item before the criterion is built.
 
 **The criterion:** "A bare Python package install and a global Node package install each succeed as the
