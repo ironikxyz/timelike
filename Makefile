@@ -52,6 +52,9 @@ test-host:
 # Linters run in pinned containers. The uv image is distroless (no shell; research R6), so ruff and
 # mypy run through the uv inside the built agent image, on the image's own interpreter.
 SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh tests/host/run.sh \
+  tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats \
+  tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats \
+  tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats \
   tests/host/test_env_layer.sh tests/e2e/helpers.bash scan/scan.sh scripts/demo.sh \
   image/rootfs/etc/profile.d/10-timelike-shell-env.sh image/rootfs/etc/timelike/shell-env.bash \
   tests/host/test_shell_env_hook.sh tests/e2e/container-derived-defaults.bats \

@@ -320,3 +320,154 @@ invocation styles).
 - A process tree that escapes the command's descent entirely, by being re-parented to a process outside
   `run` before `run` could see it, is not stopped. `run` claims only the tree it can observe; the
   research records how far that reaches.
+
+---
+
+## Slice 1 (Cycle 2, send `bridge/sends/03-rev1-20261004-183704.md`; natural)
+
+Built by `/specswarm:modify 003` on `modify/003-slice-1`, dispatch batch `20261004-183704`. Prompt 03 is
+still at revision 1, and `audited_against [1]` is current (modify row 4). The slice-1 criteria were in
+revision 1 from the start, marked *(slice 1)*. They are **added work** on a body that stays true. The
+`Out of Scope (slice 0)` list above is history: memory, disk and redaction are this section's.
+
+### Scenarios
+
+**Scenario 5: a command killed for memory (SC-8, DEMO → D12).**
+1. The container has a 96 MiB limit. The agent runs `run python3 build.py`, and the build allocates past
+   it.
+2. The kernel's OOM killer stops the process. `run`'s verdict reads, for example:
+   `verdict: exit 137 (out of memory: limit 96.0 MiB, peak 96.0 MiB) · 3.1 s · 12 lines · log …`.
+3. `$?` is 137, as it would have been. The agent knows to reduce the build's memory, or to ask for a
+   larger limit, instead of retrying unchanged (P2's violation example).
+
+**Scenario 6: a full filesystem (SC-9).**
+1. The workspace filesystem fills while the command writes, and the command fails.
+2. The verdict reads, for example: `verdict: exit 1 (disk full: /work has 0 B free) · …`. When the
+   scratch filesystem is the full one, the verdict also says the log may be incomplete, because the
+   command's output could not be written to it.
+
+**Scenario 7: a secret in the output (SC-10).**
+1. A command prints a GitHub token, an AWS access key ID and a private key.
+2. The shown lines, the saved log and the header carry `[REDACTED:token]`, `[REDACTED:credential]` and
+   `[REDACTED:key]` in their place. The log has the same number of lines as before. The verdict ends
+   ` · redacted 3 (credential 1, key 1, token 1)`.
+
+### Functional requirements
+
+**The memory cause**
+- **FR-25:** `run` reads its own cgroup v2 directory: `/proc/self/cgroup`'s `0::<path>` under
+  `/sys/fs/cgroup`. `TIMELIKE_CGROUP_ROOT` overrides the directory, for tests on hosts. It reads
+  `memory.events`' `oom_kill` count before starting the command and after it ends.
+- **FR-26:** When the count rose and the command did not exit 0, the cause is **`memory`**. The words
+  are `out of memory: limit <L>, peak <P>`, where `<L>` is `memory.max`, and `<P>` is
+  `memory.peak`. When `memory.max` is `max`, the words are `out of memory: no limit set, peak <P>`, both in binary units with one decimal. The exit code still passes through:
+  137 when the command itself was killed, or what its parent reported.
+- **FR-27:** When the count rose and the command exited 0 anyway (a child was killed, and the command
+  survived it), the cause stays `command`. The verdict adds ` · OOM kill during the command (limit <L>,
+  peak <P>)`.
+- **FR-28:** When the command was killed by SIGKILL (or exited 137) and the cgroup files cannot be read,
+  the verdict adds ` · memory: unknown (<file>: <reason>)`. The cause stays `command`. A cause is never
+  guessed (send seam 1). JSON `data.memory.state` is `read`, `unknown` or `not looked at` (when
+  nothing pointed at memory), with `limit_bytes`, `peak_bytes`, `oom_kills` (the rise) and
+  `command_max_rss_bytes` (the largest resident set among the command's waited-for processes,
+  `getrusage(RUSAGE_CHILDREN)`).
+- **Limit of the reading:** the cgroup is the container's. An OOM kill of another process in the same
+  container during the command is counted too (peer agents share it), and `memory.peak` is the
+  container's peak since it started. The JSON names both, and research R16 records why nothing finer is
+  readable.
+
+**The disk cause**
+- **FR-29:** When the command did not exit 0, `run` checks two filesystems: the **scratch** one (the
+  session scratch directory, which holds the log) and the **workspace** one (the current directory).
+  For each it reads `statvfs` (free bytes for an unprivileged writer, and free inodes) and resolves the
+  mount point from `/proc/self/mountinfo`.
+- **FR-30:** A filesystem is **full** when its free bytes are below `disk_full_bytes` (1 MiB) or it has
+  no free inodes. The cause is **`disk`** when one is full, or when a line of the log carries the
+  ENOSPC message (`No space left on device`, `Disk quota exceeded`). The words are `disk full: <mount>
+  has <free> free`, for each full filesystem (`, ` between them). With only the message, the words are
+  `disk full: "No space left on device" in the output; <mount> has <free> free` for the workspace and
+  the scratch filesystem.
+- **FR-31:** When the scratch filesystem is full, the verdict adds ` · log may be incomplete`, because
+  the command's output could not all be written to it.
+- **FR-32:** When the log cannot be created before the command runs, the error (exit 1, the command not
+  run, unchanged from slice 0) names the scratch filesystem and its free space.
+
+**Redaction (G9, rule 15)**
+- **FR-33:** The rule set is one file in **gitleaks' own config format**:
+  `image/rootfs/etc/timelike/redaction.toml`, installed at `/etc/timelike/redaction.toml`.
+  `TIMELIKE_REDACTION_RULES` overrides the path. It extends gitleaks' defaults (`[extend] useDefault =
+  true`). Its rules are 18 provider rules copied byte for byte from the pinned gitleaks v8.30.1
+  defaults, with a `tags = ["redact:<type>"]` added to each, where `<type>` is one of rule 15's five.
+  `make scan`'s gitleaks step reads the same file (`--config`), so the set cannot diverge. The rules
+  are named, never paraphrased: `anthropic-admin-api-key`, `anthropic-api-key`, `aws-access-token`,
+  `gcp-api-key`, `github-app-token`, `github-fine-grained-pat`, `github-oauth`, `github-pat`,
+  `github-refresh-token`, `gitlab-pat`, `jwt`, `npm-access-token`, `openai-api-key`, `private-key`,
+  `pypi-upload-token`, `slack-bot-token`, `slack-user-token`, `stripe-access-token`.
+- **FR-34:** What counts as a secret is **the patterns** (send seam 2). Environment values are not
+  matched: feature 001's environment layer already strips secret-shaped variables, and a value the
+  operator allowed through `TIMELIKE_ENV_ALLOW` was allowed on purpose. Generic, entropy-only rules
+  (`generic-api-key`) are excluded, because they redact ordinary output.
+- **FR-35:** A rule is applied as gitleaks applies it. Its keywords (case-insensitive) must occur, then
+  its regex matches, and the secret is the first non-empty capture group (the whole match when there is
+  none). The secret's Shannon entropy must reach the rule's `entropy`, and it must match none of the
+  rule's `allowlists` regexes. Only the secret is replaced, by `agentio.redact(secret, type)`.
+- **FR-36:** The rules are applied to the **saved log** after the command ends, in one streaming pass,
+  in blocks of whole lines. A match spanning lines (a private key) is replaced line by line, so the log
+  keeps its line count, and every line number the verdict or the more command names stays true. The log
+  is replaced (a redacted copy, then a rename) **only when something matched**. Otherwise it is left as
+  the command wrote it.
+- **FR-37:** The **shown output** is read from the redacted log, so it is redacted in both modes. The
+  **header's command** (`run: <command>`, JSON `target`) and the **session event's arguments** are
+  redacted with the same rules.
+- **FR-38:** When anything was redacted, the verdict adds ` · redacted <n> (<type> <n>, …)`, types in
+  alphabetical order. JSON `data.redaction` has `state` (`applied` or `unavailable`), `counts` per type,
+  `rules` (the file) and `log_rewritten`. When the log was rewritten while a detached child held it
+  open, the verdict also says `detached output after this is not kept`: the child keeps writing to the
+  file the redacted copy replaced. **This amends slice 0's edge case** *"Its output keeps going to the
+  same log"*, which still holds whenever nothing was redacted.
+- **FR-39:** When the rule file is missing, unparsable or invalid (a rule with no `redact:<type>` tag, a
+  type outside rule 15's five, or a regex that does not compile), `run` **fails closed** for what it
+  shows. The verdict adds ` · output withheld: redaction rules unavailable (<reason>); the log is
+  unredacted`, and no lines are shown. The exit code is still the command's.
+- **FR-40:** The manifest names `redaction_rules` (the path and the rule ids). `--help` has one usage
+  line on redaction.
+
+### Success criteria (slice 1)
+
+The criterion text is the send's, copied exactly.
+
+**Automated**
+- **SC-8:** "A command killed by the container's memory limit produces a verdict naming the memory limit
+  and peak usage". The test runs in a throwaway container from the agent's image with `--memory 96m
+  --memory-swap 96m`. It checks the exit code (137), the words, `cause: memory` and
+  `data.memory.limit_bytes` equal to 96 MiB.
+- **SC-9:** "A command that fails because the scratch or workspace filesystem is full produces a verdict
+  naming the full filesystem and its free space". Both cases are tested, each on a small `--tmpfs` in a
+  throwaway container: the workspace (`/work`) and the scratch (`TIMELIKE_SCRATCH_ROOT`).
+- **SC-10:** "Values matching known secret formats are shown and stored as `[REDACTED:<type>]` in both the
+  displayed output and the saved log". The values are generated at run time, and none is a literal in a
+  tracked file. That keeps `make scan`'s gitleaks step at 0 findings, and GitHub's push protection quiet.
+  The test checks the shown lines, the log (read in the container), the header and the line count.
+
+Every automated criterion runs end to end in the image, under `bash -c` and `bash -lc`.
+
+**Manual**
+- **SC-11:** "DEMO: the Agent whose command is killed for exceeding memory receives a verdict naming the
+  memory cap and peak use instead of a bare exit 137" (D12). The mentor captures it after the lane; it is
+  `unconfirmed` until then.
+
+### Decisions (the send's seams; reasoning in `research.md` R15–R19)
+
+| Point | Decision |
+|---|---|
+| Where the memory cause is read | cgroup v2 `memory.events` `oom_kill` (before and after), `memory.max`, `memory.peak`; the container's cgroup, named as such (FR-25 to FR-28) |
+| Unreadable cgroup files | `unknown`, naming the file and the reason; cause stays `command` (FR-28) |
+| Which filesystems | Scratch (the log's) and workspace (the current directory) (FR-29) |
+| "Full" | Under 1 MiB free for an unprivileged writer, or no free inodes; or the ENOSPC message in the output (FR-30) |
+| What counts as a secret | The pattern set only, not environment values (FR-34) |
+| Where the rule set lives | One gitleaks-format file read by `run` (agentio) and gitleaks (FR-33) |
+| Which rules | 18 provider rules from gitleaks' pinned defaults; not the generic entropy rule (FR-33, FR-34) |
+| Redacting the log | After the command, a streaming pass, and a rename only when something matched; line count kept (FR-36) |
+| Rule file unavailable | Fail closed: the output is withheld, and the verdict says why (FR-39) |
+| A detached child holding a rewritten log | Its later output is not kept, and the verdict says so (FR-38) |
+| agentio's pass-through gate | Admits any `cause` with `command_exit` equal to the exit, as 001's contract already foresaw (A002) |

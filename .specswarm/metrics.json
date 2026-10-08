@@ -460,5 +460,50 @@
       "search_speed_host": "stdlib re over a stdlib walk: 51-255 MB/s (research R1); advisory",
       "e2e": "not run in the image here (no Docker, R10); the Docker lane decides"
     }
+  },
+  "003-cycle-2": {
+    "recorded_at": "2026-10-04T21:05:00+00:00",
+    "git_sha": "(the T028 commit; tree measured at the T027 commit ad2c55c)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.35.0 (session-loaded), /specswarm:implement --dispatch step 10",
+    "send": "bridge/sends/03-rev1-20261004-183704.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; dispatch mode: warned, never asked"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores)",
+      "units": "1196 passed, 1 skipped (venv Python 3.12.3, pytest 8.4.2, 457 s, subprocess coverage)",
+      "coverage_python": "95% overall, line and branch (agentio 94%, run 92%); merge bar 90%",
+      "lint": "ruff check + format (61 files), mypy strict (21 files), shellcheck over every *.sh/*.bash/*.bats: clean",
+      "make_test_host": "passed (hook logic 29/29)",
+      "startup_p95_ms": {
+        "run --help": 78,
+        "run --json true": 98
+      }
+    },
+    "lane": "pending: the mentor's Docker lane after the batch"
   }
 }

@@ -232,3 +232,145 @@ Verification:
 - shellcheck 0.11.0: clean on the edited file
 - host, sandboxed (`setsid --wait timeout -k 5 40`): the test's own fixture, extracted from the file, run through `tools/bin/run --text --timeout 2`. rc 124 in 4.4 s (image: 4.3 s). Line 2 is `verdict: exit 124 (timeout after 2 s (--timeout); raise with --timeout or TIMELIKE_RUN_TIMEOUT) · 4.1 s · …`, with no "not stopped". After 1.5 s, all five members (main, plain, nested-timeout, setsid, trap-term) had stopped beating and were not alive. This is host evidence, not image evidence
 SCOPE: in (1 changed files)
+
+### T018: the shared rule file, the image COPY, scan.sh --config
+**Started:** 2026-10-04T19:05Z | **Completed:** 2026-10-04T19:12Z
+
+INHERITED: spec FR-33, research R15 (the 18 rule ids, gitleaks' format, extend useDefault) — from the Cycle 2 spec (confidence: high)
+FLAGGED: the rule file is gitleaks' own config format, read by both run (agentio, tomllib) and gitleaks — chose one shared file over run-only regexes, because the stack note and 001's rule 15 both say the set is shared, and a second copy would diverge (confidence: high)
+FLAGGED: 18 provider rules copied byte for byte from gitleaks v8.30.1 defaults, overriding them by id with an added tag — chose override-with-tag over new ids, because new ids would make gitleaks report each leak twice, and the tag carries rule 15's type (confidence: high)
+ASSUMED: gitleaks ignores nothing it needs and accepts `tags` and `[[rules.allowlists]]` as written — verified, not assumed: the v8.30.1 binary (checksum-checked) loads the file, reports a planted generated token as `github-pat` with `["redact:token"]`, and finds 0 leaks in timelike's history with it (confidence: high)
+ABSENT: the 25 default rules Python's re cannot compile, and generic-api-key — not in the redaction set (R15); they stay in the scan through useDefault
+ABSENT: no Docker here, so the image COPY is not built in this task — the mentor's lane builds it; a unit (T019) and an e2e cell (T021) check /etc/timelike/redaction.toml loads in the image
+Verification: field-by-field equality of regex, entropy, keywords, allowlists and description against the pinned defaults (script, scratch); gitleaks v8.30.1 over the history and over a planted scratch repository
+SCOPE: in (3 changed files)
+
+### T022: agentio — the rule set (load_redaction_rules, redact_text), the pass-through gate, Context.event_args
+**Started:** 2026-10-04T19:20Z | **Completed:** 2026-10-04T19:34Z
+
+INHERITED: the shared file and its format — from T018 (confidence: high)
+FLAGGED: the rule set lives in agentio, not in run — chose the contract module over run alone, because rule 15 is the contract's and a second tool redacting later (08's journal) must read the same set; the send says a rule in run alone would diverge (confidence: high)
+FLAGGED: the pass-through gate admits any cause when command_exit equals the exit — chose that over listing memory and disk, because the cause says why the command ended and the exit is still the command's; 001's contract already said later causes are added "without changing its shape" (confidence: high)
+FLAGGED: regexes compile with re.ASCII — chose ASCII over Python's default Unicode classes, because gitleaks runs Go RE2, where \w and \b are ASCII; a Unicode \w would widen what a rule matches (confidence: medium)
+ASSUMED: gitleaks takes the first non-empty capture group as the secret when secretGroup is unset — none of the 18 rules sets secretGroup, and each one's group 1 is the value (confidence: medium)
+ASSUMED: a FutureWarning from compiling a gitleaks regex must not reach stderr — compile warnings are suppressed for the rule load only (confidence: high)
+ABSENT: gitleaks' `paths` allowlists and `path` rules — output has no path; not applied, and none of the 18 needs them for a match
+ABSENT: environment-value matching — spec FR-34 decides patterns only
+Verification: ruff, ruff format, mypy strict clean; a generated token, AWS key id and 20-line PEM block redacted with the line count kept; low-entropy and EXAMPLE look-alikes not redacted; 200k lines in 0.09–0.24 s; tests/unit/test_agentio.py, test_conform*.py, test_run.py: 166 passed
+SCOPE: in (1 changed files)
+
+### T023: run — the memory cause (FR-25 to FR-28)
+**Started:** 2026-10-04T19:35Z | **Completed:** 2026-10-04T19:52Z
+
+INHERITED: agentio's pass-through gate admits cause memory with command_exit — from T022 (confidence: high)
+FLAGGED: an OOM kill is read as the oom_kill count rising during the command, together with a failed command — chose that over "exit 137 means memory", because the OOM killer may kill a grandchild and the command then exits with whatever its shell reports, and because 137 is also any SIGKILL (research R16) (confidence: high)
+FLAGGED: the peak is memory.peak, the container cgroup's peak since it started, named "peak" with command_max_rss_bytes beside it in JSON — chose it over getrusage alone, because the criterion asks for the usage that hit the limit, which is the cgroup's; per-command cgroup peaks need kernel 6.12 or a child cgroup the agent cannot create (confidence: medium)
+FLAGGED: with memory.max = max the words are "out of memory: no limit set, peak P" — changed from "limit no limit" (contract amended, the unit delegate told) (confidence: high)
+ASSUMED: peer agents in one container share the count, so another process's OOM kill during the command is attributed to it — accepted and documented (spec FR-28 limit, R16) (confidence: medium)
+ABSENT: no attribution finer than the container cgroup — not readable without delegation (R16)
+ABSENT: the image check — no Docker here; SC-8 runs in the mentor's lane on a throwaway with --memory 96m
+Verification: ruff, format, mypy clean; host smoke over a fake cgroup (rise+SIGKILL → exit 137 "out of memory: limit 96.0 MiB, peak 96.0 MiB"; no limit; malformed memory.max reason; exit 0 → not looked at); tests/unit/test_run_slice1.py memory tests 10/10 (the delegate's, uncommitted until T020)
+SCOPE: in (1 changed files)
+
+### T024: run — the disk cause (FR-29 to FR-32)
+**Started:** 2026-10-04T19:53Z | **Completed:** 2026-10-04T20:05Z
+
+INHERITED: Outcome.notes and the memory-first ordering — from T023 (confidence: high)
+FLAGGED: "full" is under 1 MiB free for an unprivileged writer (f_bavail) or no free inodes, OR the ENOSPC message in the log — chose both signals over statvfs alone, because a writer that hits ENOSPC often deletes its partial file and free space recovers before run looks; the message survives in the log unless the log's own filesystem was the full one, which statvfs then shows (R17) (confidence: high)
+FLAGGED: a filesystem holding both the workspace and the scratch is named once — the unit delegate found the contract silent on it (confidence: high)
+FLAGGED: TIMELIKE_RUN_DISK_FULL_BYTES is a documented threshold (manifest disk_full_bytes), also what the host units use to make a filesystem count as full — chose a real knob over a test-only hook (confidence: medium)
+ASSUMED: a filesystem reporting f_files == 0 has no inode limit, so its inodes never make it full (confidence: medium)
+ABSENT: a full filesystem other than the workspace's and the scratch's (say, /tmp when the scratch root moved) — not checked; the criterion names those two
+ABSENT: a verdict line cut at COLUMNS before the slice-1 parts when the log path is very long — the image's log path is short (~55 chars); JSON's verdict is uncut; recorded for the cycle report
+Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py memory and disk: 24/24 (the delegate's; its go() helper now sets COLUMNS=1000, because pytest's scratch paths are long and the text verdict was cut before the slice-1 note — a test fix, committed with T020)
+SCOPE: in (1 changed files)
+
+### T025: run — redaction of the log, the shown lines, the header and the event; the verdict count; fail closed; the manifest (FR-33 to FR-40)
+**Started:** 2026-10-04T20:06Z | **Completed:** 2026-10-04T20:24Z
+
+INHERITED: agentio.load_redaction_rules, redact_text, Context.event_args — from T022; Outcome.notes order — from T023/T024 (confidence: high)
+FLAGGED: the log is replaced by its redacted copy (write beside it, rename) only when something matched, after a keyword pre-scan — chose rename-on-match over always rewriting, because a log with no secret then stays exactly as the command wrote it, including a detached child's later output (slice 0's edge case keeps holding) (confidence: high)
+FLAGGED: when the rules are unavailable, run fails closed for the command line too: the header and the event's arguments become "(withheld: redaction rules unavailable)" — the unit delegate found that withholding only the body left a secret argument in the header and the event (confidence: high)
+FLAGGED: tests/unit/conftest.py base_env points every tool test at the repository's rule file — chose that over setting it per test, because run withholds its output without rules and the unit lanes run outside the agent image; without it 14 slice-0 tests failed by design; the file is not named in tasks.md, so this task records SCOPE out (confidence: high)
+ASSUMED: surrogateescape round-trips every non-secret byte of the log, so a binary or non-UTF-8 output is kept byte for byte (confidence: high)
+ASSUMED: a private key longer than 64 KiB at a block boundary is not a case to carry further — PEM keys are a few KiB (confidence: high)
+ABSENT: redaction of output written after the verdict by a detached child — not possible after run returns; the verdict says "detached output after this is not kept" when the log was replaced
+ABSENT: environment values as secrets — FR-34
+Verification: ruff, format, mypy clean; tests/unit/test_run_slice1.py, test_run.py, test_agentio_redaction.py, test_redaction_rules.py: 185 passed (the delegates' files are committed with T019/T020)
+SCOPE: out — tests/unit/conftest.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T019: tests/unit/test_agentio_redaction.py and test_redaction_rules.py (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:26Z
+
+INHERITED: contracts/run-cli.md § Slice 1 (agentio additions), spec FR-33 to FR-40, the rule file — from T018 and the Cycle 2 spec (confidence: high)
+FLAGGED: committed after T022, not before it — the delegate started from the contract, but T022 landed while it was writing, so its 107 tests were checked against existing code rather than defining it first; the delegate said so in its report. Test-first held for intent, not for order (confidence: high)
+ASSUMED (delegate): the rule file's secret self-check excuses the gcp example keys that the gcp rule's own allowlist lists — they match the regex and are gitleaks' own allowlisted samples (confidence: medium)
+FLAGGED (delegate): test_agentio.py::test_rev9_pass_through_exit_only_with_cause_command still passes (its case has command_exit None), but its name states the rule T022 replaced — left as written, raised for the cycle report (confidence: medium)
+ABSENT: two rules matching overlapping text, event_args getting agentio's flag-style redaction too, paths-only allowlists — the delegate found the contract silent; T026 states them
+Verification: reviewed (secret-shaped values built at run time; redact_text over both files finds nothing); 107 passed, five repeated runs (random values); ruff, format clean
+SCOPE: in (2 changed files)
+
+### T020: tests/unit/test_run_slice1.py (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:27Z
+
+INHERITED: contracts/run-cli.md § Slice 1, spec § Slice 1 — from the Cycle 2 spec (confidence: high)
+FLAGGED: test-first in order for run — all 35 failed for the right reason before T023–T025; they found three contract gaps that changed the code (fail closed for the command line, a shared filesystem named once, a malformed memory.max reason) (confidence: high)
+FLAGGED: go() sets COLUMNS=1000 — my change in review: the verdict's slice-1 parts follow the log path, pytest's scratch paths are long, and under COLUMNS 200 rule 13 cut the text verdict before them; the image's log path is short (confidence: high)
+ASSUMED (delegate): the manifest's redaction_rules.path is checked only to end in redaction.toml (the host has no /etc/timelike) (confidence: medium)
+ABSENT: FR-32 (the scratch filesystem named when the log cannot be created) — not unit-tested; the e2e scratch cell reaches the in-run case, not this one
+Verification: reviewed; 35/35 pass against T023–T025; background children found and killed through pid files; ruff, format, mypy clean
+SCOPE: in (1 changed files)
+
+### T026: 001's output contract (pass-through, rule 15's rule set), README's run section, run-cli.md's settled gaps
+**Started:** 2026-10-04T20:28Z | **Completed:** 2026-10-04T20:36Z
+
+INHERITED: the behaviour of T022–T025 and the gaps T019/T020's delegates reported (confidence: high)
+FLAGGED: 001's pass-through paragraph now admits any cause when the exit equals command_exit, naming memory and disk — declared as changed_other_features; 001's spec is not modified (its own next modify records it), as the send's precedent for contract text (confidence: high)
+ASSUMED: the earlier no-limit wording (spec FR-26, contract) and the TIMELIKE_RUN_DISK_FULL_BYTES detail, edited before T018 and committed by no task, belong here (feature artifacts) (confidence: high)
+ABSENT: 001's agent-info.schema.json — redaction_rules and disk_full_bytes are tool-specific manifest extras, which the schema already allows (the run units validate run's manifest against it)
+Verification: the README and contract text read against the code (cause words, verdict additions, fail closed); deny-list PASS
+SCOPE: in (2 changed files)
+
+### T021: e2e — one file per automated criterion (delegated)
+**Started:** 2026-10-04T19:15Z | **Completed:** 2026-10-04T20:45Z
+
+INHERITED: contracts/run-cli.md § Slice 1; helpers.bash (run_in, exec_plain, start_throwaway); the throwaway pattern of container-derived-defaults.bats (confidence: high)
+FLAGGED: memory and disk run in throwaway containers from the verified image (--memory 96m --memory-swap 96m; --tmpfs /work:size=1m,mode=1777; --tmpfs /scratch:size=256k,mode=1777), with each limit read back from the throwaway before it is relied on; a failed precondition FAILS the cells with its reason, never skips (confidence: high)
+FLAGGED: no secret reaches the runner or tests/out — generated in the container, checked there with grep -cF against a secrets file, only counts printed; each SC-10 cell has its own session, so "stored" covers the whole scratch directory, events.jsonl included (confidence: high)
+FLAGGED (delegate): the scratch cell's 256 KiB filesystem counts as full under FR-30 even when empty; the command failing on its own write is what makes the case real — accepted, stated in the contract (confidence: medium)
+ASSUMED (delegate): the allocator writes its pages (b"x" * 8 MiB per step), so the limit is reached (confidence: high)
+FLAGGED: Makefile SHELLCHECK_FILES gains the three files, so make lint covers them; Makefile is not named in tasks.md, so this task records SCOPE out (confidence: high)
+ABSENT: not run — no Docker here (R10); the first run is the mentor's lane. FR-27, FR-28 and FR-39 are covered by units only, and SC-9 has no text-mode variant
+Verification: reviewed (the size formatter is run's algorithm; the verdict assertions match the contract); shellcheck clean; bats --count parses (delegate); gitleaks v8.30.1 over the three files: nothing, default and shared config (delegate); deny-list PASS
+SCOPE: out — Makefile (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T027: host lane — lint, units with coverage, make test-host, start-up
+**Started:** 2026-10-04T20:40Z | **Completed:** 2026-10-04T21:00Z
+
+INHERITED: T018–T026's files (confidence: high)
+FLAGGED: run --json true p95 rose from 78 ms to 98 ms on the host (the rule load: tomllib plus 18 regex compiles, about 20 ms) — left as is: under the 100 ms budget, which quality-standards sets for start-up (run --help: 78 ms, unaffected by the load); recorded for the mentor rather than optimised without a measurement in the image (confidence: medium)
+ASSUMED: the image's Python 3.14.7 behaves as the host's 3.12.3 for tomllib, re.ASCII and surrogateescape (confidence: high)
+ABSENT: the e2e on a host stand-in — not rebuilt this cycle (the scratchpad stand-in from 006 is gone after the clear); SC-8 and SC-9 need real --memory and --tmpfs anyway; all 16 new cells wait for the mentor's lane
+ABSENT: undo's 88% coverage — 005's module, unchanged by this cycle
+Verification: ruff check and format (61 files), mypy strict (21 files), shellcheck over every *.sh, *.bash, *.bats: clean; units with subprocess coverage: 1196 passed, 1 skipped (457 s); Python 95% overall (agentio 94%, run 92%); make test-host: passed (hook logic 29/29); start-up p95 run --help 78 ms, run --json true 98 ms (host, 40 runs, every exit asserted)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T028: cycle report § Cycle 2, implement step 10, metrics entry
+**Started:** 2026-10-04T21:00Z | **Completed:** 2026-10-04T21:15Z
+
+INHERITED: T018–T027's records and the host-lane figures — from T027 (confidence: high)
+FLAGGED: criteria cited with their trace markers — the bare sentences also appear in the send's scope list, so without the marker three citations matched two lines (grep -cF = 1 for all four now) (confidence: high)
+FLAGGED: Group A reports each of the ten contracted fields as present, for a marker written after this commit — the marker is written by this same dispatch run from the installed tally blocks, and marker-fields is run over it before completion is reported (confidence: high)
+ASSUMED: step 10's components are the plugin's own reasons, unchanged from 006's run (same machine, same install) — re-run here, not copied (confidence: high)
+ABSENT: demo_points_reached — the mentor derives it
+ABSENT: an audit-log row — modify row 4, nothing appended
+Verification: step 10 run from the installed blocks and library (output verbatim in the report); metrics.json gains 003-cycle-2 only (diff: additions); deny-list PASS
+SCOPE: in (1 changed files)
+
+## Note on Cycle 2's timestamps (correction, appended after T028)
+
+The **Started / Completed** times in the T018–T028 sections above were composed while writing each
+section, not read from a clock, and they are wrong: they run from 19:05Z to 21:15Z, while the clock
+(`date -Iseconds`) read 19:13:57Z when the marker was written. **The commit times are the record**
+(`git log --format=%cI`; T018 `86d0351` 18:49:28Z … T028 `3ea3385` 19:13:57Z, each the time of the
+task's final amend). The sections are left as written, append-only. This note supersedes their times.

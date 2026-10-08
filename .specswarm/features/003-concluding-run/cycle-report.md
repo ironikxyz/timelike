@@ -482,3 +482,243 @@ NOTE: .specswarm/features/003-concluding-run/quality-report.json reports overall
 **Step 4 (`/specswarm:complete`)** needs stdin, so the merge is done by hand:
 `git checkout master && git merge --no-ff 003-concluding-run`. The merge commit is reported to the
 mentor and cited in FOR-MENTOR Item 9's closure.
+
+## Cycle 2 — bridge/sends/03-rev1-20261004-183704.md
+
+**Written:** 2026-10-04. **Dispatch mode**, batch `20261004-183704`, prompt 1 of 8. **specswarm
+4.0.1-botbaubble.2.35.0** (`4ff8dcb`), the version this session loaded: every expanded command named the
+cache path `…/4.0.1-botbaubble.2.35.0` (lore Q002). The path is the one the send names, and CLAUDE.md
+names the same file, so there is no second report.
+
+**Sequence:**
+1. `git checkout -b modify/003-slice-1 master` (at `aa8127d`);
+2. `/specswarm:modify 003 --from-send bridge/sends/03-rev1-20261004-183704.md --dispatch`;
+3. `/specswarm:plan`, `/specswarm:tasks`, `/specswarm:implement --dispatch`.
+
+Not `/specswarm:build`. **Pushed nothing; merged nothing** (the batch leaves its branches standing).
+
+**The `$ARGUMENTS` expansion:** nothing broke. The arguments held no `"`. One expansion defect is
+recorded under process failures: it is in implement's awk, not in a quote.
+
+**Status in one line:** `run` names a memory kill and a full filesystem as causes, and secrets are shown
+and stored as `[REDACTED:<type>]`. The rule set is one gitleaks-format file read by `run` (through
+agentio) and by `make scan`'s gitleaks. Units, lint and the host lane pass. Nothing has run in the image.
+
+### Group A — cited from `.implement-complete`
+
+The marker is `.specswarm/features/003-concluding-run/.implement-complete`, written at the end of this
+dispatch run, after this section's commit. Its tallies are recomputed then, so T028's own record is
+counted. Every field is reported per field. No measured number is copied here.
+
+| Field | In the marker |
+|---|---|
+| feature | present |
+| completed_at | present |
+| mode | present |
+| tasks | present |
+| tests | present |
+| coverage | present |
+| lint | present |
+| decisions | present |
+| scope | present |
+| pause_file_written | present |
+
+The installed `marker-fields` block is run over the marker before completion is reported. If it finds
+anything, an addendum says so here.
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/03-rev1-20261004-183704.md |
+| source_prompt | plan/.discover/prompts/03-concluding-run.md |
+| prompt_revision | 1 |
+| discovery_revision | 12 |
+| slice | 1 |
+
+### Provenance
+
+The spec's frontmatter is untouched. `source_send` is still Cycle 1's send, `prompt_revision 1`,
+`discovery_revision 9`, `audited_against [1]`. Modify Step 2's installed blocks give **row 4**: revision 1
+is already audited, so Step 9 appends nothing and no `audit-log.md` row is needed. The slice-1 criteria
+were in revision 1 from the start. They are added work (INCOMPLETE in the send's words), not a superseded
+body. Spec § Slice 1 records them, and declares the one slice-0 edge case this cycle changes (FR-38).
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. This cycle used no sibling feature. Three general-purpose subagents wrote the
+tests (T019, T020, T021). They are subagents, not delegations, and are named in `decisions.md`.
+
+**criteria_reestablished**
+
+Nothing has run in the image (no Docker here, R10). Every criterion is `unconfirmed` until the mentor's
+lane after the batch, and D12 until the mentor's capture and interview.
+
+- `03 · "produces a verdict naming the memory limit and peak usage _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending; `tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats`, 4 cells)
+- `03 · "naming the full filesystem and its free space _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats`, 4 cells)
+- `03 · "in both the displayed output and the saved log _(traces to: P4)_"` —
+  **unconfirmed** (Docker lane pending; `tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats`, 8 cells)
+- `03 · "receives a verdict naming the memory cap and peak use instead of a bare exit 137 _(traces to: D12)_"` —
+  **unconfirmed**. Manual (D12): the mentor captures it after the lane.
+
+Each citation matches exactly one line of the send (`grep -cF` = 1 for all four), carrying its
+trace marker where the bare sentence is also in the send's scope list. Slice 0's five criteria stand
+as Cycle 1 established them. This cycle changed `run`, so the lane
+re-runs their e2e files too, but they are not cited here.
+
+**reconcile_mode:** `full`. The spec was checked against prompt revision 1's whole criteria set. Slice 0's
+are built, slice 1's are built here, and slice 2's two automated criteria and its one Manual criterion are
+out of this send's scope. Nothing was appended (row 4).
+
+**not_verified**
+- **Everything in the image:**
+  - the 16 new e2e cells, and the earlier `run` cells after this change;
+  - conform over `run`;
+  - Python 3.14.7: `tomllib`, `re.ASCII`, `surrogateescape`;
+  - the image's `/etc/timelike/redaction.toml` loading.
+- **`make scan` with the shared file.** The pinned gitleaks binary was run on this host over every ref
+  with the file at its committed path: 0 findings, as with the default config. The image's own gitleaks
+  step has not run it.
+- **The memory reading under Docker's `--memory`:** `memory.events` `oom_kill` rising, `memory.max`
+  100663296, `memory.peak` readable. The host has the files, but no limit and no OOM kill.
+- **tmpfs `mode=1777` making `/work` writable for uid 1000:** read back in the cell before use, not seen.
+- **No host stand-in this cycle.** The scratchpad stand-in from 006 is gone after the clear, and SC-8 and
+  SC-9 need real `--memory` and `--tmpfs`.
+- **A verdict line over COLUMNS:** with a very long log path, rule 13 cuts the text verdict before its
+  slice-1 parts. The image's log path is short, and JSON's verdict is uncut.
+- **Start-up:** `run --json true` p95 is 98 ms on the host (78 before), because of the rule load. It is
+  under the 100 ms budget. It has not been measured in the image.
+- **D12.**
+
+**changed_other_features**
+- **`tools/agentio/agentio.py` (001's module):**
+  - the rule set: `load_redaction_rules`, `RuleSet`, `RulesUnavailable`, `redact_text`;
+  - `Context.event_args`;
+  - **the pass-through gate** admits any cause with `command_exit` equal to the exit. Before, it admitted
+    `cause: command` only. No other tool returns `memory` or `disk`; every existing unit passes.
+- **001's `contracts/output-contract.md`:** the pass-through paragraph, and rule 15's rule set
+  (`changed_other_features`, as the send asked for contract text). 001's spec is not modified.
+- **`image/Dockerfile`:** `/etc/timelike/redaction.toml` is in the agent image, so `make scan`'s inputs
+  change. The bench's timelike arm uses the same image.
+- **`scan/scan.sh`:** gitleaks reads the shared file (`--config`).
+- **`tests/unit/conftest.py`:** `base_env` points every tool test at the repository's rule file.
+  Without it, `run` withholds its output on hosts.
+- **`Makefile`:** `SHELLCHECK_FILES` gains the three new e2e files.
+- **`README.md`:** the `run` section and the status paragraph.
+
+**process_failures_recorded**
+1. **T019's tests were not written first in order.** T022 landed while its delegate was writing, so its
+   107 tests were checked against existing code. The delegate said so. T020's 35 did come first, and
+   found three contract gaps that changed the code (below).
+2. **Three contract gaps** found by the test delegates and settled at implementation, stated in
+   `contracts/run-cli.md` § Slice 1:
+   - fail closed must cover the command line too;
+   - a filesystem holding both roles is named once;
+   - a malformed `memory.max` has a defined reason.
+3. **My per-task commit helper stopped after T018's commit.** The installed `scope-check` block is not
+   written for `set -euo pipefail`. T018's SCOPE line and tick were finished by an amend, and the helper
+   now relaxes those options around the block.
+4. **Two spec and contract edits made before T018 were committed by no task** until T026 found them in
+   the diff: the no-limit memory wording and the disk-threshold detail.
+5. **A text-mode unit failed on a cut verdict line** (pytest's long scratch path). It was a test fix
+   (`COLUMNS=1000` in its helper), recorded in T020, and it is the long-path item under not_verified.
+
+**Plugin observation (2.35.0), for the mentor to relay:** the expanded `/specswarm:implement` text
+replaced awk's `$0` with the command's argument (`match(--dispatch, …)`). That is in the
+`scope-tally` and `decision-tally` blocks, so a model running the expanded text gets broken awk. The
+installed file has `$0` (`grep -c 'match($0'` = 1). Every block here was run from the installed file.
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.35.0), as the library reported it
+
+```
+🧪 Running Quality Validation
+=============================
+- Detector:
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+- run_tests pytest: rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+- parse_test_results: total=unknown passed=unknown failed=unknown skipped=unknown
+- run_coverage pytest: unknown (rc 1)
+- step 10e: browser test framework: none (no package.json)
+- quality-components: QC_BROWSER_STATE=not-applicable:no web project detected, so there is nothing to drive a browser over
+                      QC_BUNDLE_STATE=unavailable:lib/bundle-size-monitor.sh is not present in this install
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**. With `block_merge_on_failure: false`, it warns and does not halt, and dispatch
+mode never asks. No component was filled in by hand. The project's own figures are recorded **beside** it
+in `.specswarm/metrics.json` → `003-cycle-2.project_measurements_not_scored`. The output is verbatim.
+
+**Host lane** (advisory; scratch venv, Python 3.12.3):
+- **Units:** 1196 passed, 1 skipped (457 s, with subprocess coverage). This cycle's new units: 107
+  (agentio and the rule file) and 35 (`run` slice 1).
+- **Coverage,** line and branch: Python **95%** overall, agentio 94%, `run` 92%.
+- **Lint:** ruff (61 files), mypy strict (21 files) and shellcheck over every shell and bats file: clean.
+- **`make test-host`:** passed (hook logic 29/29).
+- **Start-up p95:** `run --help` 78 ms, `run --json true` 98 ms.
+- **Deny-list:** `pass` with the list read, before every commit.
+
+**Implement step 9b: decision log** (the installed `scope-tally` and `decision-tally` blocks, 2.35.0,
+over 003's whole `tasks.md` and `decisions.md`, Cycles 1 and 2, after T027):
+
+```
+scope: planned=28 recorded=27 unplanned=0 unrecorded=1 in=22 out=4 none=1 unknown=0 flagged=20 flagged_out=3 other=7 other_out=1
+decisions: sections=27 flagged_sections=21 non_flagged_sections=6 sections_without_absent=0 flagged=43 assumed=27 deferred=0 absent=48 inherited=26 low_confidence=0 flagged_low_confidence=0
+```
+
+- `unrecorded=1` is T028, this report. The marker's tallies are taken after it.
+- This cycle's `out` records:
+  - T021: `Makefile`;
+  - T025: `tests/unit/conftest.py`.
+
+  Both are explained in their sections.
+- No low-confidence entry, so no pause. No pause file was written.
+
+### Cycle 2 addendum — two corrections found in review (2026-10-04)
+
+1. **Composed timestamps.** The Started and Completed times in `decisions.md` T018–T028 were written by
+   me, not read from a clock (19:05Z to 21:15Z, while the clock read 19:13:57Z at the marker). The commit
+   times are the record, and `decisions.md` now carries a note saying so. This is the same defect the
+   mentor recorded upstream for specify's `created_at` (history 2026-10-04T06:27:32Z), here made by this
+   instance. **process_failures_recorded** gains it.
+2. **The marker's lint field named the wrong ruff version** ("0.14") when first written. It was
+   corrected to `ruff 0.16.7` (`ruff --version`) before the marker was committed. `marker-fields` passed
+   both before and after: it checks the field's presence, not its truth.
+
+`marker-fields` (installed block) over `.implement-complete`: clean, ten fields.

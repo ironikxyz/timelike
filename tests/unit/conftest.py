@@ -40,6 +40,10 @@ def base_env(scratch: Path, session: str = "test", **extra: str) -> dict[str, st
         "TIMELIKE_SCRATCH_ROOT": str(scratch),
         "TIMELIKE_SESSION": session,
         "LC_ALL": "C.UTF-8",
+        # run (003 slice 1) withholds its output when the redaction rules are unavailable (FR-39). The
+        # image installs them at /etc/timelike/redaction.toml; the unit lanes run outside the agent
+        # image, so every tool test reads the repository's copy, the same file the image installs.
+        "TIMELIKE_REDACTION_RULES": str(REPO / "image" / "rootfs" / "etc" / "timelike" / "redaction.toml"),
     }
     if "COVERAGE_PROCESS_START" in os.environ:  # measure tools run as subprocesses (make coverage)
         env["COVERAGE_PROCESS_START"] = os.environ["COVERAGE_PROCESS_START"]

@@ -1,0 +1,10 @@
+feature: 003-concluding-run
+completed_at: 2026-10-04T19:13:57+00:00
+mode: dispatch
+tasks: 28/28 in tasks.md (Cycle 1 T001–T017, Cycle 2 T018–T028), all ticked; no unplanned sections
+tests: UNKNOWN — the plugin's run_tests returned 2 (pytest declared, not installed for /usr/bin/python3); project_measured (host venv, pytest 8.4.2): 1196 passed, 1 skipped
+coverage: UNKNOWN — run_coverage printed unknown (rc 1); project_measured (coverage.py with subprocess coverage, host venv): 95% Python line and branch, against min_test_coverage 90
+lint: ruff 0.16.7 check and format over tools tests scan bench (61 files), mypy strict (21 files), shellcheck (venv shellcheck-py) over every *.sh/*.bash/*.bats: clean
+decisions: sections=28 flagged_sections=22 non_flagged_sections=6 sections_without_absent=0 flagged=45 assumed=28 deferred=0 absent=50 inherited=27 low_confidence=0 flagged_low_confidence=0
+scope: planned=28 recorded=28 unplanned=0 unrecorded=0 in=23 out=4 none=1 unknown=0 flagged=21 flagged_out=3 other=7 other_out=1
+pause_file_written: no

@@ -18,12 +18,15 @@ import contextlib
 import ctypes
 import errno
 import os
+import re
+import resource
 import shlex
 import signal
 import subprocess
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import agentio
 
@@ -43,6 +46,30 @@ KILL_WINDOW_S = 3.0  # freeze, SIGKILL, re-scan: at most this long before report
 FREEZE_ROUNDS = 50
 POLL_S = 0.05
 SETTLE_S = 0.1  # after the command exits, let what it backgrounded finish forking before looking (R5)
+CGROUP_ENV = "TIMELIKE_CGROUP_ROOT"  # slice 1: where memory.events, .max and .peak are read (R16)
+DISK_FULL_ENV = "TIMELIKE_RUN_DISK_FULL_BYTES"
+DISK_FULL_BYTES = 1 << 20  # fewer free bytes than this, or no free inodes, is a full filesystem (R17)
+ENOSPC_MESSAGES = ("No space left on device", "Disk quota exceeded")  # strerror(ENOSPC), (EDQUOT)
+REDACT_BLOCK = 1 << 20  # the log is redacted in blocks of whole lines (R18)
+PEM_CARRY = 64 << 10  # an unfinished private key at a block's end is carried into the next, up to this
+WITHHELD = "(withheld: redaction rules unavailable)"  # FR-39: fail closed, the command line included
+
+
+def _manifest() -> dict[str, Any]:
+    path = agentio.redaction_rules_path()
+    rules: dict[str, Any] = {"path": str(path), "ids": []}
+    try:
+        rules["ids"] = agentio.load_redaction_rules(path).ids()
+    except agentio.RulesUnavailable as e:
+        rules["unavailable"] = str(e)
+    return {
+        "default_timeout_s": DEFAULT_TIMEOUT_S,
+        "timeout_env": TIMEOUT_ENV,
+        "error_patterns": list(ERROR_PATTERNS),
+        "redaction_rules": rules,
+        "disk_full_bytes": DISK_FULL_BYTES,
+    }
+
 
 TOOL = agentio.Tool(
     name="run",
@@ -53,6 +80,7 @@ TOOL = agentio.Tool(
         "run make test            # verdict, then the output; $? is make's",
         "run sh -c 'a | b'        # shell syntax goes through a shell",
         "long output: head, first error lines (error, FAIL, Traceback, … see --agent-info), tail",
+        "secrets in the output are shown and stored as [REDACTED:<type>] (rules: see --agent-info)",
     ],
     probe=("true",),
     passes_exit=True,
@@ -62,11 +90,7 @@ TOOL = agentio.Tool(
         agentio.EXIT_USAGE: "usage",
         agentio.EXIT_TIMEOUT: "timeout: run's own limit fired, and the command's whole tree was stopped",
     },
-    manifest_extra=lambda: {
-        "default_timeout_s": DEFAULT_TIMEOUT_S,
-        "timeout_env": TIMEOUT_ENV,
-        "error_patterns": list(ERROR_PATTERNS),
-    },
+    manifest_extra=lambda: _manifest(),
 )
 
 
@@ -83,7 +107,7 @@ def configure(p: argparse.ArgumentParser) -> None:
 class Outcome:
     """What decided the call: the command's own exit, run's limit, or run itself (data-model.md)."""
 
-    __slots__ = ("cause", "command_exit", "detached", "exit", "not_stopped", "words")
+    __slots__ = ("cause", "command_exit", "detached", "exit", "not_stopped", "notes", "words")
 
     def __init__(self, cause: str, exit: int, command_exit: int | None, words: str) -> None:
         self.cause = cause
@@ -92,6 +116,7 @@ class Outcome:
         self.words = words
         self.detached: list[tuple[int, str]] = []  # still running after the command exited (FR-9)
         self.not_stopped: list[tuple[int, str]] = []  # alive after the stop sequence; expected empty
+        self.notes: list[str] = []  # slice 1's verdict additions, in the contract's order
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
@@ -99,14 +124,29 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if not command:
         raise agentio.UsageError("no command given", "write the command after run, e.g. run make test")
     limit, source = resolve_timeout(args.timeout)
+    full_bytes = resolve_disk_full()
+    rules, unavailable = load_rules()
+    if rules is not None:  # FR-37: the header's command and the event's arguments, redacted too
+        target = agentio.redact_text(shlex.join(command), rules)[0]
+        ctx.event_args = [agentio.redact_text(a, rules)[0] for a in ctx.argv]
+    else:
+        target = WITHHELD
+        ctx.event_args = [WITHHELD]
     log = open_log(ctx)
     set_subreaper()
+    cgroup = cgroup_dir()
+    kills_before = read_oom_kills(cgroup)
 
     started = time.monotonic()
     outcome = execute(command, log, limit, source)
     duration = time.monotonic() - started
+    memory = memory_reading(outcome, cgroup, kills_before)
+    disk = disk_reading(outcome, log, ctx.scratch(), full_bytes)
+    redaction = redaction_pass(outcome, log, rules, unavailable)
 
     count, lines, cut = display(log, ctx.limit)
+    if redaction["state"] == "unavailable":
+        lines, cut = [], None  # FR-39: what could not be redacted is not shown
     verdict = f"exit {outcome.exit} ({outcome.words}) · {duration:.1f} s · {count} lines · log {log}"
     if outcome.detached:
         # contracts/run-cli.md: a plain, comma-separated list. At most VERDICT_DETACHED_MAX names, so
@@ -117,8 +157,9 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         verdict += f" · detached: {named}" + (f" (+{more} more)" if more else "")
     if outcome.not_stopped:  # never claim a clean stop that was not observed (H3)
         verdict += " · not stopped: " + ", ".join(f"{pid} {name}" for pid, name in outcome.not_stopped)
+    verdict += "".join(f" · {note}" for note in outcome.notes)
     return agentio.Result(
-        target=shlex.join(command),
+        target=target,
         scope="run",
         verdict=verdict,
         lines=lines,
@@ -133,6 +174,9 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
             "timeout_s": limit,
             "detached": [{"pid": pid, "name": name} for pid, name in outcome.detached],
             "not_stopped": [{"pid": pid, "name": name} for pid, name in outcome.not_stopped],
+            "memory": memory,
+            "disk": disk,
+            "redaction": redaction,
         },
     )
 
@@ -180,9 +224,16 @@ def open_log(ctx: agentio.Context) -> Path:
         return path
     except OSError as e:
         where = e.filename or str(ctx.scratch_root)
+        room = ""  # FR-32: say how much room the scratch filesystem has, when it can be read
+        probe = Path(where)
+        while not probe.exists() and probe != probe.parent:
+            probe = probe.parent
+        fs = filesystem("scratch", probe, DISK_FULL_BYTES)
+        if fs["free_bytes"] is not None:
+            room = f" ({fs['mount'] or probe} has {size(fs['free_bytes'])} free)"
         raise agentio.ToolError(
             agentio.EXIT_FAILURE,
-            f"cannot create the log under {where}: {e.strerror or e}",
+            f"cannot create the log under {where}: {e.strerror or e}{room}",
             "free or fix the scratch space (TIMELIKE_SCRATCH_ROOT); the command was not run",
         ) from None
 
@@ -309,6 +360,326 @@ def command_outcome(rc: int) -> Outcome:
             sig = f"signal {n}"
         return Outcome("command", 128 + n, 128 + n, f"command killed by signal {n} ({sig})")
     return Outcome("command", rc, rc, f"command exited {rc}")
+
+
+# ── why the command died: memory (slice 1; spec FR-25 to FR-28, research R16) ─────────────────────
+
+
+def cgroup_dir() -> Path:
+    """This process's cgroup v2 directory: /proc/self/cgroup's `0::` path under /sys/fs/cgroup."""
+    override = os.environ.get(CGROUP_ENV)
+    if override:
+        return Path(override)
+    with contextlib.suppress(OSError):
+        for line in Path("/proc/self/cgroup").read_text().splitlines():
+            if line.startswith("0::"):
+                return Path("/sys/fs/cgroup") / line[3:].lstrip("/")
+    return Path("/sys/fs/cgroup")
+
+
+def read_oom_kills(cgroup: Path) -> int | str:
+    """memory.events' oom_kill count, or the reason it could not be read."""
+    path = cgroup / "memory.events"
+    try:
+        text = path.read_text()
+    except OSError as e:
+        return f"{path}: {e.strerror or e}"
+    for line in text.splitlines():
+        key, _, value = line.partition(" ")
+        if key == "oom_kill" and value.strip().isdigit():
+            return int(value)
+    return f"{path}: no oom_kill count"
+
+
+def _read_bytes(path: Path) -> int | None:
+    """memory.max or memory.peak: an integer, None for `max` (no limit). Raises OSError/ValueError."""
+    text = path.read_text().strip()
+    if text == "max":
+        return None
+    if not text.isdigit():
+        raise ValueError(f"{path}: not a number of bytes: {text[:40]!r}")
+    return int(text)
+
+
+def size(n: int) -> str:
+    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`)."""
+    if n < 1024:
+        return f"{n} B"
+    value = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        value /= 1024
+        if value < 1024 or unit == "TiB":
+            break
+    return f"{value:.1f} {unit}"
+
+
+def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[str, Any]:
+    """Decide the memory part of the verdict; return JSON's data.memory (contract § Slice 1).
+
+    The OOM kill count rising during the command, with the command failing, makes the cause memory.
+    A rise under exit 0 is a note. A SIGKILL (137) with unreadable files is `memory: unknown`. A cause
+    is never guessed (send seam 1). The cgroup is the container's (R16), so the words say "out of
+    memory", and the peak is the container's.
+    """
+    max_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024  # KiB on Linux
+    data: dict[str, Any] = {
+        "state": "not looked at",
+        "limit_bytes": None,
+        "peak_bytes": None,
+        "oom_kills": None,
+        "command_max_rss_bytes": max_rss or None,
+        "reason": None,
+    }
+    if outcome.cause != "command" or outcome.command_exit is None:
+        return data  # run's own limit fired, or the command never ran: not a memory question
+    after = read_oom_kills(cgroup)
+    failed = outcome.command_exit != 0
+    sigkill = outcome.command_exit == 128 + signal.SIGKILL
+    if isinstance(before, str) or isinstance(after, str):
+        reason = before if isinstance(before, str) else str(after)
+        if failed or sigkill:
+            data.update(state="unknown", reason=reason)
+        if sigkill:
+            outcome.notes.append(f"memory: unknown ({reason})")
+        return data
+    rose = after - before
+    if not (failed or rose):
+        return data
+    data.update(state="read", oom_kills=rose)
+    try:
+        data["limit_bytes"] = _read_bytes(cgroup / "memory.max")
+        data["peak_bytes"] = _read_bytes(cgroup / "memory.peak")
+    except OSError as e:
+        data["reason"] = f"{e.filename or cgroup}: {e.strerror or e}"
+    except ValueError as e:
+        data["reason"] = str(e)
+    peak = size(data["peak_bytes"]) if data["peak_bytes"] is not None else "unknown"
+    if data["limit_bytes"] is not None:
+        limit = f"limit {size(data['limit_bytes'])}, peak {peak}"
+    elif data["reason"] is None:
+        limit = f"no limit set, peak {peak}"
+    else:
+        limit = f"limit unknown, peak {peak}"
+    if rose and failed:
+        outcome.cause = "memory"
+        outcome.words = f"out of memory: {limit}"
+    elif rose:
+        outcome.notes.append(f"OOM kill during the command ({limit})")
+    return data
+
+
+# ── why the command died: disk (slice 1; spec FR-29 to FR-32, research R17) ───────────────────────
+
+
+def resolve_disk_full() -> int:
+    raw = os.environ.get(DISK_FULL_ENV)
+    if raw is None or raw == "":
+        return DISK_FULL_BYTES
+    if not raw.isdigit():
+        raise agentio.UsageError(
+            f"{DISK_FULL_ENV}: {raw!r} is not a number of bytes",
+            f"set {DISK_FULL_ENV} to a whole number of bytes, e.g. {DISK_FULL_BYTES}, or unset it",
+        )
+    return int(raw)
+
+
+def mount_of(path: Path) -> str | None:
+    """The longest mount point in /proc/self/mountinfo (field 5, octal escapes decoded) holding path."""
+    try:
+        real = os.path.realpath(path)
+        lines = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        return None
+    best: str | None = None
+    for line in lines:
+        fields = line.split(" ")
+        if len(fields) < 5:
+            continue
+        point = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), fields[4])
+        if (real == point or real.startswith(point.rstrip("/") + "/")) and (
+            best is None or len(point) > len(best)
+        ):
+            best = point
+    return best
+
+
+def filesystem(role: str, path: Path, full_bytes: int) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "role": role,
+        "path": str(path),
+        "mount": mount_of(path),
+        "free_bytes": None,
+        "free_inodes": None,
+        "full": False,
+    }
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return entry
+    free = st.f_bavail * st.f_frsize
+    inodes = st.f_favail if st.f_files else None  # 0 files in total: the filesystem has no inode limit
+    entry.update(free_bytes=free, free_inodes=inodes, full=free < full_bytes or inodes == 0)
+    return entry
+
+
+def log_mentions(log: Path) -> str | None:
+    """The first ENOSPC message in the log, read in blocks with an overlap, or None."""
+    wanted = [m.encode() for m in ENOSPC_MESSAGES]
+    overlap = max(len(w) for w in wanted)
+    tail = b""
+    try:
+        with log.open("rb") as f:
+            while block := f.read(1 << 20):
+                window = tail + block
+                for message, raw in zip(ENOSPC_MESSAGES, wanted, strict=True):
+                    if raw in window:
+                        return message
+                tail = window[-overlap:]
+    except OSError:
+        return None
+    return None
+
+
+def disk_reading(outcome: Outcome, log: Path, scratch: Path, full_bytes: int) -> list[dict[str, Any]]:
+    """Decide the disk part of the verdict; return JSON's data.disk (empty when the command succeeded).
+
+    The workspace (the current directory) and the scratch filesystem (the log's) are read. A full one,
+    or the ENOSPC message in the output, makes the cause disk, unless memory already decided it.
+    """
+    if outcome.command_exit in (None, 0):
+        return []
+    try:
+        workspace = Path(os.getcwd())
+    except OSError:
+        workspace = Path(".")
+    entries = [filesystem("workspace", workspace, full_bytes), filesystem("scratch", scratch, full_bytes)]
+    if entries[1]["full"]:
+        outcome.notes.append("log may be incomplete")
+    if outcome.cause != "command":
+        return entries
+    full = [e for e in entries if e["full"]]
+    message = None if full else log_mentions(log)
+    if not full and message is None:
+        return entries
+
+    def named(chosen: list[dict[str, Any]]) -> str:
+        said: list[str] = []
+        seen: set[str] = set()
+        for e in chosen:
+            where = e["mount"] or e["path"]
+            if where in seen or e["free_bytes"] is None:
+                continue  # one filesystem holding both is named once
+            seen.add(where)
+            said.append(f"{where} has {size(e['free_bytes'])} free")
+        return ", ".join(said)
+
+    outcome.cause = "disk"
+    if full:
+        outcome.words = f"disk full: {named(full)}"
+    else:
+        outcome.words = f'disk full: "{message}" in the output; {named(entries)}'
+    return entries
+
+
+# ── redaction (slice 1; spec FR-33 to FR-40, research R15, R18, R19) ─────────────────────────────
+
+
+def load_rules() -> tuple[agentio.RuleSet | None, str | None]:
+    try:
+        return agentio.load_redaction_rules(agentio.redaction_rules_path()), None
+    except agentio.RulesUnavailable as e:
+        return None, str(e)
+
+
+def _mentions_any(log: Path, keywords: tuple[str, ...]) -> bool:
+    """Whether any rule keyword occurs in the log (lower-cased, blocks with an overlap). No keywords
+    means a rule always applies, so the answer is yes."""
+    if not keywords:
+        return True
+    wanted = [k.encode() for k in keywords]
+    overlap = max(len(w) for w in wanted)
+    tail = b""
+    with log.open("rb") as f:
+        while block := f.read(REDACT_BLOCK):
+            window = (tail + block).lower()
+            if any(w in window for w in wanted):
+                return True
+            tail = window[-overlap:]
+    return False
+
+
+def redact_log(log: Path, rules: agentio.RuleSet) -> dict[str, int]:
+    """Replace the log by its redacted copy when anything matched; return the counts per type.
+
+    Blocks of whole lines, one pass (R18). A private key whose BEGIN line has no END line in its block
+    is carried into the next block, so a key split by the boundary is still one match. The bytes are
+    decoded with surrogateescape, so everything that is not a secret comes back byte for byte.
+    """
+    if not _mentions_any(log, rules.keywords()):
+        return {}
+    counts: dict[str, int] = {}
+    tmp = log.with_name(log.name + ".redacting")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as out, log.open("rb") as src:
+            carry = ""
+            while True:
+                chunk = src.read(REDACT_BLOCK)
+                if chunk:
+                    chunk += src.readline()  # end the block on a line boundary
+                text = carry + chunk.decode("utf-8", errors="surrogateescape")
+                carry = ""
+                if chunk:
+                    low = text.lower()
+                    begin = low.rfind("-----begin")
+                    if begin != -1 and "-----end" not in low[begin:]:
+                        start = text.rfind("\n", 0, begin) + 1
+                        if len(text) - start <= PEM_CARRY:
+                            text, carry = text[:start], text[start:]
+                red, found = agentio.redact_text(text, rules)
+                for kind, n in found.items():
+                    counts[kind] = counts.get(kind, 0) + n
+                out.write(red.encode("utf-8", errors="surrogateescape"))
+                if not chunk:
+                    break
+        if counts:
+            os.replace(tmp, log)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            tmp.unlink()
+    return counts
+
+
+def redaction_pass(
+    outcome: Outcome, log: Path, rules: agentio.RuleSet | None, unavailable: str | None
+) -> dict[str, Any]:
+    """Redact the saved log (FR-36); add the verdict's redaction parts; return JSON's data.redaction."""
+    data: dict[str, Any] = {
+        "state": "applied",
+        "counts": {},
+        "rules": str(agentio.redaction_rules_path()),
+        "log_rewritten": False,
+        "reason": None,
+    }
+    if rules is None:
+        data.update(state="unavailable", reason=unavailable)
+        outcome.notes.append(
+            f"output withheld: redaction rules unavailable ({unavailable}); the log is unredacted"
+        )
+        return data
+    try:
+        counts = redact_log(log, rules)
+    except OSError as e:  # the log could not be rewritten: say so, and show nothing unredacted
+        data.update(state="unavailable", reason=f"cannot rewrite the log: {e.strerror or e}")
+        outcome.notes.append(f"output withheld: the log could not be redacted ({e.strerror or e})")
+        return data
+    if counts:
+        data.update(counts=dict(sorted(counts.items())), log_rewritten=True)
+        listed = ", ".join(f"{kind} {n}" for kind, n in sorted(counts.items()))
+        outcome.notes.append(f"redacted {sum(counts.values())} ({listed})")
+        if outcome.detached:
+            outcome.notes.append("detached output after this is not kept")
+    return data
 
 
 # ── the process tree, read from /proc (R3, R5) ─────────────────────────────────────────────────

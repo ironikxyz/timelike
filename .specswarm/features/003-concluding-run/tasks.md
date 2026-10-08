@@ -220,3 +220,76 @@ on the right checks.
 - **MVP:** Phase 2 + US1 (`run` passes the exit through and is conformant)
 - Then US2 and US3, the P2 core, and then the display
 - The image lane runs once, at the end (the mentor or operator)
+
+---
+
+## Phase 6: Cycle 2 — slice 1: memory, disk, redaction (send `bridge/sends/03-rev1-20261004-183704.md`, via `/specswarm:modify`, `--dispatch`)
+
+<!-- Tech Stack Validation (Cycle 2): PASSED — plan § Tech Stack Compliance Report (Cycle 2): all approved, none added; tomllib, math, resource are stdlib -->
+
+**Input:** spec § Slice 1, plan § Cycle 2, contracts/run-cli.md § Slice 1, research R15–R19,
+data-model § Slice 1. **Tests are required** (H7). Same conventions as Cycle 1, with these additions:
+- `implement --dispatch` commits per task.
+- The scope is the files each task names.
+- Every secret-shaped test value is generated at run time, never written as a literal.
+
+**Story map:** US5 memory cause (SC-8, SC-11 D12) · US6 disk cause (SC-9) · US7 redaction (SC-10).
+
+### Setup
+
+- [X] T018 The shared rule file and its two readers' wiring:
+  - `image/rootfs/etc/timelike/redaction.toml`: `[extend] useDefault = true`, plus the 18 rules of spec
+    FR-33, copied from gitleaks v8.30.1's `config/gitleaks.toml` and checked field by field, each with
+    `tags = ["redact:<type>"]`;
+  - `image/Dockerfile`: one `COPY --chmod=0644` to `/etc/timelike/redaction.toml`;
+  - `scan/scan.sh`: the gitleaks step gains `--config /repo/image/rootfs/etc/timelike/redaction.toml`.
+
+  Verify with the pinned binary (scratch): the config loads, and timelike's history has 0 findings.
+
+### Tests first (from `contracts/run-cli.md` § Slice 1; delegated, disjoint files)
+
+- [X] T019 [P] [US7] `tests/unit/test_agentio_redaction.py` and `tests/unit/test_redaction_rules.py`:
+  - the loader: valid, missing, unparsable, a bad tag or type, a non-compiling regex → `RulesUnavailable`;
+  - the repository's file: 18 rules, unique ids, one redact tag each, `useDefault`;
+  - `redact_text` per rule on generated values, entropy floors, allowlists, a multi-line private key
+    keeping its line count;
+  - the pass-through gate for `memory` and `disk`;
+  - `Context.event_args` in the event.
+- [X] T020 [P] [US5] [US6] [US7] `tests/unit/test_run_slice1.py`:
+  - memory over a fake cgroup directory (`TIMELIKE_CGROUP_ROOT`): rise and failure, rise and success,
+    no rise, `max`, unreadable;
+  - disk over fake statvfs and mountinfo, and the ENOSPC text;
+  - redaction of the log, the header, the event, the verdict count, `log_rewritten`, a detached holder,
+    and fail closed.
+- [X] T021 [P] [US5] [US6] [US7] The e2e files, one per criterion, each under `bash -c` and `bash -lc`:
+  - `tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats`: a throwaway with `--memory 96m
+    --memory-swap 96m`;
+  - `tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats`: throwaways with
+    `--tmpfs`, workspace and scratch;
+  - `tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats`.
+
+### Implementation
+
+- [X] T022 [US7] `tools/agentio/agentio.py`:
+  - `RulesUnavailable`, `load_redaction_rules`, `RuleSet`, `redact_text`;
+  - the pass-through gate (any `cause`, `command_exit == exit`);
+  - `Context.event_args`.
+- [X] T023 [US5] `tools/bin/run`: the memory cause (FR-25 to FR-28).
+- [X] T024 [US6] `tools/bin/run`: the disk cause (FR-29 to FR-32).
+- [X] T025 [US7] `tools/bin/run`: redaction of the log, the shown lines, the header and the event
+  arguments; the verdict count; fail closed; the manifest (FR-33 to FR-40).
+- [X] T026 The declared contract text and the place agents read:
+  - `.specswarm/features/001-agent-shell-baseline/contracts/output-contract.md`: the pass-through
+    paragraph and § Redaction;
+  - `README.md`: the `run` section gains the causes and redaction.
+
+### Polish
+
+- [X] T027 Host lane: ruff, ruff format, mypy, shellcheck; units with coverage (90% bar); `make test-host`;
+  the new e2e on the host stand-in (advisory); `run --help` start-up. Results in `decisions.md`.
+- [X] T028 `cycle-report.md` § Cycle 2, implement step 10, and `.specswarm/metrics.json`.
+
+### Dependencies (Cycle 2)
+
+- T018 → T019, T022. T022 → T023 → T024 → T025 (one file, `tools/bin/run`) → T026 → T027 → T028.
+- T019, T020 and T021 depend only on the contract, and run beside T022–T025 (delegates).

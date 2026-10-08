@@ -49,8 +49,10 @@ limit fired. Such a tool:
     (for example `memory`, `disk`) are added without changing its shape
   - `command_exit` is the command's own code, or `null` when the command never ran or was stopped by
     the tool's limit
-- returns a code outside the vocabulary only as the command's: `cause: command`, with the exit equal
-  to `command_exit`
+- returns a code outside the vocabulary only as the command's: the exit equal to `command_exit`, which
+  is not `null`. The cause says why the command ended: `command`, or (feature 003 slice 1) `memory`
+  when an OOM kill in the container ended it and `disk` when a full filesystem did. The exit is still
+  the command's own, so `$?` keeps its meaning
 
 A usage error happens before anything runs, so it arrives as rule 14's error on stderr, with exit 2 and
 no verdict. No 125 is added: the verdict and `cause` already carry what an extra code would.
@@ -108,7 +110,8 @@ rule-12 header.
 
 The first line is always the rule-12 header (text), or the `tool`, `target` and `scope` keys (JSON). The
 exit code is one of those listed under *Exit codes*, or, for a tool whose manifest declares
-`"passes_exit": true`, the command's own exit, with `cause: command` (discovery revision 9).
+`"passes_exit": true`, the command's own exit, with `command_exit` equal to it (discovery revision 9;
+the cause may be `command`, `memory` or `disk`, feature 003 slice 1).
 
 ## Errors (rule 14)
 
@@ -137,6 +140,15 @@ on stdout; neither is sorted.
 A redacted value is replaced with `[REDACTED:<type>]`, where `<type>` is one of `token`, `password`,
 `key`, `secret` or `credential`. A value is never silently dropped. (Slice 0 ships the helper. Feature
 03 supplies the rule set, shared with gitleaks.)
+
+**The rule set** (feature 003 slice 1) is one file in gitleaks' config format,
+`/etc/timelike/redaction.toml` (`TIMELIKE_REDACTION_RULES` overrides it), and `make scan`'s gitleaks
+reads the same file. Each rule carries one `redact:<type>` tag. agentio loads it with
+`load_redaction_rules()`, which fails as a whole (`RulesUnavailable`), never partly. It applies it with
+`redact_text()`, as gitleaks does: keywords, regex, the first capture group as the secret, the entropy
+floor, the allowlist. A secret spanning lines becomes one marker per line, so line numbers stay true. A
+tool that cannot load the rules must not show what it could not redact. A tool may record its session
+event's arguments redacted (`Context.event_args`).
 
 ## Session event (rules 10, 16)
 

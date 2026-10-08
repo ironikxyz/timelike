@@ -218,3 +218,82 @@ them matched a command line to find a process (process failure 2).
   `errors="replace"`, and `\r` is stripped (`agentio`'s `_clean`). Each line is then cut at `COLUMNS`
   with the contract's marker.
 - **A final line with no newline counts as a line.** An empty output is 0 lines.
+
+---
+
+# Slice 1 (Cycle 2, send `bridge/sends/03-rev1-20261004-183704.md`)
+
+## R15 · The rule set: one file, gitleaks' format, checked with the pinned binary
+
+The stack's note on gitleaks reads *"shares its rule set with `run`'s output redaction (feature 03)"*, and
+001's contract says *"Feature 03 supplies the rule set, shared with gitleaks"*. Both are met by one file
+that both programs read:
+- **The format is gitleaks' own TOML.** `[extend] useDefault = true` keeps gitleaks' 222 default rules.
+  The file's own `[[rules]]` are 18 of those defaults, copied byte for byte from
+  `config/gitleaks.toml` at tag v8.30.1 (the version `pins.env` pins), with one field added to each:
+  `tags = ["redact:<type>"]`. The copy was checked field by field (`regex`, `entropy`, `keywords`,
+  `allowlists`, `description` equal to the source).
+- **Checked with the real scanner,** not from its documentation: the v8.30.1 linux x64 release binary
+  (checksum verified against the release's `checksums.txt`) was run on this host.
+  - A scratch repository holding one generated GitHub token: the default config reports `github-pat`
+    with no tags, and the shared file reports `github-pat` with `["redact:token"]`. So a same-id rule in
+    the extending file overrides the default, and the finding is otherwise identical.
+  - timelike's own history (`gitleaks git`, every ref): **0 findings** under the default config, and **0**
+    under the shared file. `make scan`'s gitleaks step, which blocks on any finding, is unchanged today.
+- **Python reads it with `tomllib`** (stdlib since 3.11), imported only when a rule set is loaded, so no
+  tool's start-up pays for it.
+- **Which rules.** Of the 222, 25 do not compile under Python's `re` (global flags mid-pattern, `\z`).
+  The 18 chosen are provider formats with fixed prefixes, and all compile. `generic-api-key` (an
+  entropy rule over any `key=value`) is excluded: it would redact ordinary output.
+- **Gitleaks' semantics, applied the same way:**
+  - keywords are a lower-cased substring prefilter;
+  - the secret is the first non-empty capture group, or the whole match;
+  - `entropy` is the Shannon entropy of the secret, in bits per character, which must be at least the
+    rule's;
+  - `allowlists` regexes are tested against the secret, and `paths` do not apply (output has no path).
+
+## R16 · The memory cause: what cgroup v2 offers inside one container
+
+- **`memory.events` `oom_kill`** counts OOM kills in the cgroup. Read before and after the command, a
+  rise means a kill happened during it. On this host (kernel 6.8, cgroup v2, cgroupns) the files are at
+  `/sys/fs/cgroup/` and readable unprivileged. `/proc/self/cgroup` is `0::/`.
+- **`memory.max`** is the limit (`max` when none). Docker's `--memory 96m` writes `100663296`.
+- **`memory.peak`** (kernel 5.19 and later) is the cgroup's peak since creation. Resetting it per file
+  descriptor needs kernel 6.12, which this host lacks, so a per-command cgroup peak is not readable.
+  `run` names it the container's peak. The command tree's own largest resident set comes from
+  `getrusage(RUSAGE_CHILDREN).ru_maxrss` after the wait, and is reported beside it in JSON.
+- **No finer attribution without delegation.** The agent has no capabilities and cannot create a child
+  cgroup, so `run` cannot isolate its command's memory accounting. Peer agents in one container share
+  the count. The verdict words say "out of memory", and JSON and `--help` state the container scope.
+- **The exit code is not the test.** The OOM killer may kill a grandchild, and the command then exits
+  with whatever its shell reports (often 137, sometimes 1). The test is the `oom_kill` rise together with
+  a failed command.
+
+## R17 · The disk cause
+
+- `os.statvfs`: free bytes for an unprivileged writer are `f_bavail * f_frsize`, and free inodes are
+  `f_favail`. A tmpfs with `size=1m` filled by `dd` reads 0 bytes free.
+- The **message**: `strerror(ENOSPC)` is "No space left on device" in glibc, and Python and coreutils
+  print it. EDQUOT is "Disk quota exceeded".
+- **Why both signals:** a writer that hits ENOSPC often deletes its partial file before exiting (`dd`
+  does not, many build tools do), so free space can recover before `run` looks. The message survives in
+  the log, unless the log's own filesystem was the full one. Then the free space shows it.
+- **Mount point:** the longest mount point in `/proc/self/mountinfo` (field 5, octal escapes decoded)
+  that is a prefix of the resolved path.
+
+## R18 · Rewriting the log without losing line numbers
+
+- Blocks of whole lines (up to 1 MiB), one pass. A block holding a private key's BEGIN line with no END
+  line is carried into the next block, up to 64 KiB, so a key split by the block boundary is still one
+  match.
+- A match spanning lines is replaced by one `[REDACTED:key]` per line it covered, keeping each newline.
+  So the line count, the first-error line numbers and the `sed -n A,Bp` more command stay true.
+- The copy is written beside the log, then renamed over it, and only when something matched. A command
+  whose output holds no keyword pays one read of the log and nothing else.
+
+## R19 · Fail closed when the rules are unavailable
+
+A tool that shows output it could not redact makes the leak it exists to prevent. The command has
+already run, so its exit passes through. What is withheld is the output, and the verdict says why and
+where the unredacted log is. In the image the file is always present (a unit and an e2e cell check that
+it loads), so this branch is a broken install's, not a normal path.

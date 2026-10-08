@@ -121,6 +121,9 @@ COPY --chmod=0644 image/rootfs/etc/profile.d/00-timelike-path.sh /etc/profile.d/
 # repeated verbatim in tests/host/test_env_layer.sh, which checks it is here.
 COPY --chmod=0644 image/rootfs/etc/timelike/shell-env.bash /etc/timelike/shell-env.bash
 COPY --chmod=0644 image/rootfs/etc/profile.d/10-timelike-shell-env.sh /etc/profile.d/10-timelike-shell-env.sh
+# The redaction rule set (contract rule 15; feature 003 slice 1, spec FR-33): read by `run` through
+# agentio, and by make scan's gitleaks step from the checkout, so the two cannot diverge.
+COPY --chmod=0644 image/rootfs/etc/timelike/redaction.toml /etc/timelike/redaction.toml
 RUN test -f /etc/bash.bashrc \
       || { echo "error: /etc/bash.bashrc is missing — interactive bash would not reach the timelike hook" >&2; exit 1; } \
  && printf '\n# timelike: container-derived defaults for interactive bash (modify.md F004)\n%s\n' \

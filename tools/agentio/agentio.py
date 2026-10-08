@@ -229,7 +229,9 @@ class Result:
 
 
 class Context:
-    __slots__ = ("argv", "columns", "limit", "mode", "scratch_root", "session", "tool", "verbose")
+    __slots__ = (
+        "argv", "columns", "event_args", "limit", "mode", "scratch_root", "session", "tool", "verbose",
+    )  # fmt: skip
 
     def __init__(
         self,
@@ -250,6 +252,9 @@ class Context:
         self.limit = limit
         self.verbose = verbose
         self.columns = columns
+        # The session event's args when a tool sets them: a tool whose argv may hold a secret records
+        # them redacted (feature 003 slice 1, rule 15). None records argv, as before.
+        self.event_args: list[str] | None = None
 
     def scratch(self) -> Path:
         """This session's private scratch directory, created on first use (rule 10)."""
@@ -264,6 +269,184 @@ def redact(value: str, kind: str) -> str:
     if kind not in REDACTION_TYPES:
         raise ValueError(f"unknown redaction type {kind!r}; use one of {sorted(REDACTION_TYPES)}")
     return f"[REDACTED:{kind}]"
+
+
+# ── rule 15's rule set (feature 003 slice 1; spec FR-33 to FR-39, research R15) ─────────────────────
+# One file in gitleaks' own config format, read here and by `make scan`'s gitleaks, so the two cannot
+# diverge. Each rule carries one `redact:<type>` tag naming rule 15's type. It is applied as gitleaks
+# applies it: keywords as a case-insensitive prefilter, then the regex; the secret is the first
+# non-empty capture group (else the whole match); the secret's Shannon entropy must reach the rule's
+# `entropy`; and an allowlist regex that matches the secret excuses it.
+
+REDACTION_RULES_ENV = "TIMELIKE_REDACTION_RULES"
+DEFAULT_REDACTION_RULES = "/etc/timelike/redaction.toml"
+_REDACT_TAG = "redact:"
+
+
+class RulesUnavailable(Exception):
+    """The rule set cannot be used, and why. A load fails as a whole: never a partial rule set."""
+
+
+class Rule:
+    __slots__ = ("allowlist", "entropy", "id", "keywords", "regex", "type")
+
+    def __init__(
+        self,
+        rule_id: str,
+        kind: str,
+        regex: re.Pattern[str],
+        keywords: tuple[str, ...],
+        entropy: float | None,
+        allowlist: tuple[re.Pattern[str], ...],
+    ) -> None:
+        self.id = rule_id
+        self.type = kind
+        self.regex = regex
+        self.keywords = keywords
+        self.entropy = entropy
+        self.allowlist = allowlist
+
+
+class RuleSet:
+    __slots__ = ("path", "rules")
+
+    def __init__(self, path: str, rules: tuple[Rule, ...]) -> None:
+        self.path = path
+        self.rules = rules
+
+    def ids(self) -> list[str]:
+        return [r.id for r in self.rules]
+
+    def keywords(self) -> tuple[str, ...]:
+        """Every rule's keywords, lower-cased; a rule without keywords makes this empty (always look)."""
+        if any(not r.keywords for r in self.rules):
+            return ()
+        return tuple(sorted({k for r in self.rules for k in r.keywords}))
+
+
+def redaction_rules_path() -> Path:
+    return Path(os.environ.get(REDACTION_RULES_ENV) or DEFAULT_REDACTION_RULES)
+
+
+def _rx(path: Path, rule_id: str, pattern: object) -> re.Pattern[str]:
+    if not isinstance(pattern, str) or not pattern:
+        raise RulesUnavailable(f"{path}: rule {rule_id}: no regex")
+    import warnings  # deferred: only a rule load needs it
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # a FutureWarning on stderr is not the tool's output
+            return re.compile(pattern, re.ASCII)  # gitleaks is Go RE2: \w and \b are ASCII there
+    except re.error as e:
+        raise RulesUnavailable(f"{path}: rule {rule_id}: regex does not compile: {e}") from None
+
+
+def load_redaction_rules(path: str | Path) -> RuleSet:
+    """Read the rule set (gitleaks' format). Raises RulesUnavailable(reason) on any problem."""
+    import tomllib  # deferred: no tool's start-up pays for it (quality-standards: < 100 ms p95)
+
+    p = Path(path)
+    try:
+        doc = tomllib.loads(p.read_bytes().decode("utf-8"))
+    except OSError as e:
+        raise RulesUnavailable(f"{p}: {e.strerror or e}") from None
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise RulesUnavailable(f"{p}: not valid TOML: {e}") from None
+    entries = doc.get("rules")
+    if not isinstance(entries, list) or not entries:
+        raise RulesUnavailable(f"{p}: no [[rules]]")
+    rules: list[Rule] = []
+    seen: set[str] = set()
+    for n, entry in enumerate(entries, 1):
+        rule_id = entry.get("id") if isinstance(entry, dict) else None
+        if not isinstance(entry, dict) or not isinstance(rule_id, str) or not rule_id:
+            raise RulesUnavailable(f"{p}: rule {n} has no id")
+        if rule_id in seen:
+            raise RulesUnavailable(f"{p}: rule {rule_id} appears twice")
+        seen.add(rule_id)
+        tags = [t for t in entry.get("tags", []) if isinstance(t, str) and t.startswith(_REDACT_TAG)]
+        if len(tags) != 1:
+            have = len(tags)
+            raise RulesUnavailable(f"{p}: rule {rule_id} needs exactly one redact:<type> tag, has {have}")
+        kind = tags[0][len(_REDACT_TAG) :]
+        if kind not in REDACTION_TYPES:
+            raise RulesUnavailable(
+                f"{p}: rule {rule_id}: type {kind!r} is not one of {', '.join(sorted(REDACTION_TYPES))}"
+            )
+        keywords = entry.get("keywords", [])
+        entropy = entry.get("entropy")
+        if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+            raise RulesUnavailable(f"{p}: rule {rule_id}: keywords must be a list of strings")
+        if entropy is not None and (isinstance(entropy, bool) or not isinstance(entropy, int | float)):
+            raise RulesUnavailable(f"{p}: rule {rule_id}: entropy must be a number")
+        allow: list[re.Pattern[str]] = []
+        for a in entry.get("allowlists", []):
+            for pattern in a.get("regexes", []) if isinstance(a, dict) else []:
+                allow.append(_rx(p, rule_id, pattern))
+        rules.append(
+            Rule(
+                rule_id,
+                kind,
+                _rx(p, rule_id, entry.get("regex")),
+                tuple(k.lower() for k in keywords),
+                None if entropy is None else float(entropy),
+                tuple(allow),
+            )
+        )
+    return RuleSet(str(p), tuple(rules))
+
+
+def _shannon(text: str) -> float:
+    import math  # deferred, like tomllib
+
+    n = len(text)
+    counts: dict[str, int] = {}
+    for ch in text:
+        counts[ch] = counts.get(ch, 0) + 1
+    return -sum(c / n * math.log2(c / n) for c in counts.values())
+
+
+def redact_text(text: str, rules: RuleSet) -> tuple[str, dict[str, int]]:
+    """Replace every secret the rules find with [REDACTED:<type>]; return the text and counts per type.
+
+    A secret spanning lines (a private key) becomes one marker per line it covered, with every newline
+    kept, so the text's line count, and every line number computed from it, stays true (R18).
+    """
+    lowered = text.lower()
+    spans: list[tuple[int, int, str]] = []
+    for rule in rules.rules:
+        if rule.keywords and not any(k in lowered for k in rule.keywords):
+            continue
+        for m in rule.regex.finditer(text):
+            start, end = m.span()
+            for g in range(1, (rule.regex.groups or 0) + 1):
+                if m.group(g):
+                    start, end = m.span(g)
+                    break
+            secret = text[start:end]
+            if not secret:
+                continue
+            if rule.entropy is not None and _shannon(secret) < rule.entropy:
+                continue
+            if any(a.search(secret) for a in rule.allowlist):
+                continue
+            spans.append((start, end, rule.type))
+    if not spans:
+        return text, {}
+    spans.sort(key=lambda x: (x[0], -x[1]))
+    out: list[str] = []
+    counts: dict[str, int] = {}
+    at = 0
+    for start, end, kind in spans:
+        if start < at:
+            continue  # inside a secret already replaced (two rules, one value)
+        marker = redact("", kind)
+        out.append(text[at:start])
+        out.append("\n".join([marker] * (text.count("\n", start, end) + 1)))
+        counts[kind] = counts.get(kind, 0) + 1
+        at = end
+    out.append(text[at:])
+    return "".join(out), counts
 
 
 def confirm_required(ctx: Context, *, target: str, scope: str, plan: list[str]) -> Result:
@@ -352,6 +535,7 @@ def run(
     verbose = "--verbose" in own
     root = scratch_root()
     session: str | None = None
+    ctx: Context | None = None
     code = EXIT_FAILURE
     try:
         session = session_id()
@@ -387,7 +571,8 @@ def run(
             tool, ToolError(EXIT_FAILURE, f"internal error: {type(e).__name__}: {e}", remedy), json_errors
         )
     if session is not None:
-        _write_event(root, session, tool, raw, code, started, verbose)
+        recorded = ctx.event_args if ctx is not None and ctx.event_args is not None else raw
+        _write_event(root, session, tool, recorded, code, started, verbose)
     with contextlib.suppress(Exception):
         sys.stdout.flush()
     sys.exit(code)
@@ -544,9 +729,11 @@ def _emit_manifest(tool: Tool, p: argparse.ArgumentParser) -> int:
 
 def _emit_result(r: Result, ctx: Context, started: float) -> int:
     if r.exit not in EXIT_CODES and not (
-        ctx.tool.passes_exit and r.cause == "command" and r.command_exit == r.exit
+        ctx.tool.passes_exit and r.command_exit is not None and r.command_exit == r.exit
     ):
-        # Discovery revision 9: outside the six only as a declared pass-through of the command's exit
+        # Discovery revision 9: outside the six only as a declared pass-through of the command's exit.
+        # The cause may be any (`command`, or 003 slice 1's `memory` and `disk`): it says why the
+        # command ended, and the exit is still the command's own.
         raise ValueError(f"result exit {r.exit} is outside the contract vocabulary")
     if r.envelope is not None:  # exit 4: the envelope is JSON on stdout in every mode (rule 9)
         status = r.envelope.get("status")
