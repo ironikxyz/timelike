@@ -975,3 +975,12 @@ decision log and cycle reports are under `.specswarm/features/`; maintenance cyc
 ### Licence
 
 MIT.
+
+## Thank You Mr Gödel
+
+Thanks to Kurt Gödel for everything he was and everything he did for philosophy, reasoning and a truly human sense of
+reality. Mr. Gödel, we used a lot of your terms in this project primarily because you were so good at naming things, but
+also because we love you for your creativity and deep capacity for observation. We hope our use of your terminology is
+praise, not simple appropriation. For anyone who needs to know more about Kurt Gödel (that would be you, dear reader),
+please start with this short article by Natalie Wolchover,
+[How Gödel’s Proof Works](https://www.quantamagazine.org/how-godels-proof-works-20200714/).
