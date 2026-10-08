@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
 # shellcheck disable=SC2016 # single-quoted strings here are commands expanded inside the container
 # shellcheck disable=SC2030,SC2031 # setup_file exports what the @tests read; bats runs each @test in its own subshell by design
-# Feature 007 (prompt 04, slice 0), SC-1 (tasks.md T003; spec FR-5 to FR-8, D-1, D-2):
+# Feature 007 (prompt 04, slice 0), SC-1 (tasks.md T003; spec FR-5 to FR-8, D-1, D-2); cell names and
+# the timing check revised in Cycle 3 (T019; spec § Slice 1 carried items):
 #   SC-1 "On container start, a timelike announcement of at most 60 lines is present in each supported
-#        harness's user-level context location and in the workspace's agent context file when none
-#        exists, without overwriting an existing one"
+#        harness's user-level context location, without overwriting an existing one" (revision 13: the
+#        clause "and in the workspace's agent context file when none exists" is struck, user level only)
 #
 # "On container start" is made real: setup_file starts THROWAWAY containers from the verified image
 # (helpers.bash start_throwaway; the image the running agent container was created from, which
@@ -26,22 +27,22 @@
 #             `sleep infinity` after the image, which an --entrypoint /bin/sh would run as a script),
 #             so this file runs its own `docker run` with start_throwaway's label, caps and init.
 #
-# THE WORKSPACE PART IS NOT BUILT (spec D-1, FR-7; FOR-MENTOR Item 19). The criterion says "and in the
-# workspace's agent context file when none exists"; the send's seam says never write into a project.
-# The spec follows the seam, so the workspace tests below assert the OPPOSITE of that clause: no
-# CLAUDE.md or AGENTS.md is created in the workspace the entrypoint ran in (the image's WORKDIR in
-# `fresh`; a git repository with neither file in `prepared`, which must also stay `git status` clean).
-# Those tests are named "workspace part NOT built (D-1)" so the narrowing shows in the TAP stream, not
-# only in this comment. If plan amends the criterion or the mentor overrules the seam, they change.
+# THE WORKSPACE IS LEFT UNTOUCHED (spec FR-7, D-1 resolved by revision 13, which struck the criterion's
+# workspace clause). The workspace tests below assert that no CLAUDE.md or AGENTS.md is created in the
+# workspace the entrypoint ran in (the image's WORKDIR in `fresh`; a git repository with neither file
+# in `prepared`, which must also stay `git status` clean). Their assertions are unchanged since slice 0;
+# only their names changed (Cycle 3, T019), from "workspace part NOT built (D-1)".
 #
-# Timing (spec Measurable outcomes: placement delays the start by at most 1 s). FLAGGED method: the
-# placed files' mtimes (read in the container) against the container's State.StartedAt (read from the
-# daemon); container and daemon share the host's clock. The last file must be written < 1000 ms after
-# StartedAt. The first must not predate StartedAt by more than 1000 ms, and the image itself, started
-# with its entrypoint overridden, must hold none of the three files: together these show the files were
-# placed by this start, not baked into the image at build. StartedAt is taken when the daemon marks the
-# container running, so it may trail the process's real start slightly; the bound is coarse (1 s) on
-# purpose.
+# Timing — ORDERING, not a bound (Cycle 3, T019; spec § Slice 1 carried items, declared). The 1 s
+# placement bound failed in lane readme-b at 11225 ms under host I/O load and passed in readme-c: the
+# host's load decided it, not the feature. What "on container start" requires is asserted instead:
+#   - placed BEFORE the command: every read waits until `sleep infinity` is PID 1's child, i.e. the
+#     entrypoint has placed the files and exec'd the command, and the files are then present and current;
+#   - placed BY THIS START: the first file does not predate State.StartedAt by more than 1000 ms (clock
+#     tolerance between the container and the daemon, which share the host's clock), and the image
+#     itself, started with its entrypoint overridden, holds none of the three files.
+# The time from StartedAt to the last file is printed to the TAP stream as a measurement (fd 3), never
+# asserted.
 #
 # Cells: bash -c and bash -lc in `notty` (the harness's own invocation). The reads are POSIX tools and
 # the image's interpreter; the only timelike command under test is `timelike announce --status --json`.
@@ -343,11 +344,8 @@ check_user_level() {
       "$SC1_FRESH_STARTED" "$((-first))" >&2
     return 1
   fi
-  if ((last >= 1000)); then
-    printf 'placement finished %s ms after the container started (StartedAt %s); the bound is 1 s\n' \
-      "$last" "$SC1_FRESH_STARTED" >&2
-    return 1
-  fi
+  # A measurement, not a bound (T019): host load decided the old 1 s bound.
+  echo "# SC-1 placement ($(style_label "$1")): first file ${first} ms, last ${last} ms after StartedAt ${SC1_FRESH_STARTED} (measured, not asserted)" >&3
 }
 
 # --- prepared start: an existing file is not overwritten ---------------------------------------------
@@ -397,9 +395,9 @@ check_workspace_untouched() {
   assert_value ws.git "<clean>"
 }
 
-@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — fresh start: each user-level file is the image's announcement, at most 60 lines, current, placed within 1 s" { check_user_level c notty; }
-@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — fresh start: each user-level file is the image's announcement, at most 60 lines, current, placed within 1 s" { check_user_level lc notty; }
-@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — an existing non-timelike ~/.claude/CLAUDE.md is left byte for byte and reported not placed; the others are placed" { check_existing_kept c notty; }
-@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — an existing non-timelike ~/.claude/CLAUDE.md is left byte for byte and reported not placed; the others are placed" { check_existing_kept lc notty; }
-@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — workspace part NOT built (D-1): no CLAUDE.md or AGENTS.md is created in the workspace" { check_workspace_untouched c notty; }
-@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location and in the workspace's agent context file when none exists, without overwriting an existing one — workspace part NOT built (D-1): no CLAUDE.md or AGENTS.md is created in the workspace" { check_workspace_untouched lc notty; }
+@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — fresh start: each user-level file is the image's announcement, at most 60 lines, current, placed before the command runs, on this start" { check_user_level c notty; }
+@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — fresh start: each user-level file is the image's announcement, at most 60 lines, current, placed before the command runs, on this start" { check_user_level lc notty; }
+@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — an existing non-timelike ~/.claude/CLAUDE.md is left byte for byte and reported not placed; the others are placed" { check_existing_kept c notty; }
+@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — an existing non-timelike ~/.claude/CLAUDE.md is left byte for byte and reported not placed; the others are placed" { check_existing_kept lc notty; }
+@test "SC-1 [bash -c, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — the workspace is left untouched: no CLAUDE.md or AGENTS.md is created there" { check_workspace_untouched c notty; }
+@test "SC-1 [bash -lc, notty] On container start, a timelike announcement of at most 60 lines is present in each supported harness's user-level context location, without overwriting an existing one — the workspace is left untouched: no CLAUDE.md or AGENTS.md is created there" { check_workspace_untouched lc notty; }

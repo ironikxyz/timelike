@@ -110,7 +110,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   command-not-found answer), with the header rules updated. `image/rootfs/etc/timelike/missing-commands.tsv` (R6).
   `image/Dockerfile`: one COPY. Measure the handler's cost per call and record it. `tests/host/test_shell_env_hook.sh`
   and `tests/host/test_env_layer.sh` still pass.
-- [ ] T019 [C] `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`: the cell
+- [X] T019 [C] `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`: the cell
   names take revision 13's criterion text, and the workspace cells say "the workspace is left untouched". The
   1 s bound becomes the ordering assertion (spec § Slice 1 carried items), and the time is printed, not asserted.
 - [ ] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed

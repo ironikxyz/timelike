@@ -211,3 +211,12 @@ FLAGGED: one shellcheck warning (SC2034, ELAPSED_S read by helpers' asserts) ann
 ABSENT (delegate): not run — no Docker daemon or bats here; bash -n on @test-stripped copies only. The image lane is the evidence. ABSENT: spec FR-14 says a direct exec "exits 127 as before"; the cell asserts non-zero, which is what the lane can establish without a docker-version assumption
 Verification: shellcheck -x -P tests/e2e:tests/host clean on both files (coordinator, venv shellcheck-py); read in full by the coordinator against the contract and helpers.bash (exec_in/_shell_argv support ic; start_throwaway passes the limits; paths stay under the 200-column cut)
 SCOPE: in (2 changed files)
+
+### T019: SC-1 carried items — cell names to revision 13's text; the 1 s bound becomes an ordering
+**Started:** 2026-10-08T16:43:27Z | **Completed:** 2026-10-08T16:44:02Z | **Coordinator**
+
+INHERITED: spec § Slice 1 carried items (declared in Cycle 3's spec commit); the send's "Carried into this cycle" — (confidence: high)
+FLAGGED: the 1 s bound is replaced, not re-measured another way — host load decided it (readme-b 11225 ms fail, readme-c pass); the ordering it stood for is already established by the file's process-table wait (every read happens after the entrypoint exec'd `sleep infinity`), so the cell keeps that, keeps "placed by this start" (first file ≥ StartedAt − 1000 ms clock tolerance, and the image itself holds none), and prints the time to fd 3 as a measurement — (confidence: high)
+ASSUMED: the six cell names take revision 13's criterion text exactly (the struck clause removed from the name, the strike explained in the header), and the two workspace cells say "the workspace is left untouched: no CLAUDE.md or AGENTS.md is created there"; their assertions are unchanged — (confidence: high)
+ABSENT: no change to what the cells assert beyond the removed `last >= 1000` failure; the header's struck-criterion account replaces the "NOT BUILT (D-1)" paragraph; no other 007 e2e file changes
+Verification: shellcheck clean; @test names counted (6 renamed, 2 workspace names replaced). Not run: no Docker here; the mentor's lane runs it
