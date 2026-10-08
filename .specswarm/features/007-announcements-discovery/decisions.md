@@ -271,3 +271,13 @@ ASSUMED: npm finds /opt/agent/node/etc/npmrc through the /usr/local/bin/npm link
 ABSENT: no image build here (no Docker daemon); the stage's shell was replayed on the host under a scratch root with the pinned uv and the verified tarball: checksum OK, node v24.21.0, CPython 3.14.7, prefix left with cpython-…, node and python only, marker removed, pip 26.2.1 and npm 11.19.0 run, npmrc written literally. A tests/unit/test_bench_catalog.py failure seen now (12 setup timeouts at 15 s) also fails at e0fb5a3 under the same load (~9, delegates running): environmental, re-run in T031
 Verification: host replay as above; tests/host/test_env_layer.sh 60/60; profile.d sourced under sh from three starting PATHs puts /opt/timelike/bin first and /home/agent/.local/bin second; shellcheck clean
 SCOPE: in (2 changed files)
+
+### T028: bench/vanilla/Dockerfile — the same runtimes stage, stock behaviour (002's file)
+**Started:** 2026-10-08T17:59:57Z | **Completed:** 2026-10-08T18:00:42Z | **Coordinator**
+
+INHERITED: T027's `runtimes` stage, copied byte for byte (a unit test now compares the two stages); T026's Makefile args — (confidence: high)
+FLAGGED: vanilla links the same seven names into /usr/local/bin — chose identical command names in both arms over leaving the prefixes off PATH, because "the same runtime binaries" with different names would make a task find `python3` in one arm only (RB1) — (confidence: medium)
+ASSUMED: Debian's default PATH (no ENV in vanilla) includes /usr/local/bin, so the links are found; no ~/.local/bin, so a user install's command would not be — that is stock behaviour — (confidence: high)
+ASSUMED: the RUN asserts the marker is present but does not name pip.conf or npmrc: the unit test reads any non-comment mention as configuration, and the e2e cell (T024) checks their absence in the built image — (confidence: high)
+ABSENT: no bench catalog change (its "only what both images contain" rule is about tasks' prerequisites; no task uses the runtimes in this slice); 002's spec not modified (02 s1 records it); the driver image unchanged
+Verification: tests/unit/test_agent_runtimes.py and test_announce.py 124 passed (with T025's delegate tests, uncommitted at this point); not built here (no Docker)

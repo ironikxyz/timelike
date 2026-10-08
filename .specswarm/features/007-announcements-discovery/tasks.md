@@ -153,7 +153,7 @@ bar.** US6 = SC-6.
 - [X] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
   links, the `ENV` PATH with `/home/agent/.local/bin`. `image/rootfs/etc/profile.d/00-timelike-path.sh`: the
   same entry. `tests/host/test_env_layer.sh` still passes, or its PATH checks move with the declared order.
-- [ ] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says
+- [X] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says
   so (002's file; `changed_other_features`).
 - [ ] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
   Python and Node CLIs. `image/rootfs/etc/timelike/standard-tools.json` checked (python3 and node keep their risk
