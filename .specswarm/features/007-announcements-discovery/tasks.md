@@ -115,7 +115,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   1 s bound becomes the ordering assertion (spec § Slice 1 carried items), and the time is printed, not asserted.
 - [ ] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed
   files, conformance, coverage. Results go in `decisions.md`, labelled advisory (no image).
-- [ ] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
+- [X] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
   block is applied **only if** SC-6 is built too (the send's condition); otherwise untouched, with the reason
   recorded.
 - [ ] T022 [US6] **HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is

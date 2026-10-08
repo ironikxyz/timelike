@@ -221,3 +221,11 @@ ASSUMED: the six cell names take revision 13's criterion text exactly (the struc
 ABSENT: no change to what the cells assert beyond the removed `last >= 1000` failure; the header's struck-criterion account replaces the "NOT BUILT (D-1)" paragraph; no other 007 e2e file changes
 Verification: shellcheck clean; @test names counted (6 renamed, 2 workspace names replaced). Not run: no Docker here; the mentor's lane runs it
 SCOPE: in (1 changed files)
+
+### T021: README — the generated reference is current; the README status block is NOT applied (SC-6 held)
+**Started:** 2026-10-08T17:01:13Z | **Completed:** 2026-10-08T17:01:13Z | **Coordinator**
+
+INHERITED: T017 regenerated the command reference (`timelike budget`'s usage line); `scripts/readme_reference.py --check` passes now — (confidence: high)
+FLAGGED: the send's `## README status` block (row 04 `complete (0, 1)`, "16 of 38") is **not applied**: the send says to apply it "only if all four slice-1 criteria are met", and SC-6 (installs) is held on FOR-MENTOR Item 21 (spec D-11). README.md's What and Status stay as they are — (confidence: high)
+ABSENT: no hand edit of the generated block; no value claim (P6); if Item 21 is answered and SC-6 is built in this cycle, the block is applied then
+Verification: `python3 scripts/readme_reference.py --check` exit 0; tests/unit/test_readme_reference.py passed in T020's host lane
