@@ -54,3 +54,58 @@ from `goals` to `tasks`; its only caller is the CLI.
 | "token" leaks above the appendix through new free text | The existing unit over the real catalog, and the validator, both catch it |
 
 **Proceed:** yes. Risk is low.
+
+---
+
+# Cycle 2: revision 8 recorded (send `bridge/sends/02-rev8-20261008-095251.md`, discovery revision 13)
+
+**Analysis date:** 2026-10-08T09:56Z. specswarm **4.0.1-botbaubble.2.37.0** loaded: the modify text expanded
+`PLUGIN_DIR` to the 2.37.0 cache path, and this session's pid is in 2.37.0's `.in_use` (lore specswarm Q002).
+
+**Provenance:** modify row 7, computed by executing the command's `provenance-inputs` and `provenance-row`
+blocks. `source_prompt` and the send's `> Source:` agree (`plan/.discover/prompts/02-speedup-bench.md`); the
+prompt is at revision 8, `prompt_revision` is 1, `audited_against` is `[1]`.
+
+**Classifying revisions 2–8 (lore P004: what was compared).** The prompt bodies of the three archived sends
+for prompt 02 were diffed, from the `# Speedup bench` heading to the end:
+- `02-rev1-20260929-000641.md` and `02-rev1-20260929-080659.md`: identical.
+- `02-rev1-20260929-080659.md` against `02-rev8-20261008-095251.md`: **three additions and nothing else** —
+  the revision note, one constraint under *From Principles*, one slice-1 Automated criterion. No line removed
+  or reworded, so removals and rewordings are visible and none occurred. Revisions 2–7 did not change prompt
+  02 (its `revision` field is 8 and the body is otherwise byte-identical to revision 1's).
+- **Revision 8: INCOMPLETE (added), not SUPERSEDED.** The spec body was read for any statement of a verdict
+  order, a tiebreak or how a hung call is counted:
+
+| Body line | What it says | Against revision 8 |
+|---|---|---|
+| `spec.md:20` (Overview) | the report gives completions, turns, tool calls, failed commands, hangs, wall-clock | true; the constraint keeps all six reported |
+| `spec.md:75–77` (Scenario 3) | the report compares in completion, turns and failed commands, with hangs, tool calls and wall-clock beside them, and says why the verdict is what it is | true; names no order |
+| `spec.md:160–166` (FR-9 headline figures) | completion, turns, failed commands (non-zero exits), hangs, tool calls, wall-clock | true; a hung call is non-zero (T016), which matches *"a hung call is one failed command and one hang"* |
+| `spec.md:171–176` (FR-9a) | the verdict in words, naming what decided it | true; states no order |
+| `spec.md:216–218` (Success Criteria preface) | slice-1 and slice-2 criteria are **not** in this spec | true; the spec keeps no later-slice criterion list, so the new slice-1 criterion is not copied |
+| `spec.md:258–264` (Out of Scope) | all slice-1 and slice-2 criteria are out of scope | true; the new slice-1 criterion is among them |
+
+  **No body line is false. Do not regenerate.** The body states no tiebreak order at all.
+
+**The constraint is unmet by slice 0's code, by plan's ruling (b) carried to 02 s1** (`bridge/feedback/02-20260930-060406-hang-counted-twice.md`, § What code/ changes). The four places, read, not edited:
+
+| Place | What it says now | Against the constraint |
+|---|---|---|
+| `bench/benchlib/report.py:119` | the third tiebreak is `_sign(v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs)` | unmet: hangs are not compared on their own before failed commands, and a hung call counts twice |
+| `bench/benchlib/report.py:227` | the verdict sentence prints `vf, tf = v.nonzero_exits + v.hangs, …` as "failed or hung commands" | unmet: quotes a sum that is not a count in the report's table |
+| `data-model.md:125` (§ Comparison and report, step 3) | "compare `nonzero_exits + hangs` (fewer wins)" | unmet: the design states the old order |
+| `decisions.md` T016, the fourth ASSUMED line | the sum "counts a hung call twice … as data-model reads literally" (confidence: medium) | the origin; superseded by revision 8 |
+
+**Proposed change:** the spec only, plus the T016 annotation. No code, test, contract or data-model change, so
+nothing outside `.specswarm/features/002-speedup-bench/` changes and no Docker lane is needed (send § How this
+cycle runs).
+
+| Component | Change | Impact |
+|---|---|---|
+| `spec.md` § Reporting | revision 8's constraint copied in, declared, with a note that slice 0 does not meet it and where it is carried | none on behaviour |
+| `spec.md` frontmatter `audited_against` | 8 appended (Step 9) | provenance only |
+| `decisions.md` T016 | an annotation: superseded by discovery revision 8 (ruling (b)), code change carried to 02 s1 | record only |
+| `audit-log.md` | one row | provenance only |
+| `bench/`, `data-model.md` | **none** (the send forbids it) | — |
+
+**Breaking changes:** none. **Risk:** low; documentation only. **Proceed:** yes.

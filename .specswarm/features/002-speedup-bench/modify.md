@@ -61,3 +61,33 @@ Until then SC-3 stays `unconfirmed`.
 ## Tech stack compliance
 
 No new technology. Stdlib Python and bash, as before.
+
+---
+
+# Cycle 2: revision 8 recorded (send `bridge/sends/02-rev8-20261008-095251.md`)
+
+**Status:** Active. **Created:** 2026-10-08. **Impact analysis:** `impact-analysis.md` § Cycle 2.
+
+## Modification summary
+
+**What:** record discovery revision 8 against 002's spec. No behaviour changes.
+
+**Why:** revision 8 (plan `7ce212b`, ruling (b) on `bridge/feedback/02-20260930-060406-hang-counted-twice.md`)
+added one constraint (the verdict order: ending, turns, hangs, failed commands, each call counted once) and one
+slice-1 criterion. It amended nothing, so the body stays true; the spec was UNAUDITED against it.
+
+## Proposed changes
+
+- **F001 · The constraint in the spec, declared.**
+  - **Current:** the spec states no verdict order.
+  - **Proposed:** revision 8's constraint, verbatim and marked *(Added revision 8.)*, under § Reporting, with
+    a note that slice 0's code does not meet it (`report.py:119`, `:227`; `data-model.md:125`) and that plan's
+    ruling carries the change to 02 slice 1.
+  - **Breaking:** no.
+- **F002 · T016's assumption marked superseded.** An annotation on `decisions.md` T016, the ASSUMED line kept.
+- **Not copied:** the slice-1 criterion. The spec keeps no list of later-slice criteria (`spec.md:216–218`);
+  § Out of Scope already excludes all slice-1 criteria.
+
+## Contract and code changes
+
+None. `report.py` and `data-model.md` are not edited (the send's § 1).
