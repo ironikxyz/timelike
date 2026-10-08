@@ -882,5 +882,45 @@
       "lint": "ruff 0.16.9 check + format (tools tests scan bench), mypy 2.3.1 (27 files), shellcheck (shellcheck-py) over every *.sh, *.bash, *.bats: clean",
       "handler_cost": "about 1.9 ms more per missing command than bash alone (2.7-2.9 ms vs 0.87 ms per call, 1000 calls x 3, host bash 5.2.21)"
     }
+  },
+  "007-cycle-4": {
+    "recorded_at": "2026-10-08T18:11:19Z",
+    "git_sha": "(the T033 commit; the tree at 4b88b53 plus T033's records)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.37.0 (session-loaded), /specswarm:implement step 10 (not dispatch)",
+    "send": "bridge/sends/04-rev14-20261008-174220.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN - no component could be measured; warned, not halted"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it. Advisory: host, not the image",
+      "make_test_host": "passed: 1825 passed + 1 skipped units, env layer 60/60, hook 44/44, command-not-found 33/33 (venv python 3.12.3, pytest 8.4.2; load 2.0-2.6)",
+      "coverage_python": "not re-run: no Python source under tools/ changed in Cycle 4 (Cycle 3's figures stand: agentio 95%, run 93%, snapshot 92%, timelike 93%)",
+      "lint": "ruff 0.16.9 check + format (77 files), mypy 2.3.1 (27 files), shellcheck over every shell file: clean",
+      "runtimes_host_replay": "the runtimes stage replayed on the host: Node 24.21.0 tarball sha256 OK, CPython 3.14.7 via uv 0.12.19, marker removed, pip 26.2.1, npm 11.19.0; npm prefix -g through a link reports $HOME/.local"
+    }
   }
 }

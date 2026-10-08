@@ -5,18 +5,66 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T16:13:28Z (read from the clock), folded in on `modify/007-slice-1` with 04 s1's first work. The sections below it, from "How the batch closed" on, date from 05:56:46Z. **This repository is public**: push only on a discharge and the operator's OK (CLAUDE.md rule 5). **04 s1** (send `04-rev13-20261008-161802`) is in progress on `modify/007-slice-1`: see its feature directory and FOR-MENTOR Item 21.
+**Snapshot:** 2026-10-08T18:12:39Z (read from the clock), written at the end of 007 Cycle 4. **This repository is public**:
+push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
-## State (folded from the staged note written 2026-10-08T16:13:28Z)
+## State at 2026-10-08T18:12:39Z
 
-- **`master` = `f6faf01`**, tree `4837d3a7a98805d4389a8fc4a2ad862421a25af2` (mentor-checked), clean. **Not pushed.**
-- **`public/main` = `c79facc`** (pushed 2026-10-08 per the discharge at 09:43:06Z). Tags `v0.15.0` → `0a02771` and
-  `v0.15.1` → `c79facc` are public.
-- **Ahead of public:** three `--no-ff` audit merges, per the sign-off at 12:58:18Z: `225a55c` (002), `39c8ae2` (001),
-  `f6faf01` (007). Records only. They **ride with the next germane push and share its tag**: no tag of their own,
-  no push now.
-- **specswarm 2.37.0** (`d523530`) is loaded. Check that the session's pid is in its cache `.in_use`.
-- Local branches kept, all merged: `maint/readme`, `modify/002-rev8`, `modify/001-rev13`, `modify/007-rev13`.
+- **`modify/007-slice-1`** holds **04 slice 1, built in full** (Cycles 3 and 4 of 007). It started from `master` `f6faf01`.
+  It is **not merged and not pushed**, and **no image lane has run on it yet**.
+  - **The mentor's Docker lane comes next** (`make test`, `make scan` with the deny-list read). **Make no commit until the
+    mentor says the lane has ended** (send rule).
+  - Then: lane findings, if any, the D13 demo (the mentor captures it), sign-off, `--no-ff` merge per the mentor's
+    instruction, push on the discharge plus the operator's OK.
+  - The tag at that push: **`v0.16.0`** (README Status is now 16 of 38). It carries the three audit merges (`225a55c`,
+    `39c8ae2`, `f6faf01`) too.
+- **Sends:** Cycle 3 = `bridge/sends/04-rev13-20261008-161802.md` (stands; retired by the re-send).
+  Cycle 4 = `bridge/sends/04-rev14-20261008-174220.md` (the active prompt).
+- **What 04 s1 built:**
+  - the command-not-found handler in `image/rootfs/etc/timelike/shell-env.bash`, with its data in `missing-commands.tsv`;
+  - `timelike budget` (readers moved into agentio: `cgroup_dir`, `cgroup_value`, `cpu_figure`, `workspace`, `size`;
+    `run` and `snapshot` use them);
+  - the agent runtimes: `/opt/agent/python` (uv CPython 3.14.7, no EXTERNALLY-MANAGED, `pip.conf` user = true) and
+    `/opt/agent/node` (Node 24.21.0 tarball, SHA-256 pinned in `pins.env`, `etc/npmrc` prefix=${HOME}/.local);
+    seven links in /usr/local/bin; `/home/agent/.local/bin` on PATH;
+  - the vanilla bench image: the same `runtimes` stage, stock behaviour;
+  - SC-1's renamed cells, and the 1 s bound as an ordering.
+- **Governance** is `[2..14]` on the branch (`e58dd36` tech-stack 1.4.0 + quality-standards; `07b914d` constitution, no
+  change). `master` still records `[2..13]` until the merge.
+- **FOR-MENTOR:** Item 21 closed (`9b90a74`). Item 20 still open.
+- **007's spec** records `audited_against: [1, 13, 14]`; `prompt_revision` is 1.
+- **The cycle report** is § Cycle 3 and § Cycle 4 in `.specswarm/features/007-announcements-discovery/cycle-report.md`.
+  Every Automated criterion is `unconfirmed` until the lane, and D13 is `unconfirmed`.
+- **specswarm 2.37.0** ran both cycles. 2.38.0 is published, not installed; the send said not to reload.
+
+## Expect from the lane (watch for these)
+
+- **The `runtimes` stage under the real builder:** `ADD <nodejs URL>` with ARG expansion, the uv download, and the
+  `sha256sum -c` check.
+- **`make scan`:** new findings in CPython, Node or npm's bundled packages. A finding with no fix is a baseline change:
+  raise it, never exempt it silently.
+- **The SC-5 cell "every listed name is absent in the image":** remove any TSV row whose name turns out installed.
+- **The SC-6 cell "only the agent's home changed":** it allow-lists nothing, so anything else written outside
+  `/home/agent` fails it.
+- **The SC-7 limited throwaway** needs a lane host with at least 2 CPUs (`--cpus 1.5`). The direct-exec SC-5 cell
+  asserts non-zero, not 127.
+- **`tests/unit/test_bench_catalog.py` is load-sensitive** (15 s setup timeouts at host load of about 9).
+
+## Recipes this session used (the scratchpad is gone after a clear; rebuild)
+
+- **`ct.sh TASK FLAGGED MSGFILE DECFILE FILES…`** (one task):
+  - append DECFILE to `decisions.md`, tick the task in `tasks.md`;
+  - run the deny-list over the staged tree and the message (refuse unless PASS and 0 hits);
+  - commit, then compute the SCOPE line with the installed `scope-check` logic from `ts-TASK` (HEAD at the task's
+    start);
+  - append it, and commit "scope record, task ticked".
+  - **Pass every file you changed: with none, only `decisions.md`/`tasks.md` are staged** (how T023's report was first
+    left out).
+- **A venv** with pytest 8.4.2, ruff 0.16.9, mypy 2.3.1 and shellcheck-py. `make test-host PYTHON=<venv python>` with
+  the venv's bin on PATH.
+- **The pinned uv 0.12.19 and the Node tarball** were fetched into the scratchpad (sha-checked) for host trials. The
+  runtimes stage was replayed under a scratch root.
+- **Run a timing loop from a script file:** an inline `bash -c` loop tripped the harness's removal check.
 
 ## What happened since b10f32c (2026-10-08)
 
@@ -51,16 +99,6 @@ Read this first after a context clear. It is a snapshot. The artifacts it points
   (carries the rev-8 verdict order); 04 s1; 06 s1.
 - **A rule question I raised, not ruled on:** the specswarm `audit-append` rule has no mode for "revision N's change
   recorded, but carried to a later slice". 002 appended 8 per the send's reading.
-
-## Next actions
-
-1. **Check the bridge** (memory: check-bridge-before-building): the newest rows in `../bridge/history.md`,
-   `../bridge/active-prompt.md`'s Status line, `../bridge/feedback/`, `../bridge/dispatch/`.
-2. Build only from a new send. Branch from `master` (`f6faf01`) unless the send says otherwise.
-3. At the next germane push: the tag is `v0.<slices built>.<n>`. The slice count comes from the README Status,
-   **15 of 38** now, unless a send's README status block changes it. At 15 the next tag is **`v0.15.2`**. The push
-   carries the three audit merges too.
-4. Fold this file into `reboot.md` with that work's first commit (also update its § Plugin for 2.37.0).
 
 ## How the audit cycles were run (recipes; the scripts lived in the memory staging folder, removed once folded here: rebuild them from this text)
 

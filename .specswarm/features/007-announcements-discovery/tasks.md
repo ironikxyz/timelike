@@ -164,7 +164,7 @@ bar.** US6 = SC-6.
   steps (the uv prefix and Node tarball, as in R9). Results go in `decisions.md`.
 - [X] T032 `README.md`: the send's `## README status` block (all four slice-1 criteria are now built); the vanilla
   description (Debian + git + the agent runtimes, stock); the reference regenerated if any help moved.
-- [ ] T033 Provenance (modify Step 9): append 14 with the installed `audit-append` block, scoped, and its
+- [X] T033 Provenance (modify Step 9): append 14 with the installed `audit-append` block, scoped, and its
   `audit-log.md` row. Then `cycle-report.md` § Cycle 4, implement steps 10 and 9b, and `reboot.md` brought up
   to date for a clear.
 

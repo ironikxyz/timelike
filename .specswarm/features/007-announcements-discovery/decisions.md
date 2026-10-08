@@ -348,3 +348,12 @@ ASSUMED: row 04's "What it does" names `timelike budget` by its real name; the S
 ABSENT: no value claim (P6); no other README change; the generated reference unchanged (no help moved this cycle)
 Verification: scripts/readme_reference.py --check current; tests/unit/test_readme_reference.py passed
 SCOPE: in (1 changed files)
+
+### T033: provenance (audited_against [1, 13, 14], scoped); cycle-report § Cycle 4; steps 10 and 9b; reboot.md for a clear
+**Started:** 2026-10-08T18:10:53Z | **Completed:** 2026-10-08T18:12:51Z | **Coordinator**
+
+INHERITED: T024–T032; the installed audit-append block; lib/tally.sh (2.37.0) — (confidence: high)
+FLAGGED: scoped, not full — revision 14 rewords a constraint and the Feature text, so full (UNVERIFIED=13 14) appends 2–12 and leaves out 14 (verified); scoped appends 14 alone, which this cycle checked and built — (confidence: high)
+FLAGGED: T022 closed here, not ticked — superseded by Phase 7 (T024–T033), which built what it held; scope_tally counts it unrecorded, as the cycle report says — (confidence: high)
+ASSUMED: every Automated criterion cited unconfirmed with host results labelled advisory; D4 kept "observed by the operator"; D13 unconfirmed — (confidence: high)
+ABSENT: no demo_points_reached; no .implement-complete (not dispatch); prompt_revision, discovery_revision and source_prompt untouched; no commit after the cycle is reported done (send rule)

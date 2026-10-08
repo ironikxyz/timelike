@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/04-announcements-discovery.md
 source_send: bridge/sends/04-rev1-20261004-183704.md
 prompt_revision: 1
 discovery_revision: 12
-audited_against: [1, 13]
+audited_against: [1, 13, 14]
 slice: 0
 ---
 

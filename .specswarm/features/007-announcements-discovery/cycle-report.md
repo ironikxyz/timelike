@@ -522,3 +522,153 @@ decisions: sections=22 flagged_sections=19 non_flagged_sections=3 sections_witho
 
 `unrecorded=2` is T022 (held) and T023 (this record). There are no low-confidence decisions. Every `SCOPE:` record in
 Cycle 3 is `in` or `none`.
+
+## Cycle 4 — bridge/sends/04-rev14-20261008-174220.md
+
+Slice 1 of prompt 04, re-sent at discovery revision 14, continued on `modify/007-slice-1` from `e0fb5a3` (Cycle 3
+stands, as the send says). Written 2026-10-08T18:12:08Z (from the clock). specswarm **4.0.1-botbaubble.2.37.0**, the same session
+(2.38.0 is published but not installed, and was not reloaded). **Not merged, not pushed.** This cycle changes
+`image/`, `bench/`, `scan/`, `tests/`, `pins.env`, `compose.yaml`, `Makefile` and `README.md`, so the mentor's
+Docker lane (`make test`, `make scan` with the deny-list read) comes before sign-off. This instance makes no
+commit until the mentor says the lane has ended.
+
+**The governance audit (13 → 14) is on this branch**, as its own commits, so the lane sees one branch:
+- `e58dd36`: `tech-stack.md` 1.3.1 → 1.4.0 (the Agent runtimes entry; the PEP 668 and uv notes corrected; a
+  parseable `Node` line) and `quality-standards.md` (the scan gate names the four images and the runtimes in their
+  SBOMs);
+- `07b914d`: `constitution.md` through `/specswarm:constitution`, no change, 1.4.2 stands (no article restates the
+  base-image constraint; H5 already keeps timelike's tools off any agent interpreter).
+
+All three now record `[2..14]`, each with a prose note naming revision 14, what was checked, and the governance
+context's *What Changed In Those Revisions* (relied on). **FOR-MENTOR Item 21 is closed** (`9b90a74`).
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path.
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/04-rev14-20261008-174220.md |
+| source_prompt | plan/.discover/prompts/04-announcements-discovery.md |
+| prompt_revision | 14 |
+| discovery_revision | 14 |
+| slice | 1 of [0, 1] (intensity: natural) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used. Two general-purpose subagents wrote the tests from the spec
+before the images changed:
+- T024: the SC-6 e2e file and the revised P6 vanilla cells;
+- T025: the runtime units, the vanilla unit test and the user-row checks.
+
+Their decisions are in `decisions.md`, marked `(delegate)`. The coordinator reviewed and committed both, and
+changed two lines of T024 (`npm prefix -g` reads stdout only) and added one test to T025 (the two `runtimes` stages
+byte-identical).
+
+**criteria_reestablished.** All eight of prompt 04's criteria. **No image lane has run on this branch** (Cycle 3's
+and this cycle's changes together), so every Automated criterion is `unconfirmed`, with host results beside it,
+labelled advisory.
+- `04 · "a timelike announcement of at most 60 lines is present in each supported harness's user-level context location"` —
+  **unconfirmed** (image lane pending; the cells were renamed and the bound became an ordering in Cycle 3).
+- `04 · "and a test fails if any installed timelike tool is missing from it _(traces to: P3)_"` — **unconfirmed** (image
+  lane pending). Host advisory: `tests/unit/test_announce.py` passed.
+- `04 · "with fields for JSON support, interactivity risk and safer alternative _(traces to: P3)_"` — **unconfirmed**
+  (image lane pending). Host advisory: test_announce passed; python3 and node now read `installed: true`, computed.
+- `04 · "when either is known _(traces to: P1)_"` (the command-not-found answer) — **unconfirmed** (image lane pending).
+  Host advisory: `tests/host/test_command_not_found.sh` 33/33; `tests/unit/test_missing_commands.py` 16 passed,
+  1 skipped. The data now carries 14 `user` rows, and no runtime name.
+- `04 · "persist across new shells _(traces to: P1)_"` (the bare installs) — **unconfirmed** (image lane pending:
+  `tests/e2e/a-bare-python-package-install-and-a-global-node-package-install-succeed-without-privilege.bats`, 12
+  cells). Host advisory:
+  - the runtimes stage replayed under a scratch root: checksum OK, Node 24.21.0, CPython 3.14.7, marker removed;
+  - a bare `pip install --no-index` of a test-built wheel went to `~/.local` through the prefix's `pip.conf`, and
+    `python3 -I` could not import it;
+  - `npm install -g --offline` of a packed package went to `~/.local` through the Node prefix's `npmrc`;
+  - `tests/unit/test_agent_runtimes.py` passed.
+- `04 · "free space on the workspace and scratch filesystems _(traces to: P2)_"` — **unconfirmed** (image lane pending).
+  Host advisory: `tests/unit/test_budget.py` 73 passed.
+- `04 · "uses a timelike tool it learned about from the environment's announcement _(traces to: D4)_"` — **observed by the
+  operator**, the mode Cycle 1's Addendum 2 recorded (2026-10-07). Nothing new was observed this cycle.
+- `04 · "is told the install command or the equivalent timelike tool _(traces to: D13)_"` — **unconfirmed**. The mentor
+  captures D13 after the lane.
+
+Each citation matches exactly one line of this send (`grep -cF` = 1 for all eight).
+
+**reconcile_mode:** `scoped`. `audited_against` is now `[1, 13, 14]` (T033, the installed `audit-append` block:
+`MODE=scoped`, `UNVERIFIED=14`, `REMOVALS_VISIBLE=yes` → `APPENDED=14`).
+- **What revision 14 changed:** Feature text and one Environment constraint (struck and replaced). The Acceptance
+  Criteria are byte-identical to revision 13's.
+- **Amended, corrected by declared copy, not regenerated.** The body lines compared are in `audit-log.md`:
+  FR-13, FR-15, FR-18, FR-19, SC-6, the python3 item and D-11. FR-25 to FR-31 and D-12 to D-15 are added.
+- `full` would have appended 2–12 and left out 14 (verified).
+
+**not_verified:**
+- **Every image-level fact.** No Docker daemon here, so neither image was built.
+  - The `runtimes` stage has not run under the real builder. Unverified: `ADD <url>` with ARG expansion, and the
+    uv download.
+  - The 12 SC-6 cells, the 2 P6 vanilla cells and Cycle 3's 27 new cells.
+  - SC-1's six renamed cells.
+- **The scan over the new runtimes.** Grype will see CPython, Node and npm's bundled packages in the agent and
+  vanilla SBOMs. A finding with no fix is a baseline change, to raise after the lane, never to exempt silently.
+- **Image size** (about +180 MB per image, estimated, not measured).
+- **The handler and pip/npm at the image's exact versions:** they were tried with host or other versions.
+- **The vanilla `npm prefix -g` with no network:** the update notifier is now outside the value read.
+
+**changed_other_features:**
+- **002 (bench):**
+  - `bench/vanilla/Dockerfile` gains the same runtimes stage and the seven links, with stock behaviour, and its
+    header and label say so;
+  - the `Makefile`'s `bench-images` passes the four pins;
+  - 002's spec is not modified here (02 s1 records it);
+  - the catalog's "only what both images contain" rule is about tasks' prerequisites and stands.
+- **001 (image and environment layer):**
+  - `image/Dockerfile` (the runtimes stage, `/opt/agent`, the `PATH` in `ENV`);
+  - `image/rootfs/etc/profile.d/00-timelike-path.sh`;
+  - `pins.env`, `compose.yaml`.
+- **The scan:** `scan/scan.sh` comments only.
+- **Governance:** `tech-stack.md` 1.4.0, `quality-standards.md`, `constitution.md` (audit note).
+- **README.md:** the status block (16 of 38; row 04 `complete (0, 1)`) and the vanilla bullet.
+- **FOR-MENTOR.md:** Item 21 closed.
+- **reboot.md:** brought up to date for a clear.
+
+**process_failures_recorded:**
+1. The plugin's `decision_tally` reports `sections_without_absent=3`, but every section has an ABSENT. T014's plain
+   `ABSENT:` is mid-line (Cycle 3's slip). T024's and T025's are written `ABSENT (delegate):`, which the tally does
+   not count. D107 taught it `FLAGGED (delegate)` and `ASSUMED (delegate)`, but not ABSENT. That last part is an
+   upstream observation for the mentor to relay.
+2. During T027, `tests/unit/test_bench_catalog.py` failed 12 setup steps at a 15 s timeout, under host load of
+   about 9 (two delegates running). It failed the same way at `e0fb5a3`, and passed at load 2–3 in T031's full run.
+   It's environmental, but noted: the suite is load-sensitive.
+3. T022 is not ticked. It was superseded by Phase 7, and its closure is in T033's record, so `scope_tally` counts
+   it as unrecorded.
+
+**retired_prompts_seen:** `bridge/sends/04-rev13-20261008-161802.md` (replaced by this send, stale on both axes; Cycle
+3 names it and stands as written).
+
+**Seam 5 (`$HOME`), as the send asks:** `~/.local` now holds installed packages.
+- **Chosen: no snapshot exclusion, because none is reachable** (spec FR-19, confirmed). The only workspaces that
+  could contain `~/.local` are `~` and its ancestors, which 005 refuses; a workspace below `~` never contains it.
+  No contract changes.
+- `verify changed` sees `~/.local` only in a git repository rooted at `~`, where it lists installed files as untracked,
+  as git would.
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+- `run_tests` rc=2 (pytest declared, not installed for `/usr/bin/python3`). `run_coverage` printed `unknown` (rc 1).
+  Browser framework: `none`.
+- `Quality Score: unknown — no component could be measured, so there is no score to compare`.
+- The six exclusions: 2 attributed to this install, 2 to this machine, 2 not applicable.
+- The gate is **UNKNOWN**: warned, not halted.
+- Recorded as `.specswarm/metrics.json` → `007-cycle-4`, with the host figures beside it, unscored.
+
+**Implement step 9b: decision log** (the plugin's `scope_tally` and `decision_tally` over all of 007, every cycle,
+before T033's own records):
+
+```
+scope: planned=33 recorded=31 unplanned=0 unrecorded=2 in=24 out=0 none=8 unknown=0 flagged=28 flagged_out=0 other=4 other_out=0
+decisions: sections=32 flagged_sections=28 non_flagged_sections=4 sections_without_absent=3 flagged=41 assumed=33 deferred=0 absent=29 inherited=28 low_confidence=0 flagged_low_confidence=0 flagged_delegate=10 assumed_delegate=9
+```
+
+There are no low-confidence decisions. Every `SCOPE:` record in Cycle 4 is `in` or `none`.
