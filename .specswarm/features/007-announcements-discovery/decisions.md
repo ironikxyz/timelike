@@ -441,3 +441,4 @@ ASSUMED: the engines reader handles ||, comparators, ^, ~, x-ranges and hyphen r
 ASSUMED: release-check joins STEPS as its own row (between pip-audit-agent and govulncheck); propose() carries a bundled entry whole (its review is a person's) — (confidence: high)
 ABSENT: no assert (S101): types narrowed by passing the Bundled explicitly; single file kept (scan.sh runs it with -I); the network is used only by releases, never by report; tests/unit/test_scan_report.py's scan.sh cells fail until T042 adds the step to scan.sh
 Verification (host, advisory): test_scan_release_check.py 38 passed; ruff check and format, mypy (27 files) clean
+SCOPE: in (1 changed files)
