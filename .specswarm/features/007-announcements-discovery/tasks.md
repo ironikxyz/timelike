@@ -62,7 +62,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
   "narrows the criterion" note (`:113–116`) and Out of scope (`:232`) say the clause is struck at revision 13.
 - [X] T011 `spec.md` D-1 (`:200–210`): keep the reasoning as written; append *resolved by discovery revision 13 (Q3,
   option (b)), plan `394c33e` — the FLAGGED decision is now the rule, not a deviation from it*.
-- [ ] T012 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode `scoped`
+- [X] T012 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode `scoped`
   (revision 13 rewords one criterion by a strike, so `full` would list it as unverified; its own change is what this
   cycle addresses), expecting 13 alone; write `audited_against` in `spec.md` frontmatter; create `audit-log.md` with
   its header, a seed row for specify's `[1]` and this cycle's row. Never touch `prompt_revision`,
