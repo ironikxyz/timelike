@@ -41,6 +41,12 @@ This is the **implementation** instance of the Timelike mentored project. It use
        `git log public/main..master --format='%an %ae %cn %ce'` shows only it.
    - **Never write a deny-list pattern or matched string** into a tracked file, a commit message or a
      test. Refer to entries by id (P1–P7).
+   - **Status tags, until 1.0** (the operator, 2026-10-08): each germane push also carries one annotated
+     tag on the pushed commit, `v0.<slices built>.<n>`, with the message
+     `N of 38 slices built; this push: <what it carried>`. `<slices built>` is the README Status's count,
+     which only a send's `## README status` block changes; `<n>` counts pushes at that level, from 0. The
+     tag is the one other ref that is pushed, on the same discharge and OK, and never moved once pushed.
+     Its message goes through the deny-list too. `v0.15.0` marks `0a02771`.
    - Feature and maintenance branches stay local unless the operator decides otherwise.
    - **Never force-push, and never push to `history`** (`ironikxyz/timelike-history`, the closed private
      archive, which is fetch-only here). `archive/pre-publish` keeps the pre-publication lineage, and
