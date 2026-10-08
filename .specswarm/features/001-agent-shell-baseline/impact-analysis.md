@@ -394,7 +394,7 @@ a project cache or an in-workspace location. **True as written.**
   - `tools/bin/verify:878` runs `git status --porcelain=v1 -z --untracked-files=all` (via `:848`) without
     `--no-optional-locks` (0 hits in `verify`). git may refresh and rewrite `.git/index` when its stat cache is stale.
   - `verify changed` runs pytest, ruff and mypy in the workspace with their default caches (`__pycache__`,
-    `.pytest_cache`, `.mypy_cache`, `.ruff_cache`). 009's `contracts/verify-cli.md:130–132` already admits it and filters
+    `.pytest_cache`, `.mypy_cache`, `.ruff_cache`). 012's `contracts/verify-cli.md:130–132` already admits it and filters
     them from the change set.
   - Whether either counts as "state" under rule 10 is a reading of the rule, so it is reported, not decided.
 - **Defaults, noted:** `announce --install` writes the harnesses' user-level files under `$HOME`, and the image's
