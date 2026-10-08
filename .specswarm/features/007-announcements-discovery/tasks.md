@@ -106,7 +106,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
   `tests/unit/test_snapshot.py`, `tests/unit/test_undo.py`) pass unchanged.
 - [X] T017 [US7] `tools/bin/timelike`: `timelike budget` (contract § `timelike budget`) and the announcement's two
   rule lines (FR-24). `tests/unit/test_announce.py` is updated only where it counts lines.
-- [ ] T018 [US5] `image/rootfs/etc/timelike/shell-env.bash`: `command_not_found_handle` (contract § The
+- [X] T018 [US5] `image/rootfs/etc/timelike/shell-env.bash`: `command_not_found_handle` (contract § The
   command-not-found answer), with the header rules updated. `image/rootfs/etc/timelike/missing-commands.tsv` (R6).
   `image/Dockerfile`: one COPY. Measure the handler's cost per call and record it. `tests/host/test_shell_env_hook.sh`
   and `tests/host/test_env_layer.sh` still pass.

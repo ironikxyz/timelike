@@ -127,6 +127,9 @@ COPY --chmod=0644 image/rootfs/etc/timelike/redaction.toml /etc/timelike/redacti
 # The announcement's inputs (feature 007): the curated standard tools for `timelike tools`, and the
 # entrypoint that places the announcement in each harness's user-level context file on container start.
 COPY --chmod=0644 image/rootfs/etc/timelike/standard-tools.json /etc/timelike/standard-tools.json
+# What a command that is not installed answers in bash (feature 007 slice 1, spec FR-16): read by the
+# hook's command_not_found_handle, with builtins only.
+COPY --chmod=0644 image/rootfs/etc/timelike/missing-commands.tsv /etc/timelike/missing-commands.tsv
 COPY --chmod=0755 image/rootfs/opt/timelike/libexec/entrypoint /opt/timelike/libexec/entrypoint
 RUN test -f /etc/bash.bashrc \
       || { echo "error: /etc/bash.bashrc is missing — interactive bash would not reach the timelike hook" >&2; exit 1; } \

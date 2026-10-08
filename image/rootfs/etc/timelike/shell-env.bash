@@ -18,7 +18,9 @@
 #   - never fails the shell: errexit, nounset and xtrace are switched off locally (`local -`), and it
 #     returns 0 whatever it read
 #   - idempotent: sourcing it twice leaves the same environment as sourcing it once (bash -lc does)
-#   - leaves nothing behind: one function, unset after its single call, with local variables only
+#   - leaves nothing behind but what it means to: the defaults function is unset after its single
+#     call, with local variables only; command_not_found_handle stays defined on purpose (feature
+#     007 slice 1), and costs nothing until a command is not found
 #   - a no-op in any shell other than bash (the guard below is POSIX)
 #
 # ── F001: build parallelism from the container's CPU limit (SC-8, FR-15) ─────────────────────────
@@ -150,6 +152,56 @@
   }
   __timelike_shell_env
   unset -f __timelike_shell_env
+} 2>/dev/null
+
+# ── Feature 007 slice 1: a command that is not installed (spec FR-14 to FR-17; contract § The
+# command-not-found answer; research R5, R6) ──────────────────────────────────────────────────────
+# bash calls command_not_found_handle, in a subshell, when a name is found nowhere; its status is the
+# command's. It prints bash's own line first, byte for byte (the prolog bash would have written: the
+# caller's BASH_SOURCE, else $0, and BASH_LINENO[0]; no line number when interactive), then, for a name
+# listed in the data file, one `timelike:` line per row: the timelike equivalent, the Debian package
+# and who can add it, or a user-level install. An unknown name gets bash's line alone. Exit 127.
+# Builtins only (read, printf): a typo costs no fork. It never reads stdin, never installs, never asks.
+# Reached by bash -c, bash -lc, interactive bash and the scripts they run; NOT by sh -c (dash) or a
+# direct exec, which keep their own messages (D-7). TIMELIKE_MISSING_COMMANDS is a test-only override
+# of the data file's path, like the overrides above; nothing in the image sets it.
+{
+  command_not_found_handle() {
+    { local -; set +o errexit +o nounset +o xtrace; } 2>/dev/null
+    local IFS=$' \t\n' name="${1-}" row kind value note rest
+    local data="${TIMELIKE_MISSING_COMMANDS:-/etc/timelike/missing-commands.tsv}"
+    if [[ "$-" == *i* ]]; then
+      printf '%s: %s: command not found\n' "$0" "$name" >&2
+    else
+      printf '%s: line %s: %s: command not found\n' "${BASH_SOURCE[1]:-$0}" "${BASH_LINENO[0]}" "$name" >&2
+    fi
+    if [[ -n "$name" && -r "$data" ]]; then
+      while IFS=$'\t' read -r row kind value note rest || [[ -n "$row" ]]; do
+        [[ "$row" == "$name" && -n "$value" && -n "$note" && -z "$rest" ]] || continue
+        case "$kind" in
+          instead)
+            if [[ "$note" == - ]]; then
+              printf 'timelike: instead: %s\n' "$value"
+            else
+              printf 'timelike: instead: %s  (%s)\n' "$value" "$note"
+            fi
+            ;;
+          debian)
+            printf 'timelike: %s is in the Debian package %s, which is not installed. The agent cannot install OS packages (no root): the operator adds %s to the image.\n' \
+              "$name" "$value" "$value"
+            ;;
+          user)
+            if [[ "$note" == - ]]; then
+              printf 'timelike: install it yourself: %s\n' "$value"
+            else
+              printf 'timelike: install it yourself: %s  (%s)\n' "$value" "$note"
+            fi
+            ;;
+        esac
+      done <"$data" >&2
+    fi
+    return 127
+  }
 } 2>/dev/null
 
 # ── Feature 009: the session journal's shell record (spec FR-7, FR-8; research R1) ──────────────────
