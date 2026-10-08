@@ -150,7 +150,7 @@ bar.** US6 = SC-6.
   `pip install ` or `npm install -g `; none of the seven runtime names listed).
 - [X] T026 [US6] `pins.env` (`NODE_VERSION`, `NODE_SHA256`), `compose.yaml` (agent build args), `Makefile`
   (`bench-images` passes `UV_IMAGE`, `PYTHON_VERSION` and the Node pins to the vanilla build).
-- [ ] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
+- [X] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
   links, the `ENV` PATH with `/home/agent/.local/bin`. `image/rootfs/etc/profile.d/00-timelike-path.sh`: the
   same entry. `tests/host/test_env_layer.sh` still passes, or its PATH checks move with the declared order.
 - [ ] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says

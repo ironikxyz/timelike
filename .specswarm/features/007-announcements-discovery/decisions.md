@@ -259,3 +259,14 @@ ASSUMED: the Makefile's `include pins.env` + `export` makes NODE_VERSION and NOD
 ABSENT: no signature check of SHASUMS256.txt (GPG release keys) — the ruling asks for a pinned version and SHA-256, which is what the build checks; bench/driver/Dockerfile unchanged (the driver runs no task)
 Verification: grep of pins.env, compose.yaml args, Makefile bench-images (four args added); built in T027/T028
 SCOPE: in (3 changed files)
+
+### T027: the agent image's runtimes stage, configuration and PATH; profile.d
+**Started:** 2026-10-08T17:55:59Z | **Completed:** 2026-10-08T17:59:28Z | **Coordinator**
+
+INHERITED: T026's pins; research R9's measurements (npmrc in <node>/etc, pip.conf as the prefix's site config, the relocatable pip script) — (confidence: high)
+FLAGGED: a separate `runtimes` build stage (pinned base + uv) rather than steps in the final stage — so bench/vanilla/Dockerfile (T028) can run byte-identical steps and the two arms carry the same binaries (D-15); the final stage copies only /opt/agent — (confidence: high)
+FLAGGED: the marker is removed in the agent's final stage, not the shared stage, and the stage fails loudly if no marker is found (a uv change would otherwise silently skip the Q3 step) — (confidence: high)
+ASSUMED: `ADD <url>` with ARG expansion in the source works in the lane's builder (Docker 29, BuildKit); the checksum is enforced by `sha256sum -c` in the RUN after it, so a builder that ignored anything would still fail on a mismatch — (confidence: medium)
+ASSUMED: npm finds /opt/agent/node/etc/npmrc through the /usr/local/bin/npm link because node's execPath is its real path (R9 measured npm through the prefix's own bin; the link path is checked in the lane by T024's cells) — (confidence: medium)
+ABSENT: no image build here (no Docker daemon); the stage's shell was replayed on the host under a scratch root with the pinned uv and the verified tarball: checksum OK, node v24.21.0, CPython 3.14.7, prefix left with cpython-…, node and python only, marker removed, pip 26.2.1 and npm 11.19.0 run, npmrc written literally. A tests/unit/test_bench_catalog.py failure seen now (12 setup timeouts at 15 s) also fails at e0fb5a3 under the same load (~9, delegates running): environmental, re-run in T031
+Verification: host replay as above; tests/host/test_env_layer.sh 60/60; profile.d sourced under sh from three starting PATHs puts /opt/timelike/bin first and /home/agent/.local/bin second; shellcheck clean
