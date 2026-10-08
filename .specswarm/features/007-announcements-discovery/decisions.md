@@ -115,3 +115,4 @@ SCOPE: none — no files outside the feature's artifacts changed
 INHERITED: T010 (same file; SC-1 and FR-7 already name D-1 as resolved) — (confidence: high)
 ASSUMED: the resolution is a paragraph after D-1, not an edit inside it, so D-1's original FLAGGED reasoning reads as it did — (confidence: high)
 ABSENT: research.md's seam reasoning is unchanged (still true); FOR-MENTOR.md is not touched (Item 19 already closed; outside the feature directory)
+SCOPE: none — no files outside the feature's artifacts changed
