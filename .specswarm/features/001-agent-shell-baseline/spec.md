@@ -186,6 +186,12 @@ The contract (binding on every timelike tool, in every feature):
    Adele brokers is not `--yes`-confirmed: the grant is the confirmation, and rule 8 still applies.
    Annotated in place by cycle 7, declared; the contract was amended to match by feature 004 at
    `b7a6ea6`.)*
+   *(Clarified, revision 13: "mutating" here means a change whose scope the agent's arguments do not name
+   exactly, that touches another agent's or session's work, or that cannot be reversed from what the tool
+   shows. A change to a target the agent named exactly, applied whole or not at all, that shows what it
+   changed, is not confirmed; it declares `mutating: true` and `confirm_protocol: false`, and rule 8 still
+   applies. Annotated in place by cycle 8, declared; the contract already says it, written in by feature
+   008 (`contracts/output-contract.md:20`, `:131–140`; conformance C2).)*
 10. No daemons. State lives only under a scratch directory~~ and an optional git-excluded project cache~~
     *(struck, revision 11)* and a per-workspace state root outside the workspace, never inside the workspace or
     its `.git`. *(Revised, revision 11: the scratch directory is per session and disposable; the state root
@@ -196,6 +202,10 @@ The contract (binding on every timelike tool, in every feature):
 11. Deterministic, sorted output. No timestamps except behind `--verbose`.
 12. The first line is a self-labelling header naming the tool, target and scope.
 13. ANSI stripped. Long lines are cut at `COLUMNS` (default 200) with a marker and a byte count.
+    *(Clarified, revision 12: in both modes. In JSON the cut applies to each content string a tool emits,
+    with the same marker and the cut byte count carried as data; the serialised JSON stays valid. A long line
+    is read whole only on explicit request. Annotated in place by cycle 8, declared; the contract already
+    says it, written in by feature 006 (`contracts/output-contract.md:81–83`).)*
 14. Structured errors on stderr: one JSON object with `--json`, otherwise
     `error: <what> (code N) — <remediation>`.
 15. Redacted values appear as `[REDACTED:<type>]` and are never silently removed.

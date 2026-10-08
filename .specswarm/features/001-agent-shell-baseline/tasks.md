@@ -454,7 +454,7 @@ Governance is current at `[2..13]`, so there is no audit task. No criterion chan
   "and an optional git-excluded project cache" kept struck and marked *(Revised, revision 11)*, and revision 11's note.
   Name it in the line's note as amended (struck clause), corrected in place by cycle 8. No other body line names a
   project cache (impact analysis § Cycle 8).
-- [ ] T083 Spec contract rules 9 (`spec.md:181–188`) and 13 (`spec.md:192`): append revision 13's and revision 12's
+- [X] T083 Spec contract rules 9 (`spec.md:181–188`) and 13 (`spec.md:192`): append revision 13's and revision 12's
   clarifications in place, declared, as T079 did for revision 10. Note that the contract already carries both
   (`contracts/output-contract.md:20`, `:131–140`, `:81–83`).
 - [ ] T084 Provenance (modify Step 9): compute the append with the installed `audit-append` block in `full` mode

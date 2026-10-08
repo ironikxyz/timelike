@@ -916,3 +916,10 @@ FLAGGED: corrected in place rather than stopping for regeneration — the comman
 ASSUMED: the revision's words are copied as the prompt has them, with the strike kept visible as ~~…~~ and the revision note verbatim; the closing note on what 001 builds is this cycle's, marked as such — (confidence: high)
 ABSENT: no other body line changes (the scratch-space lines 97, 201, 287, 330 stay true); no contract change (the contract's missing state root is reported for 07 s1)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T083: spec rules 9 and 13 — revisions 13 and 12 appended in place, declared
+**Started:** 2026-10-08T10:06:28Z | **Completed:** 2026-10-08T10:06:28Z | **Coordinator**
+
+INHERITED: T082 (same file); revision 10's annotation pattern on rule 9 (T079) — (confidence: high)
+ASSUMED: each clarification is copied verbatim from the send's prompt bytes, then a provenance note naming where the contract already carries it (re-read at output-contract.md:20, :81–83, :131–140, conformance.md:27) — (confidence: high)
+ABSENT: neither rule's existing text is changed (both stay true); no contract change
