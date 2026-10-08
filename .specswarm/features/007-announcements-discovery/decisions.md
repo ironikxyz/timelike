@@ -376,3 +376,4 @@ FLAGGED: the PATH route, not a renamed interpreter — the fixture stays the eve
 ASSUMED: timelike-conform and the shipped tools need nothing from /usr/local/bin or ~/.local/bin (they name /opt/timelike/python, H5; /opt/timelike/bin, /usr/bin and /bin stay) — (confidence: high)
 ABSENT: the cell is not deleted, C1 and C6 are still asserted, and the shipped tools are still judged and must pass
 Verification (host, advisory): the generated command run under env -i in a scratch layout — a PATH dir holding python3 is dropped, `/usr/bin/env python3` then exits 127; the stub conform sees no python3
+SCOPE: in (2 changed files)
