@@ -5,66 +5,65 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T18:12:39Z (read from the clock), written at the end of 007 Cycle 4. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
-## State at 2026-10-08T18:12:39Z
+## State at 2026-10-08T20:45:32Z
 
-- **`modify/007-slice-1`** holds **04 slice 1, built in full** (Cycles 3 and 4 of 007). It started from `master` `f6faf01`.
-  It is **not merged and not pushed**, and **no image lane has run on it yet**.
-  - **The mentor's Docker lane comes next** (`make test`, `make scan` with the deny-list read). **Make no commit until the
-    mentor says the lane has ended** (send rule).
-  - Then: lane findings, if any, the D13 demo (the mentor captures it), sign-off, `--no-ff` merge per the mentor's
-    instruction, push on the discharge plus the operator's OK.
-  - The tag at that push: **`v0.16.0`** (README Status is now 16 of 38). It carries the three audit merges (`225a55c`,
-    `39c8ae2`, `f6faf01`) too.
-- **Sends:** Cycle 3 = `bridge/sends/04-rev13-20261008-161802.md` (stands; retired by the re-send).
-  Cycle 4 = `bridge/sends/04-rev14-20261008-174220.md` (the active prompt).
-- **What 04 s1 built:**
-  - the command-not-found handler in `image/rootfs/etc/timelike/shell-env.bash`, with its data in `missing-commands.tsv`;
-  - `timelike budget` (readers moved into agentio: `cgroup_dir`, `cgroup_value`, `cpu_figure`, `workspace`, `size`;
-    `run` and `snapshot` use them);
-  - the agent runtimes: `/opt/agent/python` (uv CPython 3.14.7, no EXTERNALLY-MANAGED, `pip.conf` user = true) and
-    `/opt/agent/node` (Node 24.21.0 tarball, SHA-256 pinned in `pins.env`, `etc/npmrc` prefix=${HOME}/.local);
-    seven links in /usr/local/bin; `/home/agent/.local/bin` on PATH;
-  - the vanilla bench image: the same `runtimes` stage, stock behaviour;
-  - SC-1's renamed cells, and the 1 s bound as an ordering.
-- **Governance** is `[2..14]` on the branch (`e58dd36` tech-stack 1.4.0 + quality-standards; `07b914d` constitution, no
-  change). `master` still records `[2..13]` until the merge.
-- **FOR-MENTOR:** Item 21 closed (`9b90a74`). Item 20 still open.
-- **007's spec** records `audited_against: [1, 13, 14]`; `prompt_revision` is 1.
-- **The cycle report** is § Cycle 3 and § Cycle 4 in `.specswarm/features/007-announcements-discovery/cycle-report.md`.
-  Every Automated criterion is `unconfirmed` until the lane, and D13 is `unconfirmed`.
-- **specswarm 2.37.0** ran both cycles. 2.38.0 is published, not installed; the send said not to reload.
+- **`modify/007-slice-1`** holds **04 slice 1**: Cycles 3 and 4 (built), lane 007s1-a's fixes and revision 15 (Cycle 5).
+  It started from `master` `f6faf01`. **Not merged, not pushed.**
+  - **Lane 007s1-b comes next** (test, bench-images, scan). **Make no commit until the mentor says it has ended.**
+  - Then: lane findings, if any; the D13 demo (the mentor captures it); sign-off; `--no-ff` merge with
+    `maint/readme-godel` per the mentor's instruction; push on the discharge plus the operator's OK.
+  - The tag at that push: **`v0.16.0`** (README Status is 16 of 38). It carries the three audit merges (`225a55c`,
+    `39c8ae2`, `f6faf01`) and the Gödel commits too.
+- **`maint/readme-godel`**: `866b49b` (the section) and `ad4d63f` (the section extended, send
+  `maint-readme-godel-2-20261008-190924`). Reported in `.specswarm/maintenance/readme/cycle-report.md` Cycles 2 and 3.
+  Merge `--no-ff` after sign-off; no tag of its own.
+- **Sends:** Cycle 3 = `04-rev13-20261008-161802`, Cycle 4 = `04-rev14-20261008-174220` (both stand, both retired),
+  **Cycle 5 = `bridge/sends/04-rev14-20261008-201729.md`** (the active prompt: prompt 14, discovery 15).
+- **Cycle 5 built** (T034–T045; full account in `cycle-report.md` § Cycle 5):
+  - lane fixes: the direct-exec cell reads both streams; 001's C6 cell drops python3-bearing PATH entries; two no-fix
+    baseline entries (GHSA-ch52-4w7c-c8xp, CVE-2026-77214); `pip-audit-agent`; **npm 11.21.0** (`NPM_VERSION`,
+    `NPM_SHA512`) replacing Node's bundled npm in both runtimes stages;
+  - revision 15: three **bundled-class** baseline entries (brace-expansion ×2, undici; npm 11.21.0; review by
+    2026-11-07) and the **release check** (`evaluate.py releases`, a `release-check` scan step, fails closed);
+  - governance `[2..15]`: constitution 1.4.3, tech-stack 1.5.0, quality-standards.
+- **007's spec** records `audited_against: [1, 13, 14, 15]`; `prompt_revision` is 1. 15 was appended on the send's
+  instruction (the library's row was 4), as `audit-log.md` says.
+- **FOR-MENTOR:** Item 20 still open. The three npm-bundled findings went to plan as
+  `bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` (resolved: revision 15).
+- **specswarm 2.37.0** ran every cycle. Later versions are published, not installed; the send said not to reload.
 
-## Expect from the lane (watch for these)
+## Expect from lane 007s1-b (watch for these)
 
-- **The `runtimes` stage under the real builder:** `ADD <nodejs URL>` with ARG expansion, the uv download, and the
-  `sha256sum -c` check.
-- **`make scan`:** new findings in CPython, Node or npm's bundled packages. A finding with no fix is a baseline change:
-  raise it, never exempt it silently.
-- **The SC-5 cell "every listed name is absent in the image":** remove any TSV row whose name turns out installed.
-- **The SC-6 cell "only the agent's home changed":** it allow-lists nothing, so anything else written outside
-  `/home/agent` fails it.
-- **The SC-7 limited throwaway** needs a lane host with at least 2 CPUs (`--cpus 1.5`). The direct-exec SC-5 cell
-  asserts non-zero, not 127.
-- **`tests/unit/test_bench_catalog.py` is load-sensitive** (15 s setup timeouts at host load of about 9).
+- **The release check from inside the scan container:** the `release-check` row should say 3 bundled entries, 4
+  releases examined (11.20.0, 11.21.0, 12.1.0, 12.2.0), 3 no-release, for agent and vanilla. If the image's interpreter
+  cannot reach registry.npmjs.org over TLS, the three findings block with "release check could not run" (by design).
+- **Grype over npm 11.21.0's tree:** any new finding in the rest of that tree. A finding with a fix in no npm release is
+  a bundled-class entry under revision 15; one with no fix at all is an ordinary entry. Raise both; never exempt silently.
+- **`pip-audit-agent`** in the real scan (`-r … --no-deps --disable-pip` from the agent image's uv).
+- **The npm step under the real builder** (`ADD` of the registry URL; `sha512sum -c`).
+- **T034's and T035's cells** against the real container.
+- **SC-7's limited throwaway** needs a lane host with at least 2 CPUs. `tests/unit/test_bench_catalog.py` is
+  load-sensitive (15 s setup timeouts at host load of about 9).
 
 ## Recipes this session used (the scratchpad is gone after a clear; rebuild)
 
-- **`ct.sh TASK FLAGGED MSGFILE DECFILE FILES…`** (one task):
-  - append DECFILE to `decisions.md`, tick the task in `tasks.md`;
-  - run the deny-list over the staged tree and the message (refuse unless PASS and 0 hits);
-  - commit, then compute the SCOPE line with the installed `scope-check` logic from `ts-TASK` (HEAD at the task's
-    start);
-  - append it, and commit "scope record, task ticked".
-  - **Pass every file you changed: with none, only `decisions.md`/`tasks.md` are staged** (how T023's report was first
-    left out).
-- **A venv** with pytest 8.4.2, ruff 0.16.9, mypy 2.3.1 and shellcheck-py. `make test-host PYTHON=<venv python>` with
-  the venv's bin on PATH.
-- **The pinned uv 0.12.19 and the Node tarball** were fetched into the scratchpad (sha-checked) for host trials. The
-  runtimes stage was replayed under a scratch root.
-- **Run a timing loop from a script file:** an inline `bash -c` loop tripped the harness's removal check.
+- **`ct.sh TASK MSGFILE DECFILE FILES…`** (one task): append DECFILE to `decisions.md`; tick the task; stage FILES with
+  both; run the deny-list per id over the staged diff and the message (refuse on any hit) and over the tracked tree
+  (`git write-tree` + `git archive`; capture the output first, `head` under `pipefail` kills it); commit; then compute
+  SCOPE from `ts-TASK` with the installed `scope-check` block, **sourced under `set +eu`** (it is not `set -e` safe:
+  a `grep` with no match ends the script after the commit), append it, and commit "scope record, task ticked".
+  **Read `git log` before re-running anything that commits.**
+- **`dlids.py`** (per-id counts): `sys.path.insert(0, scan)`, `import denylist`, `parse_list`, `match_lines` per entry
+  over each file; prints ids and numbers only.
+- **A venv** with pytest 8.4.2, ruff 0.16.9, mypy 2.3.1, shellcheck-py, coverage 7.10.7. `make test-host
+  PYTHON=<venv python>` with the venv's bin on PATH; `make lint-host` the same.
+- **bats 1.14.0** from the bats-core tag tarball, for stub-docker trials of single cells (there is no bats on the host).
+- **The live release check from the host:** `python3 -I scan/evaluate.py releases --baseline scan/baseline/<img>.json
+  --node-version 24.21.0 --out <file>` (about 3 s; it reads npm's 25 MB packument and 4 tarballs).
+- **Temporary worktrees** (the Gödel sends): `git worktree add <scratch>/wt maint/readme-godel`, then remove it.
 
 ## What happened since b10f32c (2026-10-08)
 
@@ -82,6 +81,12 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
      annotated. Full reconcile, `[2..13]`.
    - **007, Cycle 2 (rev 13).** SC-1's workspace clause is struck and D-1 resolved. Scoped reconcile, `[1, 13]`.
    - The mentor reconciled all three and signed off; they merged to master (above).
+
+3. **README Gödel sends** (`maint-readme-godel-20261008-180140`, `…-godel-2-20261008-190924`): `866b49b`, `ad4d63f` on
+   `maint/readme-godel`, each in a temporary worktree; README only; not merged.
+4. **Lane 007s1-a** (18:24–19:37Z) on `41d4b5f`: 573/576 e2e (the direct-exec stream; 001's C6 premise ×2), units and Go
+   passed, scan 9 blocking per runtime image. Feedback `04-20261008-193851-…`; fixes T034–T038.
+5. **Revision 15** (plan `300fdf3`): the npm-bundled question, ruled; built as 007 **Cycle 5** (T039–T045).
 
 ## Open items (none blocks)
 

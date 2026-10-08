@@ -672,3 +672,196 @@ decisions: sections=32 flagged_sections=28 non_flagged_sections=4 sections_witho
 ```
 
 There are no low-confidence decisions. Every `SCOPE:` record in Cycle 4 is `in` or `none`.
+
+## Cycle 5 — bridge/sends/04-rev14-20261008-201729.md
+
+Slice 1 of prompt 04, re-sent at prompt revision 14 / **discovery revision 15**, continued on `modify/007-slice-1`
+(Cycles 3 and 4 stand, as the send says). Written 2026-10-08T20:44:52Z (from the clock). specswarm **4.0.1-botbaubble.2.37.0**, the
+same session (2.38.0 and later are published, not installed; the send said not to reload). **Not merged, not pushed.**
+This cycle covers **lane 007s1-a's fixes** (`bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`)
+and **revision 15** (`bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` § Resolution). It
+changes `image/`, `bench/`, `scan/`, `tests/`, `pins.env`, `compose.yaml` and `Makefile`, so lane **007s1-b** comes
+before sign-off. **This instance makes no commit until the mentor says that lane has ended.**
+
+**How the cycle ran.** The lane fixes T034–T038 were built from the feedback file before this send arrived, as a by-hand
+addendum to Cycle 4's tasks; the send folded them into this cycle, and `tasks.md`'s Phase 8 heading says so. Then
+`/specswarm:modify 007 --from-send …` → plan → tasks → implement built revision 15 (T039–T045).
+
+**The governance audit (14 → 15) is on this branch**, in T039 (`eff83ca`):
+- `constitution.md` **1.4.2 → 1.4.3** (PATCH): H9 restates revision 5's "fix available", so it gains the clarification,
+  with a Sync Impact Report;
+- `tech-stack.md` **1.4.0 → 1.5.0**: npm's own pin and constraint, and an `npm` line the parser reads as approved;
+- `quality-standards.md`: the bundled-component reading, the bundled class with its 30-day review, and the release
+  check that fails closed.
+
+All three record `[2..15]`, each with a prose note naming revision 15 and its source.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path.
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/04-rev14-20261008-201729.md |
+| source_prompt | plan/.discover/prompts/04-announcements-discovery.md |
+| prompt_revision | 14 |
+| discovery_revision | 15 |
+| slice | 1 of [0, 1] (intensity: natural) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No subagent and no sibling feature was used; the coordinator wrote every test this cycle.
+
+**What was built.**
+- **Lane item 1** (T034, `b3e29a6`): the SC-5 direct-exec cell reads docker's not-found message on either stream (measured
+  on Docker 29.4.2 by the mentor: stdout), keeping non-zero, `tree`, "not found" and no timelike line.
+- **Lane item 2** (T035, `a32641e`): 001's broken-interpreter cell drops every `PATH` entry that holds a `python3` and
+  checks that premise first ("premise:", exit 3); C1 and C6 stay asserted. 001's test.
+- **Lane item 3, no fix** (T036, `b7bcf5f`): GHSA-ch52-4w7c-c8xp (npm's bundled http-cache-semantics 4.2.0, origin "files
+  under /opt/agent", with a new origin reason) and **CVE-2026-77214** (libexpat1, origin git) in **both** baselines,
+  `timelike-agent.json` and `timelike-vanilla.json`, with the neighbours' review dates. **CVE-2026-77214 is not caused by
+  this slice:** it is in the base layer's git and would block `master` too.
+- **Lane item 3, fixable** (T038, `72825e7`): no Node 24.x newer than 24.21.0 exists, so **npm 11.21.0** is pinned
+  (`NPM_VERSION`, `NPM_SHA512` = the registry's integrity as hex), checked with `sha512sum -c`, and replaces Node's bundled
+  npm whole, in the `runtimes` stage of both images (still byte-identical). It fixes 4 of the 7: ip-address
+  GHSA-mwp4-54f8-5fhr, tar GHSA-r292-9mhp-454m, brace-expansion GHSA-mh99-v99m-4gvg and GHSA-rgw5-rvv9-x895. **Route:**
+  the second the ruling allows, because no Node release carries the fixes; nothing inside npm's tree is touched.
+- **Lane item 4** (T037, `cd170e2`): a `pip-audit-agent` step in every image that carries `/opt/agent/python`, on its
+  own line. The scanned image's agent interpreter lists its distributions as exact pins; the agent image's uv runs
+  `pip-audit -r … --no-deps --disable-pip` over them (vanilla has no uv). quality-standards amended to match.
+- **Revision 15, bundled-class entries** (T043, `b07f24f`): GHSA-6j4f-fj2g-mc7p (brace-expansion 5.0.9, fixed 5.0.10)
+  and GHSA-qhr7-859c-m2p7 (fixed 5.0.11), both 2026-09-14, and GHSA-rfgv-xxqx-mfg5 (undici 6.28.0, fixed 6.28.1,
+  2026-09-04), each naming **npm 11.21.0**, with its own `reviewed` 2026-10-08 and `review_by` 2026-11-07, in both
+  baselines. Each records the scanner's fixed version for **that** advisory, so brace-expansion's two entries differ
+  (5.0.10, 5.0.11), where the send's summary gave 5.0.11 for both; the gate holds each entry to the scanner's figure.
+- **Revision 15, the release check** (T040 tests, T041 `ad90c36`, T042 `d5c3ba8`):
+  - `evaluate.py releases` reads npm's packument from the registry and, for each stable, non-deprecated release published
+    on or after the fix date whose `engines` admit Node 24.21.0, downloads the tarball, checks its sha512 integrity, and
+    reads every bundled copy of the library. It writes `release-check.json`.
+  - `report` lets a bundled-class finding through **only** on that check's `no-release` answer for the same fixed version.
+    A release that ships the fix blocks, naming it and the `pins.env` edit. No answer, a stale answer or `unknown` blocks,
+    with the escalation (component, library, why, what to do). **It fails closed.**
+  - The entry is held to the image and the scanner: a different library version, or a fixed version other than the
+    scanner's lowest stable fix, blocks with "re-review the entry". An entry past its own date, or over 30 days, blocks.
+  - `scan.sh` runs it per image, from the agent image, **with network**, after pip-audit-agent; the step's detail is its
+    summary, so the scan says what it checked (entries, Node, releases examined, states).
+  - **Generic over the component by a table; npm is implemented.** pip answers `unknown` (so it blocks) and says what its
+    reader needs: PyPI's JSON for stable pip releases whose `requires_python` admits the agent interpreter, and each
+    candidate wheel's `pip/_vendor/vendor.txt`.
+
+**criteria_reestablished.** All eight of prompt 04's criteria. **No image lane has run on this cycle's tip**, so every
+Automated criterion is `unconfirmed`, with lane 007s1-a's result and host results beside it, labelled.
+- `04 · "a timelike announcement of at most 60 lines is present in each supported harness's user-level context location"` —
+  **unconfirmed** (lane 007s1-b pending). Lane 007s1-a passed these cells at `41d4b5f`; this cycle did not touch them.
+- `04 · "and a test fails if any installed timelike tool is missing from it _(traces to: P3)_"` — **unconfirmed** (lane
+  pending). 007s1-a passed; host advisory: `tests/unit/test_announce.py` passed.
+- `04 · "with fields for JSON support, interactivity risk and safer alternative _(traces to: P3)_"` — **unconfirmed** (lane
+  pending). 007s1-a passed; untouched here.
+- `04 · "when either is known _(traces to: P1)_"` (the command-not-found answer) — **unconfirmed** (lane pending). 007s1-a
+  failed one cell here (not ok 94, the direct-exec stream), fixed in T034; host advisory: the cell's functions under
+  bats 1.14.0 against a stub docker (stdout ok, stderr ok; a timelike line, exit 0 and a daemon error each fail).
+- `04 · "persist across new shells _(traces to: P1)_"` (the bare installs) — **unconfirmed** (lane pending). 007s1-a passed
+  every SC-6 cell with npm 11.19.0; this cycle changes npm to 11.21.0 (host replay: checksum OK, `npm --version` 11.21.0,
+  links resolve).
+- `04 · "free space on the workspace and scratch filesystems _(traces to: P2)_"` — **unconfirmed** (lane pending). 007s1-a
+  passed the budget cells; untouched here.
+- `04 · "uses a timelike tool it learned about from the environment's announcement _(traces to: D4)_"` — **observed by the
+  operator**, as Cycle 1's Addendum 2 recorded (2026-10-07). Nothing new was observed this cycle.
+- `04 · "is told the install command or the equivalent timelike tool _(traces to: D13)_"` — **unconfirmed**. The mentor
+  captures D13 after a passing lane.
+
+Each citation matches exactly one line of this send (`grep -cF` = 1 for all eight).
+
+**reconcile_mode:** `scoped`. `audited_against` is now `[1, 13, 14, 15]` (T045, the installed `audit-append` block:
+`MODE=scoped`, `N=15`, `UNVERIFIED` empty, `REMOVALS_VISIBLE=yes` → `APPENDED=15`).
+- **The library's provenance row is 4**: the prompt is still at revision 14, which was already audited, so the library
+  finds nothing new. **15 is appended on the send's instruction**, and `audit-log.md` says so.
+- **What revision 15 changed:** a clarification of revision 5's "fix available", and npm's constraint in stack.md. No
+  prompt and no criterion changed (the Acceptance Criteria of `04-rev14-20261008-174220` and this send are byte-identical).
+- **Needs no body change.** The spec was checked for the scan's fixable rule: FR-30 describes the scan and stays true; it
+  gains a declared addition, and FR-32 to FR-34 are added (§ Slice 1, cycle 5). Nothing regenerated.
+
+**not_verified:**
+- **Every image-level fact for this cycle's tip.** No Docker daemon here:
+  - npm 11.21.0 under the real builder (`ADD` of the registry URL with ARG expansion; the RUN's npm lines were replayed
+    on the host only);
+  - the three e2e cell fixes (T034, T035) against the real container;
+  - `pip-audit-agent` in the real scan (`-r --no-deps --disable-pip` was tried on the host with pip-audit 2.10.1);
+  - **the release check from inside the scan container**: whether the image's timelike interpreter reaches
+    registry.npmjs.org over TLS. If it cannot, the three findings block, by design, and the escalation says why.
+- **Grype's view of npm 11.21.0's tree.** The host replay shows brace-expansion 5.0.9, ip-address 10.5.0, tar 7.5.22,
+  undici 6.28.0, with no nested copies; which advisories grype then reports is the lane's. Any new finding in the rest of
+  npm 11.21.0's tree is unknown until then.
+- **The verdict end to end** was run only over lane 007s1-a's scan output **edited** to npm 11.21.0's versions (synthetic,
+  labelled in T044): both images PASS, 0 blocking.
+- **SC-7's limited throwaway** still needs a lane host with at least 2 CPUs.
+
+**changed_other_features:**
+- **001 (image and environment layer):** `image/Dockerfile` (npm in the runtimes stage); `pins.env`, `compose.yaml`;
+  **001's test** `tests/e2e/conformance-check-over-every-timelike-tool-on-path.bats` and its fixture
+  `tests/e2e/fixtures/timelike-envpython` (T035: the premise restored, C1 and C6 kept).
+- **002 (bench):** `bench/vanilla/Dockerfile` (the same npm step; the stages stay identical) and the `Makefile`'s
+  `bench-images` (the npm pins).
+- **The scan gate** (shared by every feature): `scan/scan.sh` (pip-audit-agent, release-check), `scan/evaluate.py`
+  (bundled class, release check, the step column widened to 17), both baselines, `tests/unit/test_scan_report.py`.
+- **Governance:** `constitution.md` 1.4.3, `tech-stack.md` 1.5.0, `quality-standards.md`.
+- **README.md:** unchanged. The send's README block (16 of 38; row 04 `complete (0, 1)`) was applied in Cycle 4 (T032) and
+  matches word for word; the generated reference is current (no help moved).
+- **reboot.md:** brought up to date for a clear.
+
+**process_failures_recorded:**
+1. **A helper failed after committing, and its re-run committed twice.** The rebuilt `ct.sh` (reboot.md's recipe) sourced
+   the installed scope-check block under `set -e`, where a `grep` with no match ends the script. T034's first run had
+   committed (`b3e29a6`) before failing; reading the failure as "nothing committed", I re-ran it, which added
+   `ad93ac9` (a duplicate decision entry only). It was dropped with `git reset --keep b3e29a6` within the minute (local,
+   unpushed, no lane running), and the helper now sources the block under `set +eu`. Lesson: read `git log` before
+   re-running anything that commits.
+2. **A stray `git stash`** in the Gödel worktree (a command left at the end of a script) stashed the staged change; it was
+   restored with `git stash pop --index` and checked byte for byte before the commit. The Gödel commit was then amended
+   once (local, unpushed) to quote the tracked-tree PASS line, which a `tail -1` had replaced with the per-id line.
+3. **T037's decision said "116 passed"; the run said 114.** Corrected in place in T045, with the correction named in the
+   line.
+4. **One red commit window:** between T041 (`ad90c36`) and T042 (`d5c3ba8`), `test_scan_report.py`'s scan.sh cells fail
+   (the evaluator expects a `release-check` row that scan.sh did not yet write). T040 (`71fc5cc`) is red by design
+   (tests first).
+5. The plugin's `decision_tally` still reports `sections_without_absent=3`, as in Cycle 4 (T014's mid-line ABSENT; two
+   `ABSENT (delegate):` lines it does not count). No new case this cycle.
+
+**retired_prompts_seen:** `bridge/sends/04-rev14-20261008-174220.md` (replaced by this send, stale on the discovery axis;
+Cycle 4 names it and stands as written).
+
+**For the mentor (lane 007s1-b):**
+- Expect the three bundled entries to pass through the baseline **with the release check having run**: the
+  `release-check` row should read "3 bundled-class entries checked against npm's released tarballs (Node 24.21.0;
+  releases examined: 11.20.0, 11.21.0, 12.1.0, 12.2.0): 3 no-release" for the agent and vanilla images, and none for Adele
+  and the bench driver.
+- If the scan container cannot reach the registry, those three block with "release check could not run …; it fails
+  closed". That is the ruling working, not a defect in the entries.
+- The five new baseline entries (two ordinary, three bundled) are for your review at sign-off.
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+- The detector found `pytest`. `run_tests` rc=2 (declared, not installed for `/usr/bin/python3`). `run_coverage` printed
+  `unknown` (rc 1). Browser framework: `none`.
+- `Quality Score: unknown — no component could be measured, so there is no score to compare`.
+- The six exclusions, by the `unmeasured-explains-itself` rule: 2 attributed to this install (bundle size, visual
+  alignment), 1 to this machine (unit tests), 2 not applicable (integration, browser), and 1 unattributed (coverage,
+  whose reason as written here, "run_coverage printed unknown", names neither; Cycle 4 wrote it with "on this machine").
+- The gate is **UNKNOWN**: warned, not halted.
+- Recorded as `.specswarm/metrics.json` → `007-cycle-5`, with the project's figures beside it, unscored (host lane 1877
+  passed + 1 skipped; `scan/evaluate.py` 97% from its three test files).
+
+**Implement step 9b: decision log** (the plugin's `scope_tally` and `decision_tally` over all of 007, every cycle, before
+T045's own records):
+
+```
+scope: planned=45 recorded=43 unplanned=0 unrecorded=2 in=35 out=0 none=9 unknown=0 flagged=37 flagged_out=0 other=7 other_out=0
+decisions: sections=44 flagged_sections=37 non_flagged_sections=7 sections_without_absent=3 flagged=54 assumed=48 deferred=0 absent=41 inherited=40 low_confidence=0 flagged_low_confidence=0 flagged_delegate=10 assumed_delegate=9
+```
+
+There are no low-confidence decisions. Every `SCOPE:` record in Cycle 5 is `in` or `none`.
+
+**Git workflow (implement step 11):** option 2, stay on `modify/007-slice-1`. The merge is `--no-ff` after the mentor's
+sign-off, with `maint/readme-godel` (`866b49b`, `ad4d63f`).

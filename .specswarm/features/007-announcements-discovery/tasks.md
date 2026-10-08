@@ -214,7 +214,8 @@ T031 follows them, then T032, then T033.
 - [X] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
   registry with the real baselines (advisory); `evaluate.py report` over lane 007s1-a's scan output with the new
   baselines and that result.
-- [ ] T045 Provenance: append 15 (on the send's instruction; the library's row is 4) with its `audit-log.md` row;
-  `cycle-report.md` § Cycle 5; the README status checked against the send's block; `reboot.md` brought up to date.
+- [X] T045 Provenance: append 15 (on the send's instruction; the library's row is 4) with its `audit-log.md` row;
+  `cycle-report.md` § Cycle 5 (with implement steps 10 and 9b; step 10's record in `.specswarm/metrics.json`); the
+  README status checked against the send's block; `reboot.md` brought up to date.
 
 **Order:** T034–T038 (built), then T039, then T040 before T041, T041 before T042 and T043, then T044, then T045.
