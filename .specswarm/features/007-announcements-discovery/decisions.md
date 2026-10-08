@@ -210,3 +210,4 @@ ASSUMED: review found the file's JSON and text runs use separate not-yet-existin
 FLAGGED: one shellcheck warning (SC2034, ELAPSED_S read by helpers' asserts) annotated by the coordinator — (confidence: high)
 ABSENT (delegate): not run — no Docker daemon or bats here; bash -n on @test-stripped copies only. The image lane is the evidence. ABSENT: spec FR-14 says a direct exec "exits 127 as before"; the cell asserts non-zero, which is what the lane can establish without a docker-version assumption
 Verification: shellcheck -x -P tests/e2e:tests/host clean on both files (coordinator, venv shellcheck-py); read in full by the coordinator against the contract and helpers.bash (exec_in/_shell_argv support ic; start_throwaway passes the limits; paths stay under the 200-column cut)
+SCOPE: in (2 changed files)
