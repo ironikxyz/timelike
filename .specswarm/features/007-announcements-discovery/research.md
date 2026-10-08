@@ -93,3 +93,26 @@ It grows by one line per answer, and an e2e cell keeps every listed name absent 
   enables.
 - **Moving the readers into `agentio`** gives `run`, `budget` and the hook rule one Python home. The hook stays bash
   (no fork at shell start), so agreement is tested, not shared: the same files go to both.
+
+## R9 · The agent runtimes, measured before building (Cycle 4; discovery revision 14)
+
+On the host, before the Dockerfile was written:
+- **Node:**
+  - `https://nodejs.org/dist/index.json` (read 2026-10-08) lists v26.11.1 as newest with `lts: false`, and
+    v24.21.0 (2026-09-07, "Krypton") as the newest LTS. So the current Active LTS is **24.21.0**.
+  - `SHASUMS256.txt` gives `node-v24.21.0-linux-x64.tar.gz` the SHA-256 that `pins.env` carries. The
+    downloaded tarball hashed to the same value.
+  - `.tar.gz`, because trixie-slim has no `xz`.
+  - `bin/` holds `node`, `npm`, `npx` and `corepack`.
+- **npm's prefix:** `<node>/etc/npmrc` holding `prefix=${HOME}/.local` sent `npm install -g --offline` of a
+  locally packed package to `$HOME/.local`, and its binary ran from `$HOME/.local/bin`. (`npm config get prefix`
+  refuses: the key is protected; `npm prefix -g` reads it.)
+- **Agent Python:**
+  - `uv python install 3.14.7 --install-dir <dir> --no-bin` (pinned uv 0.12.19) gives a prefix whose
+    `bin/` has `python3`, `python`, `pip`, `pip3` and more, and whose `lib/python3.14/EXTERNALLY-MANAGED`
+    exists.
+  - With the marker removed and `<prefix>/pip.conf` = `[install] user = true`, `pip config list -v` shows the
+    file loaded as the *site* variant.
+  - A bare `pip install --no-index <wheel>` of a test-built wheel then installed into
+    `$HOME/.local/lib/python3.14/site-packages`.
+  - `python3 -I` could not import it.
