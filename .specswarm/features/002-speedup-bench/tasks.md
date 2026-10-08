@@ -249,7 +249,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
 - [X] T029 `decisions.md` T016: below its fourth ASSUMED line (the hung call counted twice), add an
   annotation: *superseded by discovery revision 8 (ruling (b)), code change carried to 02 s1*. The ASSUMED
   line is kept as written.
-- [ ] T030 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode
+- [X] T030 Provenance (modify Step 9): compute the append with the installed `audit-append` block, mode
   `scoped` with `OUT_OF_SCOPE` empty: revision 8's own change (the constraint) is addressed by T028, but its
   added slice-1 criterion is not addressed by this cycle, so `full` is not available (Step 9: "Added criteria
   this modification didn't address"). Expected append: 8 alone, as the send asks; revisions 2–7 did not

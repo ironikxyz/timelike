@@ -338,3 +338,11 @@ INHERITED: T028's spec note names T016 as the origin — (confidence: high)
 ASSUMED: an indented annotation under the ASSUMED line, rather than an edit to it, keeps the record of what was assumed at build time (append-only spirit of this log) — (confidence: high)
 ABSENT: T016's other lines are untouched; the code it describes is unchanged
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T030: provenance — audited_against [1] → [1, 8], one audit-log row
+**Started:** 2026-10-08T09:59:49Z | **Completed:** 2026-10-08T09:59:49Z | **Coordinator**
+
+INHERITED: T028 (the constraint now in the body, its unmet places named); the send's instruction "append 8" — (confidence: high)
+FLAGGED: mode scoped with OUT_OF_SCOPE empty, appending 8 — chose that over mode none, which the installed block returns when revision 8 is listed as out of scope (verified: it yields NEW_AUDITED [1]). The command reserves an append for a revision this modification "brought into line" or that "needed no body change"; revision 8's constraint is neither in the code, by plan's ruling. Chose the send's reading (audited_against = checked and needs no regeneration, the mentor's definition; the slice-1 criterion is another slice's), and recorded the code gap in the spec, the audit-log row and not_verified so the entry cannot be read as "slice 0 meets revision 8". Raised in the report — (confidence: medium)
+ASSUMED: the audit-log row's date is the clock's at writing — (confidence: high)
+ABSENT: prompt_revision (1), discovery_revision (6) and source_prompt untouched; revisions 2–7 not appended (they did not change prompt 02, so they leave no hole)

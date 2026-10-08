@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/02-speedup-bench.md
 source_send: bridge/sends/02-rev1-20260929-000641.md
 prompt_revision: 1
 discovery_revision: 6
-audited_against: [1]
+audited_against: [1, 8]
 slice: 0
 ---
 
