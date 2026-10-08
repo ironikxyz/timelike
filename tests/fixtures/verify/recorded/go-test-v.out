@@ -1,0 +1,34 @@
+=== RUN   TestAddOne
+--- PASS: TestAddOne (0.00s)
+=== RUN   TestAddTwo
+--- PASS: TestAddTwo (0.00s)
+=== RUN   TestAddNegative
+--- PASS: TestAddNegative (0.00s)
+=== RUN   TestAddZero
+--- PASS: TestAddZero (0.00s)
+=== RUN   TestAddWrongly
+    calc_test.go:12: Add(2, 2) = 4, want 5
+--- FAIL: TestAddWrongly (0.00s)
+=== RUN   TestParseNumber
+--- PASS: TestParseNumber (0.00s)
+=== RUN   TestParseText
+    calc_test.go:26: Parse("abc"): strconv.Atoi: parsing "abc": invalid syntax
+--- FAIL: TestParseText (0.00s)
+=== RUN   TestParseZero
+--- PASS: TestParseZero (0.00s)
+=== RUN   TestParseNegative
+--- PASS: TestParseNegative (0.00s)
+=== RUN   TestAddLarge
+--- PASS: TestAddLarge (0.00s)
+=== RUN   TestTable
+=== RUN   TestTable/1+2
+=== RUN   TestTable/2+2
+    calc_test.go:38: Add(2, 2) = 4, want 5
+--- FAIL: TestTable (0.00s)
+    --- PASS: TestTable/1+2 (0.00s)
+    --- FAIL: TestTable/2+2 (0.00s)
+=== RUN   TestAddCommutes
+--- PASS: TestAddCommutes (0.00s)
+FAIL
+FAIL	example.com/calc	0.005s
+FAIL

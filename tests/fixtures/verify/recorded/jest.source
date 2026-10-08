@@ -1,0 +1,8 @@
+runner: jest 30.5.2
+command: <TOOLS>/.bin/jest 
+exit: 1
+project: tests/fixtures/verify/make-project.sh jest
+recorded_at: 2026-10-06T17:55:00Z
+host: Linux x86_64
+recorded_by: tests/fixtures/verify/record.sh (stdout and stderr together, NO_COLOR=1, no terminal)
+paths: the project directory is <PROJECT>, tool directories <TOOLS>, the home directory <HOME>

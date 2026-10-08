@@ -185,3 +185,30 @@ decisions: sections=6 flagged_sections=6 non_flagged_sections=0 sections_without
   branch's tip is the commit that adds this addendum.
 - **Not verified here:** 011's cells in the image. They passed in lane batch-b (symbols 28/28) and stay as
   recorded until the lane re-runs at the new tip.
+
+### Addendum 2 — D19 observed by the operator (2026-10-08T05:37:19Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T23:48:48Z) and the transcript
+it cites, `bridge/.d19-demo-20261007T233617Z.txt` (bridge `5ab9058`), which this instance read.
+
+- `10 · "receives ranked locations with signatures _(traces to: D19)_"` — **observed by the operator**,
+  by interview with the mentor instance on `symbols`'s real output. The image was the one lane batch-d
+  passed (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway with `--cap-drop ALL`,
+  `no-new-privileges` and `--init`. Each agent command was its own `docker exec … bash -lc`, as user
+  `agent`, in a git repository holding a copy of the stdlib email package as `mailparse/` (29 files).
+  - **`symbols def --text get_content`:** `2 definitions, exact (python)`. Best first came
+    `mailparse/contentmanager.py:17` `ContentManager.get_content` with `def get_content(self, msg, *args,
+    **kw)`, then `mailparse/message.py:1137` `MIMEPart.get_content` with its signature.
+  - **`symbols callers --text get_content`:** 1 call site, in `MIMEPart.get_content`
+    (`mailparse/message.py:1140`), under the header `text-based: name matches followed by "(", not
+    resolved calls`.
+  - **A missing name:** `symbols def get_contents_v2` gave not found, exit 3, `do instead: search -w
+    get_contents_v2`. The JSON form is shown too.
+  - **The mentor's independent grep** over the same files agrees: two definitions (`message.py:1137`,
+    `contentmanager.py:17`) and one call site (`message.py:1140`).
+  - **Interview:** all four answers matched the transcript. The operator accepts D19 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12, D14 and D4 addenda
+  (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+  The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
+  first option). A revert of 012 by branch topology would carry this addendum with it.

@@ -77,6 +77,11 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/symbols-callers-3-call-sites-grouped-text-based-header.bats \
   tests/e2e/symbols-dependents-of-changed-file-ranked.bats \
   tests/e2e/symbols-stale-cache-rebuilt-answers-from-new-content.bats tests/e2e/symbols-name-and-manifest.bats \
+  tests/e2e/verify-pytest-3-failed-409-passed-file-line-name-assertion-lines.bats \
+  tests/e2e/verify-parses-pytest-jest-vitest-go-cargo-unknown-format-falls-back.bats \
+  tests/e2e/verify-changed-one-source-file-runs-importing-tests-lints-changed-states-why.bats \
+  tests/e2e/verify-changed-no-changes-exits-0-nothing-selected.bats tests/e2e/verify-name-and-manifest.bats \
+  tests/fixtures/verify/make-project.sh tests/fixtures/verify/record.sh \
   image/rootfs/opt/timelike/libexec/entrypoint \
   tests/e2e/view-anchor-mode-short-stable-anchor-changes-with-content.bats \
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \

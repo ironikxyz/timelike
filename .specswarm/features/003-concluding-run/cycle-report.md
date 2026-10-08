@@ -722,3 +722,34 @@ decisions: sections=27 flagged_sections=21 non_flagged_sections=6 sections_witho
    both before and after: it checks the field's presence, not its truth.
 
 `marker-fields` (installed block) over `.implement-complete`: clean, ten fields.
+
+### Cycle 2 — D12 addendum (operator interview) (2026-10-07T15:57:10Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-07T15:55:50Z) and the transcript
+it cites, `bridge/.d12-demo-20261007T154908Z.txt` (bridge `b967ee0`), which this instance read.
+
+- `03 · "receives a verdict naming the memory cap and peak use instead of a bare exit 137 _(traces to: D12)_"` —
+  **observed by the operator**, by interview with the mentor instance on `run`'s real output. The
+  image was the one lane batch-d passed (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway
+  started as SC-8's cells start it: `--memory 96m --memory-swap 96m`, `--cap-drop ALL`,
+  `no-new-privileges`, `--init`. Everything ran as user `agent` under `bash -lc`, with stdout a pipe.
+  - **Without `run`:** a script allocating 8 MiB blocks printed up to step 11 (88 MiB) and ended with exit
+    137. Nothing named a cause.
+  - **Through `run`, JSON:** `cause: memory`, `command_exit: 137`, and `memory` read as
+    `limit_bytes 100663296`, `peak_bytes 100663296`, `oom_kills 1`, `state: read`. Exit 137 was passed through.
+  - **Through `run`, text:** `verdict: exit 137 (out of memory: limit 96.0 MiB, peak 96.0 MiB) · 0.1 s ·
+    10 lines · log …`.
+  - **Control (exit 3):** `exit 3 (command exited 3)`, with no memory words.
+  - **Interview:** all four answers matched the transcript, and the operator accepts D12 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **Noted by the mentor, not blocking** (carried, not fixed here):
+  - the control's verdict says `1 lines`, the same plural defect as 006's carried `1 files`;
+  - `python3` is not on the agent's PATH in the image, so the demo used `/opt/timelike/python/bin/python3`,
+    as SC-8's test does. That is worth a line in the announcement or a decision.
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, on top of `244c4a8`. That way
+  `244c4a8..` is records only and lane batch-d's evidence holds. Writing it on `modify/003-slice-1` would
+  have meant rebasing all eight branches and taking `244c4a8` out of the stack. A revert of 012 by branch
+  topology would carry this addendum with it.
+
+§ Cycle 2's three automated criteria are still recorded `unconfirmed` above. Lane batch-d (2026-10-07T03:26:28Z,
+e2e 537/537) ran their cells, but this addendum records D12 only.

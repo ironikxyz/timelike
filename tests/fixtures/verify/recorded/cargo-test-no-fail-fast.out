@@ -1,0 +1,63 @@
+   Compiling calc v0.1.0 (<PROJECT>)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src/lib.rs (target/debug/deps/calc-9cacf247940caf61)
+
+running 12 tests
+test tests::add_commutes ... ok
+test tests::adds_large ... ok
+test tests::adds_negatives ... ok
+test tests::adds_one_and_one ... ok
+test tests::adds_two_and_two ... ok
+test tests::adds_zero ... ok
+test tests::adds_wrongly ... FAILED
+test tests::parses_a_negative ... ok
+test tests::gives_up ... FAILED
+test tests::parses_a_number ... ok
+test tests::parses_text ... FAILED
+test tests::parses_zero ... ok
+
+failures:
+
+---- tests::adds_wrongly stdout ----
+
+thread 'tests::adds_wrongly' (4025391) panicked at src/lib.rs:23:9:
+assertion `left == right` failed
+  left: 4
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- tests::gives_up stdout ----
+
+thread 'tests::gives_up' (4025393) panicked at src/lib.rs:39:9:
+not implemented yet
+
+---- tests::parses_text stdout ----
+
+thread 'tests::parses_text' (4025396) panicked at src/lib.rs:29:9:
+abc should parse
+
+
+failures:
+    tests::adds_wrongly
+    tests::gives_up
+    tests::parses_text
+
+test result: FAILED. 9 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+     Running tests/integration.rs (target/debug/deps/integration-be988585426fb46b)
+
+running 2 tests
+test adds_from_outside ... ok
+test parses_from_outside ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests calc
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 1 target failed:
+    `--lib`

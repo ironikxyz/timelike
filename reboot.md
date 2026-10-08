@@ -5,11 +5,33 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-06T17:46:53Z (read from the clock). **Dispatch batch `20261004-183704` running.** Done: 06 s0 (`008-edit`,
-`62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`; pause-09 answered (a)),
-10 s1 (`011-code-intelligence`, `6d523d4`). Next: 11 s1 (`012-verify-changed`, the last). Toolchains for 11's recorded
-runner output are in the scratchpad (`tc/`: go 1.27.1, cargo 1.99.0 with RUSTUP_HOME/CARGO_HOME set, jest 30.5.2,
-vitest 5.0.3 in `tc/js`). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
+**Snapshot:** 2026-10-06T20:04:26Z (read from the clock). **Dispatch batch `20261004-183704`: all 8 prompts built.** Done: 06 s0
+(`008-edit`, `62d1820`), 08 s1 (`009-session-journal`, `d27bec7`), 09 s1 (`010-services-interactive`, `c4f8aed`;
+pause-09 answered (a)), 10 s1 (`011-code-intelligence`, `6d523d4`), 11 s1 (`012-verify-changed`, `d075404`). The
+batch's final report went to the operator in chat (2026-10-06); repeat it if the mentor asks. **Lane batch-b ran at
+`1dfc6b7`** (bridge/history 2026-10-06T20:03:07Z): not signable, three failures for the mentor to route (§ Lane
+batch-b below). specswarm 2.35.0 (`4ff8dcb`). **This repository is public**; push nothing, merge nothing.
+
+## Lane batch-b (2026-10-06, at `1dfc6b7`): result and this instance's reading
+
+`make test` FAILED: e2e 534/537, units 1 failed / 1637 passed / 2 skipped, Go pass, start-up p95 97.8 ms
+(budget 100). `make scan` PASS ×4 (agent 83 baselined, adele 0, vanilla 82, bench-driver 54); deny-list pass
+(P1–P7, 449 files). Every new tool held in the image: symbols 28/28, services 22/22, journal 16/16, edit 28/28,
+verify all but one, so real pytest/ruff/mypy via uv at the pins **does** reach PyPI from the agent container.
+
+The three failures, read from `tests/out/` (no fix until the mentor routes them; each on the branch owning the file):
+1. **not ok 249, 250** — 001's SC-6 `peer-agents-write-to-own-scratch-space.bats`, the `default`-session cells.
+   Diagnosis (not a leak): 009's shell record (`journal-exit.bash`) writes the command text as `"cmd"`, and the
+   test's `PEER_SCRIPT` contains `${TIMELIKE_SESSION:-default}`, so peer b's `shell.jsonl` holds the needle
+   `default` that `fixtures/sc6_check.py:79-80` greps for. Every other isolation count is clean; the two
+   named-peer cells pass because random ids never occur in the script. Fix options: the content check skips
+   `shell.jsonl` and checks its `session` field instead, or the peer script stops containing the literal.
+2. **not ok 432** — 012 SC-4 `[bash -c]` JSON clean tree: verify's JSON is complete and correct (exit 0);
+   `jpy` failed with no stderr after ~30 s, consistent with `pyq`'s throwaway `docker run` killed by
+   `timeout $RUN_TIMEOUT`. Its `-lc` twin and the rest of the file passed. Unconfirmed (no Docker here).
+3. **unit `test_verify.py::test_not_found_steps_are_not_run_exit_1`** (012, line 756): the skip probe runs
+   `python3` on `PATH=/usr/bin:/bin`; the image has none there (`FileNotFoundError`). Fix: guard with
+   `shutil.which("python3", path=bare)` (no python3 there means pytest cannot be imported either).
 
 **The stack** (each cut from the previous; nothing merged into it; `public/main` = `aa8127d`):
 1. `modify/003-slice-1` — 03 s1 done (`4857215`).
@@ -24,7 +46,10 @@ vitest 5.0.3 in `tc/js`). specswarm 2.35.0 (`4ff8dcb`). **This repository is pub
    contract paragraph); loads run's process helpers.
 7. `011-code-intelligence` — 10 s1 done (`6d523d4`): `symbols` (outline/def/callers/dependents; index in the scratch;
    FOR-MENTOR Item 20).
-8. Not started: 11 s1 (`012-verify-changed`).
+8. `012-verify-changed` — 11 s1 done (`d075404`): `verify` (test: through run, pytest/jest/vitest/go/cargo,
+   exit passed through; changed: symbols dependents at 011's `6d523d4`, lint/type-check of changed files only).
+   Fixtures recorded from the real runners in `tests/fixtures/verify/recorded/` with `.source` sidecars;
+   e2e run real pytest/ruff/mypy in the image via uv at the pins (`install_uv_tool_wrappers`).
 
 **`master`** = `27600de`: governance audited 12 → 13 (in a worktree; NOT merged into the stack, by the
 Resume section). Unpushed, not cleared.
@@ -35,9 +60,10 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 
 ## Next actions
 
-1. **Continue the batch:** 08 s1, 09 s1, 10 s1, 11 s1 from `bridge/dispatch/code-track.md`, each branch
-   cut from the previous (09 from 009-…, etc.). Re-read the code-track header and § Resume between features.
-2. The mentor's lane after the batch, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
+1. **Wait for the mentor to route lane batch-b's three failures** (a `bridge/feedback/` file or a history
+   row). Fix only what is routed, on the owning branch, then rebase or cascade the stack as the mentor says.
+   Nothing in the bridge is to be written except pause files.
+2. Then a re-run of the lane, reconciliation (`bridge/dispatch/reconciliation.md`), D-demos
    (`human-track.md`), hand merges, pushes on the operator's OK.
 
 **Batch recipes (scratchpad, gone after a clear; rebuild them):**
@@ -74,6 +100,13 @@ Group B copies `discovery_revision: 12` and says in prose the cycle was built un
 § Cycle 1 (one ungated commit amended locally, the probe, CLAUDE_PLUGIN_ROOT).
 
 **Open items from this batch, for the batch's final report:**
+- **012:** the send's premise "pytest runs in the image" was false (the image has no pytest, ruff or
+  mypy); the e2e fetch them via the image's uv at the pins, so they need PyPI from inside the agent
+  container (not yet proved by the lane). `verify`'s children run with a scratch root inside the session's
+  scratch so a call writes one event (C7). The D104 note: T001–T003 shared one start read from HEAD, so
+  T001's scope range includes T003's commit (true, and wider than the task).
+- **Traced-run timing failures outside the features:** 011's adele conform, 012's bench runner; both pass
+  untraced 3/3.
 - **FOR-MENTOR Item 19:** closed (revision 13, user level only). Item 18 Q3 closed (revision 12).
 - **Plugin observations to relay (2.35.0):** implement's expansion clobbers awk's `$0`; specify's
   expansion breaks on a quoted description (the stray quote is in the description; an unquoted `&`

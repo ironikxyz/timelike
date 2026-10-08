@@ -794,5 +794,52 @@
       }
     },
     "lane": "pending: the mentor's Docker lane after the batch"
+  },
+  "012": {
+    "recorded_at": "2026-10-06T18:46:51+00:00",
+    "git_sha": "(the T006 commit; tree measured at the T005 commit 84f84e2)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.35.0 (session-loaded), /specswarm:implement --dispatch step 10",
+    "send": "bridge/sends/11-rev1-20261004-183704.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN — no component could be measured; dispatch mode: warned, never asked"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores)",
+      "units": "1639 passed (make test-host, untraced, before T005's 12 cases); test_verify.py 73 passed after them; traced: 1626 passed, 1 skipped, 1 failed (bench runner 'setup failed: hung' under tracing; passes untraced 3/3), 739 s",
+      "coverage_python": "94% overall, line and branch (traced run, before the 12 cases; verify 85% there); verify 90% from test_verify.py after them; merge bar 90%",
+      "lint": "ruff 0.16.7 check + format, mypy 2.4.0 strict (26 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (75): clean",
+      "make_test_host": "passed (60/60 files, 44/44 hook)",
+      "conformance_host": "pass, 13 tools (verify included, after the C7 fix)",
+      "e2e_host_standin": "verify files 36 of 38 with this host's pytest/ruff/mypy in place of the uv wrappers; the 2 type -a cells are image-only; not image evidence",
+      "p95_ms": {
+        "verify --help": 93,
+        "verify --json true (probe, through run)": 191
+      }
+    },
+    "lane": "pending: the mentor's Docker lane after the batch"
   }
 }

@@ -1,0 +1,10 @@
+feature: 012-verify-changed
+completed_at: 2026-10-06T18:47:39+00:00
+mode: dispatch
+tasks: 6/6 in tasks.md (T001–T006), all ticked; no unplanned sections
+tests: UNKNOWN — the plugin's run_tests returned 2 (pytest declared, not installed for /usr/bin/python3); project_measured (host venv, pytest 8.4.2): 1639 passed (make test-host, before T005's 12 cases); test_verify.py 73 passed after them
+coverage: UNKNOWN — run_coverage printed unknown (rc 1); project_measured (coverage.py with subprocess coverage, host venv): 94% Python line and branch (verify 90% from its tests), against min_test_coverage 90
+lint: ruff 0.16.7 check and format over the repository, mypy 2.4.0 strict (26 files), shellcheck 0.11.0 over the Makefile's SHELLCHECK_FILES (75 files): clean
+decisions: sections=6 flagged_sections=4 non_flagged_sections=2 sections_without_absent=0 flagged=10 assumed=7 deferred=0 absent=6 inherited=6 low_confidence=0 flagged_low_confidence=0
+scope: planned=6 recorded=6 unplanned=0 unrecorded=0 in=6 out=0 none=0 unknown=0 flagged=4 flagged_out=0 other=2 other_out=0
+pause_file_written: no

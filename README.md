@@ -390,6 +390,28 @@ symbols dependents app/models.py   # the files that import it, direct first, ran
 - **The index lives in the session scratch,** outside the workspace (rule 10), and is rebuilt once per
   session. On 1,000 files that took 1.9 s cold and about 0.3 s warm, measured on the host.
 
+## verify — failures only, and only what a change affects
+
+`verify` runs tests through `run` and reports the failures, each with its file, line, test name and first
+assertion lines (feature 012, prompt 11 slice 1):
+
+```
+verify test -- pytest -q        # or: verify pytest -q — "3 failed, 409 passed (pytest)", then each failure
+verify npm test                 # the format is read from the output: pytest, jest, vitest, go test, cargo test
+verify changed --dry-run        # what an edit could break, and why each test was selected; nothing run
+verify changed                  # tests importing the changed files; lint and type-check of those files only
+```
+
+- **The exit is the command's** (`verify test`). Any other output falls back to `run`'s verdict, marked
+  `format unknown`.
+- **`changed` selects by imports:** tests importing a changed file, directly or through one other file,
+  from `symbols dependents`. That is a superset, and text-based outside Python; the verdict says so.
+  Lint (ruff, eslint) and type-check (mypy, tsc) run on the changed files only.
+- **Runners come from the workspace first** (`.venv/bin`, `node_modules/.bin`), then PATH. A selected
+  check whose tool is missing is `not run`, and the call exits 1: not running a check is not passing it.
+- **The parsers are tested on real runners' output,** recorded by `tests/fixtures/verify/record.sh`, with
+  each recording's source beside it.
+
 ## Speedup bench
 
 ```bash
