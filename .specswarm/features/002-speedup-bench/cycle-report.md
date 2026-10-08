@@ -463,3 +463,173 @@ informational (`enforce_gates: false`) and decided nothing. The merge bar (Docke
 97%, SC-3 observed) is unaffected.
 
 `quality-report.json` is left as shipped. This note is the correction.
+
+## Cycle 2 — bridge/sends/02-rev8-20261008-095251.md
+
+**Written:** 2026-10-08T10:01:46Z (read from the clock). Not in dispatch mode. Built with `/specswarm:modify 002 --from-send
+bridge/sends/02-rev8-20261008-095251.md`, then `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`,
+on `modify/002-rev8` from `master` at `c79facc` (= `public/main`). **Pushed nothing; not merged.**
+
+**specswarm version (lore specswarm Q002):** this session ran **4.0.1-botbaubble.2.37.0**. Every expanded command
+named `PLUGIN_DIR=…/4.0.1-botbaubble.2.37.0`, and the session's pid is in that version's `.in_use` (2.36.0's is
+empty). This is the first `modify` under 2.37.0; see process_failures_recorded for what it showed.
+
+**Status in one line:** record only, `.specswarm/features/002-speedup-bench/` only. Revision 8 added a constraint and a
+slice-1 criterion and amended nothing; the constraint is copied into the spec, declared, with slice 0's four unmet
+places named; `audited_against` gains 8.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/02-rev8-20261008-095251.md |
+| source_prompt | plan/.discover/prompts/02-speedup-bench.md |
+| prompt_revision | 8 |
+| discovery_revision | 13 |
+| slice | 0 of [0, 1, 2] (merged) (no new slice; an audit of what is merged) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**criteria_reestablished.** Slice 0's three criteria. This cycle changed only files under
+`.specswarm/features/002-speedup-bench/` (`git diff master HEAD -- . ':!.specswarm/features/002-speedup-bench'` is
+empty), and `master`'s tree at `c79facc` is `725b7a1f…`, identical to `10ddd3a`'s. So, as the send directs, the
+two Automated criteria cite **the mentor's lane readme-c at `10ddd3a`, a lane on an identical tree** (history
+2026-10-08T08:28:00Z: `make test` PASSED, e2e 537/537; log `bridge/.make-test-readme-c.log`, TAP 393, 394, 396, 397).
+No lane ran for this cycle.
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` — **executed [mentor's lane readme-c
+  at 10ddd3a: `tests/e2e/speedup-bench.bats` "SC-1 one command runs a task in both a vanilla image and the timelike
+  image and writes a per-run trace" (ok 393), "SC-1 a hanging call ends within its limit and is recorded" (ok 394)]**
+  (cited, not re-run; identical tree)
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` — **executed [mentor's
+  lane readme-c at 10ddd3a: `speedup-bench.bats` "SC-2 the bench runs end to end in CI against a deterministic fake
+  agent without any API key" (ok 396), "SC-2 a planted API key refuses the run before any trace is written" (ok 397)]**
+  (cited, not re-run; identical tree)
+- `02 · "DEMO: the Adopting developer reads a bench report comparing a vanilla container with timelike on one task"` —
+  **observed by the operator**, the mode the Cycle 1 sign-off addendum recorded (re-interview with the mentor on
+  `bench/out/20260929T085248Z/report.txt`, a fake-agent report). This cycle observed nothing new.
+
+Each citation matches exactly one line of the send (`grep -cF` = 1 for all three). The slice-1 criterion revision 8
+added is not cited: it is not in scope for slice 0.
+
+**reconcile_mode:** `scoped`. `audited_against` is now `[1, 8]` (T030, computed by the installed `audit-append`
+block: `MODE=scoped`, `OUT_OF_SCOPE` empty, `REMOVALS_VISIBLE=yes` → `MODE_USED=scoped`, `APPENDED=8`, no note).
+- **What revision 8 changed (lore P004: what was compared).** The prompt bodies of the archived sends
+  `02-rev1-20260929-000641`, `02-rev1-20260929-080659` and this one were diffed from `# Speedup bench` to the end:
+  the two revision-1 sends are identical, and this one adds three lines (the revision note, the constraint, the
+  slice-1 criterion) and removes or rewords none. Revisions 2–7 did not change prompt 02.
+- **Not SUPERSEDED; not regenerated.** Body lines read for a verdict order, a tiebreak or how a hung call counts
+  (numbers as before T028): `spec.md:20` (Overview), `:75–77` (Scenario 3), FR-9 `:160–166`, FR-9a `:171–176`,
+  `:216–218` (Success Criteria preface), `:258–264` (Out of Scope). None states an order, so none is false. FR-9's
+  "failed commands (non-zero exits)" already counts a hung call as one failed command, which revision 8 confirms.
+- **Why `scoped`, and the one place I read the rule differently from the command (FLAGGED in T030, medium).** The
+  command appends nothing for a revision whose added criteria a cycle leaves unaddressed. Passing revision 8 as
+  out of scope makes the block return `none`, verified. Revision 8's slice-1 criterion is out of slice 0 by the
+  spec's own slice rule and by the mentor's 3c, and its constraint is now in the body. So 8 is appended in the
+  sense `audited_against` carries on the mentor's side, *checked and needs no regeneration*, as the send instructs.
+  It is **not** a claim that slice 0's code meets revision 8, which it does not (not_verified). `full` was not used:
+  it would also append 2–7.
+
+**The send's items:**
+1. **The constraint, declared** (T028, `8096f77`): under § Reporting after FR-9a, verbatim and marked *(Added revision
+   8)*, with a sub-bullet naming the four unmet places and plan's ruling (b). The slice-1 criterion is not copied: the
+   spec keeps no later-slice criterion list.
+2. **T016 marked superseded** (T029, `e284679`): an annotation under its fourth ASSUMED line, which is kept as written.
+3. **`report.py` and `data-model.md` not edited.** I agree the change can wait for 02 s1: every slice-0 report is
+   labelled a fake-agent run (FR-9), the README makes no bench claim, and slice 1 brings the live runs where the
+   order first decides something real.
+
+**not_verified**
+- **Slice 0's code does not meet revision 8's constraint**, by plan's ruling (b), carried to 02 s1. All four places
+  were read, none edited:
+  - `bench/benchlib/report.py:119`: the third tiebreak is `_sign(v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs)`.
+    Hangs are not compared on their own before failed commands, and a hung call counts twice.
+  - `bench/benchlib/report.py:227`: the verdict sentence quotes that sum as "failed or hung commands", which is not
+    a count in the report's table.
+  - `data-model.md:125` (§ Comparison and report, step 3): "compare `nonzero_exits + hangs` (fewer wins)".
+  - `decisions.md` T016: the origin, now annotated.
+- **No test ran in this cycle**, on the host or in the image. The two Automated criteria are cited from lane
+  readme-c, not re-executed. The citation holds only because nothing outside this feature's directory changed.
+
+**changed_other_features:** none. Only `.specswarm/features/002-speedup-bench/` changed. Implement step 10j's
+`.specswarm/metrics.json` entry was **not** written, because the send confines this cycle to the feature directory;
+step 10's output is recorded below instead.
+
+**process_failures_recorded**
+1. **A commit before its deny-list check.** The modify-step commit `4f634c6` was made before the publish deny-list
+   ran. It ran straight after over the branch's objects, path names and message (P1–P7 0) and the tree (pass,
+   452 files). Every later commit ran the check first.
+2. **A line-number slip, corrected in the cycle.** T030's audit-log row cited spec line numbers measured before
+   T028 inserted 14 lines. Fixed in `248d090`, which states the offset. The row was not otherwise rewritten.
+3. **Plugin observations under 2.37.0, for the mentor to relay** (first `modify` under it):
+   - **D105 holds in the field.** The expanded `implement` text sources `lib/tally.sh` for `scope-tally` and
+     `decision-tally` and carries no awk record sigil. Both functions ran with **0 bytes on stderr**, and
+     `decision_tally` prints the new `flagged_delegate` and `assumed_delegate` counts (D107).
+   - **Cosmetic:** `scope_tally` and `decision_tally` print no trailing newline, so two consecutive calls run
+     together on one line ("…other_out=0decisions: …"). Inside `$(…)`, as the blocks use them, this is harmless.
+   - **`modify` row 7 is now mechanised end to end.** The `provenance-inputs` block (D89) sets every input
+     `provenance-row` branches on, and it gave row 7 (`N=8`, `prompt_revision 1`, `audited_against [1]`) with
+     nothing read by hand. This closes the gap Cycle 7 of 001 reported.
+   - **`fnum_resolve`** resolved `modify/002-rev8` to 002 in plan, tasks and implement, writing nothing to stderr.
+   - **Workaround, as before:** the command blocks were run from scratch scripts holding the installed blocks'
+     logic, rather than as expanded text, because the expansion substitutes the command's arguments into
+     `$ARGUMENTS` and positional sigils. No block needed a logic change.
+   - **The `audit-append` rule versus the send:** see reconcile_mode. The command has no mode for "revision N's
+     own change is recorded but carried to a later slice". Whether it should is the mentor's question to relay.
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.37.0 blocks), as the library reported it
+
+```
+== b detect
+{"frameworks": ["pytest"], "primary": "pytest", "count": 1}   rc=0
+== c run_tests
+rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+== parse
+total=unknown passed=unknown failed=unknown skipped=unknown
+== d coverage
+detect rc=0; run_coverage rc=1 out=unknown
+== e browser
+browser test framework: none (declared in package.json; not a check that it runs)
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit_tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration_tests — not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser_tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle_size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual_alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure: false (quality-standards.md:295)
+```
+
+The gate is **UNKNOWN**. With `block_merge_on_failure: false` and `min_quality_score: 0`, it warns and does not halt.
+No component was filled in by hand. Step 10e in 2.37.0 reads `package.json` (D88), so the missing
+`lib/quality-gates.sh` error that 001's Cycle 7 recorded no longer occurs. 2.37.0 needed no rewording of reasons:
+all four `unavailable` reasons were attributed.
+
+**Implement step 9b: decision log** (plugin `scope_tally` and `decision_tally` over the whole of 002's `tasks.md` and `decisions.md`, all cycles, before T031's own records):
+
+```
+scope: planned=31 recorded=30 unplanned=0 unrecorded=1 in=25 out=0 none=5 unknown=0 flagged=27 flagged_out=0 other=3 other_out=0
+decisions: sections=30 flagged_sections=27 non_flagged_sections=3 sections_without_absent=0 flagged=45 assumed=42 deferred=2 absent=37 inherited=28 low_confidence=0 flagged_low_confidence=0 flagged_delegate=0 assumed_delegate=0
+```
+
+Cycle 2 alone (T028–T030 at that point): 3 sections, 2 FLAGGED entries (T028's placement; T030's mode), 0
+low-confidence. `SCOPE:` none 3.

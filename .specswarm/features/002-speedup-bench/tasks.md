@@ -256,7 +256,7 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
   change prompt 02, so they leave no hole for 3c. Write
   `audited_against` in `spec.md` frontmatter and one row in `audit-log.md`. Never touch `prompt_revision`,
   `discovery_revision` or `source_prompt`.
-- [ ] T031 Cycle report § Cycle 2 (the send's block): Group A not applicable; Group B copied from the send;
+- [X] T031 Cycle report § Cycle 2 (the send's block): Group A not applicable; Group B copied from the send;
   Group C, the two Automated criteria cited from the mentor's lane readme-c at `10ddd3a` (an identical tree),
   D2 with the mode the Cycle 1 sign-off addendum recorded (observed by the operator); `not_verified` names the
   four unmet places; the plugin version and any stderr under 2.37.0.
