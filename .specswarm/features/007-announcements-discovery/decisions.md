@@ -97,3 +97,13 @@ FLAGGED: SC-1 cited as built for its user-level part only, with Item 19 named be
 ABSENT: demo_points_reached — the mentor derives it
 Verification: four citations, grep -cF = 1 each against the send; step 10 run from the installed blocks (identical to 003's); metrics.json gains 007 only; deny-list PASS
 SCOPE: in (1 changed files)
+
+## Cycle 2 — send `bridge/sends/04-rev13-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T010: spec SC-1 quotes revision 13's criterion; SC-1's note, FR-7's note and Out of scope follow
+**Started:** 2026-10-08T10:10:29Z | **Completed:** 2026-10-08T10:10:29Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification in impact-analysis.md § Cycle 2 — (confidence: high)
+FLAGGED: the superseded notes are struck through and kept, each followed by a declared *(Revised, revision 13 …)* note — chose that over deleting them, so the record of the narrowing stays readable (the send: "declared copies, never silent edits") — (confidence: high)
+ASSUMED: SC-1's "Tested for the user-level part" becomes "Tested", because the criterion is now user-level only and the cells test all of it — (confidence: high)
+ABSENT: no other body line changes; decisions.md T003's cell sense and Cycle 1's citation are left as written (append-only records)
