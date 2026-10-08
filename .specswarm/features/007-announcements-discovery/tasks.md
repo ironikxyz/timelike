@@ -187,6 +187,6 @@ T031 follows them, then T032, then T033.
 - [X] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
   in every image that carries it, as a second result line; `tests/unit/test_scan_report.py` and
   `.specswarm/quality-standards.md` follow.
-- [ ] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
+- [X] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
   the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).
 - [ ] T039 `cycle-report.md` § Cycle 4, `### Lane 007s1-a fixes`; `reboot.md` brought up to date.

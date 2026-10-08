@@ -33,6 +33,7 @@ NOT_LINKED = ("corepack", "idle3", "pydoc3", "python3-config")
 AGENT_LOCAL_BIN = "/home/agent/.local/bin"
 TIMELIKE_BIN = "/opt/timelike/bin"
 NODE_URL = "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
+NPM_URL = "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz"
 # PIP_BREAK_SYSTEM_PACKAGES and the pip.conf / command-line spelling, in any case (FR-28).
 BREAK_SYSTEM = re.compile(r"break[-_]system[-_]packages", re.IGNORECASE)
 # Where it must never appear (FR-28: "anywhere"); directories are walked.
@@ -187,11 +188,24 @@ def test_pins_carry_node_sha256() -> None:
     )
 
 
+def test_pins_carry_npm_version_and_sha512() -> None:
+    """Lane 007s1-a, item 3: npm itself is pinned, by version and the registry's sha512 (as hex)."""
+    p = pins()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", p.get("NPM_VERSION", "")), (
+        f"NPM_VERSION {p.get('NPM_VERSION')!r} is not an exact x.y.z version"
+    )
+    assert re.fullmatch(r"[0-9a-f]{128}", p.get("NPM_SHA512", "")), (
+        f"NPM_SHA512 is not 128 lowercase hex characters: {p.get('NPM_SHA512')!r}"
+    )
+
+
 # --- both Dockerfiles: the same runtimes from the same pins (FR-25, FR-30, D-14, D-15) --------------
 
 
 @pytest.mark.parametrize("which", sorted(DOCKERFILES))
-@pytest.mark.parametrize("arg", ["NODE_VERSION", "NODE_SHA256", "PYTHON_VERSION", "UV_IMAGE"])
+@pytest.mark.parametrize(
+    "arg", ["NODE_VERSION", "NODE_SHA256", "NPM_VERSION", "NPM_SHA512", "PYTHON_VERSION", "UV_IMAGE"]
+)
 def test_dockerfile_declares_runtime_build_arg(which: str, arg: str) -> None:
     code = code_text(DOCKERFILES[which])
     assert re.search(rf"^ARG\s+{arg}\b", code, re.MULTILINE), (
@@ -216,6 +230,23 @@ def test_dockerfile_checks_node_with_sha256sum_c(which: str) -> None:
     assert any("NODE_SHA256" in ins for ins in hits), (
         f"{which} Dockerfile's `sha256sum -c` is not fed NODE_SHA256 (FR-25)"
     )
+
+
+@pytest.mark.parametrize("which", sorted(DOCKERFILES))
+def test_dockerfile_replaces_npm_whole_from_the_pinned_checked_tarball(which: str) -> None:
+    """Lane 007s1-a, item 3: the registry's npm package, checked with `sha512sum -c` against NPM_SHA512,
+    replaces Node's bundled npm directory whole, and the build checks the version it got."""
+    code = code_text(DOCKERFILES[which])
+    assert NPM_URL in code, f"{which} Dockerfile does not fetch {NPM_URL}"
+    runs = [ins for ins in instructions(DOCKERFILES[which]) if re.match(r"RUN\s", ins)]
+    hits = [ins for ins in runs if re.search(r"sha512sum\s+(?:-[a-z]*\s+)*-c\b", ins) and "NPM_SHA512" in ins]
+    assert hits, f"{which} Dockerfile's `sha512sum -c` is not fed NPM_SHA512"
+    (run,) = hits
+    npm_dir = "/opt/agent/node/lib/node_modules/npm"
+    check, remove = run.index("sha512sum"), run.index(f"rm -rf {npm_dir}")
+    unpack = run.index(f"-C {npm_dir} --strip-components=1")
+    assert check < remove < unpack, f"{which}: npm must be checked, then its old tree removed, then unpacked"
+    assert '--version)" = "${NPM_VERSION}"' in run, f"{which}: the build does not check npm's version"
 
 
 @pytest.mark.parametrize("which", sorted(DOCKERFILES))
@@ -488,7 +519,7 @@ def test_profile_d_is_idempotent_on_the_env_path() -> None:
 # --- compose and the Makefile pass the pins (FR-25, FR-30) -----------------------------------------
 
 
-@pytest.mark.parametrize("arg", ["NODE_VERSION", "NODE_SHA256"])
+@pytest.mark.parametrize("arg", ["NODE_VERSION", "NODE_SHA256", "NPM_VERSION", "NPM_SHA512"])
 def test_compose_agent_build_args(arg: str) -> None:
     text = read(COMPOSE)
     m = re.search(r"^  agent:\n((?:    .*\n|\s*\n)+)", text, re.MULTILINE)
@@ -501,7 +532,9 @@ def test_compose_agent_build_args(arg: str) -> None:
     )
 
 
-@pytest.mark.parametrize("arg", ["UV_IMAGE", "PYTHON_VERSION", "NODE_VERSION", "NODE_SHA256"])
+@pytest.mark.parametrize(
+    "arg", ["UV_IMAGE", "PYTHON_VERSION", "NODE_VERSION", "NODE_SHA256", "NPM_VERSION", "NPM_SHA512"]
+)
 def test_makefile_vanilla_build_passes_runtime_pins(arg: str) -> None:
     cmd = make_recipe_command("bench-images", "bench/vanilla/Dockerfile")
     assert re.search(rf"--build-arg\s+{arg}=\$[({{]{arg}[)}}]", cmd), (
