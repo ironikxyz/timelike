@@ -905,3 +905,13 @@ ABSENT: no host lane, lint or coverage (nothing outside `.specswarm/` changed); 
 ABSENT: the two contract observations (rule 8 unchecked for grant clients; `mutating` with `grant_envelope` not forbidden) are reported, not built
 Verification: all 13 citations in § Cycle 7 match exactly one line of the send (`grep -cF` = 1); no local path in the added text; deny-list pass before commit
 SCOPE: in (1 changed files)
+
+## Cycle 8 — send `bridge/sends/01-rev13-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T082: spec rule 10 — revision 11's struck clause corrected in place, declared
+**Started:** 2026-10-08T10:06:09Z | **Completed:** 2026-10-08T10:06:09Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification in impact-analysis.md § Cycle 8 (diff of the rev-10 and rev-13 sends) — (confidence: high)
+FLAGGED: corrected in place rather than stopping for regeneration — the command's row 7 says to stop on an amended, false body line; chose the send's instruction ("one copied constraint line, not a criterion and not the body's design: correct it in place … do not regenerate"), which is how revision 7's struck hooks clause was handled in cycle 5 — (confidence: high)
+ASSUMED: the revision's words are copied as the prompt has them, with the strike kept visible as ~~…~~ and the revision note verbatim; the closing note on what 001 builds is this cycle's, marked as such — (confidence: high)
+ABSENT: no other body line changes (the scratch-space lines 97, 201, 287, 330 stay true); no contract change (the contract's missing state root is reported for 07 s1)

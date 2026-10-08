@@ -450,7 +450,7 @@ technology in the task text below. The tasks change Markdown only -->
 Governance is current at `[2..13]`, so there is no audit task. No criterion changes, and nothing outside
 `.specswarm/features/001-agent-shell-baseline/` changes, so there is no Docker lane (send § How this cycle runs).
 
-- [ ] T082 Spec contract rule 10 (`spec.md:189`): correct in place by declared copy — revision 11's words, with
+- [X] T082 Spec contract rule 10 (`spec.md:189`): correct in place by declared copy — revision 11's words, with
   "and an optional git-excluded project cache" kept struck and marked *(Revised, revision 11)*, and revision 11's note.
   Name it in the line's note as amended (struck clause), corrected in place by cycle 8. No other body line names a
   project cache (impact analysis § Cycle 8).

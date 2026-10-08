@@ -186,7 +186,13 @@ The contract (binding on every timelike tool, in every feature):
    Adele brokers is not `--yes`-confirmed: the grant is the confirmation, and rule 8 still applies.
    Annotated in place by cycle 7, declared; the contract was amended to match by feature 004 at
    `b7a6ea6`.)*
-10. No daemons. State lives only under a scratch directory and an optional git-excluded project cache.
+10. No daemons. State lives only under a scratch directory~~ and an optional git-excluded project cache~~
+    *(struck, revision 11)* and a per-workspace state root outside the workspace, never inside the workspace or
+    its `.git`. *(Revised, revision 11: the scratch directory is per session and disposable; the state root
+    holds recovery state and caches, survives sessions and container recreation, and is bounded by size and
+    age. Amended (struck clause), corrected in place by cycle 8, declared: the line before it named the
+    project cache as allowed state. 001 builds only the scratch; no tool here writes a project cache, and the
+    state root is not built yet (07 slice 1).)*
 11. Deterministic, sorted output. No timestamps except behind `--verbose`.
 12. The first line is a self-labelling header naming the tool, target and scope.
 13. ANSI stripped. Long lines are cut at `COLUMNS` (default 200) with a marker and a byte count.
