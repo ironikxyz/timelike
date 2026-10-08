@@ -398,3 +398,4 @@ ASSUMED: step name pip-audit-agent, its own row in steps.tsv and verdict.json, i
 ASSUMED: quality-standards amended (dated note, not a discovery revision; governance_audited_against unchanged) and the scan.sh header and image list say what each pip-audit covers — (confidence: high)
 ABSENT: no change to the gate rule, the baselines, or step 3 (timelike's interpreter)
 Verification (host, advisory): tests/unit/test_scan_report.py and test_scan_baseline.py 116 passed (new: the agent finding blocks on its own row while pip-audit passes, its skip note, a missing record fails, dists --requirements writes exact pins, and the four-image scan under the fake docker: agent and vanilla audited from the agent image with -r/--no-deps/--disable-pip, Adele and the bench driver none); ruff check and format, mypy (27 files), shellcheck scan/scan.sh: clean. The real run is lane 007s1-b's
+SCOPE: in (4 changed files)
