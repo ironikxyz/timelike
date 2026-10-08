@@ -133,3 +133,4 @@ INHERITED: T010–T012; lane readme-c from bridge/history.md and its log (ok 41�
 FLAGGED: SC-1 cited by text outside the strike, not by Cycle 1's text — Cycle 1's quoted the struck clause and matches no line of this send; the new text matches exactly one — (confidence: high)
 ASSUMED: D4 keeps "observed by the operator" (Cycle 1 Addendum 2) — (confidence: high)
 ABSENT: the stale e2e cell names are reported, not renamed (tests/ is outside the feature directory); no demo_points_reached; no .implement-complete; metrics.json not written
+SCOPE: none — no files outside the feature's artifacts changed
