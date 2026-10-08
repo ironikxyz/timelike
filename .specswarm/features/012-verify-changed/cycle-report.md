@@ -291,3 +291,43 @@ operator, not into this file.
 
 **changed_other_features (this addendum):** 001's `tests/e2e/helpers.bash`: `PYQ_TIMEOUT` (default 120 s) for
 `pyq`, which 43 e2e files use. Only the parser's bound moves; no criterion's bound changes.
+
+### Addendum 3 — D20 observed by the operator (2026-10-08T05:37:26Z, read from the clock)
+
+From the mentor's observation entry in `../bridge/history.md` (2026-10-08T05:28:17Z) and the transcript
+it cites, `bridge/.d20-demo-20261007T235014Z.txt` (bridge `d6c6e65`), which this instance read.
+
+- `11 · "receives failures with locations _(traces to: D20)_"` — **observed by the operator**, by
+  interview with the mentor instance on `verify`'s real output. The image was the one lane batch-d passed
+  (revision `244c4a8`, `sha256:d0dd2058…`), run as a throwaway with `--cap-drop ALL`,
+  `no-new-privileges` and `--init`. Each agent command was its own `docker exec … bash -lc`, as user
+  `agent`.
+  - **The project:** `~/shop`, committed: `app/models.py`, `app/orders.py` (which imports it), an
+    unrelated `app/report.py`, and a test file for each. The project's `.venv` held real pytest 8.4.2,
+    ruff 0.16.9 and mypy 2.3.1, the versions `pins.env` gives at `244c4a8`.
+  - **The changes:** two `edit` calls on `app/models.py` introduced an off-by-one, an unused import and
+    a wrong return type.
+  - **`verify --text changed`:** `1 changed file · 2 test files importing a change … · pytest: 3 failed,
+    0 passed · ruff: 1 diagnostic · mypy: 1 diagnostic`.
+    - The selection came with its reasons: `tests/test_models.py` and `tests/test_orders.py` because each
+      `imports app/models.py`; lint and type-check on `app/models.py` only.
+    - Each failure has its file:line, test name and assertion lines (e.g. `tests/test_models.py:5
+      test_total`, `assert 1001 == 1000`).
+    - ruff gave `app/models.py:1:8 F401`, and mypy gave `app/models.py:16 return-value`.
+    - Exit 1. The JSON form is recorded too.
+  - **The mentor's direct run:** the whole suite gave 3 failed, 1 passed (`test_report`, which was
+    correctly not selected); ruff and mypy found the same two diagnostics.
+  - **Interview:** answers 3 and 4 matched. Answer 1 first read "left out" as verify's options, and answer
+    2 first gave the transcript's own line numbers (56 and 57). The mentor challenged both, and the
+    operator corrected both from the transcript (models and orders tested, report not; lint at line 1,
+    type-check at line 16 of `app/models.py`). The operator accepts D20 as observed.
+  - The criterion still resolves to exactly one line of the send (`grep -cF` = 1).
+- **The transcript header also discloses** a discarded first capture (23:49:47Z): the mentor placed
+  `--text` after the subcommand, and verify refused it with exit 2, as its help says global flags go
+  first. That capture's project also lacked pytest's `pythonpath`.
+- **With this, all eight demo points of batch `20261004-183704` are observed:** D12 (003), D14 (006),
+  D4 (007), D6 (008), D17 (009), D18 (010), D19 (011) and D20 (012).
+- **Where this record lives:** on `012-verify-changed`, the stack's tip, as with the D12, D14 and D4 addenda
+  (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
+  The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
+  first option). A revert of 012 by branch topology would carry this addendum with it.
