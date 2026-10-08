@@ -155,7 +155,7 @@ bar.** US6 = SC-6.
   same entry. `tests/host/test_env_layer.sh` still passes, or its PATH checks move with the declared order.
 - [X] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says
   so (002's file; `changed_other_features`).
-- [ ] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
+- [X] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
   Python and Node CLIs. `image/rootfs/etc/timelike/standard-tools.json` checked (python3 and node keep their risk
   and `instead`).
 - [ ] T030 `scan/scan.sh`: its comments and the pip-audit "no interpreter" record say timelike's interpreter, not

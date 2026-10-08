@@ -282,3 +282,12 @@ ASSUMED: the RUN asserts the marker is present but does not name pip.conf or npm
 ABSENT: no bench catalog change (its "only what both images contain" rule is about tasks' prerequisites; no task uses the runtimes in this slice); 002's spec not modified (02 s1 records it); the driver image unchanged
 Verification: tests/unit/test_agent_runtimes.py and test_announce.py 124 passed (with T025's delegate tests, uncommitted at this point); not built here (no Docker)
 SCOPE: in (1 changed files)
+
+### T029: missing-commands.tsv — runtime rows out, user rows in; standard-tools.json checked
+**Started:** 2026-10-08T18:01:10Z | **Completed:** 2026-10-08T18:01:21Z | **Coordinator**
+
+INHERITED: T027 (the image now ships python3, python, pip, pip3, node, npm, npx); FR-29 — (confidence: high)
+FLAGGED: a name the agent can install itself gets the `user` row only, not also its Debian package (pytest's `python3-pytest` row removed) — the answer the agent can act on first (P1); the operator route stays for OS-only tools — (confidence: medium)
+ASSUMED: 14 `user` rows (8 pip, 6 npm), each the prefix plus one package token (T025's unit rule); `http` → `pip install httpie`, `tsc` → `npm install -g typescript` (command name differs from the package); none of the names is in the image (the SC-5 e2e absence cell checks it) — (confidence: high)
+ABSENT: no change to standard-tools.json — python3 and node keep their REPL risk and `instead`, and `installed` is computed (true now); `uv` not listed (it is on PATH at /bin/uv); no network-dependent check that each package exists on PyPI or npm
+Verification: tests/unit/test_missing_commands.py 16 passed, 1 skipped (the pre-ruling "no user rows" check, off by flag)

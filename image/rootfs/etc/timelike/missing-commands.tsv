@@ -5,9 +5,11 @@
 # One answer per line, four TAB-separated fields: name, kind, value, note ("-" for none).
 #   instead  a timelike equivalent: value is the command, note says what it is
 #   debian   the Debian package that provides the name: only the operator can add it (the agent has no root)
-#   user     a user-level install the agent can run itself (none until FOR-MENTOR Item 21 is answered)
+#   user     a user-level install the agent can run itself: `pip install X` lands in ~/.local, `npm install -g X`
+#            in ~/.local too (the image's agent runtimes; 007 FR-26, FR-27; discovery revision 14)
 # A name may have several lines, printed in file order. Every listed name must be absent from the image
 # (an e2e cell checks it), and every `instead` must name an installed timelike tool (a unit test checks it).
+# Names the image ships (python3, python, pip, pip3, node, npm, npx) are not listed (FR-29).
 # Grows by one line per answer.
 tree	instead	view DIR	timelike's budgeted directory overview
 tree	debian	tree	-
@@ -60,16 +62,22 @@ psql	debian	postgresql-client	-
 man	debian	man-db	-
 gpg	debian	gnupg	-
 shellcheck	debian	shellcheck	-
-python3	debian	python3	-
-python	debian	python-is-python3	-
-pip	debian	python3-pip	-
-pip3	debian	python3-pip	-
-pytest	debian	python3-pytest	-
-node	debian	nodejs	-
-npm	debian	npm	-
-npx	debian	npm	-
 go	debian	golang-go	-
 cargo	debian	cargo	-
 rustc	debian	rustc	-
 java	debian	default-jre-headless	-
 javac	debian	default-jdk-headless	-
+pytest	user	pip install pytest	Python tests
+black	user	pip install black	Python formatter
+ruff	user	pip install ruff	Python linter and formatter
+mypy	user	pip install mypy	Python type checker
+flake8	user	pip install flake8	Python linter
+ipython	user	pip install ipython	interactive Python; a REPL, run scripts instead
+http	user	pip install httpie	HTTPie client
+poetry	user	pip install poetry	Python packaging
+tsc	user	npm install -g typescript	TypeScript compiler
+eslint	user	npm install -g eslint	JavaScript linter
+prettier	user	npm install -g prettier	formatter
+yarn	user	npm install -g yarn	package manager
+pnpm	user	npm install -g pnpm	package manager
+ts-node	user	npm install -g ts-node	TypeScript runner
