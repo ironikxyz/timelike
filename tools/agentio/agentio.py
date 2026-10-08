@@ -630,6 +630,18 @@ def _cpu_list_count(text: str) -> int | None:
     return n
 
 
+def size(n: int) -> str:
+    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`). From `run` (003)."""
+    if n < 1024:
+        return f"{n} B"
+    value = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        value /= 1024
+        if value < 1024 or unit == "TiB":
+            break
+    return f"{value:.1f} {unit}"
+
+
 def workspace() -> str:
     """005 FR-1: the nearest ancestor of the real current directory holding a `.git` entry (lstat,
     never git, at any depth), else the current directory itself."""

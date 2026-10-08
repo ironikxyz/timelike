@@ -379,16 +379,7 @@ def read_oom_kills(cgroup: Path) -> int | str:
     return f"{path}: no oom_kill count"
 
 
-def size(n: int) -> str:
-    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`)."""
-    if n < 1024:
-        return f"{n} B"
-    value = float(n)
-    for unit in ("KiB", "MiB", "GiB", "TiB"):
-        value /= 1024
-        if value < 1024 or unit == "TiB":
-            break
-    return f"{value:.1f} {unit}"
+size = agentio.size  # binary units (moved into agentio for `timelike budget`, 007 s1)
 
 
 def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[str, Any]:

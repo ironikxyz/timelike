@@ -163,7 +163,7 @@ Exit 0 whatever it could read: an unknown is a result. Usage errors exit 2, as f
 - `free_bytes` = `f_bavail × f_frsize`, `total_bytes` = `f_blocks × f_frsize`. When `statvfs` fails, both are
   null and `reason` is set.
 
-**JSON `data`:**
+**JSON `data`** (agentio puts these keys at the top level of the JSON object, beside `verdict` and `lines`; there is no `data` key, settled at implementation T017):
 ```
 {"cgroup": "<dir>",
  "memory": {"limit": FIG, "current": FIG, "peak": FIG},

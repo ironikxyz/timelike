@@ -777,6 +777,7 @@ usage:
   timelike [--json|--text]
   timelike tools             timelike and standard tools: JSON support, interactivity risk, instead
   timelike announce          the announcement placed for harnesses; --check, --status, --install
+  timelike budget            memory, CPU, process and disk limits, and what is in use
   timelike --agent-info      manifest, including the build revision
 options:
   --help  this help (at most 40 lines)

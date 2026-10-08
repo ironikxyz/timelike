@@ -145,3 +145,14 @@ FLAGGED: snapshot keeps a one-line `find_workspace` that calls agentio, rather t
 ABSENT: no direct unit tests for the new agentio functions in this task (test_budget.py, T015, covers them through `timelike budget`, and run/snapshot suites cover the moved paths); `undo` unchanged (it loads snapshot); the hook's bash copy of the CPU rule is not touched
 Verification: host, venv python 3.12 + pytest 8.4.2: tests/unit/test_run.py, test_run_slice1.py, test_snapshot.py, test_undo.py, test_agentio.py — 232 passed, unchanged suites; ruff check + format --check over tools: clean; mypy (pyproject config): no issues in 27 source files. Advisory: host, not the image
 SCOPE: in (3 changed files)
+
+### T017: `timelike budget`; the announcement's two rule lines; README reference regenerated
+**Started:** 2026-10-08T16:32:16Z | **Completed:** 2026-10-08T16:34:17Z | **Coordinator**
+
+INHERITED: T016's agentio readers (cgroup_dir, cgroup_value, cpu_figure, workspace) — (confidence: high)
+FLAGGED: `run`'s `size()` moved into agentio (`run` keeps the name as `size = agentio.size`) rather than a fourth copy in `timelike` — the contract names run's format, and edit/snapshot/view keep their own `human()`, which this cycle does not unify — (confidence: high)
+FLAGGED: README's generated command reference regenerated here (`scripts/readme_reference.py --write`, one line), not in T021 — CLAUDE.md's standing rule says "in the same cycle" and test_readme_reference.py fails the moment the help moves, so T017 keeps the tree green; T021 keeps the README status decision — (confidence: high)
+ASSUMED: the processes line reads "limit no limit" when pids.max is `max`, the contract's literal wording; awkward but exact — (confidence: medium)
+ASSUMED: contract wording "JSON `data`" amended to say agentio puts the keys at the top level (no `data` key): found running it, relayed to both test delegates by message — (confidence: high)
+ABSENT: no budget for a cgroup v1 host beyond "unknown, file named" (natural intensity); no inode figures (the criterion names free space only); no cut of long paths beyond agentio's column cap
+Verification (host, advisory): fake cgroup (300 MiB, 150000/100000, pids max, no memory.peak, affinity 0-3,8,10-11) → 300.0 MiB, 1.50 CPUs, job count 2 agrees with TIMELIKE_CPUS=2, "no limit", peak unknown naming the file, scratch "does not exist yet", verdict "; 1 unknown", exit 0; real host cgroup → no limit / 56 / 154457. pytest: test_announce, test_run, test_run_slice1, test_conform, test_readme_reference — 162 passed after the reference --write; ruff clean; mypy no issues (27 files)
