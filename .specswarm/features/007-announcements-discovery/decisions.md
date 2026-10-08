@@ -328,3 +328,4 @@ FLAGGED: the coordinator changed both `npm prefix -g` reads from `2>&1` to `2>/d
 ABSENT (delegate): no Docker run of either file (no daemon); the host trial ran the in-container scripts with other pip/npm versions
 ABSENT (delegate): the vanilla `pip config list` is not checked
 Verification: shellcheck -x -P tests/e2e:tests/host clean on both files; read by the coordinator (installs, the home-only find, teardown, the purelib listing)
+SCOPE: in (2 changed files)
