@@ -337,3 +337,4 @@ INHERITED: T024–T030; T027's host replay of the runtimes stage (checksum, Node
 ASSUMED: the 12 tests/unit/test_bench_catalog.py setup timeouts seen in T027 were host load (about 9, two delegates running): at load about 2–3 they pass in this full run, as they did at e0fb5a3 in Cycle 3's lane — (confidence: high)
 ABSENT: no image build or image test (no Docker daemon): every SC-6 and P6 cell, and the scan over the two new runtimes, wait for the mentor's lane. No coverage run this cycle: no Python source under tools/ changed in Cycle 4
 Verification (host, advisory): make test-host passed — 1825 passed and 1 skipped units (load 2.0–2.6), env layer 60/60, hook 44/44, handler 33/33; ruff check/format (77 files), mypy (27 files), shellcheck over every shell file: clean; README reference current; npm prefix -g through a /usr/local/bin link reports $HOME/.local
+SCOPE: none — no files outside the feature's artifacts changed
