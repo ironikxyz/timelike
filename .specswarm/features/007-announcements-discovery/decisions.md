@@ -196,3 +196,17 @@ ABSENT (delegate): `bash -lc` on the host (reads the host's /etc/profile; the e2
 ABSENT: the delegate's contract findings settled: no `data` key (contract amended in T017); interactive base name and directory-as-unreadable (contract amended in T018 follow-up); quota/period absent when the CPU limit is not a value (as built: absent); PATH empty never reaches the handler (bash's own behaviour, recorded in T018)
 Verification (host, advisory): test_budget.py 73 + test_missing_commands.py 13 = 86 passed against the implementation; tests/host/test_command_not_found.sh 33/33; ruff check/format clean; shellcheck clean (run.sh too)
 SCOPE: in (4 changed files)
+
+### T014: e2e for SC-5 and SC-7, from the contract
+**Started:** 2026-10-08T16:27Z (delegate launched, before T016) | **Completed:** 2026-10-08T16:43:10Z | **Delegate (general-purpose), reviewed and committed by the coordinator**
+
+INHERITED (delegate): the SC-1 file's test-name shape and setup_file/throwaway pattern, run_in/value_of/assert_*, cpu_list_count, container_tmpdir; the image's python3 -I for JSON; the coordinator's top-level-keys message — (confidence: high)
+FLAGGED (delegate): line 1 is checked against bash itself: each cell runs the same string twice in the same style, once with SC5_UNSET=1 (`unset -f command_not_found_handle` on the same line), so the control is bash's own line and interactive job-control notices pass through both — (confidence: high)
+FLAGGED (delegate): the direct-exec cell asserts non-zero and docker's not-found text, not 127 — docker's status for a missing exec binary was not verified here (no daemon) — (confidence: medium)
+FLAGGED (delegate): the limited throwaway uses --cpus 1.5 as specified; on a 1-CPU host docker refuses it and the cells fail with that reason (never skip) — (confidence: medium)
+ASSUMED (delegate): the throwaway's WORKDIR (/home/agent) has no .git at or above it, so its workspace is pwd — (confidence: medium)
+ASSUMED (delegate): the omitted note drops the two spaces with the parentheses — matches the implementation and the host test — (confidence: high)
+ASSUMED: review found the file's JSON and text runs use separate not-yet-existing scratch roots because agentio's event creates the root after the first run (delegate finding, true by design: rule 10's scratch is created on first use) — (confidence: high)
+FLAGGED: one shellcheck warning (SC2034, ELAPSED_S read by helpers' asserts) annotated by the coordinator — (confidence: high)
+ABSENT (delegate): not run — no Docker daemon or bats here; bash -n on @test-stripped copies only. The image lane is the evidence. ABSENT: spec FR-14 says a direct exec "exits 127 as before"; the cell asserts non-zero, which is what the lane can establish without a docker-version assumption
+Verification: shellcheck -x -P tests/e2e:tests/host clean on both files (coordinator, venv shellcheck-py); read in full by the coordinator against the contract and helpers.bash (exec_in/_shell_argv support ic; start_throwaway passes the limits; paths stay under the 200-column cut)

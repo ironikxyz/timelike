@@ -90,7 +90,7 @@ This cycle changes `image/`, `tools/` and `tests/`, so **the mentor's Docker lan
 **Stories:** US5 = SC-5 (the command-not-found answer), US7 = SC-7 (the budget), US6 = SC-6 (installs, **held**),
 C = carried items. Tests are written from the contract **before** the code (the 003/005 pattern), by delegates.
 
-- [ ] T014 [P] [US5, US7] e2e from the contract, written by a delegate before the code:
+- [X] T014 [P] [US5, US7] e2e from the contract, written by a delegate before the code:
   `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats` (SC-5: per style `bash -c`,
   `bash -lc`, interactive, a script; `sh -c` and direct exec unreached; the unknown name byte for byte against bash
   with the handler unset; every listed name absent) and
