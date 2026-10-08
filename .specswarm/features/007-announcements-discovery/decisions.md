@@ -144,3 +144,4 @@ ASSUMED: `cpu_figure` reads cpu.max at TIMELIKE_CGROUP_CPU_MAX, else `cgroup_dir
 FLAGGED: snapshot keeps a one-line `find_workspace` that calls agentio, rather than replacing its two call sites — chose the thin shim over editing call sites because it keeps 005's names and diff minimal, and its refusal logic (check_workspace) stays in snapshot — (confidence: high)
 ABSENT: no direct unit tests for the new agentio functions in this task (test_budget.py, T015, covers them through `timelike budget`, and run/snapshot suites cover the moved paths); `undo` unchanged (it loads snapshot); the hook's bash copy of the CPU rule is not touched
 Verification: host, venv python 3.12 + pytest 8.4.2: tests/unit/test_run.py, test_run_slice1.py, test_snapshot.py, test_undo.py, test_agentio.py — 232 passed, unchanged suites; ruff check + format --check over tools: clean; mypy (pyproject config): no issues in 27 source files. Advisory: host, not the image
+SCOPE: in (3 changed files)
