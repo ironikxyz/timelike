@@ -301,3 +301,4 @@ FLAGGED: the pip-audit "no interpreter in image" record is left as written — i
 ASSUMED: Grype over Syft's SBOM catalogs the CPython and Node binaries, pip in the agent prefix and npm's bundled packages, so no scanner step is added; the lane's scan shows what it finds — (confidence: medium)
 ABSENT: no pip-audit over the agent interpreter (its only distribution is pip, which Grype sees); no baseline change (findings unknown until the lane; a no-fix finding is raised, never exempted silently)
 Verification: bash -n and shellcheck clean; tests/unit/test_scan_report.py passed
+SCOPE: in (1 changed files)
