@@ -281,3 +281,4 @@ ASSUMED: Debian's default PATH (no ENV in vanilla) includes /usr/local/bin, so t
 ASSUMED: the RUN asserts the marker is present but does not name pip.conf or npmrc: the unit test reads any non-comment mention as configuration, and the e2e cell (T024) checks their absence in the built image — (confidence: high)
 ABSENT: no bench catalog change (its "only what both images contain" rule is about tasks' prerequisites; no task uses the runtimes in this slice); 002's spec not modified (02 s1 records it); the driver image unchanged
 Verification: tests/unit/test_agent_runtimes.py and test_announce.py 124 passed (with T025's delegate tests, uncommitted at this point); not built here (no Docker)
+SCOPE: in (1 changed files)
