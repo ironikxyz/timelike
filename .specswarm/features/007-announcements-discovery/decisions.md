@@ -357,3 +357,4 @@ FLAGGED: scoped, not full — revision 14 rewords a constraint and the Feature t
 FLAGGED: T022 closed here, not ticked — superseded by Phase 7 (T024–T033), which built what it held; scope_tally counts it unrecorded, as the cycle report says — (confidence: high)
 ASSUMED: every Automated criterion cited unconfirmed with host results labelled advisory; D4 kept "observed by the operator"; D13 unconfirmed — (confidence: high)
 ABSENT: no demo_points_reached; no .implement-complete (not dispatch); prompt_revision, discovery_revision and source_prompt untouched; no commit after the cycle is reported done (send rule)
+SCOPE: in (2 changed files)
