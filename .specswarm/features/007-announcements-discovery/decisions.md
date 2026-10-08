@@ -195,3 +195,4 @@ ASSUMED: the delegate's two handler findings (interactive base name; a directory
 ABSENT (delegate): `bash -lc` on the host (reads the host's /etc/profile; the e2e covers it); a statvfs failure case (cannot be caused on the host); sh -c and direct exec (e2e only)
 ABSENT: the delegate's contract findings settled: no `data` key (contract amended in T017); interactive base name and directory-as-unreadable (contract amended in T018 follow-up); quota/period absent when the CPU limit is not a value (as built: absent); PATH empty never reaches the handler (bash's own behaviour, recorded in T018)
 Verification (host, advisory): test_budget.py 73 + test_missing_commands.py 13 = 86 passed against the implementation; tests/host/test_command_not_found.sh 33/33; ruff check/format clean; shellcheck clean (run.sh too)
+SCOPE: in (4 changed files)
