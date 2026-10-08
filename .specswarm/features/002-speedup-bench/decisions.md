@@ -355,3 +355,4 @@ INHERITED: T028–T030; lane readme-c's results from `bridge/history.md` 2026-10
 FLAGGED: implement step 10j's `.specswarm/metrics.json` entry is not written — chose the send's "only .specswarm/features/<that feature>/ changes" over the command's step; step 10's output is in the cycle report instead — (confidence: high)
 ASSUMED: D2's mode stays "observed by the operator", as the send says (Cycle 1 sign-off addendum) — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no host or Docker lane (only this feature's directory changed)
+SCOPE: none — no files outside the feature's artifacts changed
