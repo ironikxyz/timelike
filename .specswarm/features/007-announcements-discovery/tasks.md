@@ -113,7 +113,7 @@ C = carried items. Tests are written from the contract **before** the code (the 
 - [X] T019 [C] `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`: the cell
   names take revision 13's criterion text, and the workspace cells say "the workspace is left untouched". The
   1 s bound becomes the ordering assertion (spec § Slice 1 carried items), and the time is printed, not asserted.
-- [ ] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed
+- [X] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed
   files, conformance, coverage. Results go in `decisions.md`, labelled advisory (no image).
 - [X] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
   block is applied **only if** SC-6 is built too (the send's condition); otherwise untouched, with the reason

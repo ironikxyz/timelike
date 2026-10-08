@@ -841,5 +841,46 @@
       }
     },
     "lane": "pending: the mentor's Docker lane after the batch"
+  },
+  "007-cycle-3": {
+    "recorded_at": "2026-10-08T17:03:35Z",
+    "git_sha": "(the T020 commit; measured on the tree at e7bd1ac's parent chain, T014-T019 + T021)",
+    "plugin": "specswarm 4.0.1-botbaubble.2.37.0 (session-loaded), /specswarm:implement step 10 (not dispatch)",
+    "send": "bridge/sends/04-rev13-20261008-161802.md",
+    "unit_tests": {
+      "state": "unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3); parse_test_results gave total=unknown"
+    },
+    "coverage": {
+      "state": "unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1)"
+    },
+    "integration_tests": {
+      "state": "not-applicable: no integration suite detected by the plugin; the bats e2e run only in the Docker lane"
+    },
+    "browser_tests": {
+      "state": "not-applicable: no web project detected, so there is nothing to drive a browser over"
+    },
+    "bundle_size": {
+      "state": "unavailable: lib/bundle-size-monitor.sh is not present in this install"
+    },
+    "visual_alignment": {
+      "state": "unavailable: screenshot analysis is not implemented"
+    },
+    "raw_score": 0,
+    "raw_max": 0,
+    "scaled_score": "unknown",
+    "score_note": "lib/quality-scale.sh over the plugin's own measurements: every component excluded, so unknown. Not judgment-filled. NOT the ship score from analyze-quality",
+    "gate": {
+      "min_quality_score": 0,
+      "block_merge_on_failure": false,
+      "result": "UNKNOWN - no component could be measured; warned, not halted"
+    },
+    "project_measurements_not_scored": {
+      "note": "the project's own host-lane figures, beside the plugin's score, never in it (memory: no judgment-filled quality scores). Advisory: host, not the image",
+      "make_test_host": "passed: 1747 units, env layer 60/60, hook 44/44, command-not-found 33/33 (venv python 3.12.3, pytest 8.4.2)",
+      "coverage_python_changed_files": "line and branch, traced run (1746 passed, 1 skipped, 737 s): tools/agentio/agentio.py 95%, tools/bin/run 93%, tools/bin/snapshot 92%, tools/bin/timelike 93%; merge bar 90%",
+      "coverage_total_not_reported": "the run's TOTAL (59%) is not a project figure: this cycle's rc mapped the bench's temp bin copies under the wrong [paths] alias, so they were counted unmapped. Per-file figures above are unaffected",
+      "lint": "ruff 0.16.9 check + format (tools tests scan bench), mypy 2.3.1 (27 files), shellcheck (shellcheck-py) over every *.sh, *.bash, *.bats: clean",
+      "handler_cost": "about 1.9 ms more per missing command than bash alone (2.7-2.9 ms vs 0.87 ms per call, 1000 calls x 3, host bash 5.2.21)"
+    }
   }
 }

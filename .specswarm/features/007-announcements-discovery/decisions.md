@@ -230,3 +230,12 @@ FLAGGED: the send's `## README status` block (row 04 `complete (0, 1)`, "16 of 3
 ABSENT: no hand edit of the generated block; no value claim (P6); if Item 21 is answered and SC-6 is built in this cycle, the block is applied then
 Verification: `python3 scripts/readme_reference.py --check` exit 0; tests/unit/test_readme_reference.py passed in T020's host lane
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T020: host verification (advisory); implement step 10 recorded in metrics.json
+**Started:** 2026-10-08T16:44:26Z | **Completed:** 2026-10-08T17:03:35Z | **Coordinator**
+
+INHERITED: T014-T019 and T021 (T021 was committed before this record: it changes no README content, only records the status-block decision) — (confidence: high)
+ASSUMED: `make test-host` with the scratch venv (python 3.12.3, pytest 8.4.2) is the host lane of record; it now runs tests/host/test_command_not_found.sh (T015) — (confidence: high)
+FLAGGED: the coverage TOTAL (59%) is not recorded as a project figure — this cycle's rc mapped the bench's temp `bin/` copies under the `bin` alias, not reboot.md's separate `benchbin`, so `timelike-bench` copies were counted unmapped; the per-file figures for the four changed files are unaffected and are what is recorded — (confidence: high)
+ABSENT: no host e2e stand-in run (SC-7 needs throwaway containers with limits, which a stand-in cannot give; SC-5's cells read /etc/timelike from the container) — the mentor's Docker lane is the evidence; no host conformance sweep over every tool (test_conform.py covers timelike, whose help changed; run and snapshot gained no flag)
+Verification (host, advisory): make test-host passed — 1747 units, 60/60 env layer, 44/44 hook, 33/33 handler; traced coverage run 1746 passed + 1 skipped, agentio 95%, run 93%, snapshot 92%, timelike 93%; ruff check/format, mypy (27 files), shellcheck over all shell files: clean. Implement step 10 (2.37.0 blocks): run_tests rc 2, run_coverage unknown, Quality Score unknown, 2 this install / 2 this machine / 2 not applicable, gate UNKNOWN warned; recorded as metrics.json "007-cycle-3", project figures beside it, unscored
