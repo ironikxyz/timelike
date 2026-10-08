@@ -241,7 +241,7 @@ technology in the task text below. The tasks change Markdown only -->
 Governance is current at `[2..13]`, so there is no audit task. Nothing outside
 `.specswarm/features/002-speedup-bench/` changes, so there is no Docker lane (send § How this cycle runs).
 
-- [ ] T028 `spec.md` § Reporting: copy revision 8's constraint in after FR-9a, verbatim and declared
+- [X] T028 `spec.md` § Reporting: copy revision 8's constraint in after FR-9a, verbatim and declared
   *(Added revision 8.)*, with a note that slice 0's code does not meet it (`bench/benchlib/report.py:119`,
   `:227`; `data-model.md:125`; T016) and that plan's ruling (b) carries the change to 02 slice 1. The
   slice-1 criterion is not copied: the spec keeps no later-slice criterion list (`spec.md:216–218`). No other

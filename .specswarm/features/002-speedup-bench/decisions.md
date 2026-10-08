@@ -318,3 +318,13 @@ FLAGGED: SC-1 and SC-2 cited as `executed` at 64270f7, with the caveat that the 
 ASSUMED: audit-log.md is created now with a seed row for specify's audited_against [1] and this cycle's `none` row — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch)
 SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 — send `bridge/sends/02-rev8-20261008-095251.md` (specswarm 4.0.1-botbaubble.2.37.0)
+
+### T028: spec § Reporting — revision 8's constraint copied in, declared
+**Started:** 2026-10-08T09:58:33Z | **Completed:** 2026-10-08T09:58:44Z | **Coordinator**
+
+INHERITED: (none — first task of the cycle); the classification is impact-analysis.md § Cycle 2 (additions only, by diff of the archived sends) — (confidence: high)
+FLAGGED: the constraint is placed under § Reporting after FR-9a as a declared bullet, not as a new numbered FR — chose that over an FR-9b because slice 0 does not meet it and an FR reads as a requirement this slice claims; the bullet says so in its own text — (confidence: high)
+ASSUMED: the constraint's text is copied verbatim from the send's prompt bytes (the *From Principles* list), quoted, with the revision marker moved into the bullet's lead — (confidence: high)
+ABSENT: report.py and data-model.md are not edited (send § 1); no other spec line changes, because none states a verdict order (impact analysis table); the slice-1 criterion is not copied (the spec carries no later-slice criteria)
