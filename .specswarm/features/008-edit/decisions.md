@@ -235,3 +235,4 @@ Verification:
 - lint: ruff check and format over the repository clean; mypy 2.3.1 strict, 28 files, no issues; shellcheck over 78 files clean
 - conformance (every tools/bin tool with venv-ts, libexec beside): edit ok; 12 of 13 ok; timelike fails C2–C4 on the host only (above)
 - start-up, a dry run per language, 20 runs each at load 2.4: .txt (no child) p50 93 / p95 99 ms; .py 146 / 150; .ts 191 / 200; .go 191 / 204; .sh 239 / 243. The probe (/etc/os-release, an unknown language) starts no child
+SCOPE: in (1 changed files)
