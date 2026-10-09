@@ -28,3 +28,26 @@ TIMELIKE_BIN_DIRS=$PWD/tools/bin PATH=$PWD/tools/bin:$PATH timelike-conform   # 
 ```
 
 The e2e files (`tests/e2e/edit-*.bats`) run in the image, in the operator's Docker lane.
+
+## Slice 1: anchors and the syntax check
+
+```bash
+view --anchors src/app.py:40-48                          # each line: number, anchor, text
+edit src/app.py --at 42:a3f9c1..48:0b11e2 --new $'…'     # replace lines 42-48 if both ends are unchanged
+edit src/app.py --at 42:a3f9c1 --new 'return x + 1'      # one line
+edit src/app.py --old 'def f(x):' --new 'def f(x)'       # exit 1: the edit would break the syntax; nothing written
+```
+
+- **Stale anchors:** exit 3, naming the changed lines and showing them now, with fresh anchors.
+- **A syntax error the edit would introduce:** exit 1, with the checker's message and the lines around
+  it.
+- **Checked languages:**
+  - Python (the interpreter's own compiler);
+  - shell (`bash -n`);
+  - TypeScript, TSX, Go and Rust (tree-sitter).
+
+  Anything else says `syntax: not checked (language unknown)`.
+- **Host lane:** Python and shell are checked anywhere. TypeScript, Go and Rust need the pinned wheels: in
+  the image, or in a venv made with `pip install --require-hashes -r <generated from pins.env>`.
+  Otherwise the verdict says `not checked (checker failed: no tree-sitter grammar …)`, and the units that
+  need a grammar skip.

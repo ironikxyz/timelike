@@ -108,3 +108,108 @@ None.
 
 ### ❌ Prohibited Technologies (cannot use)
 None used.
+
+---
+
+# Cycle 2 — slice 1 (send `bridge/sends/06-rev1-20261009-102433.md`)
+
+**Branch:** `modify/008-slice-1`, from `master` `ce1eaf2` (`bbb2c46` plus one `reboot.md` commit) · **Date:**
+2026-10-09 · **specswarm:** 4.0.1-botbaubble.2.40.0, the expanded command's cache path · **Modify:** row 4
+(`impact-analysis.md`, `modify.md` § Cycle 2) · **Spec:** § Slice 1 (FR-13 to FR-28, SC-7 to SC-9)
+
+## Summary
+
+- **Anchors** (FR-13 to FR-17, R11): `edit FILE --at N:h[..M:h] --new TEXT`. The ends are checked with
+  `view`'s own `anchor_of` and `line_body`. Stale or moved anchors exit 3, naming the lines.
+- **The syntax check** (FR-18 to FR-26, R9 to R15): an edit that would introduce a syntax error into a
+  Python, TypeScript/TSX, Go, Rust or shell file is refused (exit 1) with the checker's error, and the
+  file is byte-identical.
+  - The checker is a child process (`tools/libexec/syntax-check`) with a 10 s limit. It fails open, and
+    says so.
+  - `--skip-syntax-check` is visible in the command and never suggested.
+- **The image** gains four pinned wheels in timelike's interpreter and `/opt/timelike/libexec/syntax-check`.
+- **Carried** (FR-28): `bash -lc` cells, `type -a` under `bash -lc`, and the owner branch under a second
+  uid.
+
+## Technical Context
+
+| Item | Value |
+|---|---|
+| **Language** | Python 3.12+ (3.14.7 in the image). `edit` stays stdlib; the checker child imports `tree_sitter` only for TS/TSX/Go/Rust |
+| **New dependencies** | `tree-sitter` 0.26.0 (binding), `tree-sitter-typescript` 0.23.2, `tree-sitter-go` 0.25.0, `tree-sitter-rust` 0.24.2, all prebuilt wheels pinned by SHA-256 in `pins.env`, in timelike's interpreter only (R9). Python and shell use the interpreter's compiler and `/bin/bash -n`: nothing new |
+| **Contract module** | `agentio`, unchanged |
+| **Other features' code** | `tools/bin/view`: `line_body()` factored out of `window()`, with identical output (R11). Declared in `changed_other_features` |
+| **Testing** | pytest units (`tests/unit/test_edit_slice1.py`, new, written from the contract by a delegate; grammar-dependent units skip where the wheels are absent); bats e2e in the image, one file per criterion, `bash -c` and `bash -lc`, fixtures written by the test, anchors computed with `hashlib` (P005), hashes read by the test (P004), and a decoy `python3`/`bash` on the agent's PATH (P002) |
+| **Performance** | One child per checked edit: interpreter start, tree-sitter import (TS/Go/Rust only), parse. 200k-line Python parses in 1.07 s with tree-sitter (R13); `compile()` is faster. Limit 10 s |
+| **Constraints** | P2 (bounded, a verdict always, atomic), T4 (no silent skip, never suggested), P002 (nothing from PATH), RB1 (agent runtimes and vanilla untouched) |
+| **Unknowns** | none (R9 to R16). Two are measured only in the lane: the cp314 binding's import, and `docker exec -u 0` for the owner cell (R16) |
+
+## Constitution Check (Cycle 2)
+
+| Principle | Check | Result |
+|---|---|---|
+| P1 Unaided completion | An anchored edit in one call. A stale anchor shows fresh anchors. A false refusal has a visible skip (R14) | ✅ |
+| P2 Every call concludes | The checker child is killed at 10 s. Every outcome has a verdict. A checker's failure is named, not the file's (R13) | ✅ |
+| P3 Found where agents look | `--at` takes `view --anchors`'s own form. Usage and the announcement name both | ✅ |
+| P4 Reach only by grant | Offline: no network at check time; the wheels arrive at build | n/a |
+| P5 Wrong turns are recoverable | A refused edit leaves the file byte-identical. The write is atomic as before | ✅ |
+| P6 Claims are measured | Hash checks (P004). The grammars' false errors are measured and published (R10) | ✅ |
+| P7 Harness-agnostic | Shell command and flags | ✅ |
+| T4 | The skip is the agent's own, visible in command, verdict and event, and never suggested | ✅ |
+| H2 One output contract | On `agentio`, with extra manifest fields only. Conform must pass | ✅ |
+| H3 Verify artifacts | `sha256sum` before and after, in the container | ✅ |
+| H4 Non-interactive | No prompt. The child gets stdin from `edit`, never from the agent | ✅ |
+| H5 Stdlib-first | **Deviation, justified:** tree-sitter is the stack's named parser, and no stdlib module parses TS, Go or Rust. `edit` itself stays stdlib, and the deviation is confined to the child and to three languages. Python and shell use what is already there (R9) | ✅ justified |
+| H7 Every acceptance criterion is a test | SC-7 and SC-8, one e2e file each. SC-9 is Manual (D15) | ✅ |
+
+Gates: pass.
+
+## Project Structure (Cycle 2)
+
+```
+tools/bin/edit                        # --at, the syntax check, --skip-syntax-check, manifest extras
+tools/libexec/syntax-check            # new: the checker child (not on PATH)
+tools/bin/view                        # line_body() factored out of window(); output unchanged
+image/Dockerfile                      # wheels into timelike's purelib (hash-checked, import-checked); libexec copy
+pins.env, compose.yaml, Makefile      # TREE_SITTER_*_VERSION / _SHA256 pins, as build args
+pyproject.toml                        # syntax-check in the ruff and mypy lists; tree_sitter imports untyped
+.specswarm/tech-stack.md              # the four packages (1.6.0)
+tests/unit/test_edit_slice1.py        # new (delegate, from the contract)
+tests/unit/test_edit.py, test_agent_runtimes.py   # manifest assertions; pins and build-arg lists
+tests/e2e/edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats             # SC-7
+tests/e2e/edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats          # SC-8
+tests/e2e/edit-slice-0-carried-items.bats                                                          # FR-28
+tests/e2e/edit-*.bats (slice 0)       # bash -lc cells
+README.md                             # command reference regenerated; the README status block (if all three are met)
+```
+
+## Phase 0 and Phase 1
+
+- **Research:** R9 to R16.
+- **Design:**
+  - `data-model.md` § Slice 1;
+  - `contracts/edit-cli.md` § Slice 1 (the exact verdicts, the JSON and the child's protocol);
+  - `quickstart.md` § Slice 1.
+
+There is no agent context file in this repository, so the agent-context step does not apply.
+
+## Tech Stack Compliance Report (Cycle 2)
+<!-- The installed tech-stack-classify block (lib/tech-stack-parser.sh, 2.40.0) ran on 2026-10-09: tree-sitter, Python, bash, uv APPROVED; the binding and three grammars AUTO_ADD; none prohibited; nothing unparsed -->
+
+### ✅ Approved Technologies (already in stack)
+- Python, bash, uv (the wheels are installed with the pinned uv)
+- tree-sitter (structural search). This cycle uses its Python binding as the carrier (R9)
+
+### ➕ New Technologies (auto-added)
+- **tree-sitter** 0.26.0 (the Python binding), **tree-sitter-typescript** 0.23.2, **tree-sitter-go** 0.25.0,
+  **tree-sitter-rust** 0.24.2
+  - Purpose: `edit`'s syntax check for TypeScript/TSX, Go and Rust
+  - No conflicts detected
+  - Added to: Approved Libraries (Python additions), with the justification
+  - Version updated: 1.5.0 → 1.6.0
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None used.
