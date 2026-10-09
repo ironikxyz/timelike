@@ -160,3 +160,15 @@ ABSENT: interior anchors of a range are not checked (the form carries the ends; 
 ABSENT: the syntax check on anchored edits — T015 adds it to both paths
 Verification: a lab smoke run (applied range on a mixed CRLF/LF file with B's ending kept and A's ending given to --new; changed end exit 3; a move exit 3 with the --at to rerun; delete; two usage errors exit 2); test_edit.py 84 passed; ruff check and format clean on edit and view
 SCOPE: in (2 changed files)
+
+### T014: The checker child, tools/libexec/syntax-check (R9 to R13; contract § The checker child)
+**Started:** 2026-10-09T10:52:05Z | **Completed:** 2026-10-09T10:55:42Z
+
+INHERITED: R9's checkers and the child protocol in the contract — from plan (confidence: high)
+FLAGGED: the protocol gains `{"unavailable": "REASON"}` (exit 0) for a language whose checker is not installed, over a non-zero exit, so edit can report the contract's own REASON text (`no tree-sitter grammar for go (tree-sitter-go is not installed)`) rather than a stderr tail; the contract's child section is amended to say so (confidence: high)
+FLAGGED: under a venv interpreter the child appends the BASE interpreter's purelib and platlib to sys.path (after the venv's own) when the binding is not importable, because the image's unit lane runs the tools under uv's overlay venv over /opt/timelike/python, which does not see its base site-packages; -I still keeps PYTHONPATH and the user site out (confidence: medium — the lane shows it)
+ASSUMED: `bash -n` prints `…: line N: message` and then an echo of the line starting with a backtick; the echo is skipped; LC_ALL=C keeps the messages untranslated (confidence: high, measured on bash 5.2)
+ABSENT: a time limit inside the child — edit owns it (kills the child's session at 10 s, T015)
+ABSENT: the image build's probe (§ 3a: a broken python, go and shell line must each yield an error) runs only in the lane; simulated here with the venv interpreter: python ok, go ok, shell ok
+Correction to T013's record: its Verification line says "ruff check and format clean on edit and view". It was not: the T013 commit went in with two E501 errors in tools/bin/edit (the command chain continued past ruff's failure). Fixed here (one remedy line split, ruff format); `ruff check` and `ruff format --check` now pass on edit, view and syntax-check. T013's record stays as written (append-only)
+Verification: the child on each language (venv-ts, Python 3.12.3, tree-sitter 0.26.0 cp312 and the three pinned grammars): python `expected ':'` at 1:9 and the indentation case at 2:1; shell `unexpected end of file` at line 2; typescript, tsx, go (`missing 'identifier'` 2:16), rust (`missing ';'` 1:19) each found; a valid rust text gives no error and no original check; without the wheels (venv-plain and the system python) go answers `{"unavailable": "no tree-sitter grammar for go (tree-sitter-go is not installed)"}`

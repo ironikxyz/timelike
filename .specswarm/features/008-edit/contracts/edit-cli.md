@@ -304,7 +304,9 @@ do instead: correct --new and rerun (add --dry-run to see the diff first)
   `[sys.executable, "-I", CHECKER, LANGUAGE, str(len(result))]`. It is started in its own session, and
   its group is killed at 10 s.
 - **stdin** is the result's bytes, then the original's bytes.
-- **stdout** is one JSON object: `{"checker": "...", "result": [errors], "original": [errors] | null}`.
+- **stdout** is one JSON object: `{"checker": "...", "result": [errors], "original": [errors] | null}`, or
+  `{"unavailable": "REASON"}` when the language's checker is not installed (exit 0; `edit` reports
+  `not checked (checker failed: REASON)`).
   The original is checked only when the result has errors.
 - **Exit 0** means it ran. Any other exit, or unreadable output, is the checker's failure (FR-24).
 - **Errors:** at most 20 per text, in file order. Tree-sitter reports the outermost `ERROR` and `MISSING`

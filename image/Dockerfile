@@ -162,7 +162,13 @@ for lang in (t.language_typescript, t.language_tsx, g.language, r.language):
     if ts.Parser(ts.Language(lang())).parse(b"x").root_node is None:
         sys.exit("error: a grammar parsed nothing")' \
       "${TREE_SITTER_VERSION}" "${TREE_SITTER_TYPESCRIPT_VERSION}" "${TREE_SITTER_GO_VERSION}" "${TREE_SITTER_RUST_VERSION}" \
- && test -x /opt/timelike/libexec/syntax-check
+ && test -x /opt/timelike/libexec/syntax-check \
+ && for probe in 'python:def f(x)' $'go:package p\nfunc f() {' 'shell:if true; then'; do \
+      lang="${probe%%:*}"; src="${probe#*:}"; \
+      out="$(printf '%s\n' "${src}" | /opt/timelike/python/bin/python3 -I /opt/timelike/libexec/syntax-check "${lang}" "$(( ${#src} + 1 ))")"; \
+      [[ "${out}" == *'"result": [{'* ]] \
+        || { echo "error: the syntax checker did not find the error in a broken ${lang} line: ${out}" >&2; exit 1; }; \
+    done
 
 # --- 3b. The agent's runtimes, configured for user locations (007 spec FR-25 to FR-28; discovery revision 14)
 # For the agent, never for timelike's tools (stack note 3: they run /opt/timelike/python with -I, which never

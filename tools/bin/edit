@@ -723,7 +723,8 @@ def stale(path: str, an: Anchored, first: tuple[int, str], last: tuple[int, str]
             + "; nothing written"
         )
         new_at = f"{s}:{first[1]}" + (f"..{e}:{last[1]}" if s != e else "")
-        remedy = f"rerun with --at {new_at} ({shlex.join(['view', '--anchors', f'{path}:{s}-{e}'])} shows them)"
+        look = shlex.join(["view", "--anchors", f"{path}:{s}-{e}"])
+        remedy = f"rerun with --at {new_at} ({look} shows them)"
         shown, forms = anchored_lines(an, s - CONTEXT, e + CONTEXT, {s, e})
     else:
         parts = []
@@ -748,7 +749,9 @@ def stale(path: str, an: Anchored, first: tuple[int, str], last: tuple[int, str]
     )
 
 
-def anchored_match(raw: bytes, an: Anchored, a: int, b: int, new: bytes, lines: list[Line]) -> tuple[Match, bytes, bytes, int]:
+def anchored_match(
+    raw: bytes, an: Anchored, a: int, b: int, new: bytes, lines: list[Line]
+) -> tuple[Match, bytes, bytes, int]:
     """The region of lines a..b, and --new in the file's line ending (FR-17)."""
     start = an.start(a)
     last = an.raws[b - 1]

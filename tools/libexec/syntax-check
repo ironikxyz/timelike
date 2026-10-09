@@ -1,0 +1,175 @@
+#!/opt/timelike/python/bin/python3 -I
+"""syntax-check — the syntax checker `edit` runs as a child (feature 008 slice 1; research R9 to R13).
+
+Not a tool: it is never on PATH, has no manifest and writes no session event. `edit` runs it from its own
+location with its own interpreter and `-I` (lore P002), as
+
+    syntax-check LANGUAGE N        stdin: the result's N bytes, then the original's bytes
+
+and reads one JSON object from stdout:
+
+    {"checker": "...", "result": [errors], "original": [errors] | null}
+    {"unavailable": "REASON"}      when this language's checker is not installed
+
+Each error is {"line", "column" (null for bash), "message"}, at most 20 per text, in file order. The
+original is checked only when the result has errors (contracts/edit-cli.md § The checker child).
+
+The checkers, all of them parsers that run nothing:
+  python                      this interpreter's compiler, compile(..., ast.PyCF_ONLY_AST)
+  shell                       /bin/bash -n, with no startup files and no BASH_ENV
+  typescript, tsx, go, rust   tree-sitter's Python binding and pinned grammar wheels; a tree holding an
+                              ERROR or MISSING node is a syntax error at that node
+"""
+
+from __future__ import annotations
+
+import ast
+import json
+import os
+import platform
+import re
+import subprocess
+import sys
+import sysconfig
+import warnings
+from collections.abc import Callable
+from typing import Any
+
+MAX_ERRORS = 20
+SNIPPET = 20
+BASH = "/bin/bash"
+# The distribution that carries each tree-sitter language, and the function in it that returns the grammar.
+GRAMMARS = {
+    "typescript": ("tree-sitter-typescript", "tree_sitter_typescript", "language_typescript"),
+    "tsx": ("tree-sitter-typescript", "tree_sitter_typescript", "language_tsx"),
+    "go": ("tree-sitter-go", "tree_sitter_go", "language"),
+    "rust": ("tree-sitter-rust", "tree_sitter_rust", "language"),
+}
+_BASH_LINE = re.compile(r"^.*?: line (\d+): (.*)$")
+
+Errors = list[dict[str, Any]]
+
+
+class Unavailable(Exception):
+    """This language's checker is not installed: the edit is not checked, and says why."""
+
+
+def python_errors(src: bytes) -> Errors:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # a SyntaxWarning is not a syntax error
+        try:
+            compile(src, "<edit>", "exec", ast.PyCF_ONLY_AST, dont_inherit=True)
+        except SyntaxError as e:  # IndentationError and TabError included
+            return [{"line": e.lineno or 1, "column": e.offset, "message": e.msg}]
+        except ValueError as e:  # a NUL byte, or bytes the source's declared encoding cannot decode
+            return [{"line": 1, "column": None, "message": str(e)}]
+    return []
+
+
+def shell_errors(src: bytes) -> Errors:
+    env = {k: v for k, v in os.environ.items() if k not in ("BASH_ENV", "ENV")}
+    env["LC_ALL"] = "C"  # bash's own messages, untranslated
+    proc = subprocess.run(
+        [BASH, "--norc", "--noprofile", "-n"], input=src, capture_output=True, env=env, check=False
+    )
+    if proc.returncode == 0:
+        return []
+    out: Errors = []
+    for line in proc.stderr.decode("utf-8", "replace").splitlines():
+        m = _BASH_LINE.match(line)
+        if m and not m.group(2).startswith("`"):  # the line after an error only echoes the source
+            out.append({"line": int(m.group(1)), "column": None, "message": m.group(2)})
+    if not out:
+        last = proc.stderr.decode("utf-8", "replace").strip().splitlines()
+        message = last[-1] if last else f"bash -n exit {proc.returncode}"
+        out.append({"line": 1, "column": None, "message": message})
+    return out[:MAX_ERRORS]
+
+
+def _import_tree_sitter(language: str) -> tuple[Any, Any, str]:
+    """The binding, the grammar module and its distribution's version.
+
+    Under a venv interpreter (the image's unit lane runs one over timelike's) the wheels are in the BASE
+    interpreter's site-packages, which a venv does not see: that directory is added, after the venv's own.
+    """
+    dist, module, _ = GRAMMARS[language]
+    import importlib
+    import importlib.metadata
+
+    for attempt in range(2):
+        try:
+            ts = importlib.import_module("tree_sitter")
+            grammar = importlib.import_module(module)
+            return ts, grammar, importlib.metadata.version(dist)
+        except (ImportError, importlib.metadata.PackageNotFoundError):
+            if attempt or sys.base_prefix == sys.prefix:
+                break
+            base = sysconfig.get_paths(vars={"base": sys.base_prefix, "platbase": sys.base_prefix})
+            for key in ("purelib", "platlib"):
+                if base[key] not in sys.path:
+                    sys.path.append(base[key])
+    raise Unavailable(f"no tree-sitter grammar for {language} ({dist} is not installed)")
+
+
+def tree_sitter_checker(language: str) -> tuple[str, Callable[[bytes], Errors]]:
+    ts, grammar, version = _import_tree_sitter(language)
+    dist, _, fn = GRAMMARS[language]
+    parser = ts.Parser(ts.Language(getattr(grammar, fn)()))
+
+    def errors(src: bytes) -> Errors:
+        out: Errors = []
+        stack = [parser.parse(src).root_node]
+        while stack and len(out) < MAX_ERRORS:
+            node = stack.pop()
+            if node.is_missing or node.is_error:  # the outermost only: what is inside is the same error
+                line, col = node.start_point.row + 1, node.start_point.column + 1
+                if node.is_missing:
+                    message = f"missing {node.type!r}"
+                else:
+                    text = src[node.start_byte : node.end_byte].decode("utf-8", "replace")
+                    first = text.splitlines()[0] if text.strip() else text
+                    message = f"unexpected {first.strip()[:SNIPPET]!r}"
+                out.append({"line": line, "column": col, "message": message})
+            elif node.has_error:
+                stack.extend(reversed(node.children))
+        return out
+
+    name = f"{dist} {version}" + (" (tsx)" if language == "tsx" else "")
+    return name, errors
+
+
+def checker(language: str) -> tuple[str, Callable[[bytes], Errors]]:
+    if language == "python":
+        return f"python {platform.python_version()} compile", python_errors
+    if language == "shell":
+        if not os.access(BASH, os.X_OK):
+            raise Unavailable(f"{BASH} is not installed")
+        return "bash -n", shell_errors
+    if language in GRAMMARS:
+        return tree_sitter_checker(language)
+    raise SystemExit(f"syntax-check: unknown language {language!r}")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2 or not argv[1].isdigit():
+        print(
+            "usage: syntax-check LANGUAGE N  (stdin: the result's N bytes, then the original)",
+            file=sys.stderr,
+        )
+        return 2
+    language, n = argv[0], int(argv[1])
+    data = sys.stdin.buffer.read()
+    result, original = data[:n], data[n:]
+    try:
+        name, check = checker(language)
+    except Unavailable as e:
+        print(json.dumps({"unavailable": str(e)}))
+        return 0
+    found = check(result)
+    before = check(original) if found else None
+    print(json.dumps({"checker": name, "result": found, "original": before}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
