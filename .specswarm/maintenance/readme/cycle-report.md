@@ -138,3 +138,144 @@ mypy strict (27 files) are clean, and shellcheck has no new file.
    - Rule 5 named `master` as the only pushed ref. The tag is now the one other ref, on the same discharge
      and OK, so the pre-push checks should cover its message.
 2. **The Docker lane is needed** before sign-off: the change adds a unit test.
+
+## Cycle 2 — bridge/sends/maint-readme-godel-20261008-180140.md
+
+**Written:** 2026-10-08T18:22:10Z (read from the clock). Built by hand on `maint/readme-godel`, from `master` at `f6faf01`, in a
+temporary git worktree outside the project (in the session's scratchpad), so `modify/007-slice-1` and its working
+tree were not touched. No specswarm command was run (session: specswarm 2.37.0). **One commit** (this one): `README.md`
+and this section. **Pushed nothing; merged nothing.** No lane on 04 slice 1 had started when this was committed: there
+was no lane row in `bridge/history.md` after the send at 18:01:40Z, and no new `bridge/.make-test-*.log`.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/maint-readme-godel-20261008-180140.md |
+| source_prompt | none (maintenance; the operator's text, 2026-10-08, verbatim) |
+| prompt_revision | none |
+| discovery_revision | none (the send names none) |
+| slice | none |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**What changed.**
+- **`README.md`:** one blank line, then the section `## Thank You Mr Gödel`, after the last line (`MIT.` under
+  `### Licence`). The 8 lines were copied byte for byte from the send's fenced block, extracted with `awk`, not
+  retyped. The curly apostrophe (U+2019) and the five `ö` characters were checked. Diff stat:
+  `README.md | 9 +++++++++` (9 lines added, nothing removed).
+- **Nothing else changed:** the Contents line, the What and Status sections, and the generated command reference are
+  untouched.
+
+**criteria_reestablished** (the send's checks, not prompt criteria):
+- `python3 scripts/readme_reference.py --check`: **executed**, `readme reference: current, 13 tools`, exit 0. The
+  section is outside the reference markers.
+- `make test-host` (venv python 3.12.3, pytest 8.4.2, run in the worktree): **executed, FAILED 2 of 1661**:
+  1658 passed, 1 skipped, 2 failed; env layer 60/60; hook 44/44. The two failures are not this change's (see
+  not_verified).
+- **What reads the README:** only `scripts/readme_reference.py` and its test (between the markers), and the deny-list
+  gate (the whole tracked tree). Every other mention of "README" in `tests/`, `image/` and `bench/` is a fixture that
+  writes its own file. Nothing in the image or its tests reads past the markers.
+- **The deny-list per id** over this commit's diff and message: in the final paragraph of this section.
+
+**reconcile_mode:** not applicable (no prompt).
+
+**not_verified / the two host failures, reported, not fixed** (the send confines this cycle to `README.md`):
+- **The failures:** `tests/unit/test_run_slice1.py::test_the_enospc_message_in_the_output_is_the_disk_cause`
+  [both parameters].
+- **What the test expects:** `run`'s verdict to name two filesystems ("<workspace mount> has … free, <scratch mount>
+  has … free").
+- **What `run` does:** it names a filesystem once when the workspace and scratch share it (`tools/bin/run`,
+  `named()`: "one filesystem holding both is named once").
+- **Why it failed here:** in this worktree, under `/tmp` like pytest's scratch, both are `/`, so the verdict reads
+  "`/` has … free" once. In the project checkout the workspace is on another filesystem, and the same tests passed
+  (007 Cycle 4, T031: 1825 passed).
+- So it is **a test that assumes two filesystems**, unrelated to the README. It is for a later 003 cycle: assert one
+  name when both mounts agree.
+
+**changed_other_features:** none.
+
+**process_failures_recorded:** none.
+
+**retired_prompts_seen:** none.
+
+**For the mentor:**
+- Merge `--no-ff` after sign-off, in either order with 04 slice 1. They touch different parts of the README, and 04
+  s1's status block sits in `## What` / `## Status`.
+- It rides the next germane push and shares its tag.
+- No Docker lane is needed: only `README.md` changes. The two host failures are environmental, as above.
+
+**The deny-list per id**, over this commit's staged diff (`README.md` and this report) and its message, computed
+with `scan/denylist.py`'s parser before committing:
+- diff: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- message: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- tracked tree: `publish deny-list [tracked tree]: PASS — 7 entries, 455 tracked files: no match`.
+
+Identity: ironik.xyz.
+
+## Cycle 3 — bridge/sends/maint-readme-godel-2-20261008-190924.md
+
+**Written:** 2026-10-08T19:57:19Z (read from the clock). Built by hand on `maint/readme-godel`, on top of `866b49b`, in a temporary git
+worktree outside the project (in the session's scratchpad), after the mentor said lane `007s1-a` had ended
+(`bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md`, "Also"). `modify/007-slice-1` and its
+working tree were not touched. No specswarm command was run. **One commit** (this one): `README.md` and this section.
+**Pushed nothing; merged nothing.** The send as read carries its 19:10:30Z amendment (no comma after "his").
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/maint-readme-godel-2-20261008-190924.md |
+| source_prompt | none (maintenance; the operator's text, 2026-10-08, verbatim) |
+| prompt_revision | none |
+| discovery_revision | none (the send names none) |
+| slice | none |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**What changed.**
+- **`README.md`:** the whole section, from `## Thank You Mr Gödel` (line 979) to the end of the file, replaced with the
+  send's fenced block. The block was extracted from the send with `awk` (the lines between ````markdown` and the
+  closing fence), not retyped, and the README was rebuilt as its first 978 lines followed by that block. Diff stat:
+  `README.md | 8 +++++++-` (7 insertions, 1 deletion: the Wolchover link line, which now continues the paragraph).
+- **Nothing else changed:** lines 1–978 are untouched, including the blank line after `MIT.`.
+
+**criteria_reestablished** (the send's checks, not prompt criteria):
+- **Byte comparison**, executed: `tail -n +979 README.md | cmp - <block>` reports no difference. Both are 14 lines and
+  1256 bytes, SHA-256 `3049085e01442467b79d820ba477317d9a7702e4a840d7d779ff1c73e49d51d9`. The straight quotes and the
+  apostrophe in "Marks'", the one curly apostrophe (U+2019) in "Gödel’s", the `ö`s and the three dots come across as sent.
+- `python3 scripts/readme_reference.py --check`: **executed**, `readme reference: current, 13 tools`, exit 0.
+- `make test-host` was not asked for by this send and was not run.
+
+**reconcile_mode:** not applicable (no prompt).
+
+**not_verified:** that the three new links resolve (no network check was asked for or made).
+
+**changed_other_features:** none.
+
+**process_failures_recorded:** none.
+
+**retired_prompts_seen:** none.
+
+**For the mentor:** `maint/readme-godel` now carries two commits (`866b49b` and this one). Merge `--no-ff` with 04 slice 1
+after sign-off; no tag of its own.
+
+**The deny-list per id**, over this commit's staged diff (`README.md` and this report) and its message, computed with
+`scan/denylist.py`'s parser before committing:
+- diff: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- message: P1 0, P2 0, P3 0, P4 0, P5 0, P6 0, P7 0;
+- tracked tree: `publish deny-list [tracked tree]: PASS — 7 entries, 455 tracked files: no match`; per id: P1 0/0, P2 0/0, P3 0/0, P4 0/0, P5 0/0, P6 0/0, P7 0/0.
+
+Identity: ironik.xyz.
