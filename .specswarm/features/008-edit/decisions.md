@@ -148,3 +148,14 @@ ABSENT: an image build — no Docker here; the lane builds it. The Dockerfile's 
 ABSENT: bench/vanilla/Dockerfile and the runtimes stage — untouched by design (RB1); test_the_two_runtimes_stages_are_identical still passes, and a new test asserts the vanilla Dockerfile names no tree-sitter
 Verification: tests/unit/test_agent_runtimes.py 91 passed (venv Python 3.12.3, pytest 8.4.2), with 13 new cases (pins, ARG, compose, hash-only install, vanilla clean); `make -p` reads the 8 new keys; `set -a; . ./pins.env` sources clean
 SCOPE: in (4 changed files)
+
+### T013: Anchors — view's line_body factored out; edit --at (R11, FR-13 to FR-17)
+**Started:** 2026-10-09T10:50:02Z | **Completed:** 2026-10-09T10:52:04Z
+
+INHERITED: R11's decisions (ends only; a move refused naming where; --at with --old a usage error), and edit's existing loader for view (`_view()`) — from plan (confidence: high)
+FLAGGED: `line_body()` factored out of view's `window()` (a 006 file), over a copy of its three lines in edit, because FR-34's promise is one definition, and the split is half of it; output unchanged (test_view.py and test_view_slice1.py: 131 passed). Declared for changed_other_features (confidence: high)
+FLAGGED: a "past the end" anchor whose bytes occur exactly once elsewhere is reported as a move ("line 40 is now line 6"), not as past the end, chose the move because it gives the agent the one command that works; the contract's "past the end" stays for anchors found nowhere (confidence: medium)
+ASSUMED: anchors' lines split on \n only, as iterating a binary file splits them for view; edit's own numbering (split on CR too) is used for the shown region after an edit, so a CR-only file would number differently in the two — not a case in the criteria (confidence: medium)
+ABSENT: interior anchors of a range are not checked (the form carries the ends; R11)
+ABSENT: the syntax check on anchored edits — T015 adds it to both paths
+Verification: a lab smoke run (applied range on a mixed CRLF/LF file with B's ending kept and A's ending given to --new; changed end exit 3; a move exit 3 with the --at to rerun; delete; two usage errors exit 2); test_edit.py 84 passed; ruff check and format clean on edit and view

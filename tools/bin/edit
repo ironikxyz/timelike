@@ -159,7 +159,7 @@ def norm_lines(text: bytes) -> list[bytes]:
 
 
 class Match:
-    __slots__ = ("byte_end", "byte_start", "drop_last_newline", "level", "mapping")
+    __slots__ = ("byte_end", "byte_start", "checked", "drop_last_newline", "level", "mapping")
 
     def __init__(
         self,
@@ -172,6 +172,7 @@ class Match:
         self.level, self.byte_start, self.byte_end = level, byte_start, byte_end
         self.mapping = mapping
         self.drop_last_newline = drop_last_newline
+        self.checked: tuple[int, ...] = ()  # anchors only: the line numbers whose anchors were checked
 
 
 def find_exact(raw: bytes, old: bytes) -> list[Match]:
@@ -343,6 +344,9 @@ def unit_phrase(unit: tuple[str, int]) -> str:
 
 
 def level_phrase(m: Match) -> str:
+    if m.level == "anchors":
+        at = " and ".join(map(str, m.checked))
+        return f"addressed by anchors; checked at line{'s' if len(m.checked) > 1 else ''} {at}"
     if m.level == "exact":
         return "matched exactly"
     if m.level == "line_endings":
@@ -612,6 +616,176 @@ def write_atomic(path: str, real: str, st: os.stat_result, before: bytes, data: 
                 os.unlink(tmp)
 
 
+# ── anchors (slice 1; research R11, spec FR-13 to FR-17) ──────────────────────────────────────────
+
+_AT_RE = re.compile(r"(\d+):([0-9a-f]{6})(?:\.\.(\d+):([0-9a-f]{6}))?")
+AT_FORM = "N:hhhhhh[..M:hhhhhh]"
+
+
+def parse_at(spec: str) -> tuple[tuple[int, str], tuple[int, str]]:
+    m = _AT_RE.fullmatch(spec)
+    if m is None:
+        raise agentio.UsageError(
+            f"--at {spec!r} is not an anchor: the form is {AT_FORM}",
+            "copy N:hhhhhh from view --anchors FILE (six lowercase hex characters)",
+        )
+    a = (int(m.group(1)), m.group(2))
+    b = (int(m.group(3)), m.group(4)) if m.group(3) else a
+    if a[0] < 1 or b[0] < a[0]:
+        raise agentio.UsageError(
+            f"--at {spec!r}: lines must be 1 or more, the first no later than the last", f"--at {AT_FORM}"
+        )
+    return a, b
+
+
+class Anchored:
+    """The file split as view splits it (on \n), with view's own anchor function (006 FR-33, FR-34)."""
+
+    def __init__(self, raw: bytes, view: ModuleType) -> None:
+        self.raws = _split_lf(raw)
+        self.view = view
+        self._all: list[str] | None = None
+
+    def anchor(self, n: int) -> str:  # n is 1-based
+        mark: str = self.view.anchor_of(self.view.line_body(self.raws[n - 1]))
+        return mark
+
+    def all(self) -> list[str]:
+        if self._all is None:
+            self._all = [self.view.anchor_of(self.view.line_body(r)) for r in self.raws]
+        return self._all
+
+    def start(self, n: int) -> int:
+        return sum(len(r) for r in self.raws[: n - 1])
+
+
+def _split_lf(raw: bytes) -> list[bytes]:
+    """Lines split at \n only, endings kept: what iterating a binary file gives `view` (a lone CR is text)."""
+    out = [x + b"\n" for x in raw.split(b"\n")]
+    out[-1] = out[-1][:-1]
+    return out if out[-1] else out[:-1]
+
+
+def _view_required() -> ModuleType:
+    view = _view()
+    if view is None or not hasattr(view, "anchor_of") or not hasattr(view, "line_body"):
+        here = os.path.dirname(os.path.realpath(__file__))
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            "refused",
+            f"anchors need view's anchor function, and {os.path.join(here, 'view')} could not be loaded; "
+            + "nothing written",
+            "edit with --old TEXT --new TEXT instead",
+        )
+    return view
+
+
+def anchored_lines(an: Anchored, a: int, b: int, ends: set[int]) -> tuple[list[str], list[str]]:
+    """Lines a..b (1-based, clipped) as view --anchors prints them, and their N:hhhhhh forms."""
+    total = len(an.raws)
+    width = len(str(max(total, 1)))
+    shown, forms = [], []
+    marks = an.all()
+    for n in range(max(1, a), min(b, total) + 1):
+        body = an.view.line_body(an.raws[n - 1])
+        mark = ">" if n in ends else " "
+        shown.append(f"{n:>{width}}{mark}{marks[n - 1]} {clean(_decode(body))}")
+        forms.append(f"{n}:{marks[n - 1]}")
+    return shown, forms
+
+
+def stale(path: str, an: Anchored, first: tuple[int, str], last: tuple[int, str]) -> Outcome | None:
+    """None when both anchored ends hold their anchors; otherwise the refusal (exit 3, FR-16)."""
+    total = len(an.raws)
+    ends = [first] if first == last else [first, last]
+    changed: list[dict[str, Any]] = []
+    for n, want in ends:
+        now = an.anchor(n) if n <= total else None
+        if now != want:
+            changed.append({"line": n, "expected": want, "now": now})
+    if not changed:
+        return None
+    marks = an.all()
+    moved_to = None
+    hits = [[i + 1 for i, h in enumerate(marks) if h == want] for _, want in ends]
+    if all(len(h) == 1 for h in hits):
+        shifts = {h[0] - n for h, (n, _) in zip(hits, ends, strict=True)}
+        if len(shifts) == 1 and 0 not in shifts:
+            d = shifts.pop()
+            moved_to = {"start": first[0] + d, "end": last[0] + d}
+    if moved_to is not None:
+        s, e = moved_to["start"], moved_to["end"]
+        verdict = (
+            f"anchored lines moved: line{'s' if s != e else ''} {first[0]}"
+            + (f"-{last[0]}" if s != e else "")
+            + f" {'are' if s != e else 'is'} now line{'s' if s != e else ''} {s}"
+            + (f"-{e}" if s != e else "")
+            + "; nothing written"
+        )
+        new_at = f"{s}:{first[1]}" + (f"..{e}:{last[1]}" if s != e else "")
+        remedy = f"rerun with --at {new_at} ({shlex.join(['view', '--anchors', f'{path}:{s}-{e}'])} shows them)"
+        shown, forms = anchored_lines(an, s - CONTEXT, e + CONTEXT, {s, e})
+    else:
+        parts = []
+        for c in changed:
+            if c["now"] is None:
+                parts.append(f"line {c['line']} is past the end ({total} lines)")
+            else:
+                parts.append(f"line {c['line']} (anchor {c['expected']}, now {c['now']})")
+        verdict = "anchored lines changed: " + ", ".join(parts) + "; nothing written"
+        lo, hi = first[0], min(last[0], max(total, 1))
+        remedy = shlex.join(["view", "--anchors", f"{path}:{min(lo, max(total, 1))}-{hi}"]) + (
+            ", then rerun with the anchors it shows"
+        )
+        shown, forms = anchored_lines(an, first[0] - CONTEXT, last[0] + CONTEXT, {first[0], last[0]})
+    return Outcome(
+        agentio.EXIT_NOT_FOUND,
+        "anchors stale",
+        verdict,
+        remedy,
+        lines=shown,
+        data={"changed": changed, "moved_to": moved_to, "anchors_now": forms, "total": total},
+    )
+
+
+def anchored_match(raw: bytes, an: Anchored, a: int, b: int, new: bytes, lines: list[Line]) -> tuple[Match, bytes, bytes, int]:
+    """The region of lines a..b, and --new in the file's line ending (FR-17)."""
+    start = an.start(a)
+    last = an.raws[b - 1]
+    body_end = an.start(b) + len(an.view.line_body(last))
+    first_raw = an.raws[a - 1]
+    ending = first_raw[len(an.view.line_body(first_raw)) :] or common_ending(lines)
+    if not new:  # delete the lines, endings included
+        m = Match("anchors", start, an.start(b) + len(last))
+        return m, b"", b"", m.byte_end
+    parts = _ENDING_RE.split(new)
+    if len(parts) > 1 and parts[-1] == b"":
+        parts = parts[:-1]  # one trailing newline: the region keeps its last line's ending
+    m = Match("anchors", start, body_end)
+    return m, ending.join(parts), ending, body_end
+
+
+def edit_at(ctx: agentio.Context, path: str, at: str, new: bytes, dry_run: bool) -> agentio.Result:
+    first, last = parse_at(at)
+    real, st, raw = read_target(path)
+    if not dry_run and not os.access(real, os.W_OK):
+        raise Outcome(
+            agentio.EXIT_FAILURE, "refused", f"cannot write {path}: permission denied; nothing written"
+        )
+    an = Anchored(raw, _view_required())
+    refusal = stale(path, an, first, last)
+    if refusal is not None:
+        raise refusal
+    lines = split_lines(raw)
+    m, insert, ending, end = anchored_match(raw, an, first[0], last[0], new, lines)
+    m.checked = (first[0],) if first == last else (first[0], last[0])
+    after = raw[: m.byte_start] + insert + raw[end:]
+    sha_before = hashlib.sha256(raw).hexdigest()
+    res = applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run)
+    res.data["anchors"] = {"start": f"{first[0]}:{first[1]}", "end": f"{last[0]}:{last[1]}"}
+    return res
+
+
 # ── the command ────────────────────────────────────────────────────────────────────────────────────
 
 
@@ -621,6 +795,9 @@ def configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("file", nargs="?", metavar="FILE", help="the file to change")
     p.add_argument("--old", metavar="TEXT", help="the text to replace (must match exactly once)")
     p.add_argument("--new", metavar="TEXT", help="the replacement")
+    p.add_argument(
+        "--at", metavar="N:h[..M:h]", help="address lines by view --anchors's anchors instead of --old"
+    )
 
 
 def _arg_bytes(text: str) -> bytes:
@@ -630,6 +807,18 @@ def _arg_bytes(text: str) -> bytes:
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if not args.file:
         raise agentio.UsageError("edit needs a FILE", "edit FILE --old TEXT --new TEXT")
+    if args.at is not None:
+        if args.old is not None:
+            raise agentio.UsageError(
+                "--at and --old both address the text; use one",
+                "edit FILE --at N:hhhhhh --new TEXT, or edit FILE --old TEXT --new TEXT",
+            )
+        if args.new is None:
+            raise agentio.UsageError("--at needs --new TEXT", f"edit FILE --at {AT_FORM} --new TEXT")
+        try:
+            return edit_at(ctx, args.file, args.at, _arg_bytes(args.new), args.dry_run)
+        except Outcome as o:
+            return o.result(args.file)
     if args.old is None or args.new is None:
         raise agentio.UsageError(
             "edit needs --old TEXT and --new TEXT",

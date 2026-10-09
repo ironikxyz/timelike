@@ -460,6 +460,15 @@ def overview(ctx: agentio.Context, path: str, use_ignore: bool) -> agentio.Resul
     return agentio.Result(path, "overview", verdict, lines=lines, data=data)
 
 
+def line_body(raw: bytes) -> bytes:
+    """A line as FR-33 hashes it: its raw bytes without the line ending (`\n`, and one `\r` before it).
+
+    Shared with `edit` (008 slice 1), which loads it with `anchor_of` so the two tools cannot drift.
+    """
+    body = raw[:-1] if raw.endswith(b"\n") else raw
+    return body[:-1] if body.endswith(b"\r") else body
+
+
 def anchor_of(body: bytes) -> str:
     """FR-33: the first 6 hex of the SHA-256 of a line's raw bytes, its line ending already removed."""
     import hashlib  # deferred: only --anchors needs it
@@ -524,9 +533,7 @@ def window(
     anchored: list[str] = []
     escapes = 0
     for n, raw in enumerate(raws, start):
-        body = raw[:-1] if raw.endswith(b"\n") else raw
-        if body.endswith(b"\r"):
-            body = body[:-1]
+        body = line_body(raw)
         text, had = clean(decoder.decode(body))
         escapes += had
         marker = ">" if n == target else " "
