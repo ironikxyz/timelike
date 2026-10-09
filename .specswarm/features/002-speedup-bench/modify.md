@@ -91,3 +91,29 @@ slice-1 criterion. It amended nothing, so the body stays true; the spec was UNAU
 ## Contract and code changes
 
 None. `report.py` and `data-model.md` are not edited (the send's § 1).
+
+# Cycle 3: revision 8 re-recorded as `carried` (send `bridge/sends/02-rev8-20261009-043302.md`)
+
+**Status:** Active. **Created:** 2026-10-09. **Impact analysis:** `impact-analysis.md` § Cycle 3.
+
+## Modification summary
+
+**What:** re-record revision 8 against 002 as `carried` to 02 slice 1. No behaviour changes and no spec change.
+
+**Why:** Cycle 2 recorded revision 8 as `scoped`, which says the modification brought the feature into line with
+revision 8. It did not, by design. Plan's ruling (b) (`bridge/feedback/02-20260930-060406-hang-counted-twice.md`)
+carries the code change to 02 slice 1, and Cycle 2's `not_verified` names the four unmet places. specswarm 2.37.0
+had no mode for "examined, work outstanding". 2.40.0 has `carried`.
+
+## Proposed changes
+
+- **F001 · One `audit-log.md` row**: mode `carried`, revision 8, destination 02 slice 1, the ruling as its basis,
+  and the block's inputs and outputs quoted. It supersedes Cycle 2's mode for revision 8. Cycle 2's row stays as
+  written, because the log is append-only.
+- **F002 · `audited_against` unchanged** at `[1, 8]`: 8 is already listed, so the append adds nothing.
+- **Not changed:** the spec body, `prompt_revision`, `report.py`, `data-model.md`, `decisions.md` T016. The fix is
+  02 slice 1's work.
+
+## Contract and code changes
+
+None.

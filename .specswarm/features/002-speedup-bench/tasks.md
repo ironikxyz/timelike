@@ -294,3 +294,23 @@ The MVP is US1: two traces per task from one command. US2 wires it into the Dock
 independent validator. US3's report is small, but it is what the D2 demo reads. Nothing in slice 1
 (the told/not-told arm, a second harness, failure categories) is built. The trace keeps room for it
 under `extensions` and in `stderr_head`.
+
+## Phase 10: Cycle 3 — revision 8 re-recorded as `carried` (send `bridge/sends/02-rev8-20261009-043302.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 3): PASSED. plan.md § Tech Stack Compliance Report (Cycle 3) has no
+conflict or prohibition, and the task text names no technology. The tasks change Markdown only -->
+
+Governance is current at `[2..15]`, so there is no audit task. Nothing outside
+`.specswarm/features/002-speedup-bench/` changes except `reboot.md`, so there is no Docker lane (send § How this cycle
+runs).
+
+- [ ] T032 Provenance (modify Step 9, on the send's instruction; the library row is 4): run the installed 2.40.0
+  `audit-append` block with `PROMPT_REV=1`, `AUDITED=[1, 8]`, `N=8`, `MODE=carried`, `OUT_OF_SCOPE` empty,
+  `CARRIES_TO="02 slice 1"`. Expect `MODE_USED=carried`, `APPENDED` empty, `NEW_AUDITED=[1, 8]`, `AUDIT_NOTE=02 slice 1`.
+  Any other value means stop and report. Append one `audit-log.md` row quoting the inputs and outputs, with ruling (b)
+  as its basis and a note that it supersedes Cycle 2's `scoped` for revision 8. `spec.md` is untouched.
+- [ ] T033 Cycle report § Cycle 3 (the send's block): Group A not applicable; Group B copied from the send; Group C,
+  with the two Automated criteria cited from lane 007s1-c at `3eba335` (TAP 432, 433, 435, 436), D2 as Cycle 2
+  recorded it, the block's inputs and outputs, and the version that ran. Then `reboot.md`.
+
+**Parallel:** none. T033 cites T032's output.
