@@ -123,8 +123,13 @@ lint: docker-check
 	  uv tool run --python $$P mypy@$(MYPY_VERSION) --cache-dir /tmp/mypy'
 	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/adele":/src:ro -w /src -e HOME=/tmp \
 	  -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod -e GOFLAGS=-mod=readonly -e GOTOOLCHAIN=local \
-	  -e CGO_ENABLED=0 $(GO_IMAGE) bash -c 'set -e; f=$$(gofmt -l .); test -z "$$f" || { echo "gofmt: $$f"; exit 1; }; \
-	  go vet ./...; go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...'
+	  -e CGO_ENABLED=0 $(GO_IMAGE) bash -c 'set -e; go version; f=$$(gofmt -l .); test -z "$$f" || { echo "gofmt: $$f"; exit 1; }; \
+	  go vet ./...'
+	# staticcheck alone runs in GO_LINT_IMAGE (pins.env says why, and when it goes).
+	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/adele":/src:ro -w /src -e HOME=/tmp \
+	  -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod -e GOFLAGS=-mod=readonly -e GOTOOLCHAIN=local \
+	  -e CGO_ENABLED=0 $(GO_LINT_IMAGE) bash -c 'set -e; echo "staticcheck on $$(go version)"; \
+	  go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...'
 
 # Fallback when no daemon is reachable: whatever of ruff/mypy/shellcheck the host has. Advisory.
 lint-host:

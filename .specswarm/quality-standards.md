@@ -281,6 +281,12 @@ max_function_params: 5
 Lint and type checks must be clean: ruff + `mypy --strict` (Python), `go vet` + staticcheck (Go),
 shellcheck (Bash).
 
+**Removal item (dated condition, 2026-10-09):** staticcheck runs in `GO_LINT_IMAGE` (Go 1.27.1, the previous
+`GO_IMAGE` pin), because staticcheck v0.8.1, the newest release, cannot import Go 1.27.2's export data. gofmt
+and `go vet` stay on `GO_IMAGE`. **Remove when** a staticcheck release whose x/tools reads Go 1.27.2's export
+data exists: staticcheck then goes back to `GO_IMAGE` and `GO_LINT_IMAGE` is deleted from `pins.env`.
+The mentor ruled this in `bridge/feedback/04-20261009-010500-…` § Amendment 2026-10-09T01:40Z.
+
 ---
 
 ## Testing Requirements
