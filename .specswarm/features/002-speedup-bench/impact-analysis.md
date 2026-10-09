@@ -109,3 +109,31 @@ cycle runs).
 | `bench/`, `data-model.md` | **none** (the send forbids it) | — |
 
 **Breaking changes:** none. **Risk:** low; documentation only. **Proceed:** yes.
+
+# Cycle 3: revision 8 re-recorded as `carried` (send `bridge/sends/02-rev8-20261009-043302.md`, discovery revision 15)
+
+**Analysis date:** 2026-10-09T04:39Z. specswarm **4.0.1-botbaubble.2.40.0** loaded. The modify text expanded `PLUGIN_DIR`
+to the 2.40.0 cache path, and its `audit-append` block accepts `MODE=carried`: run with the send's inputs, it returned
+`MODE_USED=carried`, not `none`. Both versions' `.in_use` files are empty this time, so that signal reads nothing.
+
+**Provenance:** modify **row 4**, computed by executing `provenance-inputs` and `provenance-row`. `source_prompt` and
+the send's `> Source:` agree (`plan/.discover/prompts/02-speedup-bench.md`). N=8, `prompt_revision` 1,
+`audited_against` `[1, 8]`. Revision 8 is listed, so on its own the library finds nothing new and skips Step 9.
+**The send asks for the `carried` record anyway**, so the block runs on its instruction, and `audit-log.md` says so.
+
+**What was compared (lore P004).** This send's prompt body is byte-identical to Cycle 2's send
+(`02-rev8-20261008-095251`), from `# Speedup bench` to the end (`diff` empty). Revisions 14 and 15 did not revise
+prompt 02, which is still at revision 8.
+
+**The four places, re-read on `master` `ec71f3d`.** All four still contradict revision 8, so `carried` stands:
+- `bench/benchlib/report.py:119`: `_sign(v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs)`, the summed tiebreak.
+- `bench/benchlib/report.py:227`: the same sum, with `:231` quoting it as "failed or hung commands". (Cycle 2 cited
+  `:227`, where the sum is computed; the phrase is on `:231`.)
+- `data-model.md:125`, step 3: "compare `nonzero_exits + hangs` (fewer wins)".
+- `decisions.md` T016: the origin, annotated in Cycle 2 and still in place.
+
+`report.py` is unchanged since `4662060`, and `bench/` changed since Cycle 2's lane only in `bench/vanilla/Dockerfile`
+(007 slice 1's runtimes parity), which is none of the four.
+
+**Impact:** none on code, contracts or other features. Records only: one `audit-log.md` row, the cycle report and
+this feature's cycle artifacts. `spec.md` is unchanged, including `audited_against`. Risk: low.

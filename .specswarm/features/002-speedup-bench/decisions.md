@@ -356,3 +356,21 @@ FLAGGED: implement step 10j's `.specswarm/metrics.json` entry is not written —
 ASSUMED: D2's mode stays "observed by the operator", as the send says (Cycle 1 sign-off addendum) — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no host or Docker lane (only this feature's directory changed)
 SCOPE: none — no files outside the feature's artifacts changed
+
+### T032: provenance — revision 8 re-recorded as carried to 02 slice 1; audited_against unchanged [1, 8]
+**Started:** 2026-10-09T04:40:57Z | **Completed:** 2026-10-09T04:40:57Z | **Coordinator** (specswarm 4.0.1-botbaubble.2.40.0)
+
+INHERITED: Cycle 2's `scoped` row and its not_verified list of four unmet places; plan's ruling (b) — from T030/T031 (confidence: high)
+FLAGGED: ran audit-append although modify's provenance row is 4 (the library skips Step 9 there) — chose the send's explicit instruction over the row's skip, because the record the send exists to make (examined, work outstanding) is only made by a row; the row's number is recorded beside it (confidence: high)
+ASSUMED: the four places still contradict revision 8, re-read on `ec71f3d` (report.py unchanged since 4662060) — so carried, not scoped or full, is true (confidence: high)
+ABSENT: spec.md untouched (audited_against stays [1, 8]; prompt_revision, discovery_revision and source_prompt unchanged); Cycle 2's audit-log row not edited (append-only); report.py, data-model.md and T016 not edited (02 slice 1's work)
+SCOPE: none — no files outside the feature's artifacts changed
+
+### T033: cycle report § Cycle 3; implement steps 10 and 9b recorded; reboot.md
+**Started:** 2026-10-09T04:42:14Z | **Completed:** 2026-10-09T04:42:40Z | **Coordinator** (specswarm 4.0.1-botbaubble.2.40.0)
+
+INHERITED: T032's block outputs; lane 007s1-c's results from `bridge/history.md` 2026-10-09T03:16:00Z and its log (ok 432, 433, 435, 436) — (confidence: high: read, not re-run)
+FLAGGED: the Automated criteria cite lane 007s1-c at 3eba335, not re-run — chose the send's citation over a fresh lane, because 3eba335..ec71f3d changes four documentation files only (verified with git diff --name-only) and this cycle changes no code (confidence: high)
+ASSUMED: D2's mode stays "observed by the operator", as Cycle 2 recorded and the send says — (confidence: high)
+ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no .specswarm/metrics.json entry (outside the feature directory, as in Cycle 2); no host or Docker lane
+SCOPE: in (1 changed files)

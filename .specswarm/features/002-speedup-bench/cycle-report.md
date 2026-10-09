@@ -633,3 +633,123 @@ decisions: sections=30 flagged_sections=27 non_flagged_sections=3 sections_witho
 
 Cycle 2 alone (T028–T030 at that point): 3 sections, 2 FLAGGED entries (T028's placement; T030's mode), 0
 low-confidence. `SCOPE:` none 3.
+
+## Cycle 3 — bridge/sends/02-rev8-20261009-043302.md
+
+**Written:** 2026-10-09T04:42:14Z (read from the clock). Not in dispatch mode. Built with `/specswarm:modify 002 --from-send
+bridge/sends/02-rev8-20261009-043302.md`, then plan, tasks and `/specswarm:implement` (T032, T033), on
+`modify/002-rev8-carried` from `master` at `ec71f3d` (= `public/main`). **Nothing pushed; not merged.**
+
+**specswarm version (lore specswarm Q002):** this session ran **4.0.1-botbaubble.2.40.0**.
+- The plugins were updated during the operator's pause, and the session resumed after it. Both commands, on
+  expansion, set `PLUGIN_DIR=…/4.0.1-botbaubble.2.40.0`.
+- The `audit-append` block accepted `MODE=carried`: it returned `MODE_USED=carried`, not `none`, and logged no
+  "is not one of" note.
+- The `.in_use` files of both 2.37.0 and 2.40.0 are empty this time, so that signal (which Cycle 2 cited) reads
+  nothing.
+
+**Status in one line:** records only. Revision 8 is re-recorded as **`carried` to 02 slice 1**, one new
+`audit-log.md` row. `audited_against` stays `[1, 8]`, and `spec.md` is unchanged.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/02-rev8-20261009-043302.md |
+| source_prompt | plan/.discover/prompts/02-speedup-bench.md |
+| prompt_revision | 8 |
+| discovery_revision | 15 |
+| slice | 0 of [0, 1, 2] (merged) (no new slice; a record of what is merged) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**criteria_reestablished.** Slice 0's three criteria. This cycle changed only
+`.specswarm/features/002-speedup-bench/` and `reboot.md`. The lane's tree differs from `master`'s only in four
+documentation files: `git diff --name-only 3eba335 ec71f3d` lists 007's `cycle-report.md`,
+`.specswarm/maintenance/readme/cycle-report.md`, `README.md` (the closing section, outside the reference markers)
+and `reboot.md`, none of them code or tests. So the two Automated criteria cite **the mentor's lane 007s1-c at
+`3eba335`** (history 2026-10-09T03:16:00Z: `make test` exit 0, e2e 576/576 ok; log `bridge/.make-test-007s1-c.log`).
+No lane ran for this cycle.
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` — **executed [mentor's lane 007s1-c
+  at 3eba335: `tests/e2e/speedup-bench.bats` "SC-1 one command runs a task in both a vanilla image and the timelike
+  image and writes a per-run trace" (ok 432), "SC-1 a hanging call ends within its limit and is recorded" (ok 433)]**
+  (cited, not re-run)
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` — **executed [mentor's
+  lane 007s1-c at 3eba335: `speedup-bench.bats` "SC-2 the bench runs end to end in CI against a deterministic fake
+  agent without any API key" (ok 435), "SC-2 a planted API key refuses the run before any trace is written" (ok 436)]**
+  (cited, not re-run)
+- `02 · "DEMO: the Adopting developer reads a bench report comparing a vanilla container with timelike on one task"` —
+  **observed by the operator**, the mode Cycle 2 recorded (from the Cycle 1 sign-off addendum: the re-interview on
+  `bench/out/20260929T085248Z/report.txt`). Nothing new was observed this cycle.
+
+Each citation matches exactly one line of this send (`grep -cF` = 1 for all three). The slice-1 criterion revision 8 added (`Two arms that end the same way…`) is not cited: it is not in scope for slice 0,
+and it is the work `carried` points at.
+
+**reconcile_mode:** `carried`, to **02 slice 1**. `audited_against` is unchanged at `[1, 8]`.
+- **The block's own output (lore P004).** The installed 2.40.0 `audit-append` block took `PROMPT_REV=1`,
+  `AUDITED=[1, 8]`, `N=8`, `MODE=carried`, `OUT_OF_SCOPE` empty, `CARRIES_TO="02 slice 1"`. It also took
+  `UNVERIFIED` empty and `REMOVALS_VISIBLE=yes`, which carried does not read. It returned `MODE_USED=carried`,
+  `APPENDED` empty, `NEW_AUDITED=[1, 8]` and `AUDIT_NOTE=02 slice 1`, which are the values the send expected. The
+  empty append is the expected no-op, because 8 was already listed. It is not a failure.
+- **Library row 4.** Modify's provenance row is 4 (`N=8` is already in `audited_against`), and on that row the library
+  alone skips Step 9. The block ran on the send's instruction. The audit-log row and T032's FLAGGED entry both say so.
+- **Basis:** plan's ruling (b) in `bridge/feedback/02-20260930-060406-hang-counted-twice.md`. Revision 8 was examined,
+  and the code change rides 02 slice 1. The new row supersedes Cycle 2's `scoped` for revision 8, and Cycle 2's row
+  is kept as written.
+- **What was compared.** This send's prompt body is byte-identical to Cycle 2's send's (`diff` from `# Speedup bench`
+  to the end is empty). Prompt 02 is still at revision 8.
+
+**not_verified**
+- **Slice 0's code does not meet revision 8**, and that is why `carried` is true. All four places were re-read on
+  `ec71f3d`, and none was edited:
+  - `bench/benchlib/report.py:119`: the summed tiebreak `_sign(v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs)`.
+  - `bench/benchlib/report.py:227`: the same sum, quoted at `:231` as "failed or hung commands". Cycle 2 cited `:227`
+    only, where the sum is computed; the phrase is four lines down.
+  - `data-model.md:125`, step 3.
+  - `decisions.md` T016, annotated in Cycle 2.
+- **No test ran in this cycle**, on the host or in the image. The two Automated criteria are cited from lane 007s1-c,
+  not re-executed. `bench/` changed since Cycle 2's lane only in `bench/vanilla/Dockerfile` (007 slice 1's runtimes
+  parity), and lane 007s1-c ran the bench cells over it.
+- **Discovery revisions 14 and 15.** Revision 14's vanilla-image parity rule (RB1, P6) touches the bench's vanilla
+  arm. It was built and tested in 007 slice 1 (e2e P6 cells 469 and 470 in lane 007s1-c), not here, and nothing in it
+  changes a criterion 002 carries. I found nothing in revision 15 (bundled-library fixes) that bears on the bench.
+
+**changed_other_features:** none. Only `.specswarm/features/002-speedup-bench/` and `reboot.md` changed. Implement
+step 10j's `.specswarm/metrics.json` entry was **not** written, as in Cycle 2, because the send confines this cycle
+to the feature's directory; step 10's output is below instead.
+
+**process_failures_recorded:** none this cycle.
+
+**retired_prompts_seen:** Cycle 2's send `02-rev8-20261008-095251` stands as written. This send re-records its mode
+and does not replace its content.
+
+### Implement step 10 — quality validation (specswarm 2.40.0 blocks), as the library reported it
+
+- The detector found `pytest` (`{"frameworks": ["pytest"], "primary": "pytest", "count": 1}`).
+  - `run_tests` rc=2: "pytest is declared by this project but not installed here".
+  - `run_coverage` rc=1, printing `unknown`.
+  - Neither web project nor browser suite was detected.
+- `Quality Score: unknown — no component could be measured, so there is no score to compare`.
+- **The exclusions, by `unmeasured-explains-itself`:** 2 attributed to this install (bundle size, visual alignment),
+  2 to this machine (unit tests, coverage), 2 not applicable (integration, browser), and 0 unattributed.
+  - Coverage's reason is written "on this machine" as in 007's Cycle 4. The library's own `unknown` names neither.
+- The gate is **UNKNOWN**: warned, not halted (`min_quality_score: 0`, `block_merge_on_failure: false`).
+
+**Implement step 9b: decision log** (`scope_tally` and `decision_tally` from 2.40.0's `lib/tally.sh`, over all of 002,
+before T033's own records):
+
+```
+scope: planned=33 recorded=32 unplanned=0 unrecorded=1 in=25 out=0 none=7 unknown=0 flagged=29 flagged_out=0 other=3 other_out=0 unattributed_scope=0
+decisions: sections=32 flagged_sections=29 non_flagged_sections=3 sections_without_absent=0 flagged=47 assumed=44 deferred=2 absent=39 inherited=30 low_confidence=0 flagged_low_confidence=0 flagged_delegate=0 assumed_delegate=0 unattributed=0 deferred_delegate=0 absent_delegate=0 inherited_delegate=0
+```
+
+The `unrecorded=1` is T033 itself, recorded right after this section. There are no low-confidence decisions.
+
+**Git workflow (implement step 11):** option 2, stay on `modify/002-rev8-carried`. The merge is `--no-ff` after the
+mentor's sign-off, and it rides the next germane push and its tag.
