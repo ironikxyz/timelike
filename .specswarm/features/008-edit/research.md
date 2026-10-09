@@ -413,10 +413,12 @@ Fixtures were written by hand from each language's documented syntax, independen
   profile.d restores it (001 R1). The `type -a edit` cell under `bash -lc` is the one that can catch
   `mailcap`'s `/usr/bin/edit` shadowing ours.
 - **The owner branch under a real second uid:**
-  - as root (`docker exec -u 0`), the test creates a file owned by uid 1001, mode 0666, in a directory
-    the agent owns;
-  - the agent's edit cannot `fchown` the temporary file to 1001 (EPERM), so it is refused with
-    `cannot keep FILE's owner (uid 1001, …); nothing written`;
+  - *(corrected in T016: compose gives the agent container `cap_drop: [ALL]`, so root there has no
+    `CAP_CHOWN` or `CAP_DAC_OVERRIDE` and cannot make a file owned by uid 1001, nor write into an
+    agent-owned 0750 directory)*. The agent makes a directory and gives it mode 0777. Root
+    (`docker exec -u 0`) creates the file in it, owned by uid 0, mode 0666;
+  - the agent's edit cannot `fchown` the temporary file to uid 0 (EPERM), so it is refused with
+    `cannot keep FILE's owner (uid 0, …); nothing written`;
   - the test reads the hash before and after.
 
   If the lane's `docker exec` cannot run as root, the cell is skipped, and says that the owner branch

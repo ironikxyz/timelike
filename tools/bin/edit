@@ -829,7 +829,7 @@ LANGUAGES = {
     ".sh": "shell",
     ".bash": "shell",
 }
-SYNTAX_CHECKERS = {
+SYNTAX_CHECKERS: dict[str, str] = {
     "python": "python compile",
     "shell": "bash -n",
     "typescript": "tree-sitter-typescript",

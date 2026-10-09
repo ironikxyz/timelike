@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -14,6 +14,13 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   `5f3b94f`). Deny-list over the tag message and every object pushed: 0 on P1–P7, control positive.
 - **Plugins:** specswarm **2.40.0** and ccmentor 1.50.2, installed during the operator's pause (04:21Z). This session
   runs 2.40.0, which the expanded `PLUGIN_DIR` shows.
+- **`modify/008-slice-1`** (from `master` `ce1eaf2`): **008 Cycle 2 = 06 slice 1**, send
+  `bridge/sends/06-rev1-20261009-102433.md` (row 4: `audited_against [1]` unchanged). Built: `edit --at` (view's anchors,
+  checked with view's own `anchor_of`/`line_body`), the syntax check (Python by the interpreter's compiler, shell by
+  `bash -n`, TS/TSX/Go/Rust by tree-sitter wheels pinned in `pins.env`, child `tools/libexec/syntax-check`, 10 s limit,
+  fail open), `--skip-syntax-check`, the README status block (17 of 38). **Next:** the mentor's lane 008s1-a (the image
+  build installs the wheels: the first real test of § 3a), then D15. **No commit after reporting done until the lane
+  has ended.** Host evidence: venvs in the scratchpad (`venv-ts` with the cp312 wheels, `venv-plain` without).
 - **`modify/002-rev8-carried`** (from `ec71f3d`): 002 Cycle 3, send `bridge/sends/02-rev8-20261009-043302.md`. Records
   only: revision 8 is re-recorded as `carried` to 02 slice 1, and `audited_against` stays `[1, 8]`. **Signed off at
   `28da1d0`** (records only, no lane) and **merged `--no-ff` into `master` as `bbb2c46`**. No tag (the slice count is

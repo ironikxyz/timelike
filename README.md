@@ -32,7 +32,7 @@ Whether it works is a measured claim: see Status.
 | 03 | `run` | Every command ends with a verdict: the whole process tree is stopped at its limit, memory kills and full disks are named, and secrets are redacted | slices 0, 1 of 0–2 |
 | 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all; a missing command names how to get it, package installs need no privilege, and `timelike budget` shows the resource budget | complete (0, 1) |
 | 05 | `view`, `search` | Bounded reads and searches, each ending with the next command; a directory overview within a budget | complete (0, 1) |
-| 06 | `edit` | One exact replacement per call, tolerant of CRLF and tab/space indentation; the nearest candidates on a miss | slice 0 of 0–1 |
+| 06 | `edit` | One exact replacement per call, tolerant of CRLF and tab/space indentation; the nearest candidates on a miss; lines addressed by `view`'s anchors; an edit that would break the file's syntax is refused and the file left as it was | complete (0, 1) |
 | 07 | `snapshot`, `undo` | Snapshot the workspace, git-ignored files too, and restore it | slice 0 of 0–2 |
 | 08 | `journal` | A session's timeline: tool calls, shell commands and grant uses, by agent and session | slice 1 of 1–2 |
 | 09 | `services` | Start long-running processes, return when ready or dead, and stop the whole process tree | slice 1 of 1–2 |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**16 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+**17 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
-Features 01, 04 and 05 are complete. Features 02, 03 and 06–12 have their first slice or slices. Features
+Features 01, 04, 05 and 06 are complete. Features 02, 03 and 07–12 have their first slice or slices. Features
 13–17 are not started.
 
-**Next:** 07 slice 1 (a persistent state root), 15 slice 1, 06 slice 1.
+**Next:** 07 slice 1 (a persistent state root), 15 slice 1, 02 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -588,7 +588,7 @@ exit codes: 0 ok, 1 unreachable, or the capability failed, 2 usage; or name one 
 
 ```text
 edit: file [help]
-replace text that occurs exactly once in a file; tolerates CRLF and tab/space indentation
+replace text that occurs once, or lines by view's anchors; refuses edits that break the syntax
 usage:
   edit FILE --old TEXT --new TEXT            # applies only if TEXT matches exactly once
   edit FILE --old TEXT --new TEXT --dry-run  # the unified diff; nothing written
@@ -597,6 +597,10 @@ usage:
   the new text takes the file's line endings and indentation; the edited lines are shown after
   no match: exit 3 with up to 3 nearest candidates; several: exit 3 with their line numbers
   atomic: the file is fully changed or byte-identical; no --yes (one call; rule 9, revision 13)
+  edit FILE --at 42:a3f9c1..48:0b11e2 --new TEXT  # lines 42-48, anchors from view --anchors
+  stale anchors: exit 3, naming the changed lines and showing them with fresh anchors
+  syntax: Python, TypeScript/TSX, Go, Rust and shell are checked before writing; an edit that
+    introduces a syntax error is refused (exit 1) with the checker's error, the file unchanged
 options:
   --help  this help (at most 40 lines)
   --json  structured output (default when piped)
@@ -607,7 +611,9 @@ options:
   --dry-run  show the plan, change nothing
   --old  the text to replace (must match exactly once)
   --new  the replacement
-exit codes: 0 edited, or nothing to change, 1 refused: binary, unwritable, too large, or changed meanwhile; nothing written, 2 usage, 3 no such file, no match, or more than one match; nothing written
+  --at  address lines by view --anchors's anchors instead of --old
+  --skip-syntax-check  apply without the syntax check (said in the verdict)
+exit codes: 0 edited, or nothing to change, 1 refused: binary, unwritable, too large, changed meanwhile, or the edit would break the file's syntax; nothing written, 2 usage, 3 no such file, no match, more than one match, or stale anchors; nothing written
 ```
 
 ### `journal`

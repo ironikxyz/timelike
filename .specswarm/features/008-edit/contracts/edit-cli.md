@@ -257,6 +257,7 @@ REASON is one of these:
 - `no tree-sitter grammar for LANGUAGE (NAME is not installed)`;
 - `time limit 10 s`;
 - `exit N: <the last stderr line>`;
+- `signal N` (the child was killed by a signal; added in T015);
 - `unreadable output`.
 
 **JSON `syntax`** is `{"status", "language" (null when unknown), "checker" (null when none ran), "errors":

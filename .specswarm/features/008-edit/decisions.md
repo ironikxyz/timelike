@@ -197,3 +197,13 @@ ASSUMED (delegate): the time-limit test takes 10–15 s; left unmarked, since py
 ABSENT: the e2e (T012) — the other delegate's
 Verification: venv-ts 149 passed with test_edit.py (after the fix); the delegate's own runs: venv-ts 64 passed 1 failed, venv-plain 53 passed 1 failed 11 skipped (the grammar cases, each on its own module), the failure being the one fixed here; ruff check and format clean
 SCOPE: in (2 changed files)
+
+### T016: Lint lists, the README (reference and the send's status block), docs, reboot.md
+**Started:** 2026-10-09T11:02:33Z | **Completed:** 2026-10-09T11:02:58Z
+
+INHERITED: edit's final help and manifest (T015); the send's `## README status` block — from T015 and the send (confidence: high)
+FLAGGED: the README status block is applied in this cycle: row 06 `complete (0, 1)` with the send's own example wording for slice 1, and the Status paragraph exactly as the send gives it (17 of 38; Next: 07 s1, 15 s1, 02 s1). The block's condition is "only if all three slice-1 criteria are met (the Manual one may be unconfirmed until the demo)": both Automated criteria are built and pass their units here, and their e2e run in the lane; if the lane fails one, the block is reverted with the fix (confidence: medium — "met" before the lane is read as "built", as earlier cycles applied their blocks before their lanes)
+FLAGGED: mypy could not type SYNTAX_CHECKERS (a manifest lambda reads it before its definition); annotated `dict[str, str]` (confidence: high)
+ASSUMED: the contract's REASON list gains `signal N` (T015's FLAGGED), and research R16's owner cell is corrected in place with a marked note: the agent container drops all capabilities, so root there cannot chown to uid 1001; the cell uses a root-owned file in an agent-made 0777 directory (confidence: high)
+ABSENT: the What and Why sections beyond row 06 and the Status paragraph — the block says nothing else changes; no value claims (P6)
+Verification: `scripts/readme_reference.py --write` (13 tools) then test_readme_reference.py 21 passed; mypy 2.3.1 strict over the project's 28 files: no issues (tools/libexec/syntax-check added to its list and to ruff's extend-include); ruff check and format clean over the repository
