@@ -182,7 +182,7 @@ edit FILE … --skip-syntax-check                    apply without the syntax ch
 
 ```
 edit: src/app.py [lines 42-44 of 121]
-verdict: edited lines 42-44 of 121 (addressed by anchors; checked at lines 42 and 48); syntax: ok (python 3.14.7 compile)
+verdict: edited lines 42-44 of 121 (addressed by anchors; checked at lines 42 and 48); syntax: ok (python 3.14.8 compile)
  39      def run(self):
  …
 ```
@@ -268,7 +268,7 @@ REASON is one of these:
 
 ```
 edit: app.py [refused]
-verdict: refused: the edit would make app.py fail its syntax check (python 3.14.7 compile): line 12, column 9: expected ':'; nothing written
+verdict: refused: the edit would make app.py fail its syntax check (python 3.14.8 compile): line 12, column 9: expected ':'; nothing written
 ── syntax error 1: line 12, column 9: expected ':' ──
  10      x = 1
  11

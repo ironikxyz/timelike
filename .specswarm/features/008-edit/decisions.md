@@ -278,3 +278,28 @@ Verification:
 - edit's units on that 3.14.8: test_edit.py, test_edit_slice1.py and test_view.py 211 passed, 11 skipped (a plain venv); test_edit_slice1.py with the base site-packages 70 passed, no skip
 - both baselines load through scan/evaluate.py's `load_baseline` with no problems (agent 90 entries, vanilla 89); the scan units (test_scan_baseline, _report, _release_check) 153 passed
 SCOPE: out — pins.env is named in tasks.md (T010); scan/baseline/timelike-agent.json and timelike-vanilla.json are not: they change on the mentor's ruling, routed by the feedback file (3 changed files, 2 outside)
+
+## Cycle 2 addendum 2 — lane 008s1-b (`bridge/feedback/06-20261009-192053-lane-008s1-b-slice-0-cells-pin-the-old-verdict.md`)
+
+### A3: the slice-0 `edit` cells assert the verdict slice 1 gives a `.py` fixture (feedback item 1)
+**Started:** 2026-10-09T19:31:01Z (the first clock read of this work; the feedback was read just before) | **Completed:** 2026-10-09T19:31:16Z
+
+INHERITED: T015's verdict, `…; syntax: ok (python V compile)` for a checked `.py`, before `; nothing written` on a dry run (contracts/edit-cli.md § Slice 1); the SC-8 file's way of reading V — from T015 and T012 (confidence: high)
+FLAGGED: V is read in each file's setup_file from timelike's interpreter, exactly as the SC-8 file does, and then asserted literally (escaped in SC-1's regex). Chose this over a version pattern such as `3\.[0-9]+\.[0-9]+`, because a pattern would also pass a wrong checker version, and over hard-coding 3.14.8, which would break on the next interpreter pin (confidence: high)
+FLAGGED: SC-1's regex is built in the cell by `verdict_re` rather than at file level, because PYVER only exists once setup_file has run; it stays anchored at both ends, with no `.*` (confidence: high)
+ASSUMED: the three exact-equality assertions (SC-2 line endings alone; SC-5 LF JSON and text) stay exact equality, with the clause in the position the contract gives (confidence: high)
+ABSENT: any change to the cells' other assertions (sha256, only_file, stderr, the region and the diff), to edit itself, or to the cells that already match with a glob (SC-2 169–170, SC-5 177–178), which pass and are not this item's
+Verification:
+- the four SC-1 cells' regex, with PYVER=3.14.8: matches `edited lines 11-11 of 17` and `edited line 11 of 17`, each with the clause; rejects no clause, a trailing addition, `3x14x8` (escaping), and 3.14.7
+- every expected string, expanded with PYVER=3.14.8, equals what `edit` printed in lane 008s1-b's log (SC-1 JSON verdict; SC-2 cells 171–172; SC-5 cells 173–176)
+- bats 1.14.0 `--count` parses all three files (4, 4, 6 tests, unchanged); shellcheck 0.11.0 clean over them and helpers.bash
+- no cell ran: this host has no Docker, and the cells need the agent container
+SCOPE: in (3 changed files: the three e2e files, named in tasks.md's slice-0 tasks)
+
+### A4: the contract's examples name 3.14.8 (feedback item 2)
+**Started:** 2026-10-09T19:31:16Z | **Completed:** 2026-10-09T19:31:16Z
+
+INHERITED: addendum 1's PYTHON_VERSION 3.14.8 — from A2 (confidence: high)
+FLAGGED: both examples in contracts/edit-cli.md move to 3.14.8 — line 185 (the one named) and line 271 (the refusal example, the same stale value) — chose updating them over making them version-neutral, because the contract's checker table already defines V as the interpreter's version, and an example reads better with a real one (confidence: high)
+ABSENT: spec.md lines 223 (the same refusal example) and 276 ("CPython 3.14.7, the same version as the agent's") — the spec body, not asked for, and left as the mentor's call; they are reported in the addendum
+SCOPE: none — no files outside the feature's artifacts changed

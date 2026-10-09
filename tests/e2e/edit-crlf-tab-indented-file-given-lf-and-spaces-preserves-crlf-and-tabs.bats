@@ -32,6 +32,12 @@ setup_file() {
   stamp_check
   EDIT_DIR="$(container_tmpdir edit-sc2)"
   export EDIT_DIR
+  # Since slice 1 a .py fixture's verdict carries `syntax: ok (python V compile)` (contracts/edit-cli.md
+  # § Slice 1): V is read by the test from timelike's interpreter (edit's own), as the SC-8 file reads it.
+  PYVER="$(exec_plain "$AGENT_PY" -I -c 'import platform; print(platform.python_version())')"
+  PYVER="${PYVER//$'\r'/}"
+  [[ "$PYVER" =~ ^3\.[0-9]+\.[0-9]+$ ]] || { echo "cannot read timelike's Python version: '${PYVER}'" >&2; return 1; }
+  export PYVER
 }
 
 teardown_file() {
@@ -247,7 +253,7 @@ check_tabs() {
   expect_j start 7
   expect_j end 8
   expect_j sha256_after "$SHA_WANT"
-  [[ "$(jval verdict)" == "edited lines 7-8 of 10 (matched ignoring line endings)" ]] || flunk "verdict: $(jval verdict)"
+  [[ "$(jval verdict)" == "edited lines 7-8 of 10 (matched ignoring line endings); syntax: ok (python ${PYVER} compile)" ]] || flunk "verdict: $(jval verdict)"
 }
 
 @test "SC-2 [bash -c, notty] Replacing text in a CRLF file whose indentation is tabs, given the text with LF endings and spaces, succeeds and preserves CRLF endings and tabs — file sha256 equals the expected CRLF, tab-indented bytes; level indentation, 4 spaces = 1 tab" { check_spaces c; }
