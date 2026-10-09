@@ -186,3 +186,13 @@ ABSENT: a dedicated exit code for the syntax refusal — exit 1, as the contract
 ABSENT: the no-op (--old equal to --new) checks nothing and carries no `syntax` key (FR-26)
 Verification: a lab smoke run (venv-ts and venv-plain): python refusal with the error line and context, file hash unchanged; ok; dry run that would be refused (diff, then the error, exit 1); --skip-syntax-check; an already-broken file (`'(' was never closed`) edited with no new error applies; go refusal `unexpected '+'`; an extensionless bash script by shebang refused; .txt `not checked (language unknown)`; go without wheels `not checked (checker failed: no tree-sitter grammar for go …)`. tests/unit/test_edit.py 84 passed (venv-ts) after the verdict updates; ruff check and format clean; `edit --help` 27 lines (limit 40)
 SCOPE: in (2 changed files)
+
+### T011: Units for slice 1, tests/unit/test_edit_slice1.py (delegated)
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T11:02:33Z
+
+INHERITED: the contract's § Slice 1 and the spec's FR-13 to FR-28 — from plan (confidence: high)
+FLAGGED (delegate): written by a subagent from the contract, alone in its file, no commit; 65 tests. Its report: one failure, the implementation's "already failed" note carried a column (`line 2, column 5: …`) where the contract says `(line N: MESSAGE)`. The tool was changed to the contract's text (here), not the test (confidence: high)
+FLAGGED (delegate): beyond the brief, grounded in the contract: the child's argv and stdin recorded by a fake; no child for an unknown language, the skip or the no-op; the time-limit fake starts a grandchild, which the test sees gone afterwards (the group kill); a decoy BASH_ENV; the event's args carry --skip-syntax-check (confidence: high)
+ASSUMED (delegate): the time-limit test takes 10–15 s; left unmarked, since pyproject registers no `slow` marker (confidence: high)
+ABSENT: the e2e (T012) — the other delegate's
+Verification: venv-ts 149 passed with test_edit.py (after the fix); the delegate's own runs: venv-ts 64 passed 1 failed, venv-plain 53 passed 1 failed 11 skipped (the grammar cases, each on its own module), the failure being the one fixed here; ruff check and format clean

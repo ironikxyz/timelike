@@ -973,7 +973,8 @@ def syntax_check(
             span = f"line {s}" if s == e_ else f"lines {s}-{e_}"
             return Syntax(
                 "already failed",
-                f"syntax: {path} already failed its check before this edit ({_where(before[0])}); "
+                f"syntax: {path} already failed its check before this edit "
+                + f"(line {before[0]['line']}: {before[0]['message']}); "
                 + f"no new error in {span}",
                 data,
             )
