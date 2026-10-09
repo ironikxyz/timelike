@@ -246,3 +246,4 @@ FLAGGED: D6 cited `unconfirmed` in this cycle although the operator observed it 
 ASSUMED: Group B's `slice` is the send's own `> Slice:` line, copied whole (confidence: high)
 ABSENT: `demo_points_reached` (the mentor derives it); a lane result; a marker (not a dispatch run)
 Verification: nine citations, each `grep -cF` = 1 in the send; Group B's five values copied from the send's header; tallies printed by the installed scope-tally and decision-tally; step 10 pasted verbatim
+SCOPE: none — no files outside the feature's artifacts changed
