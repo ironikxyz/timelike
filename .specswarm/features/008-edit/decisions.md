@@ -219,3 +219,19 @@ ASSUMED (delegate): the five slice-0 criterion files already carry `bash -lc` ce
 ABSENT: any run of these files — no Docker here; the host stand-in (bats plus a docker stub) was not rebuilt this cycle. The lane is the first run
 Verification: shellcheck 0.11.0 `-x -P tests/e2e:tests/host` over the Makefile's 78 SHELLCHECK_FILES (every one present): clean
 SCOPE: in (4 changed files)
+
+### T017: Host lane (advisory: files, units and hook logic, never the image)
+**Started:** 2026-10-09T11:00:30Z | **Completed:** 2026-10-09T16:02:10Z
+
+INHERITED: every task's files; two scratch venvs (Python 3.12.3, pytest 8.4.2): `venv-ts` with the cp312 binding and the three pinned grammar wheels, `venv-plain` without (also ruff 0.16.9, mypy 2.3.1, shellcheck-py 0.11.0, coverage) — from T010 to T016 (confidence: high)
+FLAGGED: five in-process units for the checker child (a NUL byte, bash's message without a line number and with none, a missing bash, an unknown language and bad usage, an absent grammar under a venv whose base is tried once) were appended to tests/unit/test_edit_slice1.py, because the child sat at 78% and its branches cannot be forced through a subprocess; it is now 98% (64-65 left: CPython 3.12 raises SyntaxError, not ValueError, for a NUL byte) (confidence: high)
+FLAGGED: the host conformance run fails `timelike` on C2, C3 and C4 (`/opt/timelike/REVISION` absent on the host: the image stamps it, H8). `timelike` is not changed this cycle; every other tool, `edit` included, is ok. Not a finding for the lane (confidence: high)
+ASSUMED: the host was loaded by another project's test run during these measurements (load average up to 10), so durations are noisy; the timings below were taken at load 2.4 (confidence: high)
+ABSENT: the image's interpreter (3.14.7) and the cp314 binding wheel — the lane's; the host stand-in for e2e — not rebuilt (T012)
+Verification:
+- `make test-host PYTHON=venv-ts`: passed — units 1955 passed, 2 skipped (331 s); files 60/60; the hook 44/44; the handler 33/33 (before the five child units were added)
+- edit's units: venv-ts 154 passed (test_edit.py 84 + test_edit_slice1.py 70); venv-plain 143 passed, 11 skipped (the grammar cases)
+- coverage (branch, edit's two unit files, venv-ts): tools/bin/edit 95%, tools/libexec/syntax-check 98%
+- lint: ruff check and format over the repository clean; mypy 2.3.1 strict, 28 files, no issues; shellcheck over 78 files clean
+- conformance (every tools/bin tool with venv-ts, libexec beside): edit ok; 12 of 13 ok; timelike fails C2–C4 on the host only (above)
+- start-up, a dry run per language, 20 runs each at load 2.4: .txt (no child) p50 93 / p95 99 ms; .py 146 / 150; .ts 191 / 200; .go 191 / 204; .sh 239 / 243. The probe (/etc/os-release, an unknown language) starts no child

@@ -781,3 +781,80 @@ def test_a_decoy_tree_sitter_on_pythonpath_is_never_imported(lab: Lab, tmp_path:
     check_untouched(p, TS_SRC)
     assert json.loads(r.stdout)["syntax"]["status"] == "refused"
     assert not marker.exists()
+
+
+# ── the checker child in process: the branches a subprocess run cannot force (T017, coverage) ─────
+
+CHECKER = TOOLS_DIR.parent / "libexec" / "syntax-check"
+
+
+def load_checker() -> Any:
+    import importlib.machinery
+
+    loader = importlib.machinery.SourceFileLoader("timelike_syntax_check", str(CHECKER))
+    spec = importlib.util.spec_from_loader("timelike_syntax_check", loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def test_child_python_nul_byte_is_an_error_not_a_crash() -> None:
+    errs = load_checker().python_errors(b"x = 1\x00\n")
+    assert len(errs) == 1 and errs[0]["line"] == 1 and errs[0]["column"] is None
+
+
+def test_child_bash_error_without_a_line_number_is_still_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    sc = load_checker()
+
+    class Done:
+        returncode, stderr = 2, b"bash: something odd\n"
+
+    monkeypatch.setattr(sc.subprocess, "run", lambda *a, **k: Done())
+    assert sc.shell_errors(b"echo\n") == [{"line": 1, "column": None, "message": "bash: something odd"}]
+
+    class Silent:
+        returncode, stderr = 2, b""
+
+    monkeypatch.setattr(sc.subprocess, "run", lambda *a, **k: Silent())
+    assert sc.shell_errors(b"echo\n")[0]["message"] == "bash -n exit 2"
+
+
+def test_child_missing_bash_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    sc = load_checker()
+    monkeypatch.setattr(sc.os, "access", lambda *a: False)
+    with pytest.raises(sc.Unavailable, match="is not installed"):
+        sc.checker("shell")
+
+
+def test_child_unknown_language_and_bad_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    sc = load_checker()
+    with pytest.raises(SystemExit, match="unknown language"):
+        sc.checker("cobol")
+    assert sc.main(["python"]) == 2
+    assert sc.main(["python", "x"]) == 2
+    assert "usage: syntax-check" in capsys.readouterr().err
+
+
+def test_child_reports_an_absent_grammar_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sc = load_checker()
+    import importlib
+
+    real = importlib.import_module
+
+    def no_tree_sitter(name: str, *a: Any) -> Any:
+        if name.startswith("tree_sitter"):
+            raise ImportError(name)
+        return real(name, *a)
+
+    monkeypatch.setattr(importlib, "import_module", no_tree_sitter)
+    # a venv over a base interpreter: the base's site-packages is tried once, then the grammar is absent
+    monkeypatch.setattr(sc.sys, "base_prefix", "/nonexistent-base")
+    monkeypatch.setattr(sc.sys, "path", list(sys.path))
+    monkeypatch.setattr(sc.sys, "stdin", type("I", (), {"buffer": __import__("io").BytesIO(b"x")})())
+    assert sc.main(["go", "1"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"unavailable": "no tree-sitter grammar for go (tree-sitter-go is not installed)"}
+    assert any(p.startswith("/nonexistent-base") for p in sc.sys.path)
