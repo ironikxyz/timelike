@@ -196,3 +196,4 @@ FLAGGED (delegate): beyond the brief, grounded in the contract: the child's argv
 ASSUMED (delegate): the time-limit test takes 10–15 s; left unmarked, since pyproject registers no `slow` marker (confidence: high)
 ABSENT: the e2e (T012) — the other delegate's
 Verification: venv-ts 149 passed with test_edit.py (after the fix); the delegate's own runs: venv-ts 64 passed 1 failed, venv-plain 53 passed 1 failed 11 skipped (the grammar cases, each on its own module), the failure being the one fixed here; ruff check and format clean
+SCOPE: in (2 changed files)
