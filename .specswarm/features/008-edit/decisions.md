@@ -247,3 +247,34 @@ ASSUMED: Group B's `slice` is the send's own `> Slice:` line, copied whole (conf
 ABSENT: `demo_points_reached` (the mentor derives it); a lane result; a marker (not a dispatch run)
 Verification: nine citations, each `grep -cF` = 1 in the send; Group B's five values copied from the send's header; tallies printed by the installed scope-tally and decision-tally; step 10 pasted verbatim
 SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 addendum 1 — lane 008s1-a (`bridge/feedback/06-20261009-162833-lane-008s1-a-build-parse-and-new-cves.md`)
+
+### A1: `image/Dockerfile` § 3a parses (feedback item 1)
+**Started:** before 2026-10-09T17:58:05Z (the first clock read of this work) | **Completed:** 2026-10-09T18:05:26Z
+
+INHERITED: § 3a as T010 wrote it; the lane's parse error at line 157 (`unknown instruction: want`) — from T010 (confidence: high)
+FLAGGED: the import check stays inline, rewritten as one Python logical line (statements joined by `;`, the `for`/`if` blocks as list comprehensions) with a trailing `\` on every Dockerfile line, chose this over a heredoc `RUN` or a build-only script `COPY`ed in, because it matches the file's other `-c` checks (§ 2's version check) and needs no BuildKit heredoc feature and no new file in the build context (confidence: high)
+ASSUMED: the `dockerfile` package (3.4.0, BuildKit's Go parser) reads the file as `docker build` does; it reproduced the lane's error exactly (line 157, `want`, and six more after it) before the fix (confidence: high)
+ABSENT: a `docker build` — this host has no Docker (no binary, no socket); the lane is the first real build. A parser check in `make lint` — not asked for, and it would need a tool the lint images do not carry
+Verification:
+- BuildKit's parser over all five Dockerfiles: image 58 instructions, 0 unknown (65 and 7 before); adele, bench/driver, bench/vanilla, tests/runner 0 unknown
+- the RUN's joined text, as the parser hands it to the shell, run against CPython 3.14.8 with the four wheels installed by uv 0.12.22: rc 0 with the pins, rc 1 with `error: tree-sitter-go is 0.25.0, pinned 9.9.9` on a wrong pin; the three probes found their errors
+SCOPE: in (1 changed files)
+
+### A2: CPython 3.14.8, uv 0.12.22, and CVE-2026-107161 baselined (feedback item 2, the mentor's ruling)
+**Started:** 2026-10-09T17:58:05Z | **Completed:** 2026-10-09T18:05:26Z
+
+INHERITED: the ruling — PYTHON_VERSION to 3.14.8; UV_IMAGE to the first stable uv that offers it if 0.12.19 cannot; CVE-2026-107161 baselined in agent and vanilla under review_by 2026-12-27, its reason naming its true layer — from the feedback file (confidence: high)
+ASSUMED: 3.14.8 is released — python.org/ftp/python/3.14.8/ answers 200 (confidence: high)
+FLAGGED: UV_IMAGE to uv 0.12.22, chose it over 0.12.24 (the newest) because the ruling asks for the first stable release that can; 0.12.19 to 0.12.21 list CPython up to 3.14.7 and 0.12.22 to 0.12.24 list 3.14.8 (each release's own binary from PyPI, `uv python list 3.14 --all-versions --only-downloads --offline --all-platforms`) (confidence: high)
+ASSUMED: the ghcr index digest is the right pin form — the same request returns 0.12.19's existing pin `04d046b1…` for that tag (confidence: high)
+FLAGGED: CVE-2026-107161's origin is `git`, not `base layer`, chose it on evidence: the pinned trixie-slim base's amd64 layer (`6b37362b…`) has a dpkg status of 78 packages with no libsasl2, libldap, libcurl or git, and Debian trixie's Depends lead git → libcurl3t64-gnutls → libldap2 → libsasl2-2 → libsasl2-modules-db; the lane's own proposed baseline also says `git`. The ruling asked for `dpkg` in the image, which needs Docker; this is the base layer plus the package index instead, and the entry says so (confidence: high)
+ASSUMED: the DIGEST-MD5 plugin the CVE is in is absent from both images — it ships in libsasl2-modules (listed .deb contents), only a Recommends of libsasl2-2, outside the Depends closure of either image's apt line, and both use --no-install-recommends; the lane's scan reported no libsasl2-modules (confidence: high)
+ASSUMED: the top-level `reviewed` stays 2026-10-01, as the 2026-10-08 entries did; a review note records the ruling (confidence: medium)
+ABSENT: any tree-sitter pin change — the cp314 binding wheel's hash matched under 3.14.8 (uv 0.12.22 installed all four with --require-hashes); the bench-driver baseline — its two findings are the CPython pair, which the bump clears; an image rebuild or scan (no Docker here)
+Verification:
+- uv 0.12.22 (from PyPI) installed CPython 3.14.8 with § 2's flags (`--install-dir --no-bin --compile-bytecode`), then the four wheels with § 3a's (`--target <purelib> --require-hashes --no-deps --only-binary :all:`)
+- edit's units on that 3.14.8: test_edit.py, test_edit_slice1.py and test_view.py 211 passed, 11 skipped (a plain venv); test_edit_slice1.py with the base site-packages 70 passed, no skip
+- both baselines load through scan/evaluate.py's `load_baseline` with no problems (agent 90 entries, vanilla 89); the scan units (test_scan_baseline, _report, _release_check) 153 passed
+SCOPE: out — pins.env is named in tasks.md (T010); scan/baseline/timelike-agent.json and timelike-vanilla.json are not: they change on the mentor's ruling, routed by the feedback file (3 changed files, 2 outside)

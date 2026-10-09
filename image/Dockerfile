@@ -128,6 +128,8 @@ RUN chown -R root:root /opt/timelike/bin
 # --only-binary means no compiler is needed, which the image has none of. Python and shell need nothing
 # here: the checker uses this interpreter's compiler and /bin/bash -n. The checker itself lives in
 # /opt/timelike/libexec, off PATH; edit runs it from its own location (lore P002).
+# Every line of a RUN ends in a backslash, the Python import check included: the Dockerfile parser joins
+# only those (lane 008s1-a: a multi-line -c program broke the parse), so the check is one logical line.
 ARG TREE_SITTER_VERSION
 ARG TREE_SITTER_SHA256
 ARG TREE_SITTER_TYPESCRIPT_VERSION
@@ -153,14 +155,12 @@ RUN for pin in "tree-sitter:${TREE_SITTER_VERSION:-}:${TREE_SITTER_SHA256:-}" \
  && rm -f /tmp/syntax-check.requirements \
  && chown -R root:root "${site}" /opt/timelike/libexec \
  && cd / && /opt/timelike/python/bin/python3 -I -c \
-      'import importlib.metadata as md, sys, tree_sitter as ts, tree_sitter_typescript as t, tree_sitter_go as g, tree_sitter_rust as r
-want = dict(zip(["tree-sitter", "tree-sitter-typescript", "tree-sitter-go", "tree-sitter-rust"], sys.argv[1:]))
-for name, version in want.items():
-    if md.version(name) != version:
-        sys.exit(f"error: {name} is {md.version(name)}, pinned {version}")
-for lang in (t.language_typescript, t.language_tsx, g.language, r.language):
-    if ts.Parser(ts.Language(lang())).parse(b"x").root_node is None:
-        sys.exit("error: a grammar parsed nothing")' \
+      'import importlib.metadata as md, sys, tree_sitter as ts, tree_sitter_typescript as t, tree_sitter_go as g, tree_sitter_rust as r; \
+       names = ["tree-sitter", "tree-sitter-typescript", "tree-sitter-go", "tree-sitter-rust"]; \
+       bad = [f"{n} is {md.version(n)}, pinned {v}" for n, v in zip(names, sys.argv[1:]) if md.version(n) != v]; \
+       bad += ["a grammar parsed nothing" for lang in (t.language_typescript, t.language_tsx, g.language, r.language) \
+               if ts.Parser(ts.Language(lang())).parse(b"x").root_node is None]; \
+       sys.exit("error: " + "; ".join(bad) if bad else 0)' \
       "${TREE_SITTER_VERSION}" "${TREE_SITTER_TYPESCRIPT_VERSION}" "${TREE_SITTER_GO_VERSION}" "${TREE_SITTER_RUST_VERSION}" \
  && test -x /opt/timelike/libexec/syntax-check \
  && for probe in 'python:def f(x)' $'go:package p\nfunc f() {' 'shell:if true; then'; do \
