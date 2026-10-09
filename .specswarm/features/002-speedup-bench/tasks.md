@@ -304,7 +304,7 @@ Governance is current at `[2..15]`, so there is no audit task. Nothing outside
 `.specswarm/features/002-speedup-bench/` changes except `reboot.md`, so there is no Docker lane (send § How this cycle
 runs).
 
-- [ ] T032 Provenance (modify Step 9, on the send's instruction; the library row is 4): run the installed 2.40.0
+- [X] T032 Provenance (modify Step 9, on the send's instruction; the library row is 4): run the installed 2.40.0
   `audit-append` block with `PROMPT_REV=1`, `AUDITED=[1, 8]`, `N=8`, `MODE=carried`, `OUT_OF_SCOPE` empty,
   `CARRIES_TO="02 slice 1"`. Expect `MODE_USED=carried`, `APPENDED` empty, `NEW_AUDITED=[1, 8]`, `AUDIT_NOTE=02 slice 1`.
   Any other value means stop and report. Append one `audit-log.md` row quoting the inputs and outputs, with ruling (b)
