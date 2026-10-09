@@ -218,3 +218,4 @@ FLAGGED (delegate): the gofmt cell skips, naming why, when GO_IMAGE is not in th
 ASSUMED (delegate): the five slice-0 criterion files already carry `bash -lc` cells (Cycle 1 wrote them; its not_verified was that the host stand-in ran them as `bash -c`), so they are unchanged; the carried item is their run in the image (confidence: high — each has bash -lc cells)
 ABSENT: any run of these files — no Docker here; the host stand-in (bats plus a docker stub) was not rebuilt this cycle. The lane is the first run
 Verification: shellcheck 0.11.0 `-x -P tests/e2e:tests/host` over the Makefile's 78 SHELLCHECK_FILES (every one present): clean
+SCOPE: in (4 changed files)
