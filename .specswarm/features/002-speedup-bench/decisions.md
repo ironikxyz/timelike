@@ -373,3 +373,4 @@ INHERITED: T032's block outputs; lane 007s1-c's results from `bridge/history.md`
 FLAGGED: the Automated criteria cite lane 007s1-c at 3eba335, not re-run — chose the send's citation over a fresh lane, because 3eba335..ec71f3d changes four documentation files only (verified with git diff --name-only) and this cycle changes no code (confidence: high)
 ASSUMED: D2's mode stays "observed by the operator", as Cycle 2 recorded and the send says — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no .specswarm/metrics.json entry (outside the feature directory, as in Cycle 2); no host or Docker lane
+SCOPE: in (1 changed files)
