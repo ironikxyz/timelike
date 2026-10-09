@@ -5,14 +5,19 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
 
 - **`modify/007-slice-1`** holds **04 slice 1**: Cycles 3 and 4 (built), lane 007s1-a's fixes and revision 15 (Cycle 5).
   It started from `master` `f6faf01`. **Not merged, not pushed.**
-  - **Lane 007s1-b comes next** (test, bench-images, scan). **Make no commit until the mentor says it has ended.**
+  - **Lane 007s1-b ended** (feedback `04-20261009-010500-…`): every Cycle 5 fix passed, and the release check read
+    3 no-release as predicted. Item 1, `timelike-adele` 9 blocking on Go 1.27.1 stdlib, is fixed in **`a7e1f2f`**
+    (`GO_IMAGE` → `golang:1.27.2-trixie`), and Cycle 5's lane addendum records it. Item 2 is a host event: no change.
+  - **Lane 007s1-c comes next** (test, bench-images, scan). **Make no commit until the mentor says it has ended.**
+  - **Raised, open:** staticcheck v0.8.1 (newest) can't read Go 1.27.2's export data, so `make lint` fails on the new
+    pin. Rebuilding it against x/tools v0.50.0 works (scratch only). The mentor chooses.
   - Then: lane findings, if any; the D13 demo (the mentor captures it); sign-off; `--no-ff` merge with
     `maint/readme-godel` per the mentor's instruction; push on the discharge plus the operator's OK.
   - The tag at that push: **`v0.16.0`** (README Status is 16 of 38). It carries the three audit merges (`225a55c`,
@@ -533,12 +538,13 @@ Last result (host, 3.12, p95):
 
 **Host Go toolchain** (gone after a clear; nothing is installed on the host):
 ```
-S=<scratchpad>; cd $S && curl -sSL -o go.tgz https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
+S=<scratchpad>; cd $S && curl -sSL -o go.tgz https://go.dev/dl/go1.27.2.linux-amd64.tar.gz
 # verify sha256 against https://go.dev/dl/?mode=json, then: tar xzf go.tgz
 cat > $S/goenv.sh <<X
 export PATH=$S/go/bin:\$PATH GOPATH=$S/gopath GOCACHE=$S/gocache GOMODCACHE=$S/gomod GOFLAGS=-modcacherw GOTOOLCHAIN=local
 X
-. $S/goenv.sh; go install honnef.co/go/tools/cmd/staticcheck@v0.8.1 golang.org/x/vuln/cmd/govulncheck@v1.8.0
+. $S/goenv.sh; go install honnef.co/go/tools/cmd/staticcheck@v0.8.1; go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+# (two installs: different modules. staticcheck v0.8.1 fails on Go 1.27.2; see Cycle 5's lane addendum)
 cd adele && CGO_ENABLED=0 go test -count=1 -cover ./... && gofmt -l . && go vet ./... && $GOPATH/bin/staticcheck ./... && $GOPATH/bin/govulncheck ./...
 ```
 

@@ -865,3 +865,37 @@ There are no low-confidence decisions. Every `SCOPE:` record in Cycle 5 is `in` 
 
 **Git workflow (implement step 11):** option 2, stay on `modify/007-slice-1`. The merge is `--no-ff` after the mentor's
 sign-off, with `maint/readme-godel` (`866b49b`, `ad4d63f`).
+
+### Addendum — lane 007s1-b: Go 1.27.2 (2026-10-09T01:16:28Z, read from the clock)
+
+- **Finding** (mentor, `bridge/feedback/04-20261009-010500-lane-007s1-b-go-1.27.2-and-a-host-event.md`, lane 007s1-b at
+  `3d0b9f9`): item 1, `timelike-adele` FAIL. govulncheck v1.8.0 over `adele/` on `golang:1.27.1-trixie` found 9
+  reachable stdlib advisories, all high, all fixed in Go 1.27.2. Lane 007s1-a, five hours earlier on the same pin, read 0.
+  Not caused by this slice.
+- **Fix (`a7e1f2f`):** `pins.env` `GO_IMAGE` → `golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d`.
+  This is revision 5's fix-available rule, so there are no baseline entries.
+  - I re-read the index digest from Docker Hub's registry API on 2026-10-09. It matches the mentor's reading, and the
+    index carries linux/amd64.
+  - go.dev's release list gives go1.27.2 as current.
+  - Nothing else pins the Go patch version: `adele/go.mod` says `go 1.27` (no `toolchain` line); govulncheck and lint
+    run in `GO_IMAGE`; `tech-stack.md` says `Go 1.23+`. Citations of 1.27.1 in earlier cycles' records and in test
+    fixtures are history or synthetic input, and stay.
+  - In passing: the `1.27.1-trixie` tag now resolves to a different index (`sha256:8f58fd67…`) from the one pinned.
+    The tag was rebuilt upstream, and the digest pin is why the lane did not follow it.
+- **Host check (advisory; scratch Go 1.27.2, tarball SHA-256 checked against go.dev):** in `adele/`, `go test
+  -count=1 -cover ./...` passes for all 6 packages. `gofmt -l` is empty and `go vet` is clean. **govulncheck v1.8.0:
+  "No vulnerabilities found."**
+- **Found, not fixed: staticcheck v0.8.1 cannot read Go 1.27.2's standard library.** It fails with `internal error in
+  importing "internal/cpu" (cannot decode …, export data version 5 is greater than maximum supported version 4)`, exit 1.
+  - It runs clean under Go 1.27.1, and the failure is the same with a fresh cache.
+  - v0.8.1 is the newest staticcheck release (module proxy, 2026-10-09).
+  - Rebuilding v0.8.1 against `golang.org/x/tools` v0.50.0 makes it clean on 1.27.2 (a scratch build, not committed).
+  - Only `make lint` runs staticcheck. `make test`, `bench-images` and `scan` don't, so lane 007s1-c is unaffected,
+    but `make lint` will fail on this pin. Raised to the mentor in the report, not changed here: the remedy is a choice
+    between pins, not a lane fix.
+- **Host lane:** `make test-host` failed once with a cause I didn't capture (I kept only the tail, which showed the
+  env, hook and handler suites passing). It then passed: 1877 passed, 1 skipped; env 60/60, hook 44/44, handler 33/33.
+  A third run also passed with the same counts (417.9 s, against 310.1 s for the second). Item 2 (the vanilla image missing, and the stalled Go and pytest
+  stage) needs no change, per the feedback; lane 007s1-c shows whether it recurs.
+- **Not verified here:** the adele image build and the scan on 1.27.2 (no Docker in this instance). They are
+  `unconfirmed` until lane 007s1-c.
