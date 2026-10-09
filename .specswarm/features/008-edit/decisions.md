@@ -147,3 +147,4 @@ ASSUMED: the build has network for PyPI, as it does for nodejs.org and the npm r
 ABSENT: an image build — no Docker here; the lane builds it. The Dockerfile's new RUN is unverified until then
 ABSENT: bench/vanilla/Dockerfile and the runtimes stage — untouched by design (RB1); test_the_two_runtimes_stages_are_identical still passes, and a new test asserts the vanilla Dockerfile names no tree-sitter
 Verification: tests/unit/test_agent_runtimes.py 91 passed (venv Python 3.12.3, pytest 8.4.2), with 13 new cases (pins, ARG, compose, hash-only install, vanilla clean); `make -p` reads the 8 new keys; `set -a; . ./pins.env` sources clean
+SCOPE: in (4 changed files)
