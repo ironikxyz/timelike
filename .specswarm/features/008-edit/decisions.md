@@ -159,3 +159,4 @@ ASSUMED: anchors' lines split on \n only, as iterating a binary file splits them
 ABSENT: interior anchors of a range are not checked (the form carries the ends; R11)
 ABSENT: the syntax check on anchored edits — T015 adds it to both paths
 Verification: a lab smoke run (applied range on a mixed CRLF/LF file with B's ending kept and A's ending given to --new; changed end exit 3; a move exit 3 with the --at to rerun; delete; two usage errors exit 2); test_edit.py 84 passed; ruff check and format clean on edit and view
+SCOPE: in (2 changed files)
