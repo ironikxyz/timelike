@@ -364,3 +364,4 @@ INHERITED: Cycle 2's `scoped` row and its not_verified list of four unmet places
 FLAGGED: ran audit-append although modify's provenance row is 4 (the library skips Step 9 there) — chose the send's explicit instruction over the row's skip, because the record the send exists to make (examined, work outstanding) is only made by a row; the row's number is recorded beside it (confidence: high)
 ASSUMED: the four places still contradict revision 8, re-read on `ec71f3d` (report.py unchanged since 4662060) — so carried, not scoped or full, is true (confidence: high)
 ABSENT: spec.md untouched (audited_against stays [1, 8]; prompt_revision, discovery_revision and source_prompt unchanged); Cycle 2's audit-log row not edited (append-only); report.py, data-model.md and T016 not edited (02 slice 1's work)
+SCOPE: none — no files outside the feature's artifacts changed
