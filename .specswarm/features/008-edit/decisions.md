@@ -208,3 +208,13 @@ ASSUMED: the contract's REASON list gains `signal N` (T015's FLAGGED), and resea
 ABSENT: the What and Why sections beyond row 06 and the Status paragraph — the block says nothing else changes; no value claims (P6)
 Verification: `scripts/readme_reference.py --write` (13 tools) then test_readme_reference.py 21 passed; mypy 2.3.1 strict over the project's 28 files: no issues (tools/libexec/syntax-check added to its list and to ruff's extend-include); ruff check and format clean over the repository
 SCOPE: in (4 changed files)
+
+### T012: e2e in the image (delegated): SC-7, SC-8, FR-28; Makefile SHELLCHECK_FILES
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T16:01:54Z
+
+INHERITED: the contract's § Slice 1 and the owner-cell correction sent to the delegate mid-task (cap_drop ALL: root-owned file in an agent-made 0777 directory) — from plan and T016 (confidence: high)
+FLAGGED (delegate): written by a subagent from the contract, alone in its files, no commit. Its session ended (the operator's session dropped) before it reported and before it edited the Makefile; its three files were complete on disk (SC-7: 12 cells; SC-8: 31 cells including a decoy python3/bash on the agent's PATH and a gofmt confirmation; FR-28: 4 cells). The Makefile's SHELLCHECK_FILES entries were added here, not by the delegate (confidence: high)
+FLAGGED (delegate): the gofmt cell skips, naming why, when GO_IMAGE is not in the runner's environment or not pulled on the Docker host; tests/run.sh was not changed to pass it, by the brief. So the Go compiler confirmation may report itself skipped in the lane, which the cycle report says (confidence: high)
+ASSUMED (delegate): the five slice-0 criterion files already carry `bash -lc` cells (Cycle 1 wrote them; its not_verified was that the host stand-in ran them as `bash -c`), so they are unchanged; the carried item is their run in the image (confidence: high — each has bash -lc cells)
+ABSENT: any run of these files — no Docker here; the host stand-in (bats plus a docker stub) was not rebuilt this cycle. The lane is the first run
+Verification: shellcheck 0.11.0 `-x -P tests/e2e:tests/host` over the Makefile's 78 SHELLCHECK_FILES (every one present): clean
