@@ -16,8 +16,8 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
     3 no-release as predicted. Item 1, `timelike-adele` 9 blocking on Go 1.27.1 stdlib, is fixed in **`a7e1f2f`**
     (`GO_IMAGE` → `golang:1.27.2-trixie`), and Cycle 5's lane addendum records it. Item 2 is a host event: no change.
   - **Lane 007s1-c comes next** (test, bench-images, scan). **Make no commit until the mentor says it has ended.**
-  - **Raised, open:** staticcheck v0.8.1 (newest) can't read Go 1.27.2's export data, so `make lint` fails on the new
-    pin. Rebuilding it against x/tools v0.50.0 works (scratch only). The mentor chooses.
+  - **staticcheck on Go 1.27.2:** the mentor ruled (amendment 01:40Z) for a lint-only `GO_LINT_IMAGE` at 1.27.1, used
+    for staticcheck only. It is built; see Open items for its removal condition.
   - Then: lane findings, if any; the D13 demo (the mentor captures it); sign-off; `--no-ff` merge with
     `maint/readme-godel` per the mentor's instruction; push on the discharge plus the operator's OK.
   - The tag at that push: **`v0.16.0`** (README Status is 16 of 38). It carries the three audit merges (`225a55c`,
@@ -95,6 +95,10 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## Open items (none blocks)
 
+- **Removal item, `GO_LINT_IMAGE`** (2026-10-09): delete it once a staticcheck release whose x/tools reads Go
+  1.27.2's export data exists, and move staticcheck back to `GO_IMAGE`. Check with `curl
+  https://proxy.golang.org/honnef.co/go/tools/@latest` (v0.8.1 at 2026-10-09). Recorded in `quality-standards.md`
+  and `pins.env`.
 - **The mentor's carried findings** (history 12:58:18Z):
   - (a) `verify` runs `git status` without `--no-optional-locks` (`tools/bin/verify:878`). Cheap hardening for
     012's next cycle. Runner caches stay in the workspace, which 012's contract admits.

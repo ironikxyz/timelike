@@ -899,3 +899,26 @@ sign-off, with `maint/readme-godel` (`866b49b`, `ad4d63f`).
   stage) needs no change, per the feedback; lane 007s1-c shows whether it recurs.
 - **Not verified here:** the adele image build and the scan on 1.27.2 (no Docker in this instance). They are
   `unconfirmed` until lane 007s1-c.
+
+### Addendum — staticcheck in a lint-only Go image (2026-10-09T02:04:01Z, read from the clock)
+
+- **Ruling** (mentor, `bridge/feedback/04-20261009-010500-…` § Amendment 2026-10-09T01:40Z): staticcheck runs in a
+  lint-only Go image at the previous pin until a staticcheck release reads Go 1.27.2. gofmt and `go vet` stay on
+  `GO_IMAGE`. The ruling turned down two alternatives: the x/tools rebuild (not a released tool) and leaving lint red.
+- **Fix (`de5aebe`):**
+  - `pins.env` gains `GO_LINT_IMAGE=golang:1.27.1-trixie@sha256:3b77fc618ec235a1ab412de7737f120dd507c57e8d87de4cbb7994fb94275ed5`,
+    with a comment giving the reason and the removal condition.
+  - `make lint`'s Go step is split in two:
+    - gofmt and `go vet` run in `GO_IMAGE` and print `go version` first;
+    - staticcheck runs alone in `GO_LINT_IMAGE` and prints `staticcheck on <go version>`.
+  - `lint-host` uses the host's Go, runs no staticcheck and pins nothing, so it is unchanged.
+  - `quality-standards.md` records the removal item under its lint rule. `reboot.md` § Open items records it with the
+    command that checks for a new release. `tech-stack.md` is unchanged (`Go 1.23+`), as the ruling says.
+- **Checks (host, advisory; no Docker in this instance):** each command of `make lint`, run with the pinned versions.
+  - **Go:**
+    - gofmt and `go vet` on `go1.27.2 linux/amd64`: clean.
+    - `go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...` on `go1.27.1 linux/amd64`: clean.
+  - **Python:** ruff 0.16.9 check and format, clean (79 files formatted); `mypy --strict`, no issues (27 files).
+  - **Shell:** shellcheck 0.11.0 over `SHELLCHECK_FILES` (75 files), clean.
+  - **Units:** the four pin-related files, 230 passed.
+  - **Unconfirmed:** `make lint` itself, run in the images, until someone with Docker runs it.
