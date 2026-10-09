@@ -77,3 +77,145 @@ Governance is current at `[2..13]`, so there is no audit task. Nothing outside
 
 - T001 → T004. T004 → T005 → T006 → T007 → T008 → T009.
 - T002 and T003 depend only on the contract, and run beside T004–T006.
+
+## Phase 6: Cycle 3 — slice 1 (send `bridge/sends/04-rev13-20261008-161802.md`, via `/specswarm:modify` → plan → tasks)
+
+<!-- Tech Stack Validation (cycle 3): PASSED — plan.md § Tech Stack Compliance Report (Cycle 3) has no conflict or
+prohibition; the installed tech-stack-taskscan block (lib/tech-stack-parser.sh, ts_mentions) scanned the 10 task
+lines below and found no prohibited technology -->
+
+Spec § Slice 1, contract § Slice 1, plan § Cycle 3. Governance is current at `[2..13]`, so there is no audit task.
+This cycle changes `image/`, `tools/` and `tests/`, so **the mentor's Docker lane is the merge bar**.
+
+**Stories:** US5 = SC-5 (the command-not-found answer), US7 = SC-7 (the budget), US6 = SC-6 (installs, **held**),
+C = carried items. Tests are written from the contract **before** the code (the 003/005 pattern), by delegates.
+
+- [X] T014 [P] [US5, US7] e2e from the contract, written by a delegate before the code:
+  `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats` (SC-5: per style `bash -c`,
+  `bash -lc`, interactive, a script; `sh -c` and direct exec unreached; the unknown name byte for byte against bash
+  with the handler unset; every listed name absent) and
+  `tests/e2e/one-command-prints-the-agents-resource-budget.bats` (SC-7: a throwaway with known `--memory`, `--cpus`,
+  `--pids-limit`; the agent container; the CPU figure equals the shell's `$TIMELIKE_CPUS`).
+- [X] T015 [P] [US5, US7] Units and the host test from the contract, written by a delegate before the code:
+  `tests/unit/test_budget.py` (figures from files the test writes under `TIMELIKE_CGROUP_ROOT`: values, `max`,
+  unreadable, missing; disks; text and JSON; the CPU rule against the bash hook on the same files),
+  `tests/unit/test_missing_commands.py` (the shipped TSV's validity), and `tests/host/test_command_not_found.sh`
+  (the handler per style, byte for byte against bash, under `set -eux` callers, with an empty PATH).
+- [X] T016 [US7] `tools/agentio/agentio.py`: `cgroup_dir`, `cgroup_value`, `cpu_figure` and `workspace`. `tools/bin/run`
+  and `tools/bin/snapshot` use them, and their own copies go. Their existing suites (`tests/unit/test_run*.py`,
+  `tests/unit/test_snapshot.py`, `tests/unit/test_undo.py`) pass unchanged.
+- [X] T017 [US7] `tools/bin/timelike`: `timelike budget` (contract § `timelike budget`) and the announcement's two
+  rule lines (FR-24). `tests/unit/test_announce.py` is updated only where it counts lines.
+- [X] T018 [US5] `image/rootfs/etc/timelike/shell-env.bash`: `command_not_found_handle` (contract § The
+  command-not-found answer), with the header rules updated. `image/rootfs/etc/timelike/missing-commands.tsv` (R6).
+  `image/Dockerfile`: one COPY. Measure the handler's cost per call and record it. `tests/host/test_shell_env_hook.sh`
+  and `tests/host/test_env_layer.sh` still pass.
+- [X] T019 [C] `tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats`: the cell
+  names take revision 13's criterion text, and the workspace cells say "the workspace is left untouched". The
+  1 s bound becomes the ordering assertion (spec § Slice 1 carried items), and the time is printed, not asserted.
+- [X] T020 Host verification: units, lint (ruff, mypy, shellcheck), the host e2e stand-in over the new and changed
+  files, conformance, coverage. Results go in `decisions.md`, labelled advisory (no image).
+- [X] T021 `README.md`: `python3 scripts/readme_reference.py --write` (the timelike help moved). The README status
+  block is applied **only if** SC-6 is built too (the send's condition); otherwise untouched, with the reason
+  recorded.
+- [ ] T022 [US6] ~~**HELD on FOR-MENTOR Item 21** (FR-18): installs per the ruling. Tasks are written when it is
+  answered.~~ *(Superseded by Phase 7, Cycle 4: Item 21 answered by discovery revision 14; the installs are
+  T024–T033. T022 itself is closed there, in T033's record.)*
+- [X] T023 `cycle-report.md` § Cycle 3 (the send's block), and implement steps 10 and 9b.
+
+**Parallel:** T014 and T015 (delegates, test files only) run beside T016–T019. T016 comes before T017. T020 follows
+T016–T019 and T021 follows T020. T023 comes last.
+
+## Phase 7: Cycle 4 — the agent runtimes (send `bridge/sends/04-rev14-20261008-174220.md`, via `/specswarm:modify` → plan → tasks)
+
+<!-- Tech Stack Validation (cycle 4): PASSED — plan.md § Tech Stack Compliance Report (Cycle 4) has no conflict or
+prohibition; the installed tech-stack-taskscan block scanned the 10 task lines below and found no prohibited
+technology -->
+
+Spec § Slice 1, cycle 4 (FR-25 to FR-31, D-12 to D-15), plan § Cycle 4, research R9. Governance was audited to
+14 on this branch (`e58dd36`, `07b914d`), so there is no audit task here. **The mentor's Docker lane is the merge
+bar.** US6 = SC-6.
+
+- [X] T024 [P] [US6] e2e from the spec, by a delegate, before the images change:
+  `tests/e2e/a-bare-python-package-install-and-a-global-node-package-install-succeed-without-privilege.bats`
+  (FR-31: per style; a test-built wheel and npm package, unique versions; new shell; only `/home/agent` changed;
+  timelike's interpreter unchanged; no `PIP_BREAK_SYSTEM_PACKAGES`; the runtimes resolve to `/opt/agent`), and the
+  P6 vanilla cell in `tests/e2e/timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats` revised to
+  FR-13 (same versions, marker kept, `npm prefix -g` default, bare pip refused, no announcement).
+- [X] T025 [P] [US6] Units by a delegate: `tests/unit/test_announce.py`'s vanilla test (FR-13 revised: no timelike
+  configuration path; the runtime pins present), `tests/unit/test_agent_runtimes.py` (new: `pins.env` carries
+  `NODE_VERSION` and a 64-hex `NODE_SHA256`; both Dockerfiles verify it with `sha256sum -c`; `pip.conf` and
+  `npmrc` only in the agent Dockerfile; no `PIP_BREAK_SYSTEM_PACKAGES` in `image/`, `bench/`, `compose.yaml`,
+  `Makefile`; the `ENV` PATH order), `tests/unit/test_missing_commands.py` (user rows allowed; each starts
+  `pip install ` or `npm install -g `; none of the seven runtime names listed).
+- [X] T026 [US6] `pins.env` (`NODE_VERSION`, `NODE_SHA256`), `compose.yaml` (agent build args), `Makefile`
+  (`bench-images` passes `UV_IMAGE`, `PYTHON_VERSION` and the Node pins to the vanilla build).
+- [X] T027 [US6] `image/Dockerfile`: the `runtimes` stage, `/opt/agent`, marker removed, `pip.conf`, `npmrc`, seven
+  links, the `ENV` PATH with `/home/agent/.local/bin`. `image/rootfs/etc/profile.d/00-timelike-path.sh`: the
+  same entry. `tests/host/test_env_layer.sh` still passes, or its PATH checks move with the declared order.
+- [X] T028 [US6] `bench/vanilla/Dockerfile`: the same stage and binaries, stock behaviour; its header comment says
+  so (002's file; `changed_other_features`).
+- [X] T029 [US6] `image/rootfs/etc/timelike/missing-commands.tsv`: the seven runtime rows out; `user` rows for common
+  Python and Node CLIs. `image/rootfs/etc/timelike/standard-tools.json` checked (python3 and node keep their risk
+  and `instead`).
+- [X] T030 `scan/scan.sh`: its comments and the pip-audit "no interpreter" record say timelike's interpreter, not
+  any interpreter.
+- [X] T031 Host verification: the units, the host lane, lint, and an advisory host build check of the runtime
+  steps (the uv prefix and Node tarball, as in R9). Results go in `decisions.md`.
+- [X] T032 `README.md`: the send's `## README status` block (all four slice-1 criteria are now built); the vanilla
+  description (Debian + git + the agent runtimes, stock); the reference regenerated if any help moved.
+- [X] T033 Provenance (modify Step 9): append 14 with the installed `audit-append` block, scoped, and its
+  `audit-log.md` row. Then `cycle-report.md` § Cycle 4, implement steps 10 and 9b, and `reboot.md` brought up
+  to date for a clear.
+
+**Parallel:** T024 and T025 (delegates, test files only) run beside T026–T030. T026 comes before T027 and T028.
+T031 follows them, then T032, then T033.
+
+
+## Phase 8: Cycle 5 — lane 007s1-a's fixes and revision 15 (send `bridge/sends/04-rev14-20261008-201729.md`, via `/specswarm:modify` → plan → tasks)
+
+> T034–T038 were built from `bridge/feedback/04-20261008-193851-lane-007s1-a-three-cells-and-the-scan.md` before this
+> send arrived, as a by-hand addendum to Cycle 4's tasks; the send folds them into Cycle 5, and this heading moves with
+> it (it read "Lane 007s1-a fixes …, by hand on Cycle 4's tasks"). T039 was the addendum's bookkeeping; it is replaced.
+
+- [X] T034 [US5] `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`: the direct-exec
+  SC-5 cell looks for docker's not-found message on either stream (measured on Docker 29.4.2: stdout), and keeps
+  non-zero, `tree`, "not found" and no timelike line.
+- [X] T035 `tests/e2e/conformance-check-over-every-timelike-tool-on-path.bats` and
+  `tests/e2e/fixtures/timelike-envpython`: 001's broken-interpreter cell runs with a PATH that excludes the agent
+  runtimes, so its premise (no python3 on PATH) holds again; C1 and C6 stay asserted (001's test:
+  `changed_other_features`).
+- [X] T036 `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: reviewed entries for the two
+  findings with no fix (GHSA-ch52-4w7c-c8xp in npm's bundled http-cache-semantics; CVE-2026-77214 in the base
+  layer's libexpat1, via git), with reason, layer and the neighbours' review date.
+- [X] T037 `scan/scan.sh`, `scan/evaluate.py`: pip-audit also over the agent interpreter (`/opt/agent/python`)
+  in every image that carries it, as a second result line; `tests/unit/test_scan_report.py` and
+  `.specswarm/quality-standards.md` follow.
+- [X] T038 `pins.env`, `image/Dockerfile`, `bench/vanilla/Dockerfile`: the seven fixable npm findings, by the route
+  the mentor's ruling allows (no Node 24.x release newer than 24.21.0 exists; see decisions).
+- [X] T039 Governance audit, discovery 14 → 15 (read `../bridge/governance-context.md`, revision 15):
+  `.specswarm/quality-standards.md` (the bundled-component reading of "fix available", the 30-day class review, the
+  fail-closed release check, npm and pip as components), `.specswarm/tech-stack.md` (npm's own pin and constraint),
+  `.specswarm/constitution.md` (only if it restates the rule). Append 15 to each `governance_audited_against`, with its
+  prose note.
+- [X] T040 [US6] Tests first (FR-34): `tests/unit/test_scan_release_check.py`, with a registry the test writes and
+  serves from files (packument, tarballs it packs, integrities it computes): a release ships the fix (blocks, naming
+  it); none does (passes through the entry); the registry unreachable (blocks with the escalation); only a pre-release
+  or a deprecated release ships it (passes); an engines range that excludes the Node (does not count); an entry past
+  its 30-day date or over the cap (blocks); a pip-component entry (unknown, blocks); the engines reader.
+- [X] T041 [US6] `scan/evaluate.py`: bundled-class entries (FR-32), the `releases` subcommand (FR-33), and `report`
+  consulting `release-check.json` for each finding a bundled-class entry matches; fails closed.
+- [X] T042 [US6] `scan/scan.sh`: a `release-check` step per image, from the agent image, with network, after
+  pip-audit-agent; `none` without bundled-class entries. `tests/unit/test_scan_report.py`: the fake docker and the step
+  lists follow.
+- [X] T043 [US6] `scan/baseline/timelike-agent.json`, `scan/baseline/timelike-vanilla.json`: the three bundled-class
+  entries (GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 in brace-expansion 5.0.9; GHSA-rfgv-xxqx-mfg5 in undici 6.28.0;
+  component npm 11.21.0), their origin reason, and a review note.
+- [X] T044 Host verification: the units, the host lane, lint; the release check run from the host against the real
+  registry with the real baselines (advisory); `evaluate.py report` over lane 007s1-a's scan output with the new
+  baselines and that result.
+- [X] T045 Provenance: append 15 (on the send's instruction; the library's row is 4) with its `audit-log.md` row;
+  `cycle-report.md` § Cycle 5 (with implement steps 10 and 9b; step 10's record in `.specswarm/metrics.json`); the
+  README status checked against the send's block; `reboot.md` brought up to date.
+
+**Order:** T034–T038 (built), then T039, then T040 before T041, T041 before T042 and T043, then T044, then T045.

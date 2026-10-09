@@ -185,15 +185,8 @@ def home_dirs() -> list[str]:
 
 
 def find_workspace() -> str:
-    start = os.path.realpath(os.getcwd())
-    d = start
-    while True:
-        if os.path.lexists(os.path.join(d, OUT_OF_SCOPE)):
-            return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return start
-        d = parent
+    """FR-1: the nearest ancestor holding a `.git` entry, else the current directory (agentio, 007 s1)."""
+    return agentio.workspace()
 
 
 def store_root(ctx: agentio.Context) -> str:

@@ -540,6 +540,122 @@ def scratch_root() -> Path:
     return Path(os.environ.get("TIMELIKE_SCRATCH_ROOT") or DEFAULT_SCRATCH_ROOT)
 
 
+# ── shared readers: the container's limits and the workspace (feature 007 slice 1, FR-21) ──────
+# One reader each, used by `run` (003), `snapshot` (005) and `timelike budget` (007). The CPU rule is
+# also computed in bash by /etc/timelike/shell-env.bash (no fork at shell start), so the two are kept
+# in agreement by a test that feeds both the same files, not by sharing code.
+
+CGROUP_ENV = "TIMELIKE_CGROUP_ROOT"  # test override of the cgroup directory (003 R16)
+CPU_MAX_ENV = "TIMELIKE_CGROUP_CPU_MAX"  # the hook's own test override of cpu.max
+PROC_STATUS_ENV = "TIMELIKE_PROC_STATUS"  # the hook's own test override of /proc/self/status
+
+
+def cgroup_dir() -> Path:
+    """This process's cgroup v2 directory: /proc/self/cgroup's `0::` path under /sys/fs/cgroup."""
+    override = os.environ.get(CGROUP_ENV)
+    if override:
+        return Path(override)
+    with contextlib.suppress(OSError):
+        for line in Path("/proc/self/cgroup").read_text().splitlines():
+            if line.startswith("0::"):
+                return Path("/sys/fs/cgroup") / line[3:].lstrip("/")
+    return Path("/sys/fs/cgroup")
+
+
+def cgroup_value(path: Path) -> int | None:
+    """A cgroup file holding one integer or `max`: the integer, None for `max` (no limit).
+
+    Raises OSError when the file cannot be read and ValueError when it is not a number: an unknown is
+    the caller's to report, never a 0.
+    """
+    text = path.read_text().strip()
+    if text == "max":
+        return None
+    if not text.isdigit():
+        raise ValueError(f"{path}: not a number: {text[:40]!r}")
+    return int(text)
+
+
+def cpu_figure() -> dict[str, Any]:
+    """The CPU limit and the job-count figure, by the hook's rule (001 FR-15; shell-env.bash F001).
+
+    `quota`/`period` from cpu.max (None for `max` or when unreadable, with `reason`), `affinity` from
+    Cpus_allowed_list (None when unreadable), and `jobs`: ceil(quota / period) capped by the affinity
+    count, never below 1, which is what the hook exports as TIMELIKE_CPUS.
+    """
+    cpu_max = Path(os.environ.get(CPU_MAX_ENV) or cgroup_dir() / "cpu.max")
+    status = Path(os.environ.get(PROC_STATUS_ENV) or "/proc/self/status")
+    out: dict[str, Any] = {"source": str(cpu_max), "state": "unknown", "quota": None, "period": None}
+    out["reason"] = None
+    try:
+        fields = cpu_max.read_text().split()
+        if len(fields) >= 2 and fields[0] == "max" and fields[1].isdigit():
+            out["state"] = "none"
+        elif len(fields) >= 2 and fields[0].isdigit() and fields[1].isdigit() and int(fields[1]) > 0:
+            if int(fields[0]) > 0:
+                out.update(state="value", quota=int(fields[0]), period=int(fields[1]))
+            else:
+                out["reason"] = f"{cpu_max}: a quota of 0"
+        else:
+            out["reason"] = f"{cpu_max}: not '<quota|max> <period>': {' '.join(fields)[:40]!r}"
+    except OSError as e:
+        out["reason"] = f"{cpu_max}: {e.strerror or e}"
+    affinity: int | None = None
+    with contextlib.suppress(OSError):
+        for line in status.read_text().splitlines():
+            if line.startswith("Cpus_allowed_list:"):
+                affinity = _cpu_list_count(line.partition(":")[2])
+                break
+    out["affinity"] = affinity
+    jobs = affinity or 0
+    if out["state"] == "value":
+        quota_cpus = -(-out["quota"] // out["period"])
+        if quota_cpus > 0 and (jobs == 0 or quota_cpus < jobs):
+            jobs = quota_cpus
+    out["jobs"] = max(jobs, 1)
+    return out
+
+
+def _cpu_list_count(text: str) -> int | None:
+    """`0-3,8,10-11` → 7, as the hook counts it; None when it is not such a list."""
+    text = "".join(text.split())
+    if not re.fullmatch(r"[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*", text):
+        return None
+    n = 0
+    for item in text.split(","):
+        lo, _, hi = item.partition("-")
+        lo_n, hi_n = int(lo), int(hi or lo)
+        if hi_n >= lo_n:
+            n += hi_n - lo_n + 1
+    return n
+
+
+def size(n: int) -> str:
+    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`). From `run` (003)."""
+    if n < 1024:
+        return f"{n} B"
+    value = float(n)
+    for unit in ("KiB", "MiB", "GiB", "TiB"):
+        value /= 1024
+        if value < 1024 or unit == "TiB":
+            break
+    return f"{value:.1f} {unit}"
+
+
+def workspace() -> str:
+    """005 FR-1: the nearest ancestor of the real current directory holding a `.git` entry (lstat,
+    never git, at any depth), else the current directory itself."""
+    start = os.path.realpath(os.getcwd())
+    d = start
+    while True:
+        if os.path.lexists(os.path.join(d, ".git")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return start
+        d = parent
+
+
 # ── the entry point ────────────────────────────────────────────────────────────────────────────
 
 Main = Callable[[argparse.Namespace, Context], Result]

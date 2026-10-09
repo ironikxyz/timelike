@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -90,11 +90,31 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 > **No change needed:** revision 13 clarifies the output contract's rule 9 (which changes are
 > confirmed). That is a contract rule, not a technology choice, and `stack.md` is unchanged. Revision
 > 13 is appended to `governance_audited_against`: a no-change audit is a recorded result.
+>
+> **Audited against discovery revision 14** (2026-10-08), via `../bridge/governance-context.md`
+> (`/mentor:regovern` for revision 14), § "What Changed In Those Revisions" (relied on), and
+> `../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md` § Resolution (Q1–Q3).
+> **Amended (1.3.1 → 1.4.0):** revision 14 struck discovery's PEP 668 clause on the base image and added
+> stack.md's *Agent runtimes* row. Checked here: the Python language note (it said timelike's tools never use
+> "the system Python (PEP 668 externally managed)"; the slim image has no system Python, and the agent now
+> has its own interpreter), uv's note ("also the default for the agent's own installs"; installs now go
+> through the agent interpreter's own pip, configured to the user location), Platform and Services (no
+> agent runtime was listed), and Version Updates (pins). Changed: a new *Agent runtimes* entry under Build
+> Tool (agent Python, Node), the Python note, uv's note, the Debian note, and Version Updates item 1.
+> Unchanged: prohibition 3 (timelike's tools still never use an agent interpreter or venv), the
+> prohibited list, the scanners. Revision 14 is appended to `governance_audited_against`.
+>
+> **Audited against discovery revision 15** (2026-10-08), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 15, header "> Discovery: plan/.discover/discovery.md (revision 15)"), § "What Changed In Those Revisions" (relied on), and `../bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` § Resolution.
+> **Amended (1.4.0 → 1.5.0, an addition):** stack.md's Agent runtimes row gains npm's own pin and constraint and the
+> bundled-library rule. Checked: the Agent runtimes entry, Node's line, Version Updates, the scanners. Changed: the Node
+> bullet under Agent runtimes (npm pinned separately by version and integrity hash; its constraint), a new **npm** line
+> so the parser reads it as approved, and Version Updates item 1. Unchanged: everything else. Revision 15 is appended to
+> `governance_audited_against`.
 
 # Tech Stack - Timelike
 
-**Version**: 1.3.1
-**Last Updated**: 2026-10-04
+**Version**: 1.5.0
+**Last Updated**: 2026-10-08
 **Auto-Generated**: No. Derived from `../bridge/governance-context.md` (stack option A, discovery
 revision 2; audited against revisions 3 to 11, per the notes above)
 
@@ -114,8 +134,10 @@ stream upgrades.
 ### Language
 - **Python** 3.12+ (agent-side tools and the shared `agentio` output-contract module)
   - Notes: pinned to the current stable 3.14.x in `pins.env` (discovery revision 5, H9's "fix
-    available"). uv-managed CPython at `/opt/timelike/python`, always run with `-I`, never the system
-    Python (PEP 668 externally managed) or an agent venv. Fully annotated, `mypy --strict`
+    available"). uv-managed CPython at `/opt/timelike/python`, always run with `-I`, never the agent's
+    interpreter (Agent runtimes, below) or an agent venv. Fully annotated, `mypy --strict`
+    *(Revised, discovery revision 14: it said "never the system Python (PEP 668 externally managed)";
+    the slim image carries no system Python.)*
   - Snapshots (feature 07; discovery revision 11, replacing a git shadow store): a stdlib
     content-addressed store outside the workspace. Blobs are deduplicated by content across
     snapshots, symlinks are stored as links, and it lives in the per-workspace state root from
@@ -134,9 +156,35 @@ stream upgrades.
 - **Docker Compose** v2 (agent image plus the Adele sidecar)
   - Notes: nothing is installed on the host
 - **Debian** (agent image base, trixie-slim at a pinned digest)
-  - Notes: minimal. No `openssh-client` (note 6). The base is re-evaluated at slice 1 (note 7)
+  - Notes: minimal. No `openssh-client` (note 6). The base is re-evaluated at slice 1 (note 7). It carries
+    no system Python (discovery revision 14)
 - **uv** (pinned version; Python interpreter and installs)
-  - Notes: also the default for the agent's own installs. `--exclude-newer` backs the package guard
+  - Notes: provisions timelike's interpreter and the agent's (below). `--exclude-newer` backs the package
+    guard. *(Revised, discovery revision 14: it said "also the default for the agent's own installs";
+    the agent's bare `pip install` now goes through the agent interpreter's own pip, to the user location.)*
+- **Agent runtimes** (discovery revision 14, stack.md *Agent runtimes*): for the agent, never for
+  timelike's tools
+  - Agent Python: uv-managed CPython at the same pinned 3.14.x as timelike's, in its own prefix (not
+    `/opt/timelike/python`). Provisioned without its `EXTERNALLY-MANAGED` marker; its own `pip.conf` sets
+    `[install] user = true`. `python3`, `python`, `pip`, `pip3` on the agent's `PATH`
+  - Node: the official release tarball of the current Active LTS, pinned by version and SHA-256 in
+    `pins.env` and verified at build. Its own `etc/npmrc` sets `prefix` under the agent's home. `node`,
+    `npm`, `npx` on the agent's `PATH`
+  - npm: pinned separately from the Node tarball, by version and the registry's integrity hash
+    (`NPM_VERSION`, `NPM_SHA512`), and replacing Node's bundled npm whole. Its constraint: **any stable npm
+    whose `engines` admits the pinned Node**, another major line included. Its bundled `node_modules` are a
+    bundled tree: a fix counts only when an npm release ships it, and the tree is never patched package by
+    package *(discovery revision 15)*
+  - `~/.local/bin` on `PATH` (the `ENV` block and profile.d). Never `PIP_BREAK_SYSTEM_PACKAGES`, and no
+    wrapper around `pip` or `npm` (feature 15 sits in front of them later)
+  - The bench's vanilla image carries the same binaries with stock behaviour (marker kept, npm's default
+    prefix, no timelike configuration). Both images are scanned like everything else
+- **Node** (agent runtime, current Active LTS; the Agent runtimes entry above)
+  - Notes: named on its own line so the tech-stack parser reads it as approved; never used by timelike's
+    tools
+- **npm** (agent runtime, pinned on its own; the Agent runtimes entry above; discovery revision 15)
+  - Notes: named on its own line so the tech-stack parser reads it as approved; never used by timelike's
+    tools
 
 ### Platform and Services
 - **ripgrep** (structural search; invoked and wrapped, not written)
@@ -269,7 +317,8 @@ Before adding a new dependency:
 
 ### Version Updates
 
-1. Pin the base image digest, uv, the Python interpreter and Chromium. Bump them deliberately
+1. Pin the base image digest, uv, the Python interpreter, Node (version and SHA-256; discovery revision 14),
+   npm (version and integrity hash; discovery revision 15) and Chromium. Bump them deliberately
 2. Test thoroughly before updating major versions, including against the Docker Engine API version
    in use
 3. Document breaking changes in this file

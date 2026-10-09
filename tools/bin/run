@@ -46,7 +46,6 @@ KILL_WINDOW_S = 3.0  # freeze, SIGKILL, re-scan: at most this long before report
 FREEZE_ROUNDS = 50
 POLL_S = 0.05
 SETTLE_S = 0.1  # after the command exits, let what it backgrounded finish forking before looking (R5)
-CGROUP_ENV = "TIMELIKE_CGROUP_ROOT"  # slice 1: where memory.events, .max and .peak are read (R16)
 DISK_FULL_ENV = "TIMELIKE_RUN_DISK_FULL_BYTES"
 DISK_FULL_BYTES = 1 << 20  # fewer free bytes than this, or no free inodes, is a full filesystem (R17)
 ENOSPC_MESSAGES = ("No space left on device", "Disk quota exceeded")  # strerror(ENOSPC), (EDQUOT)
@@ -135,7 +134,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         ctx.event_args = [WITHHELD]
     log = open_log(ctx)
     set_subreaper()
-    cgroup = cgroup_dir()
+    cgroup = agentio.cgroup_dir()  # TIMELIKE_CGROUP_ROOT overrides it (R16; agentio since 007 s1)
     kills_before = read_oom_kills(cgroup)
 
     started = time.monotonic()
@@ -366,18 +365,6 @@ def command_outcome(rc: int) -> Outcome:
 # ── why the command died: memory (slice 1; spec FR-25 to FR-28, research R16) ─────────────────────
 
 
-def cgroup_dir() -> Path:
-    """This process's cgroup v2 directory: /proc/self/cgroup's `0::` path under /sys/fs/cgroup."""
-    override = os.environ.get(CGROUP_ENV)
-    if override:
-        return Path(override)
-    with contextlib.suppress(OSError):
-        for line in Path("/proc/self/cgroup").read_text().splitlines():
-            if line.startswith("0::"):
-                return Path("/sys/fs/cgroup") / line[3:].lstrip("/")
-    return Path("/sys/fs/cgroup")
-
-
 def read_oom_kills(cgroup: Path) -> int | str:
     """memory.events' oom_kill count, or the reason it could not be read."""
     path = cgroup / "memory.events"
@@ -392,26 +379,7 @@ def read_oom_kills(cgroup: Path) -> int | str:
     return f"{path}: no oom_kill count"
 
 
-def _read_bytes(path: Path) -> int | None:
-    """memory.max or memory.peak: an integer, None for `max` (no limit). Raises OSError/ValueError."""
-    text = path.read_text().strip()
-    if text == "max":
-        return None
-    if not text.isdigit():
-        raise ValueError(f"{path}: not a number of bytes: {text[:40]!r}")
-    return int(text)
-
-
-def size(n: int) -> str:
-    """Binary units: an integer below 1 KiB (`0 B`), else one decimal (`96.0 MiB`)."""
-    if n < 1024:
-        return f"{n} B"
-    value = float(n)
-    for unit in ("KiB", "MiB", "GiB", "TiB"):
-        value /= 1024
-        if value < 1024 or unit == "TiB":
-            break
-    return f"{value:.1f} {unit}"
+size = agentio.size  # binary units (moved into agentio for `timelike budget`, 007 s1)
 
 
 def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[str, Any]:
@@ -448,8 +416,8 @@ def memory_reading(outcome: Outcome, cgroup: Path, before: int | str) -> dict[st
         return data
     data.update(state="read", oom_kills=rose)
     try:
-        data["limit_bytes"] = _read_bytes(cgroup / "memory.max")
-        data["peak_bytes"] = _read_bytes(cgroup / "memory.peak")
+        data["limit_bytes"] = agentio.cgroup_value(cgroup / "memory.max")
+        data["peak_bytes"] = agentio.cgroup_value(cgroup / "memory.peak")
     except OSError as e:
         data["reason"] = f"{e.filename or cgroup}: {e.strerror or e}"
     except ValueError as e:

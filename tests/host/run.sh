@@ -34,6 +34,12 @@ if ! tests/host/test_shell_env_hook.sh </dev/null; then
   rc=1
 fi
 
+# The command-not-found handler's logic (feature 007 slice 1, SC-5) against bash itself, per style.
+echo "## tests/host/test_command_not_found.sh"
+if ! tests/host/test_command_not_found.sh </dev/null; then
+  rc=1
+fi
+
 if [[ ${rc} -ne 0 ]]; then
   echo "host lane (advisory): FAILED" >&2
 else

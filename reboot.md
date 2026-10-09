@@ -5,12 +5,154 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T05:56:46Z (read from the clock). **Dispatch batch `20261004-183704` is done: all 8 slices
-built, lane-verified, demo-observed, merged and pushed.** `master` = `public/main` = **`0a02771`** (pushed
-2026-10-08 per the discharge, bridge/history 2026-10-08T05:43:02Z: a fast-forward from `aa8127d`, 137 commits).
-Governance [2..13] (`27600de`) is in it. **specswarm:** the batch ran on 2.35.0 (`4ff8dcb`). **2.36.0 (`40d7149`)
-was installed 2026-10-08T05:52:01Z** and is what a new session loads; 2.35.0's cache is marked orphaned (§ Plugin
-below). **This repository is public**: push only on a discharge and the operator's OK (CLAUDE.md rule 5).
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z. **This repository is public**:
+push only on a discharge and the operator's OK (CLAUDE.md rule 5).
+
+## State at 2026-10-08T20:45:32Z
+
+- **`modify/007-slice-1`** holds **04 slice 1**: Cycles 3 and 4 (built), lane 007s1-a's fixes and revision 15 (Cycle 5).
+  It started from `master` `f6faf01`. **Signed off on `3eba335`** (2026-10-09T03:55Z; lane 007s1-c green; D13 observed
+  by the operator, transcript `bridge/.d13-demo-20261009T034838Z.txt`). **Merged `--no-ff` into `master`**, then
+  `maint/readme-godel` the same way (the merge commits are the two at `master`'s tip). **Not pushed, no tag.** The
+  mentor discharges on the merge; push only on the discharge plus the operator's OK.
+  - **Feedback closed** (resolved by the mentor 2026-10-09T03:55Z, beside each question):
+    `04-20261008-193851-…` (lane 007s1-a: fixed in Cycle 5) and `04-20261009-010500-…` (lane 007s1-b: `a7e1f2f`
+    GO_IMAGE 1.27.2, `de5aebe` GO_LINT_IMAGE). Only the `GO_LINT_IMAGE` removal item stays open (Open items).
+  - The tag at that push: **`v0.16.0`** (README Status is 16 of 38). It carries the three audit merges (`225a55c`,
+    `39c8ae2`, `f6faf01`) and the Gödel commits too.
+- **`maint/readme-godel`**: `866b49b` (the section) and `ad4d63f` (the section extended, send
+  `maint-readme-godel-2-20261008-190924`). Reported in `.specswarm/maintenance/readme/cycle-report.md` Cycles 2 and 3.
+  Merge `--no-ff` after sign-off; no tag of its own.
+- **Sends:** Cycle 3 = `04-rev13-20261008-161802`, Cycle 4 = `04-rev14-20261008-174220` (both stand, both retired),
+  **Cycle 5 = `bridge/sends/04-rev14-20261008-201729.md`** (the active prompt: prompt 14, discovery 15).
+- **Cycle 5 built** (T034–T045; full account in `cycle-report.md` § Cycle 5):
+  - lane fixes: the direct-exec cell reads both streams; 001's C6 cell drops python3-bearing PATH entries; two no-fix
+    baseline entries (GHSA-ch52-4w7c-c8xp, CVE-2026-77214); `pip-audit-agent`; **npm 11.21.0** (`NPM_VERSION`,
+    `NPM_SHA512`) replacing Node's bundled npm in both runtimes stages;
+  - revision 15: three **bundled-class** baseline entries (brace-expansion ×2, undici; npm 11.21.0; review by
+    2026-11-07) and the **release check** (`evaluate.py releases`, a `release-check` scan step, fails closed);
+  - governance `[2..15]`: constitution 1.4.3, tech-stack 1.5.0, quality-standards.
+- **007's spec** records `audited_against: [1, 13, 14, 15]`; `prompt_revision` is 1. 15 was appended on the send's
+  instruction (the library's row was 4), as `audit-log.md` says.
+- **FOR-MENTOR:** Item 20 still open. The three npm-bundled findings went to plan as
+  `bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md` (resolved: revision 15).
+- **specswarm 2.37.0** ran every cycle. Later versions are published, not installed; the send said not to reload.
+
+## Expect from lane 007s1-b (watch for these)
+
+- **The release check from inside the scan container:** the `release-check` row should say 3 bundled entries, 4
+  releases examined (11.20.0, 11.21.0, 12.1.0, 12.2.0), 3 no-release, for agent and vanilla. If the image's interpreter
+  cannot reach registry.npmjs.org over TLS, the three findings block with "release check could not run" (by design).
+- **Grype over npm 11.21.0's tree:** any new finding in the rest of that tree. A finding with a fix in no npm release is
+  a bundled-class entry under revision 15; one with no fix at all is an ordinary entry. Raise both; never exempt silently.
+- **`pip-audit-agent`** in the real scan (`-r … --no-deps --disable-pip` from the agent image's uv).
+- **The npm step under the real builder** (`ADD` of the registry URL; `sha512sum -c`).
+- **T034's and T035's cells** against the real container.
+- **SC-7's limited throwaway** needs a lane host with at least 2 CPUs. `tests/unit/test_bench_catalog.py` is
+  load-sensitive (15 s setup timeouts at host load of about 9).
+
+## Recipes this session used (the scratchpad is gone after a clear; rebuild)
+
+- **`ct.sh TASK MSGFILE DECFILE FILES…`** (one task): append DECFILE to `decisions.md`; tick the task; stage FILES with
+  both; run the deny-list per id over the staged diff and the message (refuse on any hit) and over the tracked tree
+  (`git write-tree` + `git archive`; capture the output first, `head` under `pipefail` kills it); commit; then compute
+  SCOPE from `ts-TASK` with the installed `scope-check` block, **sourced under `set +eu`** (it is not `set -e` safe:
+  a `grep` with no match ends the script after the commit), append it, and commit "scope record, task ticked".
+  **Read `git log` before re-running anything that commits.**
+- **`dlids.py`** (per-id counts): `sys.path.insert(0, scan)`, `import denylist`, `parse_list`, `match_lines` per entry
+  over each file; prints ids and numbers only.
+- **A venv** with pytest 8.4.2, ruff 0.16.9, mypy 2.3.1, shellcheck-py, coverage 7.10.7. `make test-host
+  PYTHON=<venv python>` with the venv's bin on PATH; `make lint-host` the same.
+- **bats 1.14.0** from the bats-core tag tarball, for stub-docker trials of single cells (there is no bats on the host).
+- **The live release check from the host:** `python3 -I scan/evaluate.py releases --baseline scan/baseline/<img>.json
+  --node-version 24.21.0 --out <file>` (about 3 s; it reads npm's 25 MB packument and 4 tarballs).
+- **Temporary worktrees** (the Gödel sends): `git worktree add <scratch>/wt maint/readme-godel`, then remove it.
+
+## What happened since b10f32c (2026-10-08)
+
+1. **README maintenance** (send `maint-readme-20261008-060811`): built on `maint/readme`.
+   - The README was reorganised, with a generated command reference (`scripts/readme_reference.py --check|--write`)
+     and its test (`tests/unit/test_readme_reference.py`).
+   - CLAUDE.md gained the README rule and the status-tag rule.
+   - Lane readme-c passed. Merged as `c79facc`. Pushed with `v0.15.0` and `v0.15.1`.
+2. **Audit send** (`maint-audit-rev8-13-20261008-095251`): three record-only modify cycles, each touching only its
+   feature directory:
+   - **002, Cycle 2 (rev 8).** The verdict-order constraint is in the spec, declared. Slice 0's code doesn't meet it
+     (`report.py:119`, `:227`, `data-model` step 3, T016), and plan's ruling (b) carries it to **02 s1**. Scoped
+     reconcile, `[1, 8]`.
+   - **001, Cycle 8 (revs 11–13).** Rule 10's struck project-cache clause is corrected in place; rules 9 and 13 are
+     annotated. Full reconcile, `[2..13]`.
+   - **007, Cycle 2 (rev 13).** SC-1's workspace clause is struck and D-1 resolved. Scoped reconcile, `[1, 13]`.
+   - The mentor reconciled all three and signed off; they merged to master (above).
+
+3. **README Gödel sends** (`maint-readme-godel-20261008-180140`, `…-godel-2-20261008-190924`): `866b49b`, `ad4d63f` on
+   `maint/readme-godel`, each in a temporary worktree; README only; not merged.
+4. **Lane 007s1-a** (18:24–19:37Z) on `41d4b5f`: 573/576 e2e (the direct-exec stream; 001's C6 premise ×2), units and Go
+   passed, scan 9 blocking per runtime image. Feedback `04-20261008-193851-…`; fixes T034–T038.
+5. **Revision 15** (plan `300fdf3`): the npm-bundled question, ruled; built as 007 **Cycle 5** (T039–T045).
+
+## Open items (none blocks)
+
+- **Removal item, `GO_LINT_IMAGE`** (2026-10-09): delete it once a staticcheck release whose x/tools reads Go
+  1.27.2's export data exists, and move staticcheck back to `GO_IMAGE`. Check with `curl
+  https://proxy.golang.org/honnef.co/go/tools/@latest` (v0.8.1 at 2026-10-09). Recorded in `quality-standards.md`
+  and `pins.env`.
+- **The mentor's carried findings** (history 12:58:18Z):
+  - (a) `verify` runs `git status` without `--no-optional-locks` (`tools/bin/verify:878`). Cheap hardening for
+    012's next cycle. Runner caches stay in the workspace, which 012's contract admits.
+  - (b) `output-contract.md` doesn't name the per-workspace state root. For 07 s1.
+  - (c) 007's SC-1 e2e cell names (`announcement-…-on-start.bats:400–405`) still quote the struck clause. For a later
+    007 cycle, together with SC-1's 1 s timing bound, which trips under host I/O load (lane readme-b).
+  - (d) `announce --install` writes under `$HOME`, which is also the image's WORKDIR.
+- **Still open from the batch** (see `reboot.md` § Open items): the singular/plural defects; `view` `more:` not
+  clamped; Adele ledger `agent: None`; `python3` not on the agent's PATH; FOR-MENTOR **Item 20** (the symbols index
+  in the scratch until 07 s1).
+- **Slices to come:** 07 s1 (state root) and 15 s1 (Adele's standing grant), both held for attended sends; 02 s1
+  (carries the rev-8 verdict order); 04 s1; 06 s1.
+- **A rule question I raised, not ruled on:** the specswarm `audit-append` rule has no mode for "revision N's change
+  recorded, but carried to a later slice". 002 appended 8 per the send's reading.
+
+## How the audit cycles were run (recipes; the scripts lived in the memory staging folder, removed once folded here: rebuild them from this text)
+
+- **Per cycle:**
+  - branch `modify/NNN-revM` from master;
+  - `Skill specswarm:modify` with `NNN --from-send bridge/sends/…`, which loads the text;
+  - run its blocks from `modify_s12.sh "<args>"`, which gives the row;
+  - classify by diffing the prompt bodies of the archived sends;
+  - append `# Cycle N` sections to `impact-analysis.md` and `modify.md` (create them on a first modify), and commit;
+  - `Skill specswarm:plan`: append the Cycle plan section and commit;
+  - `Skill specswarm:tasks`: add a Phase with tasks, run the `ts_mentions` scan, and commit;
+  - `Skill specswarm:implement`, per task: `git rev-parse HEAD > ts`, edit, append to `decisions.md`, tick the
+    task, then `precommit.sh msgfile && git commit -F msgfile`, then `scope.sh FEATURE_DIR $(cat ts)` appended to
+    `decisions.md` and a "scope record, task ticked" commit.
+- **Provenance:** run `audit_append.sh` with the env vars `PROMPT_REV`, `AUDITED`, `N`, `MODE`, `OUT_OF_SCOPE`,
+  `UNVERIFIED` and `REMOVALS_VISIBLE`. **A revision that rewords a criterion gets `scoped`**; `full` would skip it.
+- **Step 10:** `step10.sh` then `step10g.sh`. The result is always unknown, warned (pytest is not installed for
+  `/usr/bin/python3`). **Do not write `.specswarm/metrics.json`** when a send confines the cycle to the feature
+  directory.
+- **The 9b tallies:** `source lib/tally.sh; scope_tally tasks decisions; decision_tally decisions`. Wrap each in
+  `echo "$(…)"`, because they print no trailing newline.
+- **Deny-list:**
+  - `precommit.sh [msgfile]` checks the staged tree and the message, by id;
+  - `objscan.py "<range>" <outdir> ../bridge/publish-denylist.txt` checks objects, path names and messages. Run it
+    from `code/`;
+  - the control is the range `archive/pre-publish`, which fires P1, P2, P6 and P7.
+  - **Run the check before every commit.** I slipped once this session (`4f634c6`; scanned clean straight after).
+- **Push recipe** (`reboot.md` § Publishing recipes): a throwaway `GIT_ASKPASS` script in the scratchpad (mode 700).
+  It answers `Username*` with `x-access-token`, and anything else with `GITHUB_IRONICXYZ_PAT` read from
+  `~/projects/ironik.xyz/.env`. Run `GIT_ASKPASS=… GIT_TERMINAL_PROMPT=0 git -c credential.helper= push public
+  master:main`, then the tags. Delete the script afterwards, check the output holds no token, and verify with
+  `git ls-remote`.
+- **Subagents:** a read-only general-purpose agent did 001's rule-10 code search well. Brief it: no edits, nothing
+  under bridge/ or plan/, cite file:line. Re-read its key citations before using them.
+
+## specswarm 2.37.0 observations (already relayed to the mentor)
+
+- D105: the tallies live in `lib/tally.sh`, with 0 bytes on stderr. D107: `flagged_delegate` counts work.
+- `provenance-inputs` (D89) mechanises modify row 7.
+- `fnum_resolve` handles `modify/NNN-*` silently.
+- Step 10e reads `package.json` (no more `quality-gates.sh` error).
+- Cosmetic: the tallies print no trailing newline.
 
 ## How the batch closed (2026-10-06 to 10-08)
 
@@ -398,12 +540,13 @@ Last result (host, 3.12, p95):
 
 **Host Go toolchain** (gone after a clear; nothing is installed on the host):
 ```
-S=<scratchpad>; cd $S && curl -sSL -o go.tgz https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
+S=<scratchpad>; cd $S && curl -sSL -o go.tgz https://go.dev/dl/go1.27.2.linux-amd64.tar.gz
 # verify sha256 against https://go.dev/dl/?mode=json, then: tar xzf go.tgz
 cat > $S/goenv.sh <<X
 export PATH=$S/go/bin:\$PATH GOPATH=$S/gopath GOCACHE=$S/gocache GOMODCACHE=$S/gomod GOFLAGS=-modcacherw GOTOOLCHAIN=local
 X
-. $S/goenv.sh; go install honnef.co/go/tools/cmd/staticcheck@v0.8.1 golang.org/x/vuln/cmd/govulncheck@v1.8.0
+. $S/goenv.sh; go install honnef.co/go/tools/cmd/staticcheck@v0.8.1; go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+# (two installs: different modules. staticcheck v0.8.1 fails on Go 1.27.2; see Cycle 5's lane addendum)
 cd adele && CGO_ENABLED=0 go test -count=1 -cover ./... && gofmt -l . && go vet ./... && $GOPATH/bin/staticcheck ./... && $GOPATH/bin/govulncheck ./...
 ```
 
@@ -521,7 +664,7 @@ follow-up did.
 - **Not linked:** push-to-checkout, proc-receive, fsmonitor-watchman. Under `env -i`, hooks run
   unbounded (T4, revision 8). P2 then rests on `run` and the harness's timeout.
 
-### Plugin: specswarm (2.36.0 installed 2026-10-08; checked against these notes 2026-10-08)
+### Plugin: specswarm (2.37.0 `d523530` loaded since the audit cycles, 2026-10-08; 2.36.0 notes below)
 
 - **2.36.0** (`40d7149`, `4.0.1-botbaubble.2.36.0`) differs from 2.35.0 in `implement.md` and `specify.md`
   only, and only for D104 (values that were composed, now read from the clock):

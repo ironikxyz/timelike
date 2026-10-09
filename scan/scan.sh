@@ -5,8 +5,21 @@
 #
 #   1. SBOM        Syft over `docker save` of each image
 #   2. grype       Grype over that SBOM, JSON only
-#   3. pip-audit   over the image interpreter's installed distributions, via uv inside the image. An
-#                  image with no interpreter (vanilla; Adele's scratch stage) records none
+#   3. pip-audit   over timelike's interpreter's installed distributions, via uv inside the image. An
+#                  image without timelike's interpreter (vanilla; Adele's scratch stage) records none.
+#  3b. pip-audit-agent  over the AGENT interpreter's (/opt/agent/python; discovery revision 14) installed
+#                  distributions, in every image that carries it (agent, vanilla), as a result line of
+#                  its own. The scanned image's agent interpreter lists them as exact pins; the agent
+#                  image's uv runs pip-audit over that list (-r, --no-deps --disable-pip: nothing is
+#                  resolved or installed), because vanilla has no uv. An image without it records none.
+#                  Node with npm's bundled packages is in the agent and vanilla SBOMs, so Grype covers
+#                  it (and the agent Python again) under the same baseline rule
+#  3c. release-check  for each BUNDLED-CLASS entry in the image's baseline (a library bundled inside a
+#                  component, e.g. npm's own node_modules; discovery revision 15): does any stable release
+#                  of the component inside the stack's constraint ship the fix? evaluate.py releases reads
+#                  the registry's released tarballs, from the agent image, WITH network. The verdict lets
+#                  such a finding through only on its "no release" answer; a release that ships the fix,
+#                  or a check that could not run, blocks (fails closed). No bundled entries: none
 #   4. govulncheck Adele only: govulncheck GOVULNCHECK_VERSION over adele/ (source, symbol level), run
 #                  from GO_IMAGE. Other images record none (not a Go image)
 #   5. gitleaks    over the repository's git history (once; its report is shared by every image)
@@ -23,8 +36,9 @@
 #   timelike-agent:local          → scan/out/                       required (unchanged since 001)
 #   timelike-adele:local          → scan/out/timelike-adele/        required. FROM scratch: no interpreter,
 #                                    so pip-audit records none; its base digest is GO_IMAGE's (below)
-#   timelike-vanilla:local        → scan/out/timelike-vanilla/      (bench baseline; no interpreter,
-#                                    so pip-audit records none)
+#   timelike-vanilla:local        → scan/out/timelike-vanilla/      (bench baseline; no timelike interpreter,
+#                                    so pip-audit records none; pip-audit-agent audits its agent
+#                                    interpreter, and its runtimes are in its SBOM)
 #   timelike-bench-driver:local   → scan/out/timelike-bench-driver/ (holds the docker CLI, a Go binary:
 #                                    grype may report fixable Go-stdlib Highs that block until
 #                                    DOCKER_CLI_IMAGE is bumped, research RB10)
@@ -63,6 +77,7 @@ image=$agent
 top=scan/out
 out=$top
 py=/opt/timelike/python/bin/python3
+agent_py=/opt/agent/python/bin/python3
 as_me=(--user "$(id -u):$(id -g)")
 
 die() {
@@ -95,7 +110,8 @@ image=$agent
 rm -rf "$top"
 mkdir -p "$top"
 
-# scan_image IMAGE OUT — steps 1-3 for one image, into OUT/steps.tsv (step 4 is appended by the caller).
+# scan_image IMAGE OUT — steps 1-4 (3b included) for one image, into OUT/steps.tsv (step 5, gitleaks,
+# is appended by the caller).
 scan_image() {
 image=$1
 out=$2
@@ -175,6 +191,66 @@ else
   record pip-audit error "could not list the image's distributions: $(reason "$out/pip-audit.err")"
 fi
 
+# --- 3b. pip-audit over the agent interpreter (lane 007s1-a, item 4: quality-standards says the scan
+# covers the runtimes). The same probe as step 3, for $agent_py. The listing runs in the scanned image's
+# own agent interpreter, so it names what that image ships; the audit runs from the agent image, which
+# holds uv and timelike's interpreter, over that list alone. pip-audit exits 1 when it finds something,
+# so the JSON decides, not the code.
+progress "[3/5] pip-audit $PIP_AUDIT_VERSION over the agent interpreter's distributions"
+aerr=$out/pip-audit-agent.err
+probe=0
+docker run --rm --network none --entrypoint "$agent_py" "$image" -I -c '' >/dev/null 2>"$aerr" || probe=$?
+if [ "$probe" -eq 126 ] || [ "$probe" -eq 127 ]; then
+  record pip-audit-agent none \
+    "no agent interpreter in image: $image has no $agent_py, so pip-audit had nothing to audit"
+elif [ "$probe" -ne 0 ]; then
+  record pip-audit-agent error "could not probe $image for $agent_py (docker exit $probe): $(reason "$aerr")"
+elif listing=$(docker run --rm --network none "${as_me[@]}" --entrypoint "$agent_py" \
+  -v "$root/scan:/scan:ro" -v "$root/$out:/out" "$image" -I /scan/evaluate.py dists \
+  --out /out/dists-agent.json --requirements /out/agent-requirements.txt 2>"$aerr") \
+  && read -r count purelib <<<"$listing" && [[ $count =~ ^[0-9]+$ && -n $purelib ]]; then
+  if [ "$count" -eq 0 ]; then
+    record pip-audit-agent none "no distributions in the agent interpreter — pip-audit had nothing to audit"
+  elif docker run --rm "${as_me[@]}" -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv-cache \
+    -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint /bin/uv -v "$root/$out:/out" "$agent" \
+    tool run --python "$py" "pip-audit==$PIP_AUDIT_VERSION" -r /out/agent-requirements.txt --no-deps \
+    --disable-pip --format json --output /out/pip-audit-agent.json --progress-spinner off 2>>"$aerr"; then
+    record pip-audit-agent ran "$count distributions in $purelib (agent interpreter)"
+  else
+    rc=$?
+    if [ -s "$out/pip-audit-agent.json" ]; then
+      record pip-audit-agent ran \
+        "$count distributions in $purelib (agent interpreter; pip-audit exit $rc; its JSON decides)"
+    else
+      record pip-audit-agent error "pip-audit wrote no report (exit $rc): $(reason "$aerr")"
+    fi
+  fi
+else
+  record pip-audit-agent error "could not list the agent interpreter's distributions: $(reason "$aerr")"
+fi
+
+# --- 3c. The release check (discovery revision 15). It runs on the agent image's timelike interpreter,
+# like the verdict, because only that image is sure to have one; the scanned image's baseline is read from
+# /scan. It needs the registry (network on), and it records what it checked: its summary is the detail.
+# A failure to run is an error, never "nothing to check" (H3): the verdict then blocks every bundled entry.
+progress "[3/5] release check for the baseline's bundled-class entries"
+rerr=$out/release-check.err
+baseline_file=scan/baseline/${image%%:*}.json
+if [ ! -f "$baseline_file" ]; then
+  record release-check none "no baseline ($baseline_file), so no bundled-class entries to check"
+elif listing=$(docker run --rm "${as_me[@]}" --entrypoint "$py" -v "$root/scan:/scan:ro" -v "$root/$out:/out" \
+  "$agent" -I /scan/evaluate.py releases --baseline "/$baseline_file" --node-version "$NODE_VERSION" \
+  --out /out/release-check.json 2>"$rerr") \
+  && read -r count summary <<<"$listing" && [[ $count =~ ^[0-9]+$ ]]; then
+  if [ "$count" -eq 0 ]; then
+    record release-check none "$summary"
+  else
+    record release-check ran "$count $summary"
+  fi
+else
+  record release-check error "the release check could not run: $(reason "$rerr")"
+fi
+
 # --- 4. govulncheck, Adele only (research R5): over Adele's source, at symbol level, so evaluate.py can
 # tell a vulnerable function Adele calls (gated as High) from one it only imports (never blocks).
 # Run from GO_IMAGE, the builder Adele's binaries come from, with adele/ mounted read-only:
@@ -229,7 +305,8 @@ fi
 }
 
 # verdict IMAGE OUT — evaluate.py prints everything at once, so a crash never leaves half a verdict.
-# It always runs on the AGENT image's interpreter: the vanilla baseline has none. The baseline is read
+# It always runs on the AGENT image's timelike interpreter: the vanilla baseline has none (its agent
+# runtimes are not timelike's). The baseline is read
 # from /scan (the scan/ directory, mounted read-only); an absent file accepts nothing.
 verdict() {
   local rc=0 baseline=scan/baseline/${1%%:*}.json

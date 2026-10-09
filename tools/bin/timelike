@@ -3,7 +3,8 @@
 
 `timelike announce` generates the environment's announcement from the installed tools' own manifests,
 checks it, places it in each harness's user-level context file on container start, and reports where it
-is; `timelike tools` prints the manifest of timelike and curated standard tools (feature 007, prompt 04).
+is; `timelike tools` prints the manifest of timelike and curated standard tools; `timelike budget` prints
+the container's memory, CPU, process and disk limits and use (feature 007, prompt 04, slices 0 and 1).
 
 The build revision is the environment's own proof of what it is (constitution H8; lore cross-stack
 P003): it is read from /opt/timelike/REVISION, written at build time, and an empty or missing stamp
@@ -94,6 +95,7 @@ TOOL = agentio.Tool(
         "timelike [--json|--text]",
         "timelike tools             timelike and standard tools: JSON support, interactivity risk, instead",
         "timelike announce          the announcement placed for harnesses; --check, --status, --install",
+        "timelike budget            memory, CPU, process and disk limits, and what is in use",
         "timelike --agent-info      manifest, including the build revision",
     ],
     manifest_extra=lambda: {"revision": revision()},
@@ -101,7 +103,9 @@ TOOL = agentio.Tool(
 
 
 def configure(p: argparse.ArgumentParser) -> None:
-    p.add_argument("action", nargs="?", choices=["tools", "announce"], help="tools or announce")
+    p.add_argument(
+        "action", nargs="?", choices=["tools", "announce", "budget"], help="tools, announce or budget"
+    )
     p.add_argument("--write", metavar="PATH", help="announce: write the announcement to PATH")
     p.add_argument(
         "--check", nargs="?", const="", metavar="PATH", help="announce: exit 1 naming tools missing from it"
@@ -119,6 +123,8 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         raise agentio.UsageError(
             "--write, --check, --install and --status belong to announce", "timelike announce …"
         )
+    if args.action == "budget":
+        return budget()
     rev = revision()
     tools = tools_on_path()
     lines = [f"revision: {rev}", f"contract: {agentio.CONTRACT}", f"tools: {len(tools)}"]
@@ -185,6 +191,12 @@ def generate() -> tuple[list[str], dict[str, str]]:
     if has("timelike"):
         lines.append(
             "- `timelike tools`: every tool, standard ones too, with the safer command to use instead."
+        )
+        lines.append(
+            "- `timelike budget`: this container's memory, CPU, process and disk limits, and what is in use."
+        )
+        lines.append(
+            "- In bash, a command that is not installed says what to use instead, or who can install it."
         )
     lines += ["", "These tools work the same whether or not this file is read."]
     if len(lines) > ANNOUNCEMENT_MAX_LINES:
@@ -320,6 +332,124 @@ def tools_manifest() -> agentio.Result:
     installed = sum(e["installed"] for e in entries if e["kind"] == "standard")
     verdict = f"{n_tl} timelike tools, {n_std} standard tools ({installed} installed)"
     return agentio.Result("tools", "manifest", verdict, lines=lines, data={"tools": entries})
+
+
+# ── the resource budget (feature 007 slice 1; spec FR-20 to FR-23, contract § `timelike budget`) ─────
+
+
+def figure(path: Path) -> dict[str, Any]:
+    """One cgroup file: a value, `none` (the file says max) or `unknown` with the reason — never 0."""
+    entry: dict[str, Any] = {"state": "unknown", "value": None, "source": str(path), "reason": None}
+    try:
+        value = agentio.cgroup_value(path)
+    except OSError as e:
+        entry["reason"] = f"{path}: {e.strerror or e}"
+    except ValueError as e:
+        entry["reason"] = str(e)
+    else:
+        entry["state"] = "none" if value is None else "value"
+        entry["value"] = value
+    return entry
+
+
+def disk(role: str, path: Path) -> dict[str, Any]:
+    """Free and total bytes for the filesystem holding `path`, or its nearest existing ancestor."""
+    measured = path
+    while not measured.exists() and measured != measured.parent:
+        measured = measured.parent
+    entry: dict[str, Any] = {
+        "role": role,
+        "path": str(path),
+        "measured": str(measured),
+        "exists": path.exists(),
+        "free_bytes": None,
+        "total_bytes": None,
+        "reason": None,
+    }
+    try:
+        st = os.statvfs(measured)
+    except OSError as e:
+        entry["reason"] = f"{measured}: {e.strerror or e}"
+        return entry
+    entry.update(free_bytes=st.f_bavail * st.f_frsize, total_bytes=st.f_blocks * st.f_frsize)
+    return entry
+
+
+def shown(fig: dict[str, Any], render: Any = None) -> str:
+    if fig["state"] == "none":
+        return "no limit"
+    if fig["state"] == "unknown":
+        return f"unknown ({fig['reason']})"
+    return render(fig["value"]) if render else str(fig["value"])
+
+
+def disk_shown(d: dict[str, Any]) -> tuple[str, str]:
+    """(the line's figure, the verdict's figure)."""
+    if d["free_bytes"] is None:
+        return f"unknown ({d['reason']})", "unknown"
+    free = agentio.size(d["free_bytes"])
+    return f"{free} free of {agentio.size(d['total_bytes'])}", free
+
+
+def budget() -> agentio.Result:
+    cgroup = agentio.cgroup_dir()
+    memory = {name: figure(cgroup / f"memory.{name}") for name in ("max", "current", "peak")}
+    pids = {name: figure(cgroup / f"pids.{name}") for name in ("max", "current")}
+    cpu = agentio.cpu_figure()
+    limit: dict[str, Any] = {
+        "state": cpu["state"],
+        "value": round(cpu["quota"] / cpu["period"], 2) if cpu["state"] == "value" else None,
+        "source": cpu["source"],
+        "reason": cpu["reason"],
+    }
+    if cpu["state"] == "value":
+        limit.update(quota=cpu["quota"], period=cpu["period"])
+    raw = os.environ.get("TIMELIKE_CPUS", "")
+    shell_value = int(raw) if raw.isdigit() else None
+    agrees = None if shell_value is None else shell_value == cpu["jobs"]
+    disks = [
+        disk("workspace", Path(agentio.workspace())),
+        disk("scratch", agentio.scratch_root()),
+    ]
+
+    mem_limit = shown(memory["max"], agentio.size)
+    cpu_limit = shown(limit, lambda v: f"{v:.2f} CPUs")
+    pid_limit = shown(pids["max"])
+    cpu_line = f"cpu: limit {cpu_limit} · job count {cpu['jobs']} (TIMELIKE_CPUS)"
+    if shell_value is not None:
+        cpu_line += f" · this shell has TIMELIKE_CPUS={shell_value}, {'agrees' if agrees else 'disagrees'}"
+    lines = [
+        f"memory: limit {mem_limit} · in use {shown(memory['current'], agentio.size)}"
+        f" · peak {shown(memory['peak'], agentio.size)}",
+        cpu_line,
+        f"processes: limit {pid_limit} · running {shown(pids['current'])}",
+    ]
+    free: list[str] = []
+    for d in disks:
+        figure_text, verdict_text = disk_shown(d)
+        note = "" if d["exists"] else f" (measured at {d['measured']}; {d['path']} does not exist yet)"
+        lines.append(f"disk, {d['role']} {d['path']}: {figure_text}{note}")
+        free.append(f"{d['role']} {verdict_text}")
+    unknown = sum(f["state"] == "unknown" for f in (*memory.values(), *pids.values(), limit)) + sum(
+        d["free_bytes"] is None for d in disks
+    )
+    verdict = f"memory {mem_limit}, cpu {cpu_limit}, processes {pid_limit}; free: {', '.join(free)}"
+    if unknown:
+        verdict += f"; {unknown} unknown"
+    data: dict[str, Any] = {
+        "cgroup": str(cgroup),
+        "memory": {"limit": memory["max"], "current": memory["current"], "peak": memory["peak"]},
+        "cpu": {
+            "limit": limit,
+            "affinity": cpu["affinity"],
+            "jobs": cpu["jobs"],
+            "shell_value": shell_value,
+            "agrees": agrees,
+        },
+        "pids": {"limit": pids["max"], "current": pids["current"]},
+        "disks": disks,
+    }
+    return agentio.Result("budget", "container", verdict, lines=lines, data=data)
 
 
 # ── placement on container start (feature 007; spec FR-5 to FR-8, research R1, R2) ───────────────

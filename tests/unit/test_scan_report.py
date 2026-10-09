@@ -65,6 +65,12 @@ def baseline_file(tmp_path: Path, reviewed: str = "2026-09-20", review_by: str =
     return path
 
 
+NO_AGENT_PY = (
+    f"no agent interpreter in image: {IMAGE} has no /opt/agent/python/bin/python3, "
+    "so pip-audit had nothing to audit"
+)
+
+
 def scan_out(
     tmp_path: Path,
     *,
@@ -72,6 +78,7 @@ def scan_out(
     sbom: Any = None,
     grype: Any = None,
     pip_audit: Any = None,
+    pip_audit_agent: Any = None,
     gitleaks: Any = None,
     govulncheck: str | None = None,
 ) -> Path:
@@ -82,6 +89,8 @@ def scan_out(
         "sbom": ("ran", "syft"),
         "grype": ("ran", "grype"),
         "pip-audit": ("ran", "1 distributions in /site"),
+        "pip-audit-agent": ("none", NO_AGENT_PY),
+        "release-check": ("none", "no bundled-class entries in timelike-agent.json"),
         "govulncheck": ("none", "not a Go image: govulncheck runs over Adele's source only"),
         "gitleaks": ("ran", "gitleaks"),
     }
@@ -97,6 +106,8 @@ def scan_out(
         else {"dependencies": [{"name": "pip", "version": "25.2", "vulns": []}]},
         "gitleaks.json": gitleaks if gitleaks is not None else [],
     }
+    if pip_audit_agent is not None:
+        files["pip-audit-agent.json"] = pip_audit_agent
     for name, content in files.items():
         (out / name).write_text(content if isinstance(content, str) else json.dumps(content))
     if govulncheck is not None:
@@ -128,11 +139,11 @@ def test_clean_run_passes_writes_verdict_json_and_leads_with_the_verdict(
     verdict = json.loads((out / "verdict.json").read_text())
     assert verdict["verdict"] == "PASS"
     assert verdict["blocking"] == []
-    assert [s["status"] for s in verdict["steps"]] == ["PASS"] * 6
+    assert [s["status"] for s in verdict["steps"]] == ["PASS"] * 8
     assert step(out, "sbom")["detail"] == "2 packages catalogued from sha256:abababababab"
     assert step(out, "baseline")["detail"] == "none"
-    assert lines[7] == f"baseline: {LABEL} — none, accepts nothing"
-    assert verdict["baseline"]["summary"] == lines[7]
+    assert lines[9] == f"baseline: {LABEL} — none, accepts nothing"
+    assert verdict["baseline"]["summary"] == lines[9]
     assert verdict["rule"] == "reviewed baseline per image digest (discovery revision 5)"
     assert json.loads((out / "baseline.proposed.json").read_text())["findings"] == []
 
@@ -195,7 +206,7 @@ def test_baselined_unfixable_high_passes_and_is_listed(
     assert "baselined:" in lines
     assert step(out, "grype")["detail"].endswith("; 1 baselined")
     assert step(out, "baseline")["detail"] == "1 entries"
-    assert lines[7] == (
+    assert lines[9] == (
         f"baseline: {LABEL} — accepts 1 High; base digest {DIGEST[:19]}; "
         "reviewed 2026-09-20, review by 2026-12-01"
     )
@@ -222,7 +233,7 @@ def test_overdue_or_capped_baseline_is_an_escalation_in_text_and_json(
     assert entry["update"].startswith(f'{LABEL}, field "review_by"; have a person re-review')
     (text,) = [line for line in lines if line.startswith(f"  baseline  {LABEL}")]
     assert text.endswith(f"→ update: {entry['update']}")
-    assert lines[7] == f"baseline: {LABEL} — accepts nothing until re-reviewed (see blocking)"
+    assert lines[9] == f"baseline: {LABEL} — accepts nothing until re-reviewed (see blocking)"
 
 
 def test_unreadable_baseline_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -331,6 +342,52 @@ def test_pip_audit_skip_and_gitleaks_finding_reach_the_report(
     assert step(out, "gitleaks")["detail"] == "1 findings across git history; 1 blocking"
 
 
+def test_pip_audit_agent_finding_blocks_on_its_own_line_and_timelike_s_pip_audit_still_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    vuln = {"id": "PYSEC-2026-1", "fix_versions": ["26.3"], "aliases": ["CVE-2026-0001"]}
+    out = scan_out(
+        tmp_path,
+        steps={"pip-audit-agent": ("ran", "2 distributions in /agent-site (agent interpreter)")},
+        pip_audit_agent={
+            "dependencies": [
+                {"name": "pip", "version": "26.2.1", "vulns": [vuln]},
+                {"name": "local", "version": "0", "skip_reason": "not on PyPI"},
+            ]
+        },
+    )
+    code, lines = run_report(out, capsys)
+    assert code == 1
+    assert step(out, "pip-audit")["status"] == "PASS"
+    assert step(out, "pip-audit-agent") == {
+        "name": "pip-audit-agent",
+        "status": "FAIL",
+        "detail": "2 distributions in /agent-site (agent interpreter); 1 matches; 1 blocking",
+    }
+    (blocking,) = json.loads((out / "verdict.json").read_text())["blocking"]
+    assert (blocking["source"], blocking["identifier"], blocking["component"]) == (
+        "pip-audit-agent",
+        "PYSEC-2026-1",
+        "pip 26.2.1",
+    )
+    assert "note: pip-audit-agent skipped local 0: not on PyPI" in lines
+
+
+def test_pip_audit_agent_missing_from_steps_tsv_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = scan_out(tmp_path)
+    rows = [r for r in (out / "steps.tsv").read_text().splitlines() if not r.startswith("pip-audit-agent\t")]
+    (out / "steps.tsv").write_text("\n".join(rows) + "\n")  # as a scan.sh without the step would leave it
+    code, _ = run_report(out, capsys)
+    assert code == 1
+    assert step(out, "pip-audit-agent") == {
+        "name": "pip-audit-agent",
+        "status": "FAIL",
+        "detail": "the step recorded no result",
+    }
+
+
 def _fake_site(root: Path, names: list[str]) -> Path:
     site = root / "site-packages"
     site.mkdir()
@@ -353,10 +410,12 @@ def test_dists_counts_what_the_interpreter_sees(
     keep = [p for p in sys.path if p.startswith(stdlib) and "site-packages" not in p]
     monkeypatch.setattr(sys, "path", [str(site), *keep])
     monkeypatch.setattr(ev.sysconfig, "get_path", lambda _name: str(site))
-    record = tmp_path / "dists.json"
-    assert ev.main(["dists", "--out", str(record)]) == 0
+    record, pins = tmp_path / "dists.json", tmp_path / "requirements.txt"
+    assert ev.main(["dists", "--out", str(record), "--requirements", str(pins)]) == 0
     assert capsys.readouterr().out == f"{len(names)} {site}\n"
     assert json.loads(record.read_text()) == [{"name": n, "version": "1.0"} for n in sorted(names)]
+    # The pins pip-audit-agent audits with -r --no-deps --disable-pip: exact versions, one per line.
+    assert pins.read_text() == "".join(f"{n}==1.0\n" for n in sorted(names))
 
 
 def test_main_report_runs_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -366,7 +425,7 @@ def test_main_report_runs_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert ev.main(argv) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == f"scan: {IMAGE} [supply-chain] — PASS"
-    assert lines[7] == f"baseline: {LABEL} — none, accepts nothing"
+    assert lines[9] == f"baseline: {LABEL} — none, accepts nothing"
     assert json.loads((out / "verdict.json").read_text())["today"] == "2026-09-28"
 
 
@@ -488,10 +547,12 @@ def test_adele_with_a_clean_govulncheck_and_no_interpreter_passes(
     }
     assert step(out, "pip-audit")["status"] == "PASS"
     assert step(out, "pip-audit")["detail"].startswith("no interpreter in image: ")
-    assert "  govulncheck  PASS  govulncheck v1.8.0" in "\n".join(lines)  # the name fits its column
+    # every step name fits its column, the longest (pip-audit-agent) included
+    assert "  govulncheck      PASS  govulncheck v1.8.0" in "\n".join(lines)
+    assert f"  pip-audit-agent  PASS  {NO_AGENT_PY}" in "\n".join(lines)
     verdict = json.loads((out / "verdict.json").read_text())
     assert verdict["base_digest"] == GO_DIGEST
-    assert lines[7] == f"baseline: {ADELE_LABEL} — none, accepts nothing"
+    assert lines[9] == f"baseline: {ADELE_LABEL} — none, accepts nothing"
 
 
 def test_a_reachable_go_vulnerability_with_a_fix_blocks_and_names_go_image(
@@ -532,7 +593,7 @@ def test_a_reachable_go_vulnerability_without_a_fix_is_proposed_and_a_go_digest_
     # The same reviewed baseline under the Debian digest is for another base: it accepts nothing.
     code, lines = run_adele(out, capsys, reviewed, digest=DIGEST)
     assert code == 1
-    assert lines[7] == f"baseline: {ADELE_LABEL} — accepts nothing until re-reviewed (see blocking)"
+    assert lines[9] == f"baseline: {ADELE_LABEL} — accepts nothing until re-reviewed (see blocking)"
 
 
 @pytest.mark.parametrize(
@@ -593,6 +654,7 @@ import json, os, re, subprocess, sys
 from pathlib import Path
 
 state = Path(os.environ["FAKE_STATE"])
+AGENT_PY = "/opt/agent/python/bin/python3"
 pins = dict(re.findall(r"^([A-Z_]+)=(.*)$", Path(os.environ["FAKE_PINS"]).read_text(), re.M))
 images = json.loads(os.environ["FAKE_IMAGES"])
 argv = sys.argv[1:]
@@ -641,12 +703,14 @@ elif image == pins["GITLEAKS_IMAGE"]:
 elif image == pins["GO_IMAGE"]:
     sys.stdout.write((state / "govulncheck.json").read_text())
 elif opts.get("--entrypoint") == ["/bin/uv"]:
-    Path(host("/out/pip-audit.json")).write_text(json.dumps({"dependencies": []}))
-elif not images[image]["python"]:
+    Path(host(args[args.index("--output") + 1])).write_text(json.dumps({"dependencies": []}))
+elif not images[image]["agent_python" if opts.get("--entrypoint") == [AGENT_PY] else "python"]:
     sys.exit(127)  # docker run: the entrypoint cannot be found in the image
 elif args[:2] == ["-I", "-c"]:
     sys.exit(0)
 elif "dists" in args:
+    if "--requirements" in args:
+        Path(host(args[args.index("--requirements") + 1])).write_text("pip==26.2.1\n")
     print("1 /site")
 else:
     sys.exit(subprocess.run([sys.executable, *map(host, args[1:])]).returncode)
@@ -673,10 +737,10 @@ def scan_tree(tmp_path: Path, images: list[str], stream: str) -> tuple[Path, dic
     (bin_dir / "docker").chmod(0o755)
     (state / "govulncheck.json").write_text(stream)
     known = {
-        "timelike-agent:local": {"id": "sha256:" + "a1" * 32, "python": True},
-        ADELE: {"id": "sha256:" + "ad" * 32, "python": False},
-        "timelike-vanilla:local": {"id": "sha256:" + "0a" * 32, "python": False},
-        "timelike-bench-driver:local": {"id": "sha256:" + "bd" * 32, "python": True},
+        "timelike-agent:local": {"id": "sha256:" + "a1" * 32, "python": True, "agent_python": True},
+        ADELE: {"id": "sha256:" + "ad" * 32, "python": False, "agent_python": False},
+        "timelike-vanilla:local": {"id": "sha256:" + "0a" * 32, "python": False, "agent_python": True},
+        "timelike-bench-driver:local": {"id": "sha256:" + "bd" * 32, "python": True, "agent_python": False},
     }
     env = {
         "PATH": f"{bin_dir}:/usr/bin:/bin",
@@ -722,7 +786,15 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
         expected = p["GO_IMAGE"] if img == ADELE else p["DEBIAN_IMAGE"]
         assert verdict["base_digest"] == expected.split("@")[1], img
         steps = {r.split("\t")[0]: r.split("\t")[1:] for r in (d / "steps.tsv").read_text().splitlines()}
-        assert list(steps) == ["sbom", "grype", "pip-audit", "govulncheck", "gitleaks"], img
+        assert list(steps) == [
+            "sbom",
+            "grype",
+            "pip-audit",
+            "pip-audit-agent",
+            "release-check",
+            "govulncheck",
+            "gitleaks",
+        ], img
         if img == ADELE:
             assert steps["govulncheck"] == [
                 "ran",
@@ -738,7 +810,32 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
         pip = (dirs[img] / "steps.tsv").read_text().splitlines()[2]
         said = f"no interpreter in image: {img} has no {py}, so pip-audit had nothing to audit"
         assert pip == f"pip-audit\tnone\t{said}"
+    # pip-audit-agent: each image carrying /opt/agent/python (agent, vanilla) audits it; the rest say none.
+    agent_py = "/opt/agent/python/bin/python3"
+    for img, d in dirs.items():
+        row = (d / "steps.tsv").read_text().splitlines()[3]
+        if img in (IMAGE, "timelike-vanilla:local"):
+            assert row == "pip-audit-agent\tran\t1 distributions in /site (agent interpreter)", img
+            assert (d / "agent-requirements.txt").read_text() == "pip==26.2.1\n", img
+        else:
+            said = f"no agent interpreter in image: {img} has no {agent_py}"
+            assert row == f"pip-audit-agent\tnone\t{said}, so pip-audit had nothing to audit", img
     runs = [json.loads(r) for r in (tmp_path / "state" / "runs.jsonl").read_text().splitlines()]
+    audits = [r for r in runs if r["opts"].get("--entrypoint") == ["/bin/uv"] and "-r" in r["args"]]
+    # Two agent-interpreter audits (agent, vanilla), both run from the agent image, which holds uv:
+    # over the scanned image's own list, resolving and installing nothing.
+    assert [r["image"] for r in audits] == [IMAGE, IMAGE]
+    for r in audits:
+        assert {"-r", "/out/agent-requirements.txt", "--no-deps", "--disable-pip"} <= set(r["args"])
+        assert r["args"][r["args"].index("--output") + 1] == "/out/pip-audit-agent.json"
+    listings = [r for r in runs if r["opts"].get("--entrypoint") == [agent_py] and "dists" in r["args"]]
+    assert [r["image"] for r in listings] == [IMAGE, "timelike-vanilla:local"]
+    assert all(r["opts"]["--network"] == ["none"] for r in listings)
+    # release-check: no image here has a baseline, so none has bundled-class entries to check.
+    for img, d in dirs.items():
+        row = (d / "steps.tsv").read_text().splitlines()[4]
+        said = f"no baseline (scan/baseline/{img.split(':')[0]}.json), so no bundled-class entries to check"
+        assert row == f"release-check\tnone\t{said}", img
     (go,) = [r for r in runs if r["image"] == p["GO_IMAGE"]]
     assert go["opts"]["--entrypoint"] == ["go"]
     assert go["args"] == [
@@ -756,6 +853,52 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
     } <= set(go["opts"]["-e"])
     assert go["opts"]["-v"] == [f"{root}/adele:/src:ro"]
     assert (dirs[ADELE] / "govulncheck.json").read_text() == gv_stream()  # stdout, as written
+
+
+def test_scan_sh_runs_the_release_check_from_the_agent_image_with_network_and_records_what_it_checked(
+    tmp_path: Path,
+) -> None:
+    root, env = scan_tree(tmp_path, ALL_IMAGES[:2], gv_stream())
+    # A pip-component bundled entry: the check answers `unknown` without reaching any registry, which is
+    # what lets this run offline; npm's path is covered against a file-served registry in
+    # test_scan_release_check.py.
+    entry = {
+        "id": "PYSEC-2026-9",
+        "package": "urllib3",
+        "severity": "high",
+        "origin": "files under /opt/agent",
+        "reason": "vendored in pip",
+        "bundled": {
+            "component": "pip",
+            "component_version": "26.2.1",
+            "library_version": "2.5.0",
+            "fixed_version": "2.6.0",
+            "fixed_date": "2026-09-01",
+        },
+        "reviewed": "2026-10-08",
+        "review_by": "2026-11-07",
+    }
+    doc = {
+        "image": "timelike-agent",
+        "base_digest": pins()["DEBIAN_IMAGE"].split("@")[1],
+        "reviewed": "2026-10-01",
+        "review_by": "2026-12-27",
+        "origins": {"files under /opt/agent": "the agent runtimes"},
+        "findings": [entry],
+    }
+    (root / "scan" / "baseline" / "timelike-agent.json").write_text(json.dumps(doc))
+    done = run_scan(root, env)
+    out = root / "scan" / "out"
+    row = (out / "steps.tsv").read_text().splitlines()[4]
+    assert row.startswith("release-check\tran\t1 bundled-class entries checked"), done.stdout + done.stderr
+    assert row.endswith(": 1 unknown")
+    result = json.loads((out / "release-check.json").read_text())["results"][0]
+    assert (result["state"], result["component"]) == ("unknown", "pip")
+    runs = [json.loads(r) for r in (tmp_path / "state" / "runs.jsonl").read_text().splitlines()]
+    (check,) = [r for r in runs if "releases" in r["args"]]
+    assert check["image"] == IMAGE
+    assert "--network" not in check["opts"]  # the registry is the point
+    assert check["args"][check["args"].index("--node-version") + 1] == pins()["NODE_VERSION"]
 
 
 def test_scan_sh_publish_denylist_is_unknown_without_a_list_and_does_not_fail(tmp_path: Path) -> None:

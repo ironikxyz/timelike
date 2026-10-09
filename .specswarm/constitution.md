@@ -1,9 +1,52 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: 1.4.2 → 1.4.3 (PATCH: H9's "fix available" gains revision 15's bundled-component reading; a
+  clarification)
+- Audit against discovery revision 15, amended. Source: ../bridge/governance-context.md (/mentor:regovern for
+  revision 15, header "> Discovery: plan/.discover/discovery.md (revision 15)"), § "What Changed In Those
+  Revisions" (relied on: one clarification paragraph under discovery's "Fix available", npm's constraint in
+  stack.md), and ../bridge/feedback/04-20261008-201205-fix-available-for-npm-bundled-libraries.md § Resolution.
+  Revision 15 appended to governance_audited_against
+- Modified: H9 restates revision 5's "fix available", so it gains the clarification: for a library bundled inside
+  a component installed as one unit, the component's release counts; such a finding is baselined with its own
+  review date at most 30 days out, never patched package by package, and the gate checks the component's releases
+  on every scan, blocking when one ships the fix or when it cannot check
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (the evidence section: unchanged)
+- HOW H1–H8: checked, unchanged
+- Dependent artifacts: ✅ quality-standards.md (the baseline section: the bundled class, its 30-day review, the
+  release check); ✅ tech-stack.md 1.5.0 (npm's own pin and constraint). In-flight: 007-announcements-discovery
+  (04 s1) builds the release check in its Cycle 5
+- Deferred TODOs: none
+
+- Version change: none (1.4.2 stands; a no-change audit amends nothing)
+- Audit against discovery revision 14, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern for revision 14, header "> Discovery: plan/.discover/discovery.md (revision 14)"),
+  § "What Changed In Those Revisions" (relied on), and
+  ../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md § Resolution (Q1–Q3).
+  Revision 14 appended to governance_audited_against: a no-change audit is a recorded result
+- What revision 14 moved: discovery's Soft Constraints "Base image" bullet (the PEP 668 clause struck:
+  the slim image carries no system Python; the agent image ships the agent's own Python and Node, and
+  the bench's vanilla arm the same binaries with stock behaviour) and stack.md's new Agent runtimes row.
+  Principles, hard constraints, the output contract and demo points did not move
+- Checked: no article restates the base-image constraint or PEP 668. H5 says timelike's tools run
+  #!/opt/timelike/python/bin/python3 -I and "never use the system Python or an agent venv": the agent
+  interpreter added at revision 14 is neither timelike's interpreter nor usable by its tools under H5's
+  first sentence, so H5 holds as written (tech-stack.md's prohibition 3 and stack note 3 say the same).
+  P6 (claims measured against a vanilla environment) holds: both bench arms gain the same runtimes. H9's
+  "fix available" rule already covers "a runtime or library", so Node and the agent Python fall under it
+  unchanged
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged (per the evidence section)
+- HOW H1–H9: checked, unchanged
+- Dependent artifacts: tech-stack.md audited, amended to 1.4.0 (Agent runtimes entry; PEP 668 and uv
+  notes corrected); quality-standards.md audited, amended (the supply-chain scan gate names the four
+  scanned images and the runtimes in their SBOMs). In flight: 007-announcements-discovery (04 s1, Cycle
+  4) builds the runtimes, on modify/007-slice-1, where this audit is committed (send 04-rev14)
+- Deferred TODOs: none
+
 - Version change: none (1.4.2 stands; a no-change audit amends nothing)
 - Audit against discovery revision 13, no change needed. Source: ../bridge/governance-context.md
   (/mentor:regovern 2026-10-04T23:28:30Z), § "What Changed In Those Revisions", and
@@ -383,8 +426,14 @@ dependencies, and the repository. A known High or Critical vulnerability with a 
 blocks the merge. "Fix available" means a stable release inside what the stack permits: for a
 runtime or library, any stable release inside the stack's version constraint, including another
 minor line; for an OS package, only the pinned distribution release and its security updates. A
-pre-release never counts. Severity is the scanner's standard source. Distribution triage (e.g.
-Debian `no-dsa`) may be quoted as a reason, never used to lower a severity.
+pre-release never counts. For a library **bundled inside a component installed as one unit** (npm's own
+`node_modules`, pip's vendored packages), the release that counts is the **component's**: the fix is
+available when a stable release of that component inside the stack's constraint ships it. Until then the
+finding is baselined naming the component and the upstream fix, with its own review date at most 30 days
+out; bundled trees are never patched package by package, and the gate checks the component's releases on
+every scan, blocking when one ships the fix or when it cannot check *(clarified, discovery revision 15)*.
+Severity is the scanner's standard source. Distribution triage (e.g. Debian `no-dsa`) may be quoted as a
+reason, never used to lower a severity.
 
 A High with no fix available passes only through a reviewed **baseline** generated per image
 digest. It lists every identifier with its image, package and origin (the base layer, or the
@@ -419,4 +468,4 @@ constraint; clarified in revision 4; refined in revision 5.)*
 - **Compliance review:** `/specswarm:plan` runs a Constitution Check against P1–P7 and H1–H9.
   A violation MUST be justified in the plan's complexity tracking or the design MUST change.
 
-**Version**: 1.4.2 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-10-02
+**Version**: 1.4.3 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-10-08

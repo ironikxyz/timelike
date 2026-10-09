@@ -5,8 +5,16 @@
 # It shares with the agent image exactly: the pinned DEBIAN_IMAGE digest, the `agent` user (uid/gid
 # 1000, empty home, bash), `USER agent`, and git — the catalog's one declared prerequisite (RB1).
 # It deliberately has NONE of timelike's layers: no ENV block, no /etc/gitconfig, no shell-env hook, no
-# profile.d files, no interpreter, no timelike tools, no setuid sweep. Adding any of them here would
-# make the bench measure timelike against a partial timelike.
+# profile.d files, no timelike interpreter, no timelike tools, no setuid sweep. Adding any of them here
+# would make the bench measure timelike against a partial timelike.
+# Since discovery revision 14 (feature 007 slice 1, spec FR-13 revised and FR-30) it carries the agent's
+# runtimes, an agent Python and Node, built by the SAME `runtimes` stage as image/Dockerfile from the same
+# pins, so both arms have the same binaries (RB1: a prerequisite goes into both images or neither). They
+# keep their STOCK behaviour here: the interpreter keeps its EXTERNALLY-MANAGED marker, npm keeps its default
+# prefix (/opt/agent/node), and none of timelike's configuration goes in (no pip.conf, no npmrc, no
+# ~/.local/bin on PATH). So a bare `pip install` is refused and `npm install -g` fails without privilege
+# here, as in an image that ships the runtimes without timelike. Only the seven names the agent image puts on
+# PATH are linked, so both arms find the same commands. This is feature 002's file; 02 s1 records it.
 # It also lacks procps, ca-certificates and less, which git recommends or timelike installs (RB1): a
 # task may use only what BOTH images contain, and a prerequisite goes into both images or neither.
 #
@@ -14,6 +22,56 @@
 # cited below live in .specswarm/features/002-speedup-bench/research.md.
 
 ARG DEBIAN_IMAGE
+ARG UV_IMAGE
+
+# The agent runtimes stage, copied byte for byte from image/Dockerfile (a unit test checks the two agree).
+FROM ${UV_IMAGE} AS uv
+
+# The agent's runtimes (feature 007 slice 1, discovery revision 14; 007 spec FR-25, D-14, D-15): an agent
+# Python (uv-managed CPython at PYTHON_VERSION) and Node (the official tarball, NODE_VERSION, checked against
+# NODE_SHA256), both under /opt/agent. Node's bundled npm is replaced whole by the registry's package at
+# NPM_VERSION, checked against NPM_SHA512 (lane 007s1-a: fixes in npm's bundled dependencies). Built in a
+# stage of their own so bench/vanilla/Dockerfile can run the identical steps: the two bench arms carry the
+# same binaries (RB1). Configuration is the final stage's job. The slim base has no curl and no xz, so the
+# tarballs come by ADD, and Node's is the .tar.gz.
+FROM ${DEBIAN_IMAGE} AS runtimes
+SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
+COPY --from=uv /uv /bin/uv
+ARG PYTHON_VERSION
+ARG NODE_VERSION
+ARG NODE_SHA256
+ARG NPM_VERSION
+ARG NPM_SHA512
+ADD https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz /tmp/node.tar.gz
+ADD https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz /tmp/npm.tgz
+RUN test -n "${PYTHON_VERSION:-}" && test -n "${NODE_VERSION:-}" \
+      || { echo "error: PYTHON_VERSION or NODE_VERSION build arg is empty — pass them from pins.env" >&2; exit 1; } \
+ && [[ "${NODE_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] \
+      || { echo "error: NODE_SHA256 build arg is not a SHA-256 — pass it from pins.env" >&2; exit 1; } \
+ && printf '%s  %s\n' "${NODE_SHA256}" /tmp/node.tar.gz | sha256sum -c - \
+      || { echo "error: node-v${NODE_VERSION}-linux-x64.tar.gz does not match NODE_SHA256 (pins.env) — refusing it" >&2; exit 1; } \
+ && mkdir -p /opt/agent/node \
+ && tar -xzf /tmp/node.tar.gz -C /opt/agent/node --strip-components=1 --no-same-owner \
+ && rm -f /tmp/node.tar.gz \
+ && test "$(/opt/agent/node/bin/node --version)" = "v${NODE_VERSION}" \
+ && [[ "${NPM_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "${NPM_SHA512:-}" =~ ^[0-9a-f]{128}$ ]] \
+      || { echo "error: NPM_VERSION or NPM_SHA512 build arg is missing or malformed — pass them from pins.env" >&2; exit 1; } \
+ && printf '%s  %s\n' "${NPM_SHA512}" /tmp/npm.tgz | sha512sum -c - \
+      || { echo "error: npm-${NPM_VERSION}.tgz does not match NPM_SHA512 (pins.env) — refusing it" >&2; exit 1; } \
+ && rm -rf /opt/agent/node/lib/node_modules/npm \
+ && mkdir /opt/agent/node/lib/node_modules/npm \
+ && tar -xzf /tmp/npm.tgz -C /opt/agent/node/lib/node_modules/npm --strip-components=1 --no-same-owner \
+ && rm -f /tmp/npm.tgz \
+ && test "$(/opt/agent/node/bin/node /opt/agent/node/bin/npm --version)" = "${NPM_VERSION}" \
+ && UV_NO_CACHE=1 UV_PYTHON_INSTALL_DIR=/opt/agent \
+      uv python install "${PYTHON_VERSION}" --install-dir /opt/agent --no-bin --compile-bytecode \
+ && test -x "/opt/agent/cpython-${PYTHON_VERSION}-linux-x86_64-gnu/bin/python3" \
+ && ln -s "cpython-${PYTHON_VERSION}-linux-x86_64-gnu" /opt/agent/python \
+ && find /opt/agent -mindepth 1 -maxdepth 1 \( -name '.*' -o -type l ! -name python \) -exec rm -rf {} + \
+ && /opt/agent/python/bin/python3 -I -c \
+      'import platform, sys; v = platform.python_version(); sys.exit(0 if v == sys.argv[1] else "error: agent interpreter is " + v + ", pinned " + sys.argv[1])' \
+      "${PYTHON_VERSION}" \
+ && chown -R root:root /opt/agent
 
 FROM ${DEBIAN_IMAGE}
 
@@ -45,6 +103,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && if ! command -v timeout || ! command -v sh; then \
       echo "error: timeout or sh is missing from the base image (code 1) — the bench's in-container limit wrapper needs both (RB5); re-check DEBIAN_IMAGE" >&2; exit 1; fi
 
+# --- 1b. The agent's runtimes with stock behaviour (FR-13 revised, FR-30) ---------------------------------
+# The same /opt/agent the agent image copies, and the same seven links; nothing else.
+COPY --from=runtimes /opt/agent /opt/agent
+RUN for n in python3 python pip pip3; do ln -s "/opt/agent/python/bin/${n}" "/usr/local/bin/${n}"; done \
+ && for n in node npm npx; do ln -s "/opt/agent/node/bin/${n}" "/usr/local/bin/${n}"; done \
+ && test -n "$(find /opt/agent/python/lib -maxdepth 2 -name EXTERNALLY-MANAGED -print -quit)" \
+ && /usr/local/bin/python3 --version && /usr/local/bin/node --version
+
 # --- 2. The agent user, as in image/Dockerfile §4 but without adele ----------------------------------
 # uid/gid 1000, empty home (no /etc/skel dotfiles: vanilla has no rc-file defaults either), login shell
 # /bin/bash, no supplementary groups. Fail loudly if the base image already uses the id (lore
@@ -71,7 +137,7 @@ RUN if [ -z "${GIT_SHA:-}" ]; then \
       echo "error: GIT_SHA build arg '${GIT_SHA}' is not a git revision (code 1) — pass git rev-parse HEAD (H8)" >&2; exit 1; fi
 LABEL org.opencontainers.image.revision=$GIT_SHA \
       org.opencontainers.image.title="timelike bench vanilla baseline" \
-      org.opencontainers.image.description="Debian + git + agent uid 1000, without any of timelike's layers (feature 002 RB1)"
+      org.opencontainers.image.description="Debian + git + the agent runtimes (stock) + agent uid 1000, without any of timelike's layers (feature 002 RB1)"
 
 # --- 4. Run as the unprivileged agent, like the agent image ------------------------------------------
 USER agent

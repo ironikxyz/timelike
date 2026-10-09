@@ -18,6 +18,10 @@ services:
         DEBIAN_IMAGE: ${DEBIAN_IMAGE:-}
         UV_IMAGE: ${UV_IMAGE:-}
         PYTHON_VERSION: ${PYTHON_VERSION:-}
+        NODE_VERSION: ${NODE_VERSION:-}
+        NODE_SHA256: ${NODE_SHA256:-}
+        NPM_VERSION: ${NPM_VERSION:-}
+        NPM_SHA512: ${NPM_SHA512:-}
         GIT_SHA: ${GIT_SHA:-}
     image: timelike-agent:local
     container_name: timelike-agent

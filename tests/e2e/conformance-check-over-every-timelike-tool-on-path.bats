@@ -98,12 +98,20 @@ ${AGENT_PY} -I /tmp/json_fields.py '${WORK}/info.json' tool revision"
 
 # check_conform_names_broken_interpreter FIXTURE STYLE TTY — FIXTURE (a file in fixtures/) is added
 # to PATH and TIMELIKE_BIN_DIRS beside the shipped tools; conform must name it and still judge those.
+# Since discovery revision 14 the image puts the agent's python3 on PATH (/usr/local/bin), so a
+# `#!/usr/bin/env python3` tool would simply run there. The cell keeps its premise by dropping every
+# PATH entry that holds a python3 (the agent runtimes), and checks the premise before it judges
+# anything: exit 3 with "premise:" means python3 still resolved, not that conform misjudged.
+# timelike's own tools name /opt/timelike/python directly (constitution H5), so they are unaffected.
 check_conform_names_broken_interpreter() {
   local tool="$1" bad="${WORK}/badbin"
   exec_plain mkdir -p "$bad"
   copy_into_container "${BATS_TEST_DIRNAME}/fixtures/${tool}" "${bad}/${tool}" 0755
-  RUN_TIMEOUT=60 run_in "$2" "$3" "PATH='${bad}':\"\$PATH\" TIMELIKE_BIN_DIRS='/opt/timelike/bin:${bad}' timelike-conform --text --limit 0"
+  RUN_TIMEOUT=60 run_in "$2" "$3" "keep=; IFS=:; for d in \$PATH; do [ -x \"\$d/python3\" ] || keep=\"\${keep:+\$keep:}\$d\"; done; unset IFS; \
+PATH='${bad}':\"\$keep\"; if command -v python3 >/dev/null; then echo \"premise: python3 on PATH at \$(command -v python3)\"; exit 3; fi; \
+TIMELIKE_BIN_DIRS='/opt/timelike/bin:${bad}' timelike-conform --text --limit 0"
   assert_within 60
+  assert_no_line_matching '^premise:'
   assert_status 1
   assert_no_line_matching '^error: internal error'
   local c

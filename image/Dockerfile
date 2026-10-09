@@ -13,6 +13,52 @@ ARG UV_IMAGE
 # uv ships as a distroless image holding /uv and /uvx (R6).
 FROM ${UV_IMAGE} AS uv
 
+# The agent's runtimes (feature 007 slice 1, discovery revision 14; 007 spec FR-25, D-14, D-15): an agent
+# Python (uv-managed CPython at PYTHON_VERSION) and Node (the official tarball, NODE_VERSION, checked against
+# NODE_SHA256), both under /opt/agent. Node's bundled npm is replaced whole by the registry's package at
+# NPM_VERSION, checked against NPM_SHA512 (lane 007s1-a: fixes in npm's bundled dependencies). Built in a
+# stage of their own so bench/vanilla/Dockerfile can run the identical steps: the two bench arms carry the
+# same binaries (RB1). Configuration is the final stage's job. The slim base has no curl and no xz, so the
+# tarballs come by ADD, and Node's is the .tar.gz.
+FROM ${DEBIAN_IMAGE} AS runtimes
+SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
+COPY --from=uv /uv /bin/uv
+ARG PYTHON_VERSION
+ARG NODE_VERSION
+ARG NODE_SHA256
+ARG NPM_VERSION
+ARG NPM_SHA512
+ADD https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz /tmp/node.tar.gz
+ADD https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz /tmp/npm.tgz
+RUN test -n "${PYTHON_VERSION:-}" && test -n "${NODE_VERSION:-}" \
+      || { echo "error: PYTHON_VERSION or NODE_VERSION build arg is empty — pass them from pins.env" >&2; exit 1; } \
+ && [[ "${NODE_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] \
+      || { echo "error: NODE_SHA256 build arg is not a SHA-256 — pass it from pins.env" >&2; exit 1; } \
+ && printf '%s  %s\n' "${NODE_SHA256}" /tmp/node.tar.gz | sha256sum -c - \
+      || { echo "error: node-v${NODE_VERSION}-linux-x64.tar.gz does not match NODE_SHA256 (pins.env) — refusing it" >&2; exit 1; } \
+ && mkdir -p /opt/agent/node \
+ && tar -xzf /tmp/node.tar.gz -C /opt/agent/node --strip-components=1 --no-same-owner \
+ && rm -f /tmp/node.tar.gz \
+ && test "$(/opt/agent/node/bin/node --version)" = "v${NODE_VERSION}" \
+ && [[ "${NPM_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "${NPM_SHA512:-}" =~ ^[0-9a-f]{128}$ ]] \
+      || { echo "error: NPM_VERSION or NPM_SHA512 build arg is missing or malformed — pass them from pins.env" >&2; exit 1; } \
+ && printf '%s  %s\n' "${NPM_SHA512}" /tmp/npm.tgz | sha512sum -c - \
+      || { echo "error: npm-${NPM_VERSION}.tgz does not match NPM_SHA512 (pins.env) — refusing it" >&2; exit 1; } \
+ && rm -rf /opt/agent/node/lib/node_modules/npm \
+ && mkdir /opt/agent/node/lib/node_modules/npm \
+ && tar -xzf /tmp/npm.tgz -C /opt/agent/node/lib/node_modules/npm --strip-components=1 --no-same-owner \
+ && rm -f /tmp/npm.tgz \
+ && test "$(/opt/agent/node/bin/node /opt/agent/node/bin/npm --version)" = "${NPM_VERSION}" \
+ && UV_NO_CACHE=1 UV_PYTHON_INSTALL_DIR=/opt/agent \
+      uv python install "${PYTHON_VERSION}" --install-dir /opt/agent --no-bin --compile-bytecode \
+ && test -x "/opt/agent/cpython-${PYTHON_VERSION}-linux-x86_64-gnu/bin/python3" \
+ && ln -s "cpython-${PYTHON_VERSION}-linux-x86_64-gnu" /opt/agent/python \
+ && find /opt/agent -mindepth 1 -maxdepth 1 \( -name '.*' -o -type l ! -name python \) -exec rm -rf {} + \
+ && /opt/agent/python/bin/python3 -I -c \
+      'import platform, sys; v = platform.python_version(); sys.exit(0 if v == sys.argv[1] else "error: agent interpreter is " + v + ", pinned " + sys.argv[1])' \
+      "${PYTHON_VERSION}" \
+ && chown -R root:root /opt/agent
+
 FROM ${DEBIAN_IMAGE}
 
 # Build-time shell only; it does not affect the running container's shells.
@@ -74,6 +120,31 @@ RUN site="$(/opt/timelike/python/bin/python3 -I -c 'import sysconfig; print(sysc
 COPY --chmod=0755 tools/bin/ /opt/timelike/bin/
 RUN chown -R root:root /opt/timelike/bin
 
+# --- 3b. The agent's runtimes, configured for user locations (007 spec FR-25 to FR-28; discovery revision 14)
+# For the agent, never for timelike's tools (stack note 3: they run /opt/timelike/python with -I, which never
+# reads the user site). Root owns both prefixes. The configuration is scoped to each runtime (ruling Q3):
+#   - the agent interpreter loses its EXTERNALLY-MANAGED marker: no external manager owns it (timelike put it
+#     there for the agent to install into)
+#   - its own pip.conf (pip's site configuration for that prefix) makes a bare `pip install` a user install
+#   - Node's own npmrc (the global config npm finds from node's real path) puts `npm install -g` under
+#     ~/.local; npm expands ${HOME} itself
+#   - seven links on PATH, to the runtimes' own executables: no wrapper (feature 15 sits in front later).
+#     corepack, idle3, pydoc3 and python3-config are not linked (D-12)
+# Never PIP_BREAK_SYSTEM_PACKAGES. ~/.local/bin is on PATH through § 7 and profile.d (FR-28).
+COPY --from=runtimes /opt/agent /opt/agent
+RUN marker="$(find /opt/agent/python/lib -maxdepth 2 -name EXTERNALLY-MANAGED -print -quit)" \
+ && { test -n "${marker}" || { echo "error: the agent interpreter carries no EXTERNALLY-MANAGED marker to remove — has uv changed?" >&2; exit 1; }; } \
+ && rm -f "${marker}" \
+ && printf '[install]\nuser = true\n' >/opt/agent/python/pip.conf \
+ && mkdir -p /opt/agent/node/etc \
+ && printf 'prefix=${HOME}/.local\n' >/opt/agent/node/etc/npmrc \
+ && chmod 0644 /opt/agent/python/pip.conf /opt/agent/node/etc/npmrc \
+ && for n in python3 python pip pip3; do ln -s "/opt/agent/python/bin/${n}" "/usr/local/bin/${n}"; done \
+ && for n in node npm npx; do ln -s "/opt/agent/node/bin/${n}" "/usr/local/bin/${n}"; done \
+ && test -z "$(find /opt/agent/python/lib -maxdepth 2 -name EXTERNALLY-MANAGED -print -quit)" \
+ && /usr/local/bin/pip --version >/dev/null && /usr/local/bin/npm --version >/dev/null \
+ && test "$(/usr/local/bin/python3 -I -c 'import sys; print(sys.prefix)')" != "$(readlink -f /opt/timelike/python)"
+
 # Git-hook dispatchers (cycle 5, discovery revision 7; research R11). GIT_CONFIG_* below points
 # core.hooksPath here: each hook name is a link to `dispatch`, which runs the repository's own hook
 # under a time limit. Copied without --chmod, because COPY keeps a directory's links as links and
@@ -127,6 +198,9 @@ COPY --chmod=0644 image/rootfs/etc/timelike/redaction.toml /etc/timelike/redacti
 # The announcement's inputs (feature 007): the curated standard tools for `timelike tools`, and the
 # entrypoint that places the announcement in each harness's user-level context file on container start.
 COPY --chmod=0644 image/rootfs/etc/timelike/standard-tools.json /etc/timelike/standard-tools.json
+# What a command that is not installed answers in bash (feature 007 slice 1, spec FR-16): read by the
+# hook's command_not_found_handle, with builtins only.
+COPY --chmod=0644 image/rootfs/etc/timelike/missing-commands.tsv /etc/timelike/missing-commands.tsv
 COPY --chmod=0755 image/rootfs/opt/timelike/libexec/entrypoint /opt/timelike/libexec/entrypoint
 RUN test -f /etc/bash.bashrc \
       || { echo "error: /etc/bash.bashrc is missing — interactive bash would not reach the timelike hook" >&2; exit 1; } \
@@ -146,14 +220,16 @@ RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} + \
 # --- 7. Non-interactive defaults (step 8; R1–R5). ONE instruction, one KEY=VALUE per line. -----------
 # tests/host/test_env_layer.sh parses this block: keep it a single ENV, no comments inside, and only
 # double quotes (no $, backslash or single quote in values). PATH is also restored for login shells by
-# /etc/profile.d/00-timelike-path.sh, because Debian's /etc/profile resets it (R1).
+# /etc/profile.d/00-timelike-path.sh, because Debian's /etc/profile resets it (R1). /home/agent/.local/bin
+# (007 FR-28, discovery revision 14) is where bare pip and npm -g installs put commands: after timelike's
+# tools, so an install never shadows one, and before /usr/local/bin.
 # Slice 1: BASH_ENV points non-interactive bash at the container-derived hook (§ 5; F004). TZ and
 # PYTHON_BASIC_REPL are static, so they live here and reach sh -c and direct execs as well (F003,
 # SC-10): TZ="UTC" needs no zoneinfo file (glibc reads it as a POSIX TZ string, offset 0), and
 # PYTHON_BASIC_REPL keeps Python >= 3.13 out of PyREPL (colour, line editing, escape sequences).
 # From here on the build's own RUN shells (bash) read BASH_ENV too; the hook only adds job counts and
 # strips secret-shaped names, and § 8's GIT_SHA is not one.
-ENV PATH="/opt/timelike/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+ENV PATH="/opt/timelike/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     TIMELIKE_BIN_DIRS="/opt/timelike/bin" \
     GIT_EDITOR="true" \
     GIT_SEQUENCE_EDITOR="true" \

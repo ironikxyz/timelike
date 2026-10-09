@@ -78,3 +78,120 @@ then `exec "$@"`. The image's `ENTRYPOINT ["/opt/timelike/libexec/entrypoint"]`,
 - **A failed `--check`** is a result on stdout (rule 10's outcomes are verdicts), exit 1, with `missing`
   and `extra` in JSON. It is not a stderr error.
 - **`announce --json`'s `lines`** are the announcement's lines, the file's content line by line.
+
+---
+
+# Slice 1 (modify Cycle 3, send `bridge/sends/04-rev13-20261008-161802.md`; spec § Slice 1)
+
+## The command-not-found answer (FR-14 to FR-17a)
+
+**Where:** `command_not_found_handle`, defined in `/etc/timelike/shell-env.bash`. It is reached by `bash -c`,
+`bash -lc`, interactive bash, and any bash script they run. It is **not** reached by `sh -c` or a direct exec.
+
+**Behaviour:** stderr only. Exit 127. It reads nothing from stdin, installs nothing and forks nothing (bash
+builtins only). It turns off `errexit`, `nounset` and `xtrace` locally, so a caller's `set -eux` neither breaks
+it nor traces it.
+
+**Line 1, always: bash's own line, byte for byte.**
+
+| Shell | Line |
+|---|---|
+| non-interactive (`bash -c`, `bash -lc`, a script, `bash -s`) | `<where>: line <BASH_LINENO[0]>: <name>: command not found`, with `<where>` = the caller's `BASH_SOURCE[1]` when set, else `$0` (`bash -c '…' myname` → `myname`; a function defined in a `-c` string → `environment`, as bash says) |
+| interactive (`$-` contains `i`) | `<base name of $0>: <name>: command not found` (bash prints argv0's base name: `/usr/bin/bash` → `bash`, `-bash` stays; settled at implementation, T015's finding) |
+
+**Then, for a known name, one line per data row whose `name` equals the command's name, in file order:**
+
+| `kind` | Line (`<note>` part omitted when the note is `-`) |
+|---|---|
+| `instead` | `timelike: instead: <value>  (<note>)` |
+| `debian` | `timelike: <name> is in the Debian package <value>, which is not installed. The agent cannot install OS packages (no root): the operator adds <value> to the image.` |
+| `user` | `timelike: install it yourself: <value>  (<note>)` (no rows ship until FOR-MENTOR Item 21 is answered) |
+
+Two spaces separate the command from `(<note>)`. A name with no row gets line 1 alone.
+
+**The data:** `/etc/timelike/missing-commands.tsv`, overridden by `TIMELIKE_MISSING_COMMANDS` (tests only).
+- UTF-8. Lines starting with `#`, and empty lines, are ignored.
+- Otherwise exactly four tab-separated fields: `name`, `kind` (`instead` | `debian` | `user`), `value`, `note`
+  (`-` for none).
+- An unreadable or missing file, or a directory at the path, means line 1 alone. A malformed line, or an unknown kind, is skipped.
+- `name` is a command word: no `/`, no whitespace.
+
+**Validity (unit test, on the shipped file):**
+- every line well-formed;
+- every `instead` value's first word is an executable in `tools/bin/`;
+- each `debian` value is a plausible package name (`[a-z0-9][a-z0-9+.-]+`);
+- no duplicate (name, kind, value).
+
+**e2e:** no listed name resolves with `command -v` in the image.
+
+## `timelike budget` (FR-20 to FR-23)
+
+`timelike budget [--json]`. Usage line in `timelike --help`:
+`timelike budget            memory, CPU, process and disk limits, and what is in use`.
+Exit 0 whatever it could read: an unknown is a result. Usage errors exit 2, as for the other subcommands
+(`--write` and the rest stay `announce`'s).
+
+**Sources:**
+- **The cgroup directory:** `TIMELIKE_CGROUP_ROOT` if set, else `/sys/fs/cgroup/<0:: path of /proc/self/cgroup>`,
+  else `/sys/fs/cgroup` (`agentio.cgroup_dir()`, moved from `run`).
+- **memory:** `memory.max`, `memory.current`, `memory.peak`.
+- **pids:** `pids.max`, `pids.current`.
+- **CPU:** `TIMELIKE_CGROUP_CPU_MAX` if set, else `<cgroup>/cpu.max`, for the limit; `TIMELIKE_PROC_STATUS` if set,
+  else `/proc/self/status`, for `Cpus_allowed_list`. These are the hook's own test overrides, so one file feeds both.
+
+**A figure** (JSON):
+`{"state": "value"|"none"|"unknown", "value": <int|float|null>, "source": "<path>", "reason": <str|null>}`
+- `none`: the file says `max`. `value` is null, and the text says `no limit`;
+- `unknown`: the file is missing, unreadable or unparseable. `value` is null, and `reason` is
+  `"<path>: <strerror or what was wrong>"`. The text says `unknown (<reason>)`. **Never 0.**
+
+**CPU** (`agentio.cpu_figure()`, the hook's rule, spec FR-22):
+- `limit`: a figure with `value` = quota ÷ period, rounded to 2 decimals (a float), plus `quota` and `period`
+  (ints) when its state is `value`. `cpu.max` has the form `<quota|max> <period>`;
+- `affinity`: the CPU count in `Cpus_allowed_list` (e.g. `0-3,8,10-11` → 7), or null when unreadable;
+- `jobs`: `affinity` (0 when null); if ⌈quota ÷ period⌉ > 0 and (jobs = 0 or ⌈quota ÷ period⌉ < jobs), then
+  jobs = ⌈quota ÷ period⌉; never below 1. This **must equal** the hook's `TIMELIKE_CPUS` on the same two files;
+- `shell_value`: this process's `TIMELIKE_CPUS` as an int, or null when unset or not an int;
+- `agrees`: `shell_value == jobs`, or null when `shell_value` is null.
+
+**A disk:** `{"role": "workspace"|"scratch", "path": "<p>", "measured": "<p'>", "exists": <bool>,
+"free_bytes": <int|null>, "total_bytes": <int|null>, "reason": <str|null>}`
+- **workspace:** `path` = `agentio.workspace()`: the nearest ancestor of the real current directory holding a
+  `.git` entry (lstat, not git), else the current directory (005 FR-1, moved from `snapshot`).
+- **scratch:** `path` = `TIMELIKE_SCRATCH_ROOT` or `/tmp/timelike`.
+- `measured` is `path` when it exists, else its nearest existing ancestor (`exists` false).
+- `free_bytes` = `f_bavail × f_frsize`, `total_bytes` = `f_blocks × f_frsize`. When `statvfs` fails, both are
+  null and `reason` is set.
+
+**JSON `data`** (agentio puts these keys at the top level of the JSON object, beside `verdict` and `lines`; there is no `data` key, settled at implementation T017):
+```
+{"cgroup": "<dir>",
+ "memory": {"limit": FIG, "current": FIG, "peak": FIG},
+ "cpu": {"limit": FIG(+quota, period), "affinity": int|null, "jobs": int, "shell_value": int|null, "agrees": bool|null},
+ "pids": {"limit": FIG, "current": FIG},
+ "disks": [DISK(workspace), DISK(scratch)]}
+```
+
+**Text lines** (exactly five, in this order; sizes as `run`'s `size()`: below 1 KiB `N B`, else one decimal
+with KiB/MiB/GiB/TiB):
+```
+memory: limit <L> · in use <U> · peak <P>
+cpu: limit <C> · job count <J> (TIMELIKE_CPUS)[ · this shell has TIMELIKE_CPUS=<n>, <agrees|disagrees>]
+processes: limit <L> · running <R>
+disk, workspace <path>: <free> free of <total>[ (measured at <measured>; <path> does not exist yet)]
+disk, scratch <path>: <free> free of <total>[ (measured at <measured>; <path> does not exist yet)]
+```
+- `<C>` is `1.50 CPUs`, `no limit` or `unknown (…)`. A count in processes is a plain integer.
+- A disk with no statvfs prints `unknown (<reason>)` in place of `<free> free of <total>`.
+
+**Verdict:** `memory <L>, cpu <C>, processes <L>; free: workspace <free>, scratch <free>`. When any figure or
+disk is unknown, `; <n> unknown` is appended (n counts unknown memory, CPU-limit and pids figures plus disks
+with no statvfs).
+
+## The announcement (FR-24)
+
+Two rule lines go after the `timelike tools` line, each emitted only when `timelike` is installed:
+```
+- `timelike budget`: this container's memory, CPU, process and disk limits, and what is in use.
+- In bash, a command that is not installed says what to use instead, or who can install it.
+```

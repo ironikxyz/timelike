@@ -905,3 +905,63 @@ rule 10's place for caches that should outlive a session. Moving the index there
 
 **For the mentor (route: code, or 07 slice 1's send):** move the index when the state root is built, in
 07 slice 1's cycle or 10's slice 2. Until then, the cold first call per session is the accepted cost.
+
+## Item 21 — Feature 04 slice 1 (`007-announcements-discovery`, Cycle 3): there is no Python and no Node for "a bare install" to reach; which reading? (blocks one criterion only)
+
+**Status:** closed 2026-10-08T17:46:27Z (read from the clock). Answered by plan as discovery revision 14 (plan `e800ef3`): Q1 option (a), the agent image ships a uv-managed agent Python in its own prefix and the official Node LTS tarball, pinned; Q2 reading (ii), user locations made the default by configuration scoped to each runtime; Q3, no `PIP_BREAK_SYSTEM_PACKAGES` anywhere (the agent interpreter is provisioned without its `EXTERNALLY-MANAGED` marker instead), and vanilla gains the same runtime binaries with stock behaviour. Copy of record: `../bridge/feedback/04-20261008-173021-agent-runtimes-for-package-installs.md` § Resolution (Q1–Q3); built from `bridge/sends/04-rev14-20261008-174220.md` (007 Cycle 4). The text below is kept as raised.
+
+**Raised:** 2026-10-08 on `modify/007-slice-1`, from send
+`bridge/sends/04-rev13-20261008-161802.md`, seam 1, which asks for this item before the criterion is built.
+
+**The criterion:** "A bare Python package install and a global Node package install each succeed as the
+agent's user without privilege and persist across new shells". **Nothing of it is built until this is
+answered.** Criteria 1 (the command-not-found answer) and 3 (the budget command) and the shell hook go
+ahead meanwhile.
+
+**What the image has, read from `image/Dockerfile` and checked here:**
+- timelike's own interpreter at `/opt/timelike/python` (run with `-I`; stack note 3: never the agent's);
+- `uv` at `/bin/uv` (pinned 0.12.19);
+- no `python3`, `pip`, `node` or `npm` on the agent's PATH. Debian's `python3` is not installed either.
+
+**What I measured with the pinned uv 0.12.19, as an ordinary user in a throwaway home (host, not the image):**
+- `uv python install 3.14.7 --default` succeeds without privilege. It puts `python`, `python3` and
+  `python3.14` in `~/.local/bin`, in 2.9 s, from the network.
+- That Python is marked `EXTERNALLY-MANAGED` (PEP 668). It has `python3 -m pip` (pip 26.2.1) and **no `pip`
+  executable**. So a "bare `pip install X`" is not found there, and `python3 -m pip install X` is refused
+  until PEP 668 is overridden.
+- uv has no Node. An agent-side Node would be an unpinned download from nodejs.org.
+
+**The options:**
+- **(a) The image ships agent-facing runtimes.** Debian's `python3`, `python3-pip`, `python3-venv`,
+  `nodejs` and `npm` from trixie (pinned by the base digest, as git is), separate from timelike's
+  interpreter. Plus the configuration in (b). The cost:
+  - image size and `make scan`'s surface (npm brings a large JavaScript tree and its CVEs);
+  - **bench parity:** vanilla is "Debian + git" (RB1, FR-13). Either both images get the runtimes, or the
+    timelike arm measures the runtimes and not timelike (P6). Changing vanilla is feature 02's call.
+- **(b) timelike ships the configuration, not the runtimes.** This is my recommendation. Through the
+  environment, never a wrapper (seam 4), so feature 15 can sit in front later:
+  - `PIP_USER=1`, so pip goes to `~/.local`. **`PIP_BREAK_SYSTEM_PACKAGES=1`** is needed too, because both
+    Debian's and uv's Pythons are `EXTERNALLY-MANAGED` and refuse `--user` otherwise. With `PIP_USER` the
+    override writes only to `~/.local`, never to a root-owned path (P004's test). It does override a distro
+    safeguard, so plan should rule on it.
+  - `npm_config_prefix=/home/agent/.local`, so `npm install -g` goes to `~/.local/lib/node_modules` and
+    `~/.local/bin`;
+  - `/home/agent/.local/bin` on PATH in the ENV block and in profile.d, so installs persist across new shells.
+
+  Wherever a runtime exists (an operator's derived image, a harness layer like D4's), bare `pip install` and
+  `npm install -g` then land in user locations. The shipped image says what it lacks: `python3`, `pip`,
+  `node` and `npm` typed there get criterion 1's answer, which names who adds them, plus
+  `uv python install --default` for Python. The criterion is tested in a test-only image layer on the agent
+  image that adds trixie's `python3-pip` and `npm`, with a package built by the test (P005). Bench parity
+  holds. **This reads the criterion as conditional on a runtime being present, which the send says to
+  raise.**
+- **(c) uv-managed agent Python only.** It gives Python without privilege. It doesn't give a bare `pip`
+  without a shim, which seam 4 rules out, and it gives no Node.
+
+**Also affected:** the curated `standard-tools.json` entry for `python3` (and `node`) has to match what the
+image ships (the send's carried item). Under (b) they stay as curated entries, `installed: false` in the
+image.
+
+**For the mentor (route: plan, if plan rules):** (a), (b) or something else, and whether
+`PIP_BREAK_SYSTEM_PACKAGES=1` with `PIP_USER=1` is acceptable. If the answer is (a), it also needs feature
+02's ruling on vanilla.

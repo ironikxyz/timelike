@@ -790,12 +790,44 @@ def test_repository_curated_file_shape() -> None:
 # ── P6 and existing behaviour ──────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    "needle", ["announcement", "standard-tools.json", "libexec/entrypoint", "timelike announce"]
-)
-def test_vanilla_dockerfile_references_none_of_this_feature(needle: str) -> None:
+# timelike's configuration, which the vanilla image must not reference (spec FR-13, revised in cycle 4:
+# it gains the agent runtimes' binaries, with stock behaviour, and none of timelike's configuration).
+VANILLA_FORBIDDEN = [
+    "announcement",
+    "timelike announce",
+    "entrypoint",
+    "standard-tools.json",
+    "missing-commands.tsv",
+    "shell-env",
+    "profile.d",
+    "pip.conf",
+    "npmrc",
+    "/opt/timelike",
+]
+# What it must carry instead: the same runtime pins and prefix as the agent image (FR-13 revised, FR-30).
+VANILLA_REQUIRED = ["NODE_SHA256", "PYTHON_VERSION", "/opt/agent"]
+
+
+def vanilla_instructions() -> str:
+    """The vanilla Dockerfile without comment lines: its header may say what it lacks ("no profile.d
+    files"), and saying so is not referencing it."""
     assert VANILLA_DOCKERFILE.exists()
-    assert needle not in VANILLA_DOCKERFILE.read_text(), f"P6: the vanilla image mentions {needle!r}"
+    return "\n".join(
+        line for line in VANILLA_DOCKERFILE.read_text().splitlines() if not line.lstrip().startswith("#")
+    )
+
+
+@pytest.mark.parametrize("needle", VANILLA_FORBIDDEN)
+def test_vanilla_dockerfile_references_none_of_this_feature(needle: str) -> None:
+    code = vanilla_instructions()
+    assert needle.lower() not in code.lower(), f"P6: the vanilla image mentions {needle!r} (FR-13 revised)"
+
+
+@pytest.mark.parametrize("needle", VANILLA_REQUIRED)
+def test_vanilla_dockerfile_carries_the_runtime_pins(needle: str) -> None:
+    assert needle in vanilla_instructions(), (
+        f"the vanilla image lacks {needle!r}: it gains the same runtimes from the same pins (FR-13 revised)"
+    )
 
 
 def test_plain_timelike_is_unchanged(rig: Rig) -> None:
