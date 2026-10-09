@@ -545,3 +545,47 @@ Done. No commit after this report until the mentor says lane 008s1-a has ended.
 
 **Then:** done. No commit until the mentor says lane 008s1-b has ended. This item is closed here once the mentor
 resolves it in the feedback file.
+
+### Cycle 2 addendum 2 — lane 008s1-b: ten slice-0 cells pinned the old verdict (2026-10-09T19:31:45Z, read from the clock)
+
+- **Finding** (mentor, lane 008s1-b at `29e65c2`, 2026-10-09T18:08:35Z to 19:20:15Z; log `bridge/.make-test-008s1-b.log`).
+  **Routed** by `bridge/feedback/06-20261009-192053-lane-008s1-b-slice-0-cells-pin-the-old-verdict.md`.
+  - The other three targets passed: bench-images, scan and lint. The scan was clean against addendum 1's ruling.
+  - e2e: 619 of 629 cells ok. **Slice 1's own cells all passed in the image**, per the mentor: SC-7 34 of 34, SC-8 43
+    of 43, FR-28 4 of 4.
+  - The ten failures were slice-0 cells: SC-1 193–196, SC-2 171–172 and SC-5 173–176. Each asserted the verdict as it
+    was before T015 added the syntax part. `edit` printed what the contract specifies; every assertion before the
+    verdict passed.
+  - **This cycle's defect:** T015 changed the verdict and the slice-0 e2e files were not brought along. The host
+    stand-in cannot reach e2e cells, which is the `not_verified` gap this lane closed.
+- **Fix** (`5f5c246`), in the three files only:
+  - Each `setup_file` reads V from timelike's interpreter, exactly as the SC-8 file does.
+  - The verdicts assert `syntax: ok (python V compile)` literally, in the contract's position (before
+    `; nothing written` on a dry run).
+  - SC-1's regex is still anchored at both ends, with V escaped and no `.*`. It is built inside the cell, because V
+    is set in `setup_file`.
+  - SC-2's and SC-5's assertions stay exact equality.
+  - No other assertion changed.
+- **Contract** (same commit): `contracts/edit-cli.md` lines 185 and 271 now read `python 3.14.8 compile`. 271 is
+  the refusal example; it carried the same stale value, so it moved with 185.
+- **Not changed, for the mentor:** `spec.md` still names 3.14.7, at 223 (the refusal example) and 276 ("CPython
+  3.14.7, the same version as the agent's"). 276 is now a stale statement in the spec body. It was not asked for, so
+  it is left to the mentor's call.
+- **What the host could check** (no Docker here, so **no cell ran**):
+  - SC-1's regex with V = 3.14.8 matches both line-range forms with the clause. It rejects a verdict with no clause,
+    one with a trailing addition, an unescaped version, and 3.14.7.
+  - Every expected string, expanded with V = 3.14.8, equals what `edit` printed in the lane's log.
+  - bats 1.14.0 `--count` parses the three files, with counts unchanged (4, 4, 6).
+  - shellcheck 0.11.0 is clean over the three files and helpers.bash.
+  - **Not reached:** the cells themselves, and `exec_plain` reading V in these three files' `setup_file`. The
+    SC-8 file already does the latter and passed in 008s1-b.
+- **Touched:** only tests and the contract's examples. No tool, image, pin or baseline changed, so lane 008s1-c needs
+  only the test target, as the mentor said.
+- **Citations:** every Group C citation above stays `unconfirmed` until a green lane. The README block stays
+  applied, as the mentor ruled.
+- **process_failures_recorded, added:** T015 changed a verdict that slice-0 e2e cells pin exactly, and those files
+  were not updated in the same task.
+- **Deny-list:** PASS before the commit (7 entries, 471 files, P1–P7 0/0).
+
+**Then:** done. No commit until the mentor says lane 008s1-c has ended. Both feedback items (008s1-a and 008s1-b) are
+closed here once the mentor resolves them.
