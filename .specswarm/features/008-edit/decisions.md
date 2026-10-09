@@ -185,3 +185,4 @@ ASSUMED: `sys.executable` is timelike's interpreter when edit runs from /opt/tim
 ABSENT: a dedicated exit code for the syntax refusal — exit 1, as the contract decides; the set stays {0, 1, 2, 3}
 ABSENT: the no-op (--old equal to --new) checks nothing and carries no `syntax` key (FR-26)
 Verification: a lab smoke run (venv-ts and venv-plain): python refusal with the error line and context, file hash unchanged; ok; dry run that would be refused (diff, then the error, exit 1); --skip-syntax-check; an already-broken file (`'(' was never closed`) edited with no new error applies; go refusal `unexpected '+'`; an extensionless bash script by shebang refused; .txt `not checked (language unknown)`; go without wheels `not checked (checker failed: no tree-sitter grammar for go …)`. tests/unit/test_edit.py 84 passed (venv-ts) after the verdict updates; ruff check and format clean; `edit --help` 27 lines (limit 40)
+SCOPE: in (2 changed files)
