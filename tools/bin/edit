@@ -1,6 +1,12 @@
 #!/opt/timelike/python/bin/python3 -I
 """edit — replace text that occurs exactly once in a file, and show the edited lines (P1, P2, P5).
 
+Slice 1: `--at N:hhhhhh[..M:hhhhhh]` addresses lines by `view --anchors`'s anchors, checked with view's own
+anchor function, and every edit of a Python, TypeScript/TSX, Go, Rust or shell file is syntax-checked
+before it is written, by `libexec/syntax-check` in a child process with a 10 s limit. An edit that
+introduces an error is refused (exit 1), with the file byte-identical. `--skip-syntax-check` is the
+agent's own, visible choice (T4). Design: spec § Slice 1, research R9 to R16.
+
 `edit FILE --old TEXT --new TEXT` applies only when TEXT matches once. Matching tries three levels and the
 first with any match decides: exact bytes; then line endings (CRLF or CR against LF) and trailing
 whitespace; then, over whole lines, indentation under one consistent mapping (4 spaces = 1 tab). The new
@@ -27,7 +33,10 @@ import math
 import os
 import re
 import shlex
+import signal
 import stat
+import subprocess
+import sys
 import tempfile
 import time
 from types import ModuleType
@@ -52,7 +61,7 @@ _ENDING_NAME = {b"\r\n": "CRLF", b"\n": "LF", b"\r": "CR"}
 TOOL = agentio.Tool(
     name="edit",
     target="file",
-    summary="replace text that occurs exactly once in a file; tolerates CRLF and tab/space indentation",
+    summary="replace text that occurs once, or lines by view's anchors; refuses edits that break the syntax",
     usage=[
         "edit FILE --old TEXT --new TEXT            # applies only if TEXT matches exactly once",
         "edit FILE --old TEXT --new TEXT --dry-run  # the unified diff; nothing written",
@@ -61,6 +70,10 @@ TOOL = agentio.Tool(
         "the new text takes the file's line endings and indentation; the edited lines are shown after",
         "no match: exit 3 with up to 3 nearest candidates; several: exit 3 with their line numbers",
         "atomic: the file is fully changed or byte-identical; no --yes (one call; rule 9, revision 13)",
+        "edit FILE --at 42:a3f9c1..48:0b11e2 --new TEXT  # lines 42-48, anchors from view --anchors",
+        "stale anchors: exit 3, naming the changed lines and showing them with fresh anchors",
+        "syntax: Python, TypeScript/TSX, Go, Rust and shell are checked before writing; an edit that",
+        "  introduces a syntax error is refused (exit 1) with the checker's error, the file unchanged",
     ],
     mutating=True,
     destructive=True,
@@ -68,15 +81,23 @@ TOOL = agentio.Tool(
     probe=("/etc/os-release", "--old", "PRETTY_NAME=", "--new", "PRETTY_NAME=", "--dry-run"),
     exit_codes={
         agentio.EXIT_OK: "edited, or nothing to change",
-        agentio.EXIT_FAILURE: "refused: binary, unwritable, too large, or changed meanwhile; nothing written",
+        agentio.EXIT_FAILURE: (
+            "refused: binary, unwritable, too large, changed meanwhile, or the edit would break the file's "
+            + "syntax; nothing written"
+        ),
         agentio.EXIT_USAGE: "usage",
-        agentio.EXIT_NOT_FOUND: "no such file, no match, or more than one match; nothing written",
+        agentio.EXIT_NOT_FOUND: (
+            "no such file, no match, more than one match, or stale anchors; nothing written"
+        ),
     },
     manifest_extra=lambda: {
         "levels": list(LEVEL_NAMES.values()),
         "context": CONTEXT,
         "candidates": CANDIDATES,
         "candidate_floor": CANDIDATE_FLOOR,
+        "anchor_form": AT_FORM,
+        "syntax_checkers": dict(SYNTAX_CHECKERS),
+        "syntax_time_limit_s": CHECK_LIMIT_S,
     },
 )
 
@@ -768,7 +789,9 @@ def anchored_match(
     return m, ending.join(parts), ending, body_end
 
 
-def edit_at(ctx: agentio.Context, path: str, at: str, new: bytes, dry_run: bool) -> agentio.Result:
+def edit_at(
+    ctx: agentio.Context, path: str, at: str, new: bytes, dry_run: bool, skip: bool = False
+) -> agentio.Result:
     first, last = parse_at(at)
     real, st, raw = read_target(path)
     if not dry_run and not os.access(real, os.W_OK):
@@ -784,9 +807,189 @@ def edit_at(ctx: agentio.Context, path: str, at: str, new: bytes, dry_run: bool)
     m.checked = (first[0],) if first == last else (first[0], last[0])
     after = raw[: m.byte_start] + insert + raw[end:]
     sha_before = hashlib.sha256(raw).hexdigest()
-    res = applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run)
+    res = applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run, skip)
     res.data["anchors"] = {"start": f"{first[0]}:{first[1]}", "end": f"{last[0]}:{last[1]}"}
     return res
+
+
+# ── the syntax check (slice 1; research R9 to R15, spec FR-18 to FR-26) ─────────────────────────
+
+CHECK_LIMIT_S = 10
+SHOWN_ERRORS = 3
+REFUSAL_REMEDY = "correct --new and rerun (add --dry-run to see the diff first)"
+LANGUAGES = {
+    ".py": "python",
+    ".pyi": "python",
+    ".ts": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".tsx": "tsx",
+    ".go": "go",
+    ".rs": "rust",
+    ".sh": "shell",
+    ".bash": "shell",
+}
+SYNTAX_CHECKERS = {
+    "python": "python compile",
+    "shell": "bash -n",
+    "typescript": "tree-sitter-typescript",
+    "tsx": "tree-sitter-typescript (tsx)",
+    "go": "tree-sitter-go",
+    "rust": "tree-sitter-rust",
+}
+_PYTHON_RE = re.compile(r"python(3(\.\d+)?)?")
+
+
+def language_of(path: str, raw: bytes) -> str | None:
+    """By extension; an extensionless file by its shebang, directly or through env (FR-18, R15)."""
+    ext = os.path.splitext(path)[1]
+    if ext:
+        return LANGUAGES.get(ext.lower())
+    if not raw.startswith(b"#!"):
+        return None
+    words = raw[2:].split(b"\n", 1)[0].decode("utf-8", "replace").split()
+    if words and os.path.basename(words[0]) == "env":
+        words = [w for w in words[1:] if not w.startswith("-") and "=" not in w]
+    prog = os.path.basename(words[0]) if words else ""
+    if _PYTHON_RE.fullmatch(prog):
+        return "python"
+    return "shell" if prog in ("bash", "sh") else None
+
+
+def checker_path() -> str:
+    """The child beside timelike's own tools, never from PATH (lore P002): bin/../libexec/syntax-check."""
+    here = os.path.dirname(os.path.realpath(__file__))
+    return os.path.normpath(os.path.join(here, os.pardir, "libexec", "syntax-check"))
+
+
+def run_checker(language: str, result: bytes, original: bytes) -> tuple[dict[str, Any] | None, str | None]:
+    """The child's answer, or why there is none. Its own session, killed whole at the limit (R13)."""
+    import json  # deferred: only a checked edit needs it
+
+    child = checker_path()
+    if not os.path.isfile(child):
+        return None, f"checker not installed at {child}"
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-I", child, language, str(len(result))],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except OSError as e:
+        return None, f"cannot start {child}: {e.strerror or e}"
+    try:
+        out, err = proc.communicate(result + original, timeout=CHECK_LIMIT_S)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
+        return None, f"time limit {CHECK_LIMIT_S} s"
+    if proc.returncode < 0:
+        return None, f"signal {-proc.returncode}"
+    if proc.returncode != 0:
+        tail = err.decode("utf-8", "replace").strip().splitlines()
+        return None, f"exit {proc.returncode}" + (f": {clean(tail[-1])}" if tail else "")
+    try:
+        answer = json.loads(out)
+    except ValueError:
+        return None, "unreadable output"
+    if not isinstance(answer, dict):
+        return None, "unreadable output"
+    if isinstance(answer.get("unavailable"), str):
+        return None, clean(answer["unavailable"])
+    if not isinstance(answer.get("checker"), str) or not isinstance(answer.get("result"), list):
+        return None, "unreadable output"
+    return answer, None
+
+
+class Syntax:
+    """The check's outcome: the verdict's `syntax:` part, JSON `syntax`, and a refusal's lines."""
+
+    def __init__(
+        self, status: str, verdict: str, data: dict[str, Any], lines: list[str] | None = None
+    ) -> None:
+        self.refused = status == "refused"
+        self.verdict, self.data, self.lines = verdict, data, list(lines or [])
+
+
+def _errors(found: Any) -> list[dict[str, Any]]:
+    out = []
+    for e in found if isinstance(found, list) else []:
+        if isinstance(e, dict) and isinstance(e.get("line"), int):
+            col = e.get("column")
+            out.append(
+                {
+                    "line": e["line"],
+                    "column": col if isinstance(col, int) else None,
+                    "message": clean(str(e.get("message", ""))),
+                }
+            )
+    return out
+
+
+def _where(e: dict[str, Any]) -> str:
+    col = f", column {e['column']}" if e["column"] is not None else ""
+    return f"line {e['line']}{col}: {e['message']}"
+
+
+def _identity(e: dict[str, Any], lines: list[Line]) -> tuple[str, bytes]:
+    """R12: an error is its message and the text of its line, so a shifted line is the same error."""
+    n = e["line"] - 1
+    return e["message"], lines[n].content.strip() if 0 <= n < len(lines) else b""
+
+
+def syntax_check(
+    path: str, raw: bytes, after: bytes, new_lines: list[Line], written: tuple[int, int], skip: bool
+) -> Syntax:
+    language = language_of(path, raw)
+    data: dict[str, Any] = {"status": "", "language": language, "checker": None, "errors": [], "reason": None}
+    if skip:  # FR-25: the agent's own, visible choice (T4)
+        data.update(status="skipped", reason="--skip-syntax-check")
+        return Syntax("skipped", "syntax: skipped (--skip-syntax-check)", data)
+    if language is None:
+        data.update(status="not checked", reason="language unknown")
+        return Syntax("not checked", "syntax: not checked (language unknown)", data)
+    answer, failure = run_checker(language, after, raw)
+    if answer is None:  # FR-24: fail open, and say so
+        data.update(status="not checked", reason=f"checker failed: {failure}")
+        return Syntax("not checked", f"syntax: not checked (checker failed: {failure})", data)
+    name = clean(answer["checker"])
+    found = _errors(answer["result"])
+    data.update(checker=name, errors=found)
+    if not found:
+        data["status"] = "ok"
+        return Syntax("ok", f"syntax: ok ({name})", data)
+    before = _errors(answer.get("original"))
+    data["original_errors"] = before
+    refusing = found
+    if before:  # R12: refuse only a new error inside the lines this edit writes
+        seen = {_identity(e, split_lines(raw)) for e in before}
+        s, e_ = written
+        refusing = [e for e in found if s <= e["line"] <= e_ and _identity(e, new_lines) not in seen]
+        if not refusing:
+            data["status"] = "already failed"
+            span = f"line {s}" if s == e_ else f"lines {s}-{e_}"
+            return Syntax(
+                "already failed",
+                f"syntax: {path} already failed its check before this edit ({_where(before[0])}); "
+                + f"no new error in {span}",
+                data,
+            )
+    data.update(status="refused", errors=refusing)
+    shown: list[str] = []
+    total = len(new_lines)
+    for i, err in enumerate(refusing[:SHOWN_ERRORS], 1):
+        shown.append(f"── syntax error {i}: {_where(err)} ──")
+        at = err["line"] - 1
+        shown.extend(numbered(new_lines, at - 2, at + 2, total, {at}))
+    if len(refusing) > SHOWN_ERRORS:
+        shown.append(f"… and {len(refusing) - SHOWN_ERRORS} more")
+    verdict = (
+        f"the edit would make {path} fail its syntax check ({name}): {_where(refusing[0])}; nothing written"
+    )
+    return Syntax("refused", verdict, data, shown)
 
 
 # ── the command ────────────────────────────────────────────────────────────────────────────────────
@@ -800,6 +1003,11 @@ def configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("--new", metavar="TEXT", help="the replacement")
     p.add_argument(
         "--at", metavar="N:h[..M:h]", help="address lines by view --anchors's anchors instead of --old"
+    )
+    p.add_argument(
+        "--skip-syntax-check",
+        action="store_true",
+        help="apply without the syntax check (said in the verdict)",
     )
 
 
@@ -819,7 +1027,9 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         if args.new is None:
             raise agentio.UsageError("--at needs --new TEXT", f"edit FILE --at {AT_FORM} --new TEXT")
         try:
-            return edit_at(ctx, args.file, args.at, _arg_bytes(args.new), args.dry_run)
+            return edit_at(
+                ctx, args.file, args.at, _arg_bytes(args.new), args.dry_run, args.skip_syntax_check
+            )
         except Outcome as o:
             return o.result(args.file)
     if args.old is None or args.new is None:
@@ -833,7 +1043,9 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         )
     path = args.file
     try:
-        return edit(ctx, path, _arg_bytes(args.old), _arg_bytes(args.new), args.dry_run)
+        return edit(
+            ctx, path, _arg_bytes(args.old), _arg_bytes(args.new), args.dry_run, args.skip_syntax_check
+        )
     except Outcome as o:
         return o.result(path)
 
@@ -850,7 +1062,9 @@ def find(raw: bytes, lines: list[Line], old: bytes) -> tuple[list[Match], list[s
     return found, tried
 
 
-def edit(ctx: agentio.Context, path: str, old: bytes, new: bytes, dry_run: bool) -> agentio.Result:
+def edit(
+    ctx: agentio.Context, path: str, old: bytes, new: bytes, dry_run: bool, skip: bool = False
+) -> agentio.Result:
     real, st, raw = read_target(path)
     if not dry_run and not os.access(real, os.W_OK):
         raise Outcome(
@@ -909,7 +1123,7 @@ def edit(ctx: agentio.Context, path: str, old: bytes, new: bytes, dry_run: bool)
         last = lines[line_of(lines, max(m.byte_start, m.byte_end - 1))]
         end = last.start + len(last.content) + len(last.ending)
     after = raw[: m.byte_start] + insert + raw[end:]
-    return applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run)
+    return applied(ctx, path, real, st, raw, after, m, lines, insert, ending, end, sha_before, dry_run, skip)
 
 
 def no_match(
@@ -1002,6 +1216,7 @@ def applied(
     region_end: int,
     sha_before: str,
     dry_run: bool,
+    skip_check: bool = False,
 ) -> agentio.Result:
     new_lines = split_lines(after)
     total = len(new_lines)
@@ -1043,8 +1258,12 @@ def applied(
         "line_ending": _ENDING_NAME[ending or region_ending(lines, m.byte_start)],
         "sha256_before": sha_before,
     }
-    if dry_run:
-        import difflib  # deferred: only a dry run needs it
+    # FR-20: the check runs on the bytes that would be written, before anything is (P2).
+    written = (first + 1, first + 1) if removed_all else (first + 1, last + 1)
+    syn = syntax_check(path, raw, after, new_lines, written, skip_check)
+    data["syntax"] = syn.data
+    if dry_run or syn.refused:
+        import difflib  # deferred: only a dry run, or a refusal, needs it
 
         diff = list(
             difflib.unified_diff(
@@ -1056,15 +1275,23 @@ def applied(
                 lineterm="",
             )
         )
-        data.update(dry_run=True, sha256_after=None, changed=False)
+        data.update(dry_run=dry_run, sha256_after=None, changed=False)
+        if syn.refused:  # FR-22, FR-23: exit 1, the checker's error, nothing written
+            data["remedy"] = REFUSAL_REMEDY
+            body = [clean(x) for x in diff] if dry_run else []
+            verdict = ("dry run: would be refused: " if dry_run else "refused: ") + syn.verdict
+            lines_out = [*body, *syn.lines, f"do instead: {REFUSAL_REMEDY}"]
+            return agentio.Result(
+                path, "refused", verdict, lines=lines_out, data=data, exit=agentio.EXIT_FAILURE
+            )
         would = "dry run: would " + rng.replace("edited", "edit", 1)
-        verdict = "; ".join([f"{would} ({level_phrase(m)})", *notes, "nothing written"])
+        verdict = "; ".join([f"{would} ({level_phrase(m)})", *notes, syn.verdict, "nothing written"])
         return agentio.Result(path, scope, verdict, lines=[clean(x) for x in diff], data=data)
     write_atomic(path, real, st, raw, after)
     data.update(changed=True, sha256_after=hashlib.sha256(after).hexdigest())
     marked = set(range(first, last + 1)) if not removed_all else {first}
     shown = numbered(new_lines, first - CONTEXT, last + CONTEXT, total, marked)
-    verdict = "; ".join([f"{rng} ({level_phrase(m)})", *notes])
+    verdict = "; ".join([f"{rng} ({level_phrase(m)})", *notes, syn.verdict])
     return agentio.Result(path, scope, verdict, lines=shown, data=data)
 
 

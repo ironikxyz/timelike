@@ -160,7 +160,9 @@ def test_exact_unique_match_replaces_only_that_text(lab: Lab) -> None:
     r = edit(lab, "--json", "app.py", "--old", old, "--new", new)
     expected = before.replace(old.encode(), new.encode())
     d = check_edited(lab, r, p, before, expected, level="exact", start=5, end=6)
-    assert d["verdict"] == "edited lines 5-6 of 10 (matched exactly)"
+    # slice 1 (FR-26): the verdict ends with the syntax check's outcome; app.py's prose lines are not Python
+    assert d["verdict"].startswith("edited lines 5-6 of 10 (matched exactly); syntax: ")
+    assert d["syntax"]["status"] == "already failed" and d["syntax"]["language"] == "python"
     assert (d["match_start"], d["match_end"]) == (5, 6)
     assert d["target"] == "app.py" and d["path"] == "app.py"
     assert d["abs_path"] == os.path.realpath(p)
@@ -179,7 +181,7 @@ def test_text_mode_shows_header_verdict_and_numbered_region(lab: Lab) -> None:
     assert p.read_bytes() == expected
     out = text_of(r)
     assert re.fullmatch(r"edit: app\.py \[lines \d+-\d+ of 10\]", out[0]), out[0]
-    assert out[1] == "verdict: edited lines 5-6 of 10 (matched exactly)"
+    assert out[1].startswith("verdict: edited lines 5-6 of 10 (matched exactly); syntax: ")  # FR-26
     assert out[2:] == numbered(view_lines(expected), 2, 9, 10, range(5, 7))
 
 
@@ -269,7 +271,9 @@ def test_level_2_gives_the_new_text_the_regions_ending(lab: Lab, eol: bytes, nam
     r = edit(lab, "--json", "f.txt", "--old", "one\ntwo", "--new", "uno\ndos\ntres")
     expected = eol.join([b"uno", b"dos", b"tres", b"three", b""])
     d = check_edited(lab, r, p, before, expected, level="line_endings", start=1, end=3)
-    assert d["verdict"] == "edited lines 1-3 of 4 (matched ignoring line endings)"
+    assert d["verdict"] == (
+        "edited lines 1-3 of 4 (matched ignoring line endings); syntax: not checked (language unknown)"
+    )
     assert d["line_ending"] == name
     assert (d["match_start"], d["match_end"]) == (1, 2)
 
@@ -337,9 +341,11 @@ def test_sc2_crlf_and_tabs_given_lf_and_four_spaces(lab: Lab) -> None:
     d = check_edited(lab, r, p, before, expected, level="indentation", start=2, end=4)
     assert d["mapping"] == {"agent": "4 spaces", "file": "1 tab"}
     assert d["line_ending"] == "CRLF"
-    assert d["verdict"] == (
-        "edited lines 2-4 of 5 (matched ignoring line endings and indentation (4 spaces = 1 tab))"
+    assert d["verdict"].startswith(
+        "edited lines 2-4 of 5 (matched ignoring line endings and indentation (4 spaces = 1 tab)); "
+        + "syntax: ok ("
     )
+    assert d["syntax"]["status"] == "ok"
     assert (d["match_start"], d["match_end"]) == (2, 3)
 
 
@@ -685,7 +691,8 @@ def test_dry_run_writes_nothing_and_prints_the_unified_diff(lab: Lab) -> None:
     assert (d["start"], d["end"], d["total"]) == (7, 8, 15)
     assert (d["match_start"], d["match_end"]) == (7, 8)
     assert d["line_ending"] == "LF"
-    assert d["verdict"] == "dry run: would edit lines 7-8 of 15 (matched exactly); nothing written"
+    assert d["verdict"].startswith("dry run: would edit lines 7-8 of 15 (matched exactly); syntax: ")
+    assert d["verdict"].endswith("; nothing written")
 
 
 def test_dry_run_text_mode(lab: Lab) -> None:
@@ -698,7 +705,10 @@ def test_dry_run_text_mode(lab: Lab) -> None:
     expected_diff = list(
         difflib.unified_diff(["a", "b", "c", "d"], ["a", "B", "C", "d"], "a/f.txt", "b/f.txt", lineterm="")
     )
-    assert out[1] == "verdict: dry run: would edit lines 2-3 of 4 (matched exactly); nothing written"
+    assert out[1] == (
+        "verdict: dry run: would edit lines 2-3 of 4 (matched exactly); "
+        + "syntax: not checked (language unknown); nothing written"
+    )
     assert out[2:] == expected_diff
 
 
@@ -763,6 +773,12 @@ def test_manifest(lab: Lab) -> None:
     assert info["probe"] == ["/etc/os-release", "--old", "PRETTY_NAME=", "--new", "PRETTY_NAME=", "--dry-run"]
     assert info["levels"] == ["exact", "line endings", "indentation"]
     assert (info["context"], info["candidates"], info["candidate_floor"]) == (3, 3, 0.5)
+    # slice 1 (spec FR-27): the anchor form, the checkers and their limit; the flags
+    assert info["anchor_form"] == "N:hhhhhh[..M:hhhhhh]"
+    assert set(info["syntax_checkers"]) == {"python", "shell", "typescript", "tsx", "go", "rust"}
+    assert info["syntax_time_limit_s"] == 10
+    assert {"--at", "--skip-syntax-check"} <= set(info["flags"])
+    assert "syntax" in info["exit_codes"]["1"] and "stale anchors" in info["exit_codes"]["3"]
 
 
 def test_the_probe_runs(lab: Lab) -> None:
