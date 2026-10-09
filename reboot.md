@@ -18,9 +18,10 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   `bridge/sends/06-rev1-20261009-102433.md` (row 4: `audited_against [1]` unchanged). Built: `edit --at` (view's anchors,
   checked with view's own `anchor_of`/`line_body`), the syntax check (Python by the interpreter's compiler, shell by
   `bash -n`, TS/TSX/Go/Rust by tree-sitter wheels pinned in `pins.env`, child `tools/libexec/syntax-check`, 10 s limit,
-  fail open), `--skip-syntax-check`, the README status block (17 of 38). **Next:** the mentor's lane 008s1-a (the image
-  build installs the wheels: the first real test of § 3a), then D15. **No commit after reporting done until the lane
-  has ended.** Host evidence: venvs in the scratchpad (`venv-ts` with the cp312 wheels, `venv-plain` without).
+  fail open), `--skip-syntax-check`, the README status block (17 of 38). **Lane 008s1-a failed** (feedback
+  `06-20261009-162833`): the Dockerfile did not parse (fixed `765190a`), and the mentor ruled CPython 3.14.8 (uv 0.12.22)
+  and CVE-2026-107161 baselined, origin git (`e275c26`); Cycle 2 addendum 1. **Next:** lane 008s1-b, then D15. **No
+  commit until 008s1-b has ended.** Close the feedback item here once the mentor resolves it. Host evidence: venvs in the scratchpad (`venv-ts` with the cp312 wheels, `venv-plain` without).
 - **`modify/002-rev8-carried`** (from `ec71f3d`): 002 Cycle 3, send `bridge/sends/02-rev8-20261009-043302.md`. Records
   only: revision 8 is re-recorded as `carried` to 02 slice 1, and `audited_against` stays `[1, 8]`. **Signed off at
   `28da1d0`** (records only, no lane) and **merged `--no-ff` into `master` as `bbb2c46`**. No tag (the slice count is

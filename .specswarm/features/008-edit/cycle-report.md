@@ -487,3 +487,61 @@ decisions: sections=17 flagged_sections=15 non_flagged_sections=2 sections_witho
 ### Then
 
 Done. No commit after this report until the mentor says lane 008s1-a has ended.
+
+### Cycle 2 addendum 1 — lane 008s1-a: the Dockerfile parse error, and CPython 3.14.8 (2026-10-09T18:05:49Z, read from the clock)
+
+- **Finding** (mentor, lane 008s1-a at `9fe5abe`, 2026-10-09T16:05:57Z to 16:27:58Z; logs `bridge/.make-test-008s1-a.log`,
+  `.make-bench-images-008s1-a.log`, `.make-scan-008s1-a.log`, `.make-lint-008s1-a.log`). **Routed** by
+  `bridge/feedback/06-20261009-162833-lane-008s1-a-build-parse-and-new-cves.md`, with the mentor's ruling on item 2.
+  The agent image did not build, so **no e2e cell and no image unit of this cycle ran**. Every citation above stays
+  `unconfirmed`.
+- **Item 1, this cycle's** (`765190a`). § 3a's import check was a multi-line `-c` program. A `RUN` continues only on a
+  trailing `\`, so line 157 began a new instruction. My host simulation ran the shell text and never reached the
+  Dockerfile parser: a process failure, recorded here. **Fix:** the check is one Python logical line (statements joined
+  by `;`, the loops as comprehensions), and every Dockerfile line ends in `\`. A comment in § 3a says why.
+- **Item 2, not this cycle's code: the mentor's ruling** (`e275c26`).
+  - `PYTHON_VERSION` **3.14.7 → 3.14.8** (CVE-2026-19445 critical, CVE-2026-19553 high). It feeds timelike's
+    interpreter, the agent runtime (agent and vanilla) and the bench driver.
+  - **`UV_IMAGE` moved: uv 0.12.19 → 0.12.22**, `ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc`
+    (the image index digest from ghcr.io; the same request returns 0.12.19's existing pin). Each release's own binary
+    lists CPython up to 3.14.7 for 0.12.19 to 0.12.21, and 3.14.8 for 0.12.22 to 0.12.24. 0.12.22 (2026-10-02) is the
+    first stable release that can, as the ruling asked.
+  - **No tree-sitter pin moved.** The cp314 binding wheel is the same file under 3.14.8: uv 0.12.22 installed all four
+    wheels with `--require-hashes`.
+  - **CVE-2026-107161** (`libsasl2-2` and `libsasl2-modules-db` 2.1.28+dfsg1-9, High, no fix) is baselined in agent
+    and vanilla under review_by 2026-12-27, with a review note naming the ruling. Its **origin is `git`, not the base
+    layer**:
+    - the pinned trixie-slim base's amd64 layer has a dpkg status of 78 packages, with no libsasl2, libldap, libcurl or
+      git;
+    - Debian trixie's Depends lead git → libcurl3t64-gnutls → libldap2 → libsasl2-2 → libsasl2-modules-db;
+    - the lane's own proposed baseline says `git` too.
+
+    The `git` origin's package list now names both. The entry's reason adds that the vulnerable DIGEST-MD5 plugin
+    ships in `libsasl2-modules`, a Recommends that `--no-install-recommends` keeps out of both images.
+  - **The ruling asked for `dpkg` in the image. That was not done:** this host has no Docker, so the evidence is the
+    base layer plus Debian's index, and the entry says so.
+- **"Build the images locally before saying done" was not met.** This host has no Docker: no binary and no socket.
+  What was done instead, and what it does not cover:
+  - **BuildKit's own parser** (the `dockerfile` package, 3.4.0) reproduced the lane's error exactly before the fix
+    (line 157, `want`). After it, the parser reads all five Dockerfiles with 0 unknown instructions.
+  - **The joined § 3a `RUN` text**, as the parser hands it to the shell, ran against CPython 3.14.8 with the four
+    wheels. It passes with the pins and fails naming a wrong pin. The three checker probes found their errors.
+  - **The build's two uv steps** ran with the uv 0.12.22 binary from PyPI, using § 2's and § 3a's flags. They
+    installed CPython 3.14.8, then the four wheels with the hashes `pins.env` pins.
+  - **edit's units on 3.14.8:** 211 passed and 11 skipped (the grammar cases) in a plain venv. test_edit_slice1.py with
+    the base site-packages: 70 passed, none skipped.
+  - **The baselines** load through `scan/evaluate.py` with no problems (agent 90 entries, vanilla 89). The scan
+    units: 153 passed.
+  - **Not covered:** the build itself (the uv image's own binary, apt, every other stage), anything in the image, and
+    the scan's result over rebuilt images. Lane 008s1-b is the first to show them.
+- **not_verified, amended:** the § 3a entry above now reads uv 0.12.22 and CPython 3.14.8, with the hashes confirmed by
+  uv 0.12.22 on the host. Everything else in the list stands.
+- **process_failures_recorded, added:**
+  - the Dockerfile parse error, shipped because only the shell text was simulated;
+  - the two addendum decision entries were first written with composed times, and corrected to clock reads before
+    they were committed.
+- **Deny-list:** PASS before each commit (7 entries, 471 files, P1–P7 0/0). The README block stays applied, as the
+  mentor asked; if 008s1-b fails a criterion's cells, it is reverted with the fix.
+
+**Then:** done. No commit until the mentor says lane 008s1-b has ended. This item is closed here once the mentor
+resolves it in the feedback file.
