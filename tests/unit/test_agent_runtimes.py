@@ -199,6 +199,44 @@ def test_pins_carry_npm_version_and_sha512() -> None:
     )
 
 
+# --- edit's syntax checker: pinned wheels in the agent image only (008 slice 1, research R9) ----------
+
+SYNTAX_PINS = ["TREE_SITTER", "TREE_SITTER_TYPESCRIPT", "TREE_SITTER_GO", "TREE_SITTER_RUST"]
+
+
+@pytest.mark.parametrize("pin", SYNTAX_PINS)
+def test_pins_carry_syntax_checker_wheels(pin: str) -> None:
+    p = pins()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", p.get(f"{pin}_VERSION", "")), (
+        f"{pin}_VERSION {p.get(f'{pin}_VERSION')!r} is not an exact x.y.z version (research R9)"
+    )
+    assert re.fullmatch(r"[0-9a-f]{64}", p.get(f"{pin}_SHA256", "")), (
+        f"{pin}_SHA256 is not 64 lowercase hex characters: {p.get(f'{pin}_SHA256')!r}"
+    )
+
+
+@pytest.mark.parametrize("arg", [f"{p}_{k}" for p in SYNTAX_PINS for k in ("VERSION", "SHA256")])
+def test_agent_dockerfile_and_compose_pass_syntax_checker_pins(arg: str) -> None:
+    assert re.search(rf"^ARG\s+{arg}\b", code_text(AGENT_DOCKERFILE), re.MULTILINE), (
+        f"image/Dockerfile declares no ARG {arg}"
+    )
+    assert re.search(rf"^\s+{arg}:\s*\$\{{{arg}:-\}}\s*$", read(COMPOSE), re.MULTILINE), (
+        f"compose.yaml's agent build args do not pass {arg}: ${{{arg}:-}}"
+    )
+
+
+def test_agent_dockerfile_installs_the_wheels_by_hash_only() -> None:
+    code = code_text(AGENT_DOCKERFILE)
+    for flag in ("--require-hashes", "--no-deps", "--only-binary :all:"):
+        assert flag in code, f"the wheels are not installed with {flag} (research R9)"
+
+
+def test_vanilla_image_carries_no_syntax_checker() -> None:
+    """The checker is timelike's tool, not the agent's runtime: the vanilla arm never has it (RB1)."""
+    text = read(VANILLA_DOCKERFILE)
+    assert "TREE_SITTER" not in text and "tree-sitter" not in text and "libexec" not in text
+
+
 # --- both Dockerfiles: the same runtimes from the same pins (FR-25, FR-30, D-14, D-15) --------------
 
 

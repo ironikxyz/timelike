@@ -131,3 +131,19 @@ ASSUMED: `delegations: []` — the two test writers were subagents, not sibling 
 ABSENT: `demo_points_reached` (the mentor derives it); a lane result (no Docker here)
 Verification: six citations, each `grep -cF` = 1 in the send; tallies from the installed blocks; step 10's output pasted verbatim; metrics.json gains only the 008 entry
 SCOPE: in (1 changed files)
+
+---
+
+# Cycle 2 — slice 1 (send `bridge/sends/06-rev1-20261009-102433.md`; specswarm 4.0.1-botbaubble.2.40.0)
+
+### T010: Pins and the image (R9)
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T10:50:02Z
+
+INHERITED: research R9's carrier (binding plus three grammar wheels in timelike's purelib; Python by compile, shell by bash -n) and the four hashes, read from PyPI's JSON for the exact wheel files on 2026-10-09 and matching sha256sum of the downloaded files — from plan (confidence: high)
+FLAGGED: into timelike's interpreter's **purelib**, not a separate --target directory, chose purelib because make scan's step 3 (pip-audit) already lists and audits exactly that directory, so the scan sees the wheels with no change to scan/ (the send: "expect make scan to see it"); a separate directory would have needed a scan change and an import path (confidence: high)
+FLAGGED: eight pins.env keys (version and SHA-256 per wheel) over one requirements lock file, because pins.env is "every pinned image and version, in one place" and the build already takes every pin as a build argument; the Dockerfile writes the requirements file from them (confidence: high)
+ASSUMED: uv 0.12.19's `pip install --target --require-hashes --no-deps --only-binary :all:` fetches the cp314 manylinux wheel whose hash is pinned; only the lane's build can show it (confidence: medium)
+ASSUMED: the build has network for PyPI, as it does for nodejs.org and the npm registry today (confidence: high)
+ABSENT: an image build — no Docker here; the lane builds it. The Dockerfile's new RUN is unverified until then
+ABSENT: bench/vanilla/Dockerfile and the runtimes stage — untouched by design (RB1); test_the_two_runtimes_stages_are_identical still passes, and a new test asserts the vanilla Dockerfile names no tree-sitter
+Verification: tests/unit/test_agent_runtimes.py 91 passed (venv Python 3.12.3, pytest 8.4.2), with 13 new cases (pins, ARG, compose, hash-only install, vanilla clean); `make -p` reads the 8 new keys; `set -a; . ./pins.env` sources clean
