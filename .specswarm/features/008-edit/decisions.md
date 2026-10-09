@@ -236,3 +236,13 @@ Verification:
 - conformance (every tools/bin tool with venv-ts, libexec beside): edit ok; 12 of 13 ok; timelike fails C2–C4 on the host only (above)
 - start-up, a dry run per language, 20 runs each at load 2.4: .txt (no child) p50 93 / p95 99 ms; .py 146 / 150; .ts 191 / 200; .go 191 / 204; .sh 239 / 243. The probe (/etc/os-release, an unknown language) starts no child
 SCOPE: in (1 changed files)
+
+### T018: cycle-report.md § Cycle 2, and the final scope record
+**Started:** 2026-10-09T16:02:10Z | **Completed:** 2026-10-09T16:03:30Z
+
+INHERITED: every task's record; step 10's output from the installed blocks; the tallies from lib/tally.sh — from T010 to T017 (confidence: high)
+FLAGGED: reconcile_mode `full` with every citation `unconfirmed`, chose full because every criterion of revision 1 (both slices) was examined against the spec and has its e2e file in the lane, over scoped; the mode is corrected in an addendum if the lane fails a cell (confidence: medium)
+FLAGGED: D6 cited `unconfirmed` in this cycle although the operator observed it on slice 0 (Cycle 1 Addendum 1), because nobody has looked at it on this cycle's build; the report says both (confidence: high)
+ASSUMED: Group B's `slice` is the send's own `> Slice:` line, copied whole (confidence: high)
+ABSENT: `demo_points_reached` (the mentor derives it); a lane result; a marker (not a dispatch run)
+Verification: nine citations, each `grep -cF` = 1 in the send; Group B's five values copied from the send's header; tallies printed by the installed scope-tally and decision-tally; step 10 pasted verbatim

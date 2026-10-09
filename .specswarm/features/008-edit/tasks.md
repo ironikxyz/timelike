@@ -102,7 +102,7 @@ a SCOPE line, delegates own disjoint files and do not commit.
 
 ## Phase 5: Setup
 
-- [ ] T010 Pins and the image (R9):
+- [X] T010 Pins and the image (R9):
   - `pins.env` gains `TREE_SITTER_VERSION`/`_SHA256`, `TREE_SITTER_TYPESCRIPT_*`, `TREE_SITTER_GO_*` and
     `TREE_SITTER_RUST_*`, with the cp314 manylinux wheel's hash for the binding;
   - `compose.yaml` passes them as build args;
@@ -116,7 +116,7 @@ a SCOPE line, delegates own disjoint files and do not commit.
 
 ## Phase 6: Tests first (delegated, from the contract)
 
-- [ ] T011 [P] [US5] [US6] Units, `tests/unit/test_edit_slice1.py`, from `contracts/edit-cli.md` § Slice 1:
+- [X] T011 [P] [US5] [US6] Units, `tests/unit/test_edit_slice1.py`, from `contracts/edit-cli.md` § Slice 1:
   - the anchors: applied, a changed end, past the end, a move, an ambiguous move, the usage errors, CRLF;
     the expected anchors are computed with `hashlib` in the test (P005);
   - the languages (extension, shebang, unknown);
@@ -130,7 +130,7 @@ a SCOPE line, delegates own disjoint files and do not commit.
   - a decoy `python3` and `bash` on PATH (P002).
 
   Grammar-dependent cases skip when `tree_sitter_typescript` is not importable.
-- [ ] T012 [P] [US5] [US6] [US7] e2e in the image, from the contract:
+- [X] T012 [P] [US5] [US6] [US7] e2e in the image, from the contract:
   - `tests/e2e/edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats` (SC-7);
   - `tests/e2e/edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats` (SC-8:
     five languages and TSX, hash before and after, a decoy `python3`/`bash` in `~/.local/bin`, Go's
@@ -142,15 +142,15 @@ a SCOPE line, delegates own disjoint files and do not commit.
 
 ## Phase 7: US5 — anchors (SC-7)
 
-- [ ] T013 [US5] `tools/bin/view`: `line_body()` factored out of `window()` (output unchanged). `tools/bin/edit`:
+- [X] T013 [US5] `tools/bin/view`: `line_body()` factored out of `window()` (output unchanged). `tools/bin/edit`:
   `--at` parsing and usage errors, the anchor check with `view.anchor_of`/`view.line_body`, the
   replacement, the stale and moved refusals with `view --anchors`-format lines, and `level: "anchors"`.
 
 ## Phase 8: US6 — the syntax check (SC-8, D15)
 
-- [ ] T014 [US6] `tools/libexec/syntax-check`: the child (Python compile, `bash -n`, tree-sitter), per the
+- [X] T014 [US6] `tools/libexec/syntax-check`: the child (Python compile, `bash -n`, tree-sitter), per the
   contract's protocol.
-- [ ] T015 [US6] `tools/bin/edit`:
+- [X] T015 [US6] `tools/bin/edit`:
   - language detection;
   - the child's run (own session, group killed at 10 s);
   - R12's refusal rule;
@@ -163,12 +163,12 @@ a SCOPE line, delegates own disjoint files and do not commit.
 
 ## Phase 9: Polish
 
-- [ ] T016 Lint and docs:
+- [X] T016 Lint and docs:
   - `pyproject.toml` (`syntax-check` in the ruff and mypy lists; `tree_sitter*` untyped imports);
   - `README.md`: the command reference via `scripts/readme_reference.py --write`, and the send's README
     status block **only if** SC-7, SC-8 and the D15 path are built;
   - `reboot.md`.
-- [ ] T017 Host lane:
+- [X] T017 Host lane:
   - ruff, mypy and shellcheck;
   - units with the wheels in a scratch venv and without them;
   - `make test-host`;
@@ -176,7 +176,7 @@ a SCOPE line, delegates own disjoint files and do not commit.
   - the child's start-up cost, measured.
 
   Results go in `decisions.md`.
-- [ ] T018 `cycle-report.md` § Cycle 2 (the send's block), and the final scope record. No commit after the
+- [X] T018 `cycle-report.md` § Cycle 2 (the send's block), and the final scope record. No commit after the
   report until the mentor says the lane has ended.
 
 ## Dependencies (Cycle 2)

@@ -279,3 +279,211 @@ it cites, `bridge/.d6-demo-20261007T212743Z.txt` (bridge `2d5180e`), which this 
   (`d932c1c`, `631a29e`, `eafd930`), so that `244c4a8..` stays records only and lane batch-d's evidence holds.
   The mentor's instruction allowed this placement provided it is stated (a branch per addendum was its
   first option). A revert of 012 by branch topology would carry this addendum with it.
+
+---
+
+## Cycle 2 — bridge/sends/06-rev1-20261009-102433.md
+
+Written 2026-10-09T16:03:17Z (read from the clock), on `modify/008-slice-1`, cut from `master` `ce1eaf2`. That is the send's
+base `bbb2c46` plus one `reboot.md` commit. This path is the one the send names, and the project's CLAUDE.md
+names the same one.
+
+**specswarm version (lore `specswarm` Q002):** **4.0.1-botbaubble.2.40.0**. Every command this cycle ran
+(modify, plan, tasks, implement) expanded `PLUGIN_DIR` to that cache path.
+
+**Provenance:** modify's installed blocks gave **row 4**: `PROMPT_REV 1`, `AUDITED [1]`, `N 1`, and
+`OLD_SOURCE = NEW_SOURCE = plan/.discover/prompts/06-edit.md`. Nothing was appended, and `spec.md`'s
+frontmatter is unchanged (`audited_against: [1]`). Slice 1 is added work, declared in `spec.md` § Slice 1.
+No audit-log row is written, because no audit-append ran.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/06-rev1-20261009-102433.md |
+| source_prompt | plan/.discover/prompts/06-edit.md |
+| prompt_revision | 1 |
+| discovery_revision | 15 |
+| slice | 1 of [0, 1] (intensity: natural) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used. Two general-purpose subagents wrote the tests from the
+contract: T011's units and T012's e2e. They are subagents, not delegations. The e2e subagent's session ended
+with the operator's session, before it reported; its three files were complete on disk (decisions.md T012).
+
+**criteria_reestablished**
+
+Nothing has run in the image. Each citation matches exactly one line of the send (`grep -cF` = 1 for all
+nine). The lane is the first run of every e2e file named here.
+
+- `06 · "changes only that text and prints the edited region with line numbers _(traces to: P1)_"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/edit-replacing-text-appearing-once-changes-only-that-text-prints-edited-region.bats`).
+- `06 · "succeeds and preserves CRLF endings and tabs _(traces to: P1)_"` — **unconfirmed** (Docker lane
+  pending; `tests/e2e/edit-crlf-tab-indented-file-given-lf-and-spaces-preserves-crlf-and-tabs.bats`).
+- `06 · "is refused with exit 3, listing each match's line number _(traces to: P2)_"` — **unconfirmed**
+  (Docker lane pending; `tests/e2e/edit-matches-more-than-once-refused-exit-3-listing-line-numbers.bats`).
+- `06 · "showing up to three nearest candidate regions with line numbers _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending; `tests/e2e/edit-matches-nowhere-refused-exit-3-nearest-candidates.bats`).
+- `06 · "A dry run prints the unified diff and leaves the file byte-identical _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending; `tests/e2e/edit-dry-run-prints-unified-diff-file-byte-identical.bats`).
+- `06 · "is refused, naming the changed lines, when they are not _(traces to: P1)_"` — **unconfirmed**
+  (Docker lane pending;
+  `tests/e2e/edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats`, 12 cells:
+  unchanged range and line, a changed end (JSON and text), past the end, a move and its rerun).
+- `06 · "is refused with the checker's error, and the file is byte-identical _(traces to: P2)_"` —
+  **unconfirmed** (Docker lane pending;
+  `tests/e2e/edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats`, 31 cells:
+  refused and valid in Python, shell, TypeScript, TSX, Go and Rust; decoy `python3`/`bash` on the agent's
+  PATH; a gofmt confirmation of the Go fixture, which skips and says why when `GO_IMAGE` is not in the
+  runner's environment).
+- `06 · "on a failed match is shown the nearest candidates _(traces to: D6)_"` — **unconfirmed** in this
+  cycle. D6 was observed by the operator on 008's slice-0 build (Cycle 1, Addendum 1); this cycle changes
+  matching and candidates in no way, but nobody has looked again.
+- `06 · "is rejected with the error and the file is left unchanged _(traces to: D15)_"` — **unconfirmed**.
+  Manual (D15): the mentor captures it after the lane, as the send says.
+
+**Host evidence beside the citations** (changes no mode): `edit`'s units are 154 passed with the grammar
+wheels and 143 passed with 11 skipped without them. A lab smoke run showed each outcome the contract
+names, with the file's hash unchanged on every refusal (decisions.md T013, T015).
+
+**reconcile_mode:** `full`. Every criterion of prompt 06 revision 1, both slices, Automated and Manual, was
+examined against this spec in this cycle. Each Automated criterion has its e2e file in the lane. No
+revision is appended (row 4: revision 1 is already listed). If the lane fails a cell, an addendum says so,
+and the mode is corrected there.
+
+**not_verified**
+- **Everything in the image:** every e2e cell above, plus the carried items' cells in
+  `tests/e2e/edit-slice-0-carried-items.bats` (FR-28: `type -a edit` under `bash -lc`; the owner branch with
+  a root-owned file).
+- **The wheels' install in the build** (§ 3a: uv 0.12.19's `--target --require-hashes --no-deps
+  --only-binary :all:` fetching the cp314 binding wheel the pin names), its import check and its checker
+  probe. Simulated on the host with the cp312 wheel only.
+- **The checker under the image's unit lane:** a venv over `/opt/timelike/python` must reach the base
+  site-packages (the child adds it; decisions.md T014).
+- **`make scan` over the four new distributions:** step 3 should now say "4 distributions" where it said
+  "no third-party packages", with pip-audit and Grype over them. Their findings, if any, are unknown.
+- **Conformance in the image** with the new `edit`, and the announcement's 60-line bound. `edit`'s summary
+  line changed; its usage grew by four lines.
+- **The owner branch:** depends on `docker exec -u 0` in the lane, and the cell skips, naming why, if root
+  cannot create the file.
+- **Compiler confirmation (lore P005):** Go by `gofmt -e` only if `GO_IMAGE` reaches the runner
+  (tests/run.sh does not pass it today). TypeScript and Rust have none, because neither host has `tsc` or
+  `rustc` (research R10).
+- **D6 and D15.**
+- **By design, not by omission:**
+  - interior anchors of a range are not checked (R11);
+  - a CR-only file numbers its lines differently in `view` and in `edit`'s after-view (decisions.md T013);
+  - the grammars' measured false errors (R10) stand: `export type * from`, `in out` variance, and
+    `safe fn` in `unsafe extern`.
+
+**changed_other_features**
+- **006 (`view`):** `line_body()` is factored out of `window()` with identical output (test_view.py and
+  test_view_slice1.py: 131 passed), so that `edit` uses view's own split as well as `anchor_of` (006
+  FR-34's promise). The `more:` window finding (05's, D6 transcript) is untouched, as the send says.
+- **001 (the image):** `image/Dockerfile` § 3a (the wheels into timelike's purelib, `/opt/timelike/libexec`,
+  the import check and the probe), `pins.env` (eight keys), `compose.yaml` (eight build args). The
+  `runtimes` stage and the vanilla image are untouched (RB1).
+- **007:** `tests/unit/test_agent_runtimes.py` gains 13 cases (pins, ARGs, compose, hash-only install,
+  vanilla free of the checker). The announcement regenerates from `edit`'s new manifest in the build.
+- **Governance:** `.specswarm/tech-stack.md` goes 1.5.0 → 1.6.0. The four packages are under Approved
+  Libraries, with `governance_audited_against` unchanged (an addition, not an audit).
+- **README:** the command reference is regenerated, and the send's `## README status` block is applied:
+  row 06 `complete (0, 1)`, and 17 of 38. It was applied before the lane, on the reading that both
+  Automated criteria are built (decisions.md T016). If the lane fails one, the block is reverted with the
+  fix.
+- **Makefile:** `SHELLCHECK_FILES` gains the three e2e files.
+
+**process_failures_recorded**
+- **T013 was committed with two ruff E501 errors**, because a command chain continued past ruff's failure.
+  Its decision record said lint was clean. T014 fixed the code and recorded the correction; T013's record
+  stays as written.
+- **The operator's session dropped mid-cycle**, after T016. The e2e subagent ended without a report and
+  before its Makefile edit. Its files were checked on disk (shellcheck clean, cells complete), and the
+  Makefile entries were added in T012.
+- **The research's owner-cell design was wrong**, because the agent container drops every capability, so
+  root cannot chown. This was caught before any test ran, and R16 was corrected in place with a marked note.
+- **A Bash call simulating the build probe was refused by a safety check** (it saw a shell `-c` script it
+  could not inspect; the script removed nothing). It was rerun as a script file. No effect on the code.
+
+**retired_prompts_seen:** none.
+
+### Implement step 10 — quality validation (specswarm 2.40.0), as the installed blocks reported it
+
+Run from a scratch script that executes the installed detector, `run_tests`, `run_coverage`, the
+`quality-scale` library and the `unmeasured-explains-itself` block. Its `quality-components` copy keeps
+only the non-web branch, which is the one this project takes (no `package.json`). The output is verbatim:
+
+```
+🧪 Running Quality Validation
+=============================
+- Detector:
+{
+  "frameworks": ["pytest"],
+  "primary": "pytest",
+  "count": 1
+}
+- run_tests pytest: rc=2
+/usr/bin/python3: No module named pytest
+run_tests: pytest is declared by this project but not installed here
+- parse_test_results: total=unknown passed=unknown failed=unknown skipped=unknown
+- run_coverage pytest: unknown (rc 1)
+- step 10e: browser test framework: none (declared in package.json; not a check that it runs)
+- quality-components: QC_BROWSER_STATE=not-applicable:no web project detected, so there is nothing to drive a browser over
+                      QC_BUNDLE_STATE=unavailable:lib/bundle-size-monitor.sh is not present in this install
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The gate is **UNKNOWN**, which warns and does not halt (`block_merge_on_failure: false`). Nothing was
+filled in by hand. The project's own figures are in decisions.md T017:
+- **units:** host lane 1955 passed, 2 skipped; `edit`'s 154 with the grammar wheels;
+- **coverage:** `edit` 95%, `syntax-check` 98%;
+- **lint:** ruff, mypy strict and shellcheck clean;
+- **conformance:** `edit` ok;
+- **start-up:** checked edits p95 150 to 243 ms; the probe starts no child.
+
+**Implement step 9b: decision log** (the installed `scope-tally` and `decision-tally`, after T017):
+
+```
+scope: planned=18 recorded=17 unplanned=0 unrecorded=1 in=17 out=0 none=0 unknown=0 flagged=15 flagged_out=0 other=2 other_out=0 unattributed_scope=0
+decisions: sections=17 flagged_sections=15 non_flagged_sections=2 sections_without_absent=0 flagged=36 assumed=16 deferred=0 absent=21 inherited=17 low_confidence=0 flagged_low_confidence=0 flagged_delegate=4 assumed_delegate=2 unattributed=0 deferred_delegate=0 absent_delegate=0 inherited_delegate=0
+```
+
+- `unrecorded=1` is T018, this report. Its scope record follows its commit.
+- `other=2` are T011 and T012: their FLAGGED entries are the delegates' (`FLAGGED (delegate):`, counted in
+  `flagged_delegate=4`), so the tally counts those sections as non-FLAGGED.
+- No entry is low-confidence. This is not a dispatch run, so there is no pause file and no marker.
+
+### Then
+
+Done. No commit after this report until the mentor says lane 008s1-a has ended.
