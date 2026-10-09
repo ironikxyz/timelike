@@ -309,7 +309,7 @@ runs).
   `CARRIES_TO="02 slice 1"`. Expect `MODE_USED=carried`, `APPENDED` empty, `NEW_AUDITED=[1, 8]`, `AUDIT_NOTE=02 slice 1`.
   Any other value means stop and report. Append one `audit-log.md` row quoting the inputs and outputs, with ruling (b)
   as its basis and a note that it supersedes Cycle 2's `scoped` for revision 8. `spec.md` is untouched.
-- [ ] T033 Cycle report § Cycle 3 (the send's block): Group A not applicable; Group B copied from the send; Group C,
+- [X] T033 Cycle report § Cycle 3 (the send's block): Group A not applicable; Group B copied from the send; Group C,
   with the two Automated criteria cited from lane 007s1-c at `3eba335` (TAP 432, 433, 435, 436), D2 as Cycle 2
   recorded it, the block's inputs and outputs, and the version that ran. Then `reboot.md`.
 
