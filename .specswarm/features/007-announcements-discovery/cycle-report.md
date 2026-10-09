@@ -922,3 +922,29 @@ sign-off, with `maint/readme-godel` (`866b49b`, `ad4d63f`).
   - **Shell:** shellcheck 0.11.0 over `SHELLCHECK_FILES` (75 files), clean.
   - **Units:** the four pin-related files, 230 passed.
   - **Unconfirmed:** `make lint` itself, run in the images, until someone with Docker runs it.
+
+### Addendum — D13 observed by the operator; lane 007s1-c green (2026-10-09T03:54:48Z, read from the clock)
+
+- **Lane 007s1-c passed on `3eba335`** (mentor, `../bridge/history.md` 2026-10-09T03:16:00Z):
+  - **test, EXIT 0:** e2e 576/576 ok; pytest 1875 passed, 3 skipped; Go packages all ok.
+  - **bench-images, EXIT 0.**
+  - **scan, EXIT 0:** Adele govulncheck on golang:1.27.2-trixie read 0 vulnerabilities; release-check PASS; deny-list
+    PASS.
+  - **lint, EXIT 0:** gofmt and vet ran on go1.27.2, staticcheck on go1.27.1, as ruled.
+  - Lane 007s1-b's host event did not recur.
+  - The "lane pending" criteria above ran in that lane. I take their cell results from the mentor's record and did not
+    re-read them here.
+- **D13 changes mode:** `04 · "is told the install command or the equivalent timelike tool _(traces to: D13)_"` —
+  **unconfirmed → observed by the operator**.
+  - **Transcript:** `../bridge/.d13-demo-20261009T034838Z.txt`.
+  - **Where:** a throwaway container from `timelike-agent:local`, image `sha256:875874fd…` at revision `3eba335`, the
+    image lane 007s1-c passed. The agent's commands ran as user `agent`, each in its own `bash -lc`.
+  - **What was shown:** `rg`, `less`, `jq`, `pytest` and `frobnicate` each got the answer the contract gives:
+    - for `rg` and `less`, the timelike tool instead, plus the Debian package;
+    - for `jq`, the Debian package alone;
+    - for `pytest`, `pip install pytest`, which the agent then ran, and pytest worked in a new shell;
+    - for `frobnicate`, bash's own line alone, exit 127.
+  - **dash:** the mentor's check that `sh -c` (dash) keeps its own message is contract D-7 as designed, and the
+    operator accepted it (history 2026-10-09T03:50:00Z).
+- **Signed off:** 04 slice 1, on `3eba335` (history 2026-10-09T03:55:00Z). Both lane feedback items are resolved in their
+  files and are now closed in `reboot.md`. The `GO_LINT_IMAGE` removal item stays open.

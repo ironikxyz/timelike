@@ -5,21 +5,19 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
 
 - **`modify/007-slice-1`** holds **04 slice 1**: Cycles 3 and 4 (built), lane 007s1-a's fixes and revision 15 (Cycle 5).
-  It started from `master` `f6faf01`. **Not merged, not pushed.**
-  - **Lane 007s1-b ended** (feedback `04-20261009-010500-…`): every Cycle 5 fix passed, and the release check read
-    3 no-release as predicted. Item 1, `timelike-adele` 9 blocking on Go 1.27.1 stdlib, is fixed in **`a7e1f2f`**
-    (`GO_IMAGE` → `golang:1.27.2-trixie`), and Cycle 5's lane addendum records it. Item 2 is a host event: no change.
-  - **Lane 007s1-c comes next** (test, bench-images, scan). **Make no commit until the mentor says it has ended.**
-  - **staticcheck on Go 1.27.2:** the mentor ruled (amendment 01:40Z) for a lint-only `GO_LINT_IMAGE` at 1.27.1, used
-    for staticcheck only. It is built; see Open items for its removal condition.
-  - Then: lane findings, if any; the D13 demo (the mentor captures it); sign-off; `--no-ff` merge with
-    `maint/readme-godel` per the mentor's instruction; push on the discharge plus the operator's OK.
+  It started from `master` `f6faf01`. **Signed off on `3eba335`** (2026-10-09T03:55Z; lane 007s1-c green; D13 observed
+  by the operator, transcript `bridge/.d13-demo-20261009T034838Z.txt`). **Merged `--no-ff` into `master`**, then
+  `maint/readme-godel` the same way (the merge commits are the two at `master`'s tip). **Not pushed, no tag.** The
+  mentor discharges on the merge; push only on the discharge plus the operator's OK.
+  - **Feedback closed** (resolved by the mentor 2026-10-09T03:55Z, beside each question):
+    `04-20261008-193851-…` (lane 007s1-a: fixed in Cycle 5) and `04-20261009-010500-…` (lane 007s1-b: `a7e1f2f`
+    GO_IMAGE 1.27.2, `de5aebe` GO_LINT_IMAGE). Only the `GO_LINT_IMAGE` removal item stays open (Open items).
   - The tag at that push: **`v0.16.0`** (README Status is 16 of 38). It carries the three audit merges (`225a55c`,
     `39c8ae2`, `f6faf01`) and the Gödel commits too.
 - **`maint/readme-godel`**: `866b49b` (the section) and `ad4d63f` (the section extended, send
