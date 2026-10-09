@@ -207,3 +207,4 @@ FLAGGED: mypy could not type SYNTAX_CHECKERS (a manifest lambda reads it before 
 ASSUMED: the contract's REASON list gains `signal N` (T015's FLAGGED), and research R16's owner cell is corrected in place with a marked note: the agent container drops all capabilities, so root there cannot chown to uid 1001; the cell uses a root-owned file in an agent-made 0777 directory (confidence: high)
 ABSENT: the What and Why sections beyond row 06 and the Status paragraph — the block says nothing else changes; no value claims (P6)
 Verification: `scripts/readme_reference.py --write` (13 tools) then test_readme_reference.py 21 passed; mypy 2.3.1 strict over the project's 28 files: no issues (tools/libexec/syntax-check added to its list and to ruff's extend-include); ruff check and format clean over the repository
+SCOPE: in (4 changed files)
