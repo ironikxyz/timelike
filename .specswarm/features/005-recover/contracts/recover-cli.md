@@ -158,8 +158,8 @@ A value that is not a non-negative integer (or `off` for the interval) is a usag
 
 ### Lines every result may carry, in this order, after any `do instead:` line
 
-1. `not persistent: <root> is on the container's own filesystem, so this recovery state is lost when the
-   container is removed; mount a volume at <root> to keep it (compose.yaml mounts timelike-state)` — when
+1. `not persistent: <root> is not a mounted volume, so this recovery state dies with the container; mount
+   one at <root> (compose.yaml: timelike-state)` — when
    the state root is not on its own filesystem (FR-27). JSON `data.state = {root, persistent}` always.
 2. `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)` — once, on first use (FR-30);
    `not imported: <session> snapshot <id>: <why>` for one that fails verification.

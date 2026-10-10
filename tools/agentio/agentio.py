@@ -566,10 +566,10 @@ def state_persistent(root: Path) -> bool:
 
 
 def not_persistent_line(root: Path) -> str:
+    # Within rule 13's 200 columns at the default root (it was 217 as first written, and was cut).
     return (
-        f"not persistent: {root} is on the container's own filesystem, so this recovery state is lost"
-        f" when the container is removed; mount a volume at {root} to keep it"
-        " (compose.yaml mounts timelike-state)"
+        f"not persistent: {root} is not a mounted volume, so this recovery state dies with the container;"
+        f" mount one at {root} (compose.yaml: timelike-state)"
     )
 
 

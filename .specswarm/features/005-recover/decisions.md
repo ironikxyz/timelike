@@ -222,3 +222,16 @@ ASSUMED: an unreadable root is "not persistent" — unknown is never reported as
 ASSUMED: unit tests get a state root beside the scratch root (`<scratch>-state`) in conftest's base_env, so no test writes /var/lib/timelike (confidence: high)
 ABSENT: any caller yet — snapshot moves in T021; no cache-wide layout migration (VERSION 1 is the first layout)
 Verification: test_agentio_state.py 6 passed; test_agentio.py and test_agentio_startup.py unchanged (83 passed with them, 3.14.8 venv)
+SCOPE: out — tests/unit/test_agentio_state.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T021: snapshot's store in the state root; persistence line; attribution; other workspaces; lock holder
+**Started:** 2026-10-10T05:24Z (after T020's commit) | **Completed:** 2026-10-10T05:34:08Z
+
+INHERITED: agentio.state_root / ensure_state_root / state_persistent / not_persistent_line — from T020 (confidence: high)
+FLAGGED: the not-persistent line is set aside by slice 0's unit helpers (text_of, doc_of) and asserted by test_snapshot_slice1.py on raw stdout, chose that over pointing unit state roots at a device unlike `/`, because the image's unit lane has no such device and the line's presence must follow the filesystem, not the test (confidence: high)
+FLAGGED: the line was shortened to fit rule 13's 200 columns (it was 217 at the default root and was cut); spec FR-27 and the contract changed with it, declared (confidence: high)
+FLAGGED: the lock file is emptied on release, so a later wait never names a holder that has gone; a holder only ever names itself while it holds the flock (confidence: high)
+ASSUMED: slice-0 records lack session/agent; JSON shows them as null (confidence: high)
+ASSUMED: one slice-0 unit relied on "another session = an empty store"; since slice 1 sessions share a store (FR-23 as amended), it now uses another state root (confidence: high)
+ABSENT: import (T022), stat cache (T023), purge (T025); e2e not run (no Docker here)
+Verification: test_snapshot.py, test_undo.py, test_snapshot_slice1.py — 84 passed (3.14.8 venv); the lock unit names its holder

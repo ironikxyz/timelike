@@ -57,11 +57,16 @@ class Lab:
     def env(self, **extra: str) -> dict[str, str]:
         return base_env(self.scratch, SESSION, HOME=str(self.home), **extra)
 
+    @property
+    def state(self) -> Path:
+        """TIMELIKE_STATE_ROOT, as conftest's base_env sets it: a sibling of the scratch root."""
+        return self.scratch.with_name(self.scratch.name + "-state")
+
     def store(self, ws: Path | None = None) -> Path:
-        """data-model: <scratch root>/<session>/snapshots/<first 16 hex of sha256(realpath ws)>/"""
+        """data-model § State root (Cycle 3): <state root>/workspaces/<16 hex of sha256(realpath ws)>/"""
         real = os.path.realpath(ws or self.ws)
         key = hashlib.sha256(real.encode()).hexdigest()[:16]
-        return self.scratch / SESSION / "snapshots" / key
+        return self.state / "workspaces" / key
 
 
 @pytest.fixture
@@ -95,17 +100,29 @@ def undo(lab: Lab, *args: str, **kw: Any) -> Proc:
     return call(UNDO, lab, *args, **kw)
 
 
+NOT_PERSISTENT = "not persistent: "
+
+
 def doc_of(r: Proc) -> dict[str, Any]:
+    """The JSON document, with slice 1's not-persistent line set aside (see text_of)."""
     try:
         d: dict[str, Any] = json.loads(r.stdout)
     except ValueError:
         why = f"stdout is not one JSON object (exit {r.returncode}):\n{r.stdout}\n{r.stderr}"
         raise AssertionError(why) from None
+    if isinstance(d.get("lines"), list):
+        d["lines"] = [x for x in d["lines"] if not x.startswith(NOT_PERSISTENT)]
     return d
 
 
 def text_of(r: Proc) -> list[str]:
-    return r.stdout.splitlines()
+    """Stdout's lines, without slice 1's not-persistent line (FR-27).
+
+    Whether it appears depends on the filesystem the test's state root is on (on most hosts, the same as
+    `/`), so slice 0's tests, which pin lines exactly, set it aside here. test_snapshot_slice1.py asserts
+    the line itself, against the test's own st_dev comparison, on raw stdout.
+    """
+    return [x for x in r.stdout.splitlines() if not x.startswith(NOT_PERSISTENT)]
 
 
 def said(r: Proc) -> str:
@@ -423,8 +440,8 @@ def test_workspace_containing_the_store_is_refused(lab: Lab) -> None:
     d = outcome(snap(lab, "--json"), 1, "take")
     assert d["verdict"].startswith(f"refused: {os.path.realpath(lab.ws)} contains the snapshot store (")
     assert os.path.realpath(lab.ws) in d["verdict"].split("(", 1)[1], d["verdict"]  # the store path
-    assert d["remedy"] == "set TIMELIKE_SCRATCH_ROOT outside the workspace"
-    assert not (inner_scratch / SESSION / "snapshots").exists() or no_store_written(lab, lab.ws)
+    assert d["remedy"] == "set TIMELIKE_STATE_ROOT outside the workspace"
+    assert not (lab.state / "workspaces").exists() or no_store_written(lab, lab.ws)
     after = {p: v for p, v in tree(lab.ws).items() if not p.startswith("scratch-here")}
     assert after == before
 
@@ -538,8 +555,9 @@ def test_per_file_limit_and_size_cap_exclude_largest_first_with_reasons(lab: Lab
     assert [(x["path"], x["reason"]) for x in d2["excluded"]] == [("big.bin", per_file)]
     assert (d2["files"], d2["bytes"], d2["stored_bytes"]) == (4, 810, 300)
 
-    # The text form, from an empty store (another session), where the size cap bites as in the JSON run.
-    t = snap(lab, "--text", TIMELIKE_SESSION=f"{SESSION}-text", **caps)
+    # The text form, from an empty store (another state root: since slice 1 every session shares one
+    # store per workspace, FR-23 as amended), where the size cap bites as in the JSON run.
+    t = snap(lab, "--text", TIMELIKE_STATE_ROOT=str(lab.tmp / "state-text"), **caps)
     assert t.returncode == 0
     out = text_of(t)
     assert out[0] == f"snapshot: {os.path.realpath(lab.ws)} [take]"
@@ -751,6 +769,8 @@ def test_list_is_newest_first_with_labels_and_no_times_unless_verbose(lab: Lab) 
         "files": 1,
         "bytes": 6,
         "partial": False,
+        "session": SESSION,  # slice 1, FR-31: who took it, always in JSON
+        "agent": None,
     }
     assert rows[1]["label"] is None and rows[1]["files"] == 2
     assert all("taken_at" not in s for s in rows)
@@ -832,12 +852,17 @@ def test_take_waits_for_the_lock_then_exits_1_naming_the_holder(lab: Lab) -> Non
     take(lab)  # creates the store and its lock file
     lock = lab.store() / "lock"
     assert lock.exists()
+    assert lock.read_text() == ""  # released: the take that made it no longer names itself (FR-38)
     with lock.open("a") as held:
         fcntl.flock(held.fileno(), fcntl.LOCK_EX)
+        held.write("4242 other-session agent-b\n")  # what a holder writes (data-model § State root)
+        held.flush()
         t0 = time.monotonic()
         r = snap(lab, "--text", timeout=30)
         elapsed = time.monotonic() - t0
-    assert LOCK_VERDICT in stderr_error(r, 1)  # the lock timeout stays a structured error
+    err = stderr_error(r, 1)
+    assert LOCK_VERDICT in err  # the lock timeout stays a structured error
+    assert "; holder pid 4242, session other-session, agent agent-b)" in err  # slice 1, FR-38
     assert 9 <= elapsed < 15, elapsed
     assert snapshot_ids(lab) == [1]
 

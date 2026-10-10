@@ -422,8 +422,8 @@ each workspace is never removed. The verdict names each snapshot it dropped.
   lies on a different filesystem from the container's root (`st_dev` differs from `/`'s): a named
   volume or a bind mount. When it is not, every `snapshot` and `undo` result (take, list, dry run,
   restore, refusals after the workspace check) carries the line
-  `not persistent: <root> is on the container's own filesystem, so this recovery state is lost when the
-  container is removed; mount a volume at <root> to keep it (compose.yaml mounts timelike-state)`, and
+  `not persistent: <root> is not a mounted volume, so this recovery state dies with the container; mount
+  one at <root> (compose.yaml: timelike-state)` (within rule 13's 200 columns at the default root), and
   JSON `data.state` = `{"root": …, "persistent": false}` (`true` otherwise, with no line). One line per
   result, every result: a per-session "first time only" would need state the warning is about.
 - **FR-28** A state root that cannot be created or written is an error (exit 1) naming the path and

@@ -66,5 +66,8 @@ def test_persistence_is_the_filesystem_comparison(tmp_path: Path) -> None:
 
 def test_not_persistent_line_names_root_and_remedy() -> None:
     line = agentio.not_persistent_line(Path("/var/lib/timelike"))
-    assert line.startswith("not persistent: /var/lib/timelike is on the container's own filesystem")
-    assert "mount a volume at /var/lib/timelike" in line and "timelike-state" in line
+    assert line == (
+        "not persistent: /var/lib/timelike is not a mounted volume, so this recovery state dies with the"
+        " container; mount one at /var/lib/timelike (compose.yaml: timelike-state)"
+    )
+    assert len(line) <= 200  # rule 13 would cut it

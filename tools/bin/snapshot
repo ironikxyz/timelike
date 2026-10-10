@@ -2,8 +2,9 @@
 """snapshot — take and list snapshots of the workspace, so a wrong turn can be undone (P5).
 
 `snapshot` copies every file, symlink and directory of the workspace (tracked, untracked or ignored by
-version control) into a content-addressed store in the session scratch directory, and prints the
-snapshot's identifier, file count and size. `snapshot list` lists them. `undo` (a separate command that
+version control) into a content-addressed store in the per-workspace state root (rule 10 at revision 11;
+slice 1, FR-25), shared by every session and agent, and prints the snapshot's identifier, file count and
+size. `snapshot list` lists them. `undo` (a separate command that
 loads this file) restores one.
 
 Scope and limits, stated rather than implied (T2):
@@ -27,6 +28,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import shlex
 import stat
 import time
@@ -46,6 +48,8 @@ DEFAULT_CAPS = {
     ENV_MAX_ENTRIES: 50_000,
 }
 LOCK_WAIT_S = 10.0
+AGENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # TIMELIKE_AGENT, as the journal validates it (009)
+NOTES: list[str] = []  # lines every result of this invocation carries (FR-27, FR-30, FR-37), in order
 RECORD_VERSION = 1
 SAFETY_PREFIX = "before undo "  # the reason on the snapshot an undo takes of the state it replaces
 OUT_OF_SCOPE = ".git"  # version control's own state: the project's, never ours (D-4)
@@ -189,8 +193,40 @@ def find_workspace() -> str:
     return agentio.workspace()
 
 
-def store_root(ctx: agentio.Context) -> str:
-    return os.path.realpath(os.path.join(str(ctx.scratch_root), ctx.session, "snapshots"))
+def store_root() -> str:
+    """Where every workspace's store lives: <state root>/workspaces (FR-25; data-model § State root)."""
+    return os.path.realpath(os.path.join(str(agentio.state_root()), "workspaces"))
+
+
+def agent_id() -> str | None:
+    raw = os.environ.get("TIMELIKE_AGENT", "")
+    return raw if AGENT_RE.match(raw) else None
+
+
+def note_persistence() -> dict[str, Any]:
+    """FR-27: the not-persistent line when the state root is on the container's own filesystem."""
+    root = agentio.state_root()
+    persistent = agentio.state_persistent(root)
+    if not persistent:
+        add_note(agentio.not_persistent_line(root))
+    return {"root": str(root), "persistent": persistent}
+
+
+def add_note(line: str) -> None:
+    if line not in NOTES:
+        NOTES.append(line)
+
+
+def finish(r: agentio.Result, state: dict[str, Any]) -> agentio.Result:
+    """Every result carries NOTES after its `do instead:` line (contract § Slice 1) and data.state.
+
+    A result that was cut already holds them: cut_or_lines puts NOTES first before it cuts.
+    """
+    if r.cut is None:
+        at = 1 if r.lines and r.lines[0].startswith("do instead: ") else 0
+        r.lines[at:at] = [n for n in NOTES if n not in r.lines]
+    r.data["state"] = state
+    return r
 
 
 def check_workspace(ws: str, ctx: agentio.Context, command: str) -> None:
@@ -204,11 +240,11 @@ def check_workspace(ws: str, ctx: agentio.Context, command: str) -> None:
             raise refuse(f"{ws} is your home directory", remedy)
         if h.startswith(ws.rstrip("/") + "/"):
             raise refuse(f"{ws} is an ancestor of your home directory", remedy)
-    store = store_root(ctx)
+    store = os.path.realpath(str(agentio.state_root()))
     if store == ws or store.startswith(ws.rstrip("/") + "/"):
         raise refuse(
             f"{ws} contains the snapshot store ({store})",
-            "set TIMELIKE_SCRATCH_ROOT outside the workspace",
+            f"set {agentio.STATE_ROOT_ENV} outside the workspace",
         )
 
 
@@ -219,6 +255,10 @@ Entry = dict[str, Any]  # {kind: file|link|dir|other, mode, size, target, what, 
 
 class EntryCapExceeded(Exception):
     pass
+
+
+class LockBusy(agentio.ToolError):
+    """The store's lock stayed held past the wait (FR-24): an error naming the holder (FR-38)."""
 
 
 def _other_kind(mode: int) -> str:
@@ -297,14 +337,14 @@ class Store:
         self.ws = ws
         self.key = hashlib.sha256(ws.encode()).hexdigest()[:16]
         self.ctx = ctx
-        self.path = Path(store_root(ctx)) / self.key
+        self.path = Path(store_root()) / self.key
 
     def exists(self) -> bool:
         return (self.path / "workspace").is_file()
 
     def create(self) -> None:
+        agentio.ensure_state_root()  # private, versioned (FR-25, FR-28; P003)
         try:
-            self.ctx.scratch()  # agentio's private session directory (rule 10)
             for sub in ("snaps", "objects", "artefacts"):
                 (self.path / sub).mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(self.path.parent, 0o700)
@@ -313,7 +353,7 @@ class Store:
             raise agentio.ToolError(
                 agentio.EXIT_FAILURE,
                 f"cannot create the snapshot store {self.path}: {e.strerror or e}",
-                "check TIMELIKE_SCRATCH_ROOT is writable",
+                f"check {agentio.STATE_ROOT_ENV} is writable",
             ) from None
         marker = self.path / "workspace"
         if marker.exists():
@@ -331,26 +371,46 @@ class Store:
             )
 
     @contextlib.contextmanager
-    def lock(self) -> Iterator[None]:
+    def lock(self, wait_s: float = LOCK_WAIT_S) -> Iterator[None]:
+        """FR-24, FR-38: one lock per workspace store, shared by every session and agent.
+
+        flock(2): the kernel releases it when its holder exits, so a holder that no longer exists holds
+        nothing and there is no stale lock to clear. The holder writes who it is, for the timeout verdict.
+        """
         fd = os.open(self.path / "lock", os.O_RDWR | os.O_CREAT, 0o600)
         try:
-            deadline = time.monotonic() + LOCK_WAIT_S
+            deadline = time.monotonic() + wait_s
             while True:
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise agentio.ToolError(
-                            agentio.EXIT_FAILURE,
-                            "another snapshot or undo is running on this workspace"
-                            f" (lock held for {LOCK_WAIT_S:.0f} s: {self.path / 'lock'})",
-                            "wait for it to finish, then run this again",
-                        ) from None
+                        raise self._busy(fd, wait_s) from None
                     time.sleep(0.05)
-            yield
+            holder = f"{os.getpid()} {self.ctx.session} {agent_id() or '-'}\n".encode()
+            with contextlib.suppress(OSError):
+                os.ftruncate(fd, 0)
+                os.pwrite(fd, holder, 0)
+            try:
+                yield
+            finally:
+                with contextlib.suppress(OSError):
+                    os.ftruncate(fd, 0)  # released: no holder to name (a later wait names none)
         finally:
             os.close(fd)
+
+    def _busy(self, fd: int, wait_s: float) -> LockBusy:
+        who = ""
+        with contextlib.suppress(OSError, ValueError):
+            pid, session, agent = os.pread(fd, 256, 0).decode().split()[:3]
+            who = f"; holder pid {pid}, session {session}, agent {agent}"
+        return LockBusy(
+            agentio.EXIT_FAILURE,
+            "another snapshot or undo is running on this workspace"
+            f" (lock held for {wait_s:.0f} s: {self.path / 'lock'}{who})",
+            "wait for it to finish, then run this again",
+        )
 
     def _write_atomic(self, path: Path, text: str, mode: int) -> None:
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -519,6 +579,8 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
         "reason": reason,
         "label": label,
         "workspace": store.ws,
+        "session": store.ctx.session,
+        "agent": agent_id(),
         "taken_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "entries": captured,
         "excluded": excluded,
@@ -607,7 +669,11 @@ def raise_lines(rec: dict[str, Any], caps: dict[str, int]) -> list[str]:
 def cut_or_lines(
     ctx: agentio.Context, store: Store, name: str, lines: list[str]
 ) -> tuple[list[str], agentio.Cut | None]:
-    """Over the output cap, cut with `more` reading the saved list: a re-run would act again."""
+    """Over the output cap, cut with `more` reading the saved list: a re-run would act again.
+
+    NOTES go first, so a cut result carries them too (finish() only adds them to an uncut one).
+    """
+    lines = [n for n in NOTES if n not in lines] + lines
     if ctx.limit <= 0 or len(lines) <= ctx.limit:
         return lines, None
     head_n = max(1, ctx.limit // 2)
@@ -668,6 +734,27 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
     return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
 
 
+def other_workspaces(ws: str) -> list[tuple[str, int]]:
+    """FR-29: every other workspace in the state root with snapshots, by path, and how many."""
+    out = []
+    with contextlib.suppress(OSError):
+        for d in Path(store_root()).iterdir():
+            try:
+                path = (d / "workspace").read_text().strip()
+            except OSError:
+                continue
+            n = sum(1 for _ in (d / "snaps").glob("*.json"))
+            if path != ws and n:
+                out.append((path, n))
+    return sorted(out)
+
+
+def other_lines(ws: str) -> tuple[list[str], list[dict[str, Any]]]:
+    others = other_workspaces(ws)
+    lines = [f"other workspace with snapshots: {path} ({n})" for path, n in others]
+    return lines, [{"workspace": path, "snapshots": n} for path, n in others]
+
+
 def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
     recs = list(reversed(Store(ctx, ws).records()))
     lines, items = [], []
@@ -677,12 +764,16 @@ def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
         if r.get("label"):
             line += f'  "{r["label"]}"'
         item = {k: r[k] for k in ("id", "reason", "label", "files", "bytes", "partial")}
+        item["session"], item["agent"] = r.get("session"), r.get("agent")  # FR-31 (slice-0 records: null)
         if ctx.verbose:
-            line += f"  taken {r['taken_at']}"
+            line += f"  taken {r['taken_at']}  session {r.get('session') or '-'}  agent {r.get('agent') or '-'}"
             item["taken_at"] = r["taken_at"]
         lines.append(line)
         items.append(item)
-    return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data={"snapshots": items})
+    data: dict[str, Any] = {"snapshots": items}
+    if not recs:
+        lines, data["other_workspaces"] = other_lines(ws)
+    return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data=data)
 
 
 def configure(p: argparse.ArgumentParser) -> None:
@@ -699,11 +790,13 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         caps_from_env()  # a bad cap value is a usage error before anything is written
     ws = find_workspace()
     scope = "list" if args.verb == "list" else "take"
+    state = note_persistence()
     try:
         check_workspace(ws, ctx, "snapshot")
-        return cmd_list(ctx, ws) if args.verb == "list" else cmd_take(ctx, ws, args.label)
+        r = cmd_list(ctx, ws) if args.verb == "list" else cmd_take(ctx, ws, args.label)
     except Outcome as o:
-        return o.result(ws, scope)
+        r = o.result(ws, scope)
+    return finish(r, state)
 
 
 # ── the plan (data-model § Plan) ──────────────────────────────────────────────────────────────
@@ -875,6 +968,7 @@ def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
             agentio.EXIT_NOT_FOUND,
             f"no snapshot {raw or ''} for {ws}".replace("  ", " "),
             "take one with: snapshot",
+            other_lines(ws)[0],  # FR-29: a moved workspace is told where its history is
         )
     if raw is None:
         # The newest snapshot the agent took, not a safety snapshot of an earlier undo: otherwise a
@@ -893,10 +987,12 @@ def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if args.id is not None and not args.id.isdigit():
         raise agentio.UsageError(f"{args.id!r} is not a snapshot id", "ids are numbers; see: snapshot list")
     ws = find_workspace()
+    state = note_persistence()
     try:
-        return _undo(args, ctx, ws)
+        r = _undo(args, ctx, ws)
     except Outcome as o:
-        return o.result(ws, f"restore {args.id or 'newest'}")
+        r = o.result(ws, f"restore {args.id or 'newest'}")
+    return finish(r, state)
 
 
 def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Result:

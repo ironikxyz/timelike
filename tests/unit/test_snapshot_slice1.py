@@ -1,0 +1,138 @@
+"""snapshot and undo, slice 1 (feature 005 Cycle 3; spec FR-25 to FR-41; contracts/recover-cli.md § Slice 1).
+
+The same lab as slice 0's tests (test_snapshot.py), whose helpers this file imports. State is judged by
+the test walking the tree and the store itself, never by the tool's message (P004).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+from pathlib import Path
+
+from test_snapshot import (
+    SESSION,
+    Lab,
+    doc_of,
+    make_repo,
+    snap,
+    take,
+    text_of,
+    tree,
+    undo,
+    write,
+)
+from test_snapshot import lab as lab  # the fixture, re-exported as test_undo.py does
+
+NOT_PERSISTENT = "not persistent: "
+
+
+# ── FR-23 as amended, FR-25: the store lives in the state root ───────────────────────────────
+
+
+def test_the_store_is_in_the_state_root_not_the_session_scratch(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "x\n")
+    d = take(lab)
+    assert d["store"] == str(lab.store())
+    assert str(lab.store()).startswith(str(lab.state / "workspaces") + "/")
+    assert (lab.state / "VERSION").read_text() == "timelike-state 1\n"
+    assert (lab.store() / "snaps" / "1.json").is_file()
+    assert not (lab.scratch / SESSION / "snapshots").exists()
+
+
+# ── FR-27: persistence is stated, never implied ──────────────────────────────────────────────
+
+
+def test_not_persistent_line_follows_the_filesystem_the_test_measures(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "x\n")
+    take(lab)
+    persistent = os.stat(lab.state).st_dev != os.stat("/").st_dev
+    for args in (["--json"], ["--json", "list"]):
+        r = snap(lab, *args)
+        raw = json.loads(r.stdout)
+        assert raw["state"] == {"root": str(lab.state), "persistent": persistent}
+        lines = [x for x in raw["lines"] if x.startswith(NOT_PERSISTENT)]
+        assert len(lines) == (0 if persistent else 1), raw["lines"]
+        if lines:
+            assert lines[0].startswith(f"not persistent: {lab.state} is not a mounted volume")
+    t = undo(lab, "--text", "--dry-run")
+    assert any(x.startswith(NOT_PERSISTENT) for x in t.stdout.splitlines()) is (not persistent)
+
+
+def test_a_refusal_carries_the_line_after_its_remedy(lab: Lab) -> None:
+    r = snap(lab, "--json", cwd=lab.home)
+    raw = json.loads(r.stdout)
+    assert raw["lines"][0].startswith("do instead: ")
+    if os.stat(lab.tmp).st_dev == os.stat("/").st_dev:
+        assert raw["lines"][1].startswith(NOT_PERSISTENT), raw["lines"]
+
+
+# ── FR-31: attribution; one store for every session (revision 11) ───────────────────────────
+
+
+def test_two_sessions_share_one_store_and_each_record_names_who_took_it(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "one\n")
+    take(lab, TIMELIKE_SESSION="s1", TIMELIKE_AGENT="agent-a")
+    write(lab.ws / "f.txt", "two\n")
+    take(lab, TIMELIKE_SESSION="s2", TIMELIKE_AGENT="agent-b")
+    take(lab, TIMELIKE_SESSION="s3", TIMELIKE_AGENT="not valid!")
+
+    d = doc_of(snap(lab, "--json", "list", TIMELIKE_SESSION="s9"))
+    who = [(s["id"], s["session"], s["agent"]) for s in d["snapshots"]]
+    assert who == [(3, "s3", None), (2, "s2", "agent-b"), (1, "s1", "agent-a")]
+    rec = json.loads((lab.store() / "snaps" / "1.json").read_text())
+    assert (rec["session"], rec["agent"]) == ("s1", "agent-a")
+
+    v = [x for x in text_of(snap(lab, "--text", "list", "--verbose")) if x[:1].isdigit()]
+    assert v[1].endswith("session s2  agent agent-b") and v[0].endswith("session s3  agent -"), v
+
+    # A new session restores another session's snapshot (criterion 3, first half, on the host).
+    write(lab.ws / "f.txt", "three\n")
+    r = undo(lab, "1", "--yes", "--json", TIMELIKE_SESSION="s-new")
+    assert r.returncode == 0, r.stdout
+    assert (lab.ws / "f.txt").read_text() == "one\n"
+
+
+# ── FR-29: a workspace moved elsewhere is told where its history is ──────────────────────────
+
+
+def test_a_moved_workspace_sees_none_and_is_told_where_snapshots_are(lab: Lab) -> None:
+    make_repo(lab.ws, lab.home)
+    take(lab)
+    take(lab)
+    moved = lab.tmp / "moved"
+    shutil.copytree(lab.ws, moved, symlinks=True)
+
+    d = doc_of(snap(lab, "--json", "list", cwd=moved))
+    assert d["verdict"] == "0 snapshots"
+    real = os.path.realpath(lab.ws)
+    assert d["lines"] == [f"other workspace with snapshots: {real} (2)"]
+    assert d["other_workspaces"] == [{"workspace": real, "snapshots": 2}]
+
+    r = undo(lab, "--json", "--dry-run", cwd=moved)
+    assert r.returncode == 3
+    u = doc_of(r)
+    assert u["lines"] == ["do instead: take one with: snapshot", f"other workspace with snapshots: {real} (2)"]
+
+
+# ── criterion 4 (revision 11): a restore first snapshots the workspace, and can itself be undone ──
+
+
+def test_a_restore_names_its_safety_snapshot_and_undoing_it_returns_the_replaced_state(lab: Lab) -> None:
+    make_repo(lab.ws, lab.home)
+    take(lab)
+    write(lab.ws / "src" / "app.py", "print('changed')\n")
+    write(lab.ws / "new.txt", "new\n")
+    replaced = tree(lab.ws)
+
+    r = undo(lab, "--yes", "--json")
+    assert r.returncode == 0, r.stdout
+    d = doc_of(r)
+    s = d["before"]
+    assert d["verdict"].endswith(f"verified; the state before is snapshot {s}")
+    assert tree(lab.ws) != replaced
+
+    r2 = undo(lab, str(s), "--yes", "--json")
+    assert r2.returncode == 0, r2.stdout
+    assert tree(lab.ws) == replaced  # compared by the test, never by the message (P004)
