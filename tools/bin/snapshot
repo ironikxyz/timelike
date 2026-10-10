@@ -90,6 +90,7 @@ UNDO_TOOL = agentio.Tool(
         "undo ID --yes            # restore snapshot ID (see: snapshot list)",
         "without --yes: exit 4 and the confirmation envelope (its confirm is undo … --yes)",
         "never touches any .git; files left out of the snapshot are left alone",
+        "undo --trash [ID --yes]  # list deleted files kept in the trash, or put item ID back",
     ],
     mutating=True,
     confirm_protocol=True,  # discovery revision 13, case 1: "everything since" is not named exactly
@@ -1245,11 +1246,310 @@ def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -
         os.chmod(os.path.join(_parent_checked(ws, e["path"]), e["path"].rsplit("/", 1)[-1]), e["mode"])
 
 
+# ── the trash (FR-39 to FR-41, D-18) ──────────────────────────────────────────────────────────
+# What a delete removes, kept before it happens: <state root>/trash/items/<id>.json and the content,
+# deduplicated, in trash/objects/. Not per workspace: a deleted path anywhere the agent owns is kept.
+# What feeds it (the guards) is FOR-MENTOR Item 22's; `guard trash-put` is the entry point either way.
+
+ENV_TRASH_MAX_AGE_DAYS = "TIMELIKE_TRASH_MAX_AGE_DAYS"
+ENV_TRASH_MAX_BYTES = "TIMELIKE_TRASH_MAX_BYTES"
+TRASH_DEFAULTS = {ENV_TRASH_MAX_AGE_DAYS: 30, ENV_TRASH_MAX_BYTES: 1024**3}
+
+
+def trash_limits() -> dict[str, int]:
+    out = {}
+    for var, default in TRASH_DEFAULTS.items():
+        raw = os.environ.get(var, "").strip()
+        if raw == "":
+            out[var] = default
+        elif raw.isdigit():
+            out[var] = int(raw)
+        else:
+            raise agentio.UsageError(
+                f"{var} must be a non-negative whole number, not {raw!r}", f"e.g. {var}={default}, or 0 for none"
+            )
+    return out
+
+
+class Trash(Store):
+    """The trash shares the store's mechanics (objects, atomic writes, ids, the lock), not its records."""
+
+    def __init__(self, ctx: agentio.Context) -> None:  # noqa: D107 — no workspace: the trash is global
+        self.ctx = ctx
+        self.ws = "trash"
+        self.key = "trash"
+        self.path = agentio.state_root() / "trash"
+
+    def create(self) -> None:
+        agentio.ensure_state_root()
+        for sub in ("items", "objects"):
+            (self.path / sub).mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.path, 0o700)
+
+    def item_path(self, ident: int) -> Path:
+        return self.path / "items" / f"{ident}.json"
+
+    def items(self) -> list[dict[str, Any]]:
+        out = []
+        for p in (self.path / "items").glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append(json.loads(p.read_text()))
+        return sorted(out, key=lambda r: int(r["id"]))
+
+    def item(self, ident: int) -> dict[str, Any] | None:
+        with contextlib.suppress(OSError, ValueError):
+            return dict(json.loads(self.item_path(ident).read_text()))
+        return None
+
+
+def _trash_walk(top: str) -> list[dict[str, Any]]:
+    """`top` and, for a directory, everything below it; symlinks recorded, never followed."""
+    out = []
+    stack = [top]
+    while stack:
+        path = stack.pop()
+        try:
+            st = os.lstat(path)
+        except OSError as e:
+            out.append({"path": path, "kind": "other", "what": f"unreadable: {e.strerror or e}", "size": 0})
+            continue
+        perm = stat.S_IMODE(st.st_mode)
+        if stat.S_ISLNK(st.st_mode):
+            out.append({"path": path, "kind": "link", "target": os.readlink(path)})
+        elif stat.S_ISDIR(st.st_mode):
+            out.append({"path": path, "kind": "dir", "mode": perm})
+            try:
+                with os.scandir(path) as it:
+                    stack.extend(sorted((e.path for e in it), reverse=True))
+            except OSError as e:
+                out[-1]["error"] = e.strerror or str(e)
+        elif stat.S_ISREG(st.st_mode):
+            out.append({"path": path, "kind": "file", "mode": perm, "size": st.st_size})
+        else:
+            out.append({"path": path, "kind": "other", "what": _other_kind(st.st_mode), "size": 0})
+    return out
+
+
+def trash_put(ctx: agentio.Context, paths: list[str], command: list[str]) -> dict[str, Any] | None:
+    """Keep `paths` (as the deleting command names them) in the trash before they are deleted (FR-39).
+
+    Returns the item, or None when none of the paths exists. A file the trash cannot keep (unreadable,
+    not a file/link/directory, or past TIMELIKE_TRASH_MAX_BYTES on its own) is listed under `not_kept`,
+    so the line naming the item can say what a later restore cannot bring back (T2).
+    """
+    limits = trash_limits()
+    tops = [os.path.abspath(p) for p in paths if os.path.lexists(p)]
+    if not tops:
+        return None
+    trash = Trash(ctx)
+    trash.create()
+    with trash.lock():
+        entries: list[dict[str, Any]] = []
+        not_kept: list[dict[str, Any]] = []
+        total = 0
+        cap = limits[ENV_TRASH_MAX_BYTES]
+        for top in dict.fromkeys(tops):
+            for e in _trash_walk(top):
+                if e["kind"] == "other":
+                    not_kept.append({"path": e["path"], "size": e["size"], "reason": e["what"]})
+                    continue
+                if e["kind"] == "file":
+                    if cap and total + e["size"] > cap:
+                        not_kept.append({"path": e["path"], "size": e["size"], "reason": f"over {ENV_TRASH_MAX_BYTES}"})
+                        continue
+                    try:
+                        sha, read, _ = trash.put(e["path"])
+                    except OSError as err:
+                        not_kept.append({"path": e["path"], "size": e["size"], "reason": f"unreadable: {err.strerror or err}"})
+                        continue
+                    e = {**e, "sha256": sha, "size": read}
+                    total += read
+                entries.append({k: v for k, v in e.items() if k != "error"})
+        item = {
+            "v": RECORD_VERSION,
+            "id": trash.next_id(),
+            "deleted_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "session": ctx.session,
+            "agent": agent_id(),
+            "command": command,
+            "roots": list(dict.fromkeys(tops)),
+            "entries": entries,
+            "not_kept": not_kept,
+            "files": sum(1 for e in entries if e["kind"] == "file"),
+            "bytes": total,
+        }
+        trash._write_atomic(trash.item_path(item["id"]), json.dumps(item, indent=1) + "\n", 0o600)
+        purge_trash(trash, limits, keep=item["id"])
+    return item
+
+
+def purge_trash(trash: Trash, limits: dict[str, int], keep: int) -> None:
+    """FR-41: by age, then oldest first while the trash's content exceeds its cap; never `keep`."""
+    age_s = limits[ENV_TRASH_MAX_AGE_DAYS] * 86400
+    cap = limits[ENV_TRASH_MAX_BYTES]
+    by_age = _records_by_age_in(trash.path / "items")
+    now = time.time()
+    dropped = False
+    for mtime, ident in list(by_age):
+        if ident != keep and age_s and now - mtime > age_s:
+            _drop_trash(trash, ident, f"older than {limits[ENV_TRASH_MAX_AGE_DAYS]} days")
+            by_age.remove((mtime, ident))
+            dropped = True
+    if dropped:
+        _sweep_trash(trash)
+    while cap and _object_bytes(trash.path) > cap:
+        older = [(m, i) for m, i in by_age if i != keep]
+        if not older:
+            break
+        _drop_trash(trash, older[0][1], f"over {ENV_TRASH_MAX_BYTES}")
+        by_age.remove(older[0])
+        _sweep_trash(trash)
+
+
+def _records_by_age_in(d: Path) -> list[tuple[float, int]]:
+    out = []
+    with contextlib.suppress(OSError):
+        for p in d.glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append((p.stat().st_mtime, int(p.stem)))
+    return sorted(out)
+
+
+def _drop_trash(trash: Trash, ident: int, why: str) -> None:
+    with contextlib.suppress(OSError):
+        trash.item_path(ident).unlink()
+    add_note(f"purged: trash item {ident} ({why})")
+
+
+def _sweep_trash(trash: Trash) -> None:
+    keep: set[str] = set()
+    for item in trash.items():
+        keep.update(e["sha256"] for e in item.get("entries", []) if e.get("kind") == "file")
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(trash.path / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                for f in os.scandir(sub.path):
+                    if f.name not in keep and not f.name.startswith("."):
+                        with contextlib.suppress(OSError):
+                            os.unlink(f.path)
+
+
+def trash_line(item: dict[str, Any]) -> str:
+    first = item["roots"][0]
+    more = len(item["roots"]) - 1
+    return f"{item['id']}  {item['files']} files  {human(item['bytes'])}  {first}" + (
+        f" and {more} more" if more else ""
+    )
+
+
+def _trash_blocked(item: dict[str, Any]) -> list[str]:
+    """Paths a put-back would overwrite, or whose parent is gone: refused, named, nothing written."""
+    out = []
+    for root in item["roots"]:
+        if os.path.lexists(root):
+            out.append(f"refused: {root} exists")
+        elif not os.path.isdir(os.path.dirname(root)) or os.path.islink(os.path.dirname(root)):
+            out.append(f"refused: {os.path.dirname(root)} is not a directory (put back what held it first)")
+    return out
+
+
+def _put_back(trash: Trash, item: dict[str, Any]) -> None:
+    dirs = [e for e in item["entries"] if e["kind"] == "dir"]
+    for e in sorted(dirs, key=lambda e: e["path"].count("/")):
+        os.mkdir(e["path"], 0o700)
+    for e in item["entries"]:
+        if e["kind"] == "link":
+            os.symlink(e["target"], e["path"])
+        elif e["kind"] == "file":
+            fd = os.open(e["path"], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            try:
+                with open(trash.object_path(e["sha256"]), "rb") as fin:
+                    for block in iter(lambda: fin.read(CHUNK), b""):
+                        os.write(fd, block)
+                os.fchmod(fd, e["mode"])
+            finally:
+                os.close(fd)
+    for e in sorted(dirs, key=lambda e: -e["path"].count("/")):
+        os.chmod(e["path"], e["mode"])
+
+
+def _put_back_differences(item: dict[str, Any]) -> list[str]:
+    left = []
+    for e in item["entries"]:
+        try:
+            st = os.lstat(e["path"])
+        except OSError:
+            left.append(f"missing {e['kind']} {e['path']}")
+            continue
+        if e["kind"] == "file":
+            ok = stat.S_ISREG(st.st_mode) and file_sha(e["path"]) == e["sha256"]
+        elif e["kind"] == "link":
+            ok = stat.S_ISLNK(st.st_mode) and os.readlink(e["path"]) == e["target"]
+        else:
+            ok = stat.S_ISDIR(st.st_mode)
+        if not ok:
+            left.append(f"differs {e['kind']} {e['path']}")
+    return left
+
+
+def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> agentio.Result:
+    """`undo --trash [ID] [--dry-run] [--yes]` (FR-40): list the trash, or put one item back, verified."""
+    trash = Trash(ctx)
+    if args.id is None:
+        items = list(reversed(trash.items())) if trash.path.is_dir() else []
+        lines = [trash_line(i) for i in items]
+        data = {"items": [{k: i[k] for k in ("id", "files", "bytes", "roots", "session", "agent")} for i in items]}
+        return agentio.Result(target, "trash", f"{len(items)} items in the trash", lines=lines, data=data)
+    item = trash.item(int(args.id)) if trash.path.is_dir() else None
+    scope = f"trash {args.id}"
+    if item is None:
+        ids = ", ".join(str(i["id"]) for i in reversed(trash.items())) if trash.path.is_dir() else ""
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            f"no trash item {args.id}",
+            f"trash items: {ids}" if ids else "the trash is empty",
+        )
+    plan = [f"put back {e['kind']} {e['path']}" for e in item["entries"]]
+    blocked = _trash_blocked(item)
+    n = len(item["entries"])
+    if args.dry_run:
+        verdict = f"dry run: trash item {item['id']} — {n} to put back; nothing changed"
+        if blocked:
+            verdict += f"; {len(blocked)} blocked"
+        lines = blocked + plan + [f"not kept: {x['path']} ({x['reason']})" for x in item.get("not_kept", [])]
+        return agentio.Result(target, scope, verdict, lines=lines, data={"id": item["id"], "blocked": blocked})
+    if blocked:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"refused: trash item {item['id']} would overwrite or has no place: {blocked[0].removeprefix('refused: ')}",
+            "move what is there aside, or put back the item that held its directory first",
+            blocked,
+        )
+    if not args.yes:
+        if ctx.limit > 0 and len(plan) > ctx.limit:
+            more = len(plan) - (ctx.limit - 1)
+            plan = [*plan[: ctx.limit - 1], f"… and {more} more: undo --trash {item['id']} --dry-run --limit 0"]
+        return agentio.confirm_required(ctx, target=target, scope=scope, plan=plan)
+    with trash.lock():
+        _put_back(trash, item)
+        left = _put_back_differences(item)
+    if left:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"put back trash item {item['id']} left {len(left)} differences",
+            f"undo --trash {item['id']} --dry-run shows the item",
+            left,
+        )
+    verdict = f"put back trash item {item['id']}: {n} paths; verified"
+    return agentio.Result(target, scope, verdict, lines=plan, data={"id": item["id"], "verified": True})
+
+
 # ── undo (FR-14 to FR-20) ─────────────────────────────────────────────────────────────────────
 
 
 def undo_configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("id", nargs="?", metavar="ID", help="the snapshot to restore (default: the newest)")
+    p.add_argument("--trash", action="store_true", help="list the trash, or put trash item ID back (FR-40)")
 
 
 def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
@@ -1285,9 +1585,9 @@ def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     ws = find_workspace()
     state = note_persistence()
     try:
-        r = _undo(args, ctx, ws)
+        r = undo_trash(args, ctx, ws) if args.trash else _undo(args, ctx, ws)
     except Outcome as o:
-        r = o.result(ws, f"restore {args.id or 'newest'}")
+        r = o.result(ws, f"trash {args.id}" if args.trash and args.id else "trash" if args.trash else f"restore {args.id or 'newest'}")
     return finish(r, state)
 
 

@@ -292,3 +292,16 @@ ASSUMED: a store whose records cannot all be read is not swept (a record that ca
 ABSENT: a test of the time bound itself (TIMELIKE_PURGE_SECONDS is whole seconds and the host purges in milliseconds); the bound is in the loop, and the line it prints shares the "stopped" path the newest-only case exercises
 Verification: 4 units (age; size with the newest kept and the stop named; another workspace purged when free, skipped and named when busy; a bad limit is a usage error before anything is written); all recover units 104 passed
 **Process failure recorded:** an edit to undo's verification dropped its `if left:` guard, so every restore reported a failure; 16 units caught it before the commit.
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T026: the trash — store, purge, `undo --trash`, and `guard trash-put` (FR-39–FR-41)
+**Started:** 2026-10-10T05:49:39Z | **Completed:** 2026-10-10T05:51:47Z
+
+INHERITED: Store's mechanics (objects, ids, atomic writes, the lock), NOTES, the record-mtime age rule — from T021–T025 (confidence: high)
+FLAGGED: "moved to a trash" is met by copy-then-delete: the guard keeps the content, then the real command deletes, so its behaviour, output and exit code are unchanged (seam 4); a hard link would be instant but the state root is a volume, another filesystem, so it cannot (confidence: high)
+FLAGGED: the trash is not per workspace — any path the agent deletes is kept, the criterion says "deleted files" (Item 22 Q3 asks the mentor to confirm) (confidence: medium)
+FLAGGED: a put-back never overwrites: an existing path, or a missing parent, refuses the whole item, named (confidence: high)
+ASSUMED: a file that would take the trash past its cap is named "not kept" by the guard's line, not silently dropped (T2) (confidence: high)
+DEFERRED: what calls `guard trash-put` in the agent's shell — FOR-MENTOR Item 22 (Q1, Q3)
+ABSENT: an e2e cell (T028); a restored item stays in the trash, so a second put-back is refused as "exists" (not removed on restore)
+Verification: test_trash.py 5 passed (kept and put back verified by the test's walk, modes and links included; never overwrites; unknown id exit 3; purge by size and age, named; over the cap named); undo units unchanged (help within 40 lines)

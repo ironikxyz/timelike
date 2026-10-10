@@ -1,0 +1,88 @@
+#!/opt/timelike/python/bin/python3 -I
+"""guard — what timelike's guards run before a destructive command (feature 005 slice 1; spec FR-39, D-18).
+
+Not a tool: never on PATH, no manifest, no session event. Run by its absolute path (P002), as
+
+    guard trash-put --command 'rm -rf build' -- PATH...
+
+which keeps PATH... (as the deleting command names them, a directory with everything below it) in the
+trash at <state root>/trash/ before the command deletes them, and prints one line on stderr naming the item:
+
+    timelike: trash item 7 keeps 12 files (3.4 KiB): undo --trash 7 --yes puts them back
+
+plus `timelike: not kept: <path> (<why>)` for each file it could not keep, and a `purged:` line for each
+trash item its purge dropped (FR-41). It never deletes anything itself; the real command does. Exit 0
+when the item was written or there was nothing to keep, 1 when it could not be written (the caller then
+decides; nothing is deleted by this helper either way).
+
+What calls it — the guards in front of `rm` and `git clean` — is FOR-MENTOR Item 22's (Q1, Q3).
+`snapshot`, beside timelike's other tools, holds the implementation; it is loaded from this file's own
+location (bin/ beside libexec/), never from PATH.
+"""
+
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+import sys
+from types import ModuleType
+
+import agentio
+
+
+def load_snapshot() -> ModuleType:
+    here = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(os.path.dirname(here), "bin", "snapshot")
+    loader = importlib.machinery.SourceFileLoader("timelike_snapshot", path)
+    spec = importlib.util.spec_from_loader("timelike_snapshot", loader)
+    if spec is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["timelike_snapshot"] = module
+    loader.exec_module(module)
+    return module
+
+
+def say(line: str) -> None:
+    print(f"timelike: {line}", file=sys.stderr)
+
+
+def usage() -> int:
+    say("usage: guard trash-put --command 'CMD' -- PATH...")
+    return 2
+
+
+def trash_put(argv: list[str]) -> int:
+    if len(argv) < 3 or argv[0] != "--command" or "--" not in argv:
+        return usage()
+    command = argv[1]
+    paths = argv[argv.index("--") + 1 :]
+    snap = load_snapshot()
+    try:
+        ctx = agentio.Context(snap.TOOL, [], agentio.session_id(), agentio.scratch_root(), "text", 0, False)
+        item = snap.trash_put(ctx, paths, command.split())
+    except (agentio.ToolError, OSError) as e:
+        say(f"the trash could not keep {' '.join(paths)}: {getattr(e, 'what', None) or e}")
+        return 1
+    if item is not None:
+        say(
+            f"trash item {item['id']} keeps {item['files']} files ({snap.human(item['bytes'])}):"
+            f" undo --trash {item['id']} --yes puts them back"
+        )
+        for x in item["not_kept"]:
+            say(f"not kept: {x['path']} ({x['reason']})")
+    for line in snap.NOTES:
+        if line.startswith("purged: "):
+            say(line)
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) >= 2 and argv[1] == "trash-put":
+        return trash_put(argv[2:])
+    return usage()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
