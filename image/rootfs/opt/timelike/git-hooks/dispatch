@@ -27,6 +27,34 @@ name=${0##*/}
 self_dir= # this directory, resolved only when needed (/opt/timelike/git-hooks in the image)
 default_limit=60
 
+# Feature 005 slice 1 (FR-44; FOR-MENTOR Item 22, Q2; a change to this feature's contract, declared):
+# before the repository's own pre-push hook, timelike records a forced push. git gives pre-push one line
+# per ref, "<local ref> <local sha> <remote ref> <remote sha>", with the remote's prior commit read by
+# git itself; /opt/timelike/libexec/guard (by its absolute path, P002) takes a snapshot of the worktree
+# for each update that is not a fast-forward (or deletes the ref, or whose prior commit git cannot place)
+# and prints one line naming it, the prior commit and the command that puts the ref back. This step
+# NEVER fails the push: whatever it cannot do, it says on stderr, and the push and the repository's own
+# hook then run as before. git's lines are kept in a file so the repository's hook reads them too (git
+# always hands pre-push a finite pipe, never a terminal, so reading it all here cannot block). The forks
+# this costs are pre-push's only, never the other hooks'. TIMELIKE_GUARD is a test-only override.
+if [ "$name" = pre-push ]; then
+  guard=${TIMELIKE_GUARD:-/opt/timelike/libexec/guard}
+  if pushin=$(mktemp "${TMPDIR:-/tmp}/timelike-pre-push.XXXXXX" 2>/dev/null); then
+    if ! cat >"$pushin"; then
+      printf 'timelike: forced pushes are not recorded: the pre-push input could not be read\n' >&2
+    elif [ -x "$guard" ]; then
+      "$guard" pre-push "$@" <"$pushin" >&2 || :
+    else
+      printf 'timelike: forced pushes are not recorded: %s is missing\n' "$guard" >&2
+    fi
+    exec <"$pushin"
+    rm -f "$pushin"
+  else
+    printf 'timelike: forced pushes are not recorded: cannot keep the pre-push input in %s\n' \
+      "${TMPDIR:-/tmp}" >&2
+  fi
+fi
+
 # Every hook git runs comes through here, about eight per commit, so the no-hook path is kept to one
 # git process and no other fork: a shell loop, not awk (profiled on the host: about 5.8 ms per dispatch
 # with awk and an eager self-path lookup; the line printed by `git config` is "<scope><TAB><value>").

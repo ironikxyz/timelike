@@ -1,8 +1,8 @@
 """The trash (feature 005 slice 1, T026; spec FR-39 to FR-41; contracts/recover-cli.md § `undo --trash`).
 
-Fed here through `guard trash-put`, the entry point every guard design uses; what calls it in the agent's
-shell is FOR-MENTOR Item 22's. The deleting command is the real `rm` (cross-stack P005), and what is put
-back is compared by the test's own walk (P004).
+Fed here through `guard trash-put`, the trash's entry point; in the agent's shell the guarded `rm` and
+`git clean` feed it (FR-45; tests/unit/test_guard.py). The deleting command is the real `rm` (cross-stack
+P005), and what is put back is compared by the test's own walk (P004).
 """
 
 from __future__ import annotations

@@ -182,4 +182,32 @@ so a timeout names who holds it.
 ## R16 · The trash
 
 `<state>/trash/items/<id>.json` and `<state>/trash/objects/`; `guard trash-put PATH…` copies before the
-real delete; `undo --trash` lists and restores. What calls `trash-put` is Item 22's Q1/Q3.
+real delete; `undo --trash` lists and restores. What calls it is Item 22's: the guarded `rm` and
+`git clean` (R17).
+
+## R17 · The guards: what they cost, and what the depth bound costs to decide
+
+*(Cycle 3, after FOR-MENTOR Item 22's ruling.)* Measured on the code host, 2026-10-10, with the hook as
+BASH_ENV, the repository's guard under CPython 3.14.8 (the image's version), a 400-file git workspace,
+the state root on the same filesystem; 20 runs each (5 for `rm -r`), three sessions:
+
+| Command | Guarded | `command …` |
+|---|---|---|
+| `rm FILE` (trash, no snapshot) | 74–77 ms | 1 ms |
+| `rm -r DIR` (snapshot of the workspace, then trash) | 115–136 ms | — |
+| `git status --short` (no helper) | 3 ms | 3 ms |
+
+The helper's start (interpreter, `agentio`, `snapshot` loaded) is most of the single-file cost; the
+ruling accepts it for P5, and the depth bound keeps it out of every script's loop. The no-fork property
+of a shell's START is unchanged: the guard block is builtins only, and its ancestor walk reads
+`/proc/<pid>/stat` only in a bash that inherited the marker (tests/host/test_shell_env_hook.sh K13 and
+F still run the whole hook with forking impossible).
+
+One measurement session ran its loops unguarded (1 ms per `rm`, no trash items written) and was
+discarded; three reruns of the same script, one in a fresh directory, were guarded every time. The cause
+was not found. The units cover every path that defines or skips the functions (tests/unit/test_guard.py).
+
+**Exec'd shells.** bash runs the last simple command of a `-c` string by `exec`, so `bash -c 'bash -c …'`
+keeps one pid: the marker alone read it as the same shell sourcing the hook twice (found by the unit
+`test_a_bash_c_started_inside_the_agents_shell_is_not_guarded`). A non-exported `__timelike_guarded`,
+set where the functions are defined, tells the two apart.

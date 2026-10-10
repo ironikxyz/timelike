@@ -975,7 +975,13 @@ image.
 
 ## Item 22 — Feature 07 slice 1 (`005-recover`, Cycle 3): how the guards reach `rm` and `git` (blocks two criteria: the guards and the trash)
 
-**Status:** open. Raised 2026-10-10T05:15:03Z (read from the clock) on `modify/005-slice-1`, from send
+**Status:** closed 2026-10-10T09:22:40Z (read from the clock). Answered by the mentor beside the question,
+`../bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md` § Resolution: Q1 (a), bash functions,
+bounded to the agent's own shell (not the scripts it starts); Q2 yes, a `pre-push` step in 001's dispatcher, declared,
+plus `--no-verify` caught by the `git` function; Q3 as proposed; note 12 as read here, with a restore re-hashing what it
+writes. Built in T032 on `modify/005-slice-1` (005 spec FR-35a, FR-42 to FR-47, D-19). The text below is kept as raised.
+
+**Raised:** 2026-10-10T05:15:03Z (read from the clock) on `modify/005-slice-1`, from send
 `bridge/sends/07-rev11-20261010-050829.md`, seams 4, 5 and 7. The send asks for this item before the guards are
 built, where a decision would put a timelike wrapper in front of a standard command name or change another
 feature's contract. Both apply.

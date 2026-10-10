@@ -13,7 +13,10 @@ Scope and limits, stated rather than implied (T2):
 - every `.git` is out of scope at any depth: never captured, restored, removed or followed (revision 8);
 - beyond the caps a snapshot is partial and names each excluded file and why, or (entry cap) refused;
   the size cap counts the bytes a snapshot adds to the store, after deduplication (revision 11);
-- "taken" is said only after the record and every object it names are read back and re-hashed.
+- "taken" is said only after the record is read back and every object new to this snapshot is
+  re-hashed; an object the last verified snapshot already proved (an unchanged file) is checked for
+  presence, type and size. A restore re-hashes every object it will write before writing any of it
+  (stack note 12 as the mentor read it for Item 22).
 
 No git is run and nothing is hard-linked. Design: .specswarm/features/005-recover/ (spec, research
 R1–R9, data-model.md, contracts/recover-cli.md).
@@ -501,11 +504,14 @@ class Store:
     def write_record(self, rec: dict[str, Any]) -> None:
         self._write_atomic(self.record_path(rec["id"]), json.dumps(rec, indent=1) + "\n", 0o600)
 
-    def verify(self, rec: dict[str, Any]) -> str | None:
-        """Can `rec` be restored? Read its record back, and re-hash every object it names (stack note 12).
+    def verify(self, rec: dict[str, Any], proven: frozenset[str] = frozenset()) -> str | None:
+        """Can `rec` be restored? Read its record back and check every object it names (stack note 12).
 
-        Returns what is wrong, or None. A damaged object is removed, so the next snapshot stores it again
-        instead of trusting the copy `put` found in place.
+        An object in `proven` (one the last verified snapshot already re-hashed: an unchanged file found
+        through the stat cache) is checked for presence, type and size; every other object is re-hashed.
+        A restore re-hashes what it writes before writing any of it (check_objects), so a proven object
+        that rotted since is caught there (Item 22, note 12). Returns what is wrong, or None. A damaged
+        object is removed, so the next snapshot stores it again instead of trusting the copy in place.
         """
         try:
             back = json.loads(self.record_path(rec["id"]).read_text())
@@ -525,7 +531,8 @@ class Store:
             obj = self.object_path(sha)
             try:
                 st = os.lstat(obj)
-                ok = stat.S_ISREG(st.st_mode) and st.st_size == size and file_sha(str(obj)) == sha
+                ok = stat.S_ISREG(st.st_mode) and st.st_size == size
+                ok = ok and (sha in proven or file_sha(str(obj)) == sha)
             except OSError as err:
                 return f"object {sha[:12]} cannot be read ({err.strerror or err})"
             if not ok:
@@ -793,9 +800,12 @@ def _exclusion(rel: str, size: int, reason: str) -> dict[str, Any]:
     return {"path": rel, "size": size, "reason": reason}
 
 
-def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | None) -> dict[str, Any]:
+def take_locked(
+    store: Store, caps: dict[str, int], reason: str, label: str | None, extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Walk, choose, copy, record, verify. The caller holds the store's lock and has created the store.
 
+    `extra` adds fields to the record (a guard's `push`: the remote ref's prior commit, FR-44).
     Raises Outcome when the snapshot cannot be shown restorable: then it is not taken (no record stays).
     """
     try:
@@ -823,7 +833,8 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
             else:
                 candidates.append((rel, e["size"]))
     # FR-35: a file whose size, mtime, ctime and inode match the last take, and whose object is still in
-    # the store, is recorded without being read. Verification (below) still re-hashes every object.
+    # the store, is recorded without being read. The last take re-hashed that object before it wrote the
+    # cache, so verification (below) checks it for presence, type and size only (note 12, Item 22).
     old_cache = store.statcache()
     known: dict[str, str] = {}
     for rel, e in entries.items():
@@ -884,9 +895,9 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
     }
     if needed is not None:
         rec["size_cap_needed"] = needed
+    rec.update(extra or {})
     store.write_record(rec)
-    store.write_statcache(new_cache)
-    problem = store.verify(rec)
+    problem = store.verify(rec, frozenset(known.values()))
     if problem is not None:
         with contextlib.suppress(OSError):
             store.record_path(rec["id"]).unlink()
@@ -896,6 +907,7 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
             f"run snapshot again; if this repeats, the store {store.path} is damaged:"
             " remove it and take a new snapshot",
         )
+    store.write_statcache(new_cache)  # only a verified take's objects may be trusted by the next one
     return rec
 
 
@@ -1232,6 +1244,40 @@ def _restore(store: Store, ws: str, e: Entry) -> None:
     os.replace(tmp, target)  # rename replaces a symlink at the target, never follows it
 
 
+def check_objects(store: Store, files: list[Entry], what: str) -> None:
+    """Re-hash every object a restore will write, before it writes any (note 12's condition, Item 22).
+
+    A mismatch refuses the whole restore, names the object and the path it was for, and removes the
+    object so the next snapshot of that content stores it again. Nothing has been written.
+    """
+    seen: set[str] = set()
+    for e in sorted(files, key=lambda e: e["path"]):
+        sha = e["sha256"]
+        if sha in seen:
+            continue
+        seen.add(sha)
+        obj = store.object_path(sha)
+        try:
+            st = os.lstat(obj)
+            ok = stat.S_ISREG(st.st_mode) and st.st_size == e["size"] and file_sha(str(obj)) == sha
+        except OSError as err:
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"{what} refused: object {sha[:12]} (for {e['path']}) cannot be read"
+                f" ({err.strerror or err}); nothing was changed",
+                "the store has lost that content: take a new snapshot, or restore another one",
+            ) from None
+        if not ok:
+            with contextlib.suppress(OSError):
+                obj.unlink()
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"{what} refused: object {sha[:12]} (for {e['path']}) does not match its hash"
+                " (removed; the next snapshot stores that content again); nothing was changed",
+                "restore another snapshot, or take a new one",
+            )
+
+
 def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -> None:
     snap = {e["path"]: e for e in rec["entries"]}
     removals = [ch for ch in plan if ch["change"] == "remove"]
@@ -1253,7 +1299,7 @@ def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -
 # ── the trash (FR-39 to FR-41, D-18) ──────────────────────────────────────────────────────────
 # What a delete removes, kept before it happens: <state root>/trash/items/<id>.json and the content,
 # deduplicated, in trash/objects/. Not per workspace: a deleted path anywhere the agent owns is kept.
-# What feeds it (the guards) is FOR-MENTOR Item 22's; `guard trash-put` is the entry point either way.
+# What feeds it: the guards in front of `rm` and `git clean` (FR-42, FR-45), through `guard`.
 
 ENV_TRASH_MAX_AGE_DAYS = "TIMELIKE_TRASH_MAX_AGE_DAYS"
 ENV_TRASH_MAX_BYTES = "TIMELIKE_TRASH_MAX_BYTES"
@@ -1553,6 +1599,9 @@ def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> a
             ]
         return agentio.confirm_required(ctx, target=target, scope=scope, plan=plan)
     with trash.lock():
+        check_objects(
+            trash, [e for e in item["entries"] if e["kind"] == "file"], f"put back of trash item {item['id']}"
+        )
         _put_back(trash, item)
         left = _put_back_differences(item)
     if left:
@@ -1656,6 +1705,12 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
             return agentio.Result(
                 ws, scope, f"nothing to restore: the workspace matches snapshot {ident}", data={"id": ident}
             )
+        snap = {e["path"]: e for e in rec["entries"]}
+        check_objects(
+            store,
+            [snap[ch["path"]] for ch in plan if ch["change"] == "restore" and ch["kind"] == "file"],
+            f"restore of snapshot {ident}",
+        )
         try:
             before = take_locked(store, caps_from_env(), f"{SAFETY_PREFIX}{ident}", None)
         except Outcome as o:

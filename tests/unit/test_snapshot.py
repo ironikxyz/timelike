@@ -637,14 +637,18 @@ def test_over_the_cap_files_sharing_content_are_left_out_together_largest_first(
 
 
 def test_taken_follows_a_check_that_every_stored_object_reads_back_by_its_hash(lab: Lab) -> None:
-    """Condition 4: plant a damaged object where `put` will find it and trust it. The re-hash catches
-    it: no snapshot is taken or listed, the damaged object is removed, and the next snapshot succeeds."""
+    """Condition 4, as Item 22's ruling on note 12 reads it: an object NEW to a snapshot is re-hashed.
+    Plant a damaged object where `put` will find it and trust it, for a file the stat cache cannot vouch
+    for (its mtime moved). The re-hash catches it: no snapshot is taken or listed, the damaged object is
+    removed, and the next snapshot succeeds."""
     write(lab.ws / "a.txt", b"real content\n")
     digest = hashlib.sha256(b"real content\n").hexdigest()
     take(lab)  # creates the store; snapshot 1 is sound
     obj = lab.store() / "objects" / digest[:2] / digest
     obj.chmod(0o600)
     obj.write_bytes(b"real contenX\n")  # same size, wrong bytes
+    st = os.stat(lab.ws / "a.txt")
+    os.utime(lab.ws / "a.txt", ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))  # not a stat-cache hit
 
     d = outcome(snap(lab, "--json"), 1, "take")
     assert d["verdict"].startswith("snapshot 2 not taken: it could not be verified restorable: object ")
@@ -655,6 +659,34 @@ def test_taken_follows_a_check_that_every_stored_object_reads_back_by_its_hash(l
     d3 = take(lab)
     assert d3["id"] == 3 and d3["verified"] is True  # ids are never reused (FR-11)
     assert obj.read_bytes() == b"real content\n"
+
+
+def test_a_proven_object_that_rotted_is_caught_by_the_restore_before_anything_is_written(lab: Lab) -> None:
+    """Note 12's condition (Item 22): a take checks an object the last verified take proved for
+    presence, type and size only, so a same-size rot passes it; the restore re-hashes every object it
+    will write BEFORE writing any, refuses naming the object, and writes nothing (no safety snapshot
+    either). The object is removed, so the next take of that content stores it again."""
+    write(lab.ws / "a.txt", b"real content\n")
+    write(lab.ws / "b.txt", b"other\n")
+    digest = hashlib.sha256(b"real content\n").hexdigest()
+    take(lab)
+    obj = lab.store() / "objects" / digest[:2] / digest
+    obj.chmod(0o600)
+    obj.write_bytes(b"real contenX\n")
+    assert take(lab)["id"] == 2  # unchanged files: proven, size and type only (the ruling's reading)
+
+    (lab.ws / "a.txt").unlink()
+    (lab.ws / "b.txt").write_bytes(b"changed\n")
+    before = tree(lab.ws)
+    d = outcome(undo(lab, "2", "--yes", "--json"), 1, "restore 2")
+    assert d["verdict"] == (
+        f"restore of snapshot 2 refused: object {digest[:12]} (for a.txt) does not match its hash"
+        " (removed; the next snapshot stores that content again); nothing was changed"
+    )
+    assert tree(lab.ws) == before and snapshot_ids(lab) == [2, 1] and not obj.exists()  # newest first
+
+    write(lab.ws / "a.txt", b"real content\n")
+    assert take(lab)["verified"] is True and obj.read_bytes() == b"real content\n"
 
 
 def test_only_the_per_file_limit_bit_names_only_its_variable(lab: Lab) -> None:

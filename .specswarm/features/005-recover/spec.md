@@ -373,7 +373,7 @@ above by declared copy. Revision 11 is already in `audited_against` (modify row 
 Slice 1's six criteria, verbatim from the send:
 - *"A recursive delete, a hard reset with uncommitted changes, a force push, and a clean of untracked
   files each take an automatic snapshot before running, and the verdict names it"* _(slice 1)_ —
-  **held for FOR-MENTOR Item 22** (Q1, Q2): how the guards reach `rm` and `git`.
+  built after FOR-MENTOR Item 22's ruling (FR-42 to FR-47; bash functions, the agent's own shell only).
 - *"A directory removed by a script (not by the shell's delete command) is restorable from the most
   recent automatic or scheduled snapshot"* _(slice 1)_.
 - *"A snapshot taken in one session is listed and restorable from a new session, and after the agent's
@@ -381,7 +381,7 @@ Slice 1's six criteria, verbatim from the send:
 - *"A restore first snapshots the workspace, so the restore itself can be undone, and its verdict names
   that snapshot"* _(slice 1; revision 11)_ — FR-19 already does this; re-established against the new store.
 - *"Deleted files are moved to a restorable trash that is purged by age and size limits"* _(slice 1)_ —
-  the trash's store, purge and restore are built here; **what feeds it is held for Item 22** (Q3).
+  the trash's store, purge and restore, fed by the guarded `rm` and `git clean` (FR-45; Item 22, Q3).
 - *DEMO: "the Agent runs a guarded destructive command, a snapshot is taken automatically, and the Agent
   restores from it"* (D16, Manual) _(slice 1)_.
 
@@ -474,8 +474,15 @@ each workspace is never removed. The verdict names each snapshot it dropped.
   and read as 300.
 - **FR-35** **Unchanged files are not re-read** (P2): each store keeps a stat cache (path → size,
   mtime, ctime, inode, sha256) from its last take. A file whose stat matches and whose object is in the
-  store is recorded without being read. Verification (FR-9, stack note 12) still re-hashes every object
-  the record names. The cost is measured and reported (research R11).
+  store is recorded without being read. The cost is measured and reported (research R11).
+- **FR-35a** **What "taken" verifies** (stack note 12 as the mentor read it for Item 22): the record is
+  read back, every object **new to this snapshot** is re-hashed, and an object the last verified take
+  already proved (an unchanged file found through FR-35's cache) is checked for presence, type and size
+  only. The cache is written only after a take verifies, so it never vouches for an unverified object.
+  **A restore re-hashes every object it will write before writing any of it** (`undo ID --yes` and
+  `undo --trash ID --yes`): a mismatch refuses the whole restore, names the object and its path, removes
+  the object (the next snapshot of that content stores it again), and nothing is written. "Taken" is
+  therefore not a full re-hash of the store; "restorable" is checked where it is used.
 
 **Purge (seam 8)**
 - **FR-36** Every take (on demand, scheduled, safety, and later the guards') ends with a **purge** of the
@@ -508,17 +515,64 @@ each workspace is never removed. The verdict names each snapshot it dropped.
   (`TIMELIKE_TRASH_MAX_BYTES`, default 1 GiB), oldest first, never the item just written, naming what it
   dropped. It is never emptied silently.
 
-**Held for Item 22** (built after the ruling): what stands in front of `rm`, `git reset --hard` and
-`git clean` (Q1); the `pre-push` record of a force push (Q2); what feeds the trash (Q3); their
-announcement and `type -a` lines.
+**The guards (seams 4 and 5; criterion 1; FOR-MENTOR Item 22, answered in
+`bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md`)**
+- **FR-42** Bash **functions** named `rm` and `git`, defined by `/etc/timelike/shell-env.bash` (not
+  wrappers on PATH, not a DEBUG trap: Q1 (a)). Before a guarded command they run
+  `/opt/timelike/libexec/guard` by its absolute path (P002); then the **real** command runs, last, so its
+  output and exit code are its own. Nothing is ever blocked: what the guard cannot do (a refused
+  workspace, a busy store, a missing helper) is one stderr line, and the command still runs. Any other
+  command line (`git status`, `rm --help`) runs at once, its arguments read with builtins only.
+- **FR-43** **What is guarded, and the snapshot.** A recursive `rm` (`-r`, `-R`, `--recursive`), or an
+  `rm` whose options the guard cannot read ("when in doubt"), snapshots the workspace each existing
+  operand belongs to (the operand itself when it holds `.git`, else its nearest ancestor holding one,
+  else the shell's own workspace when the operand is inside it), once per workspace. `git reset --hard`
+  snapshots the worktree when `git status` shows uncommitted changes to tracked files (or cannot say).
+  `git clean` (not `-n`, and not refused by `clean.requireForce`) snapshots the worktree. A git command
+  line with a git option the guard cannot read snapshots the shell's workspace. The snapshot's reason is
+  `before <command>` (the command cut at 60 characters), and its line is
+  `timelike: snapshot <id> of <ws> taken before <command>: undo <id> --yes puts the workspace back`, or
+  `timelike: no snapshot of <ws> before <command>: <why>`. `undo --yes` picks it as the newest.
+- **FR-44** **A force push** (seam 5). A `pre-push` step in 001's hook dispatcher, before the
+  repository's own hook (a change to 001's contract, declared): for each ref git is about to update
+  that is not a fast-forward of the remote's prior commit (or deletes it, or whose prior commit git
+  cannot place), one snapshot of the worktree records `push: [{remote, ref, prior, source, deleted,
+  local_ref}]`, and a line per ref says `timelike: forced push: <remote> <ref> was <prior sha>; put it back
+  with: git push --force <remote> <prior sha>:<ref>`. The prior commit is the one git itself read from
+  the remote for this push. The step never fails the push, and the repository's hook reads git's lines
+  as before. `git push --no-verify` with a force (`-f`, `--force`, `--force-with-lease`, `--mirror`,
+  `--delete`, a `+` or `:` refspec) skips that hook, so the `git` function records it instead, from the
+  remote-tracking ref, and the line says the ref may be stale. Exactly one snapshot per forced push. A
+  remote given as a URL is recorded without any user or password in it (P4).
+- **FR-45** **What feeds the trash** (Q3): every file a guarded `rm` deletes, recursive or not, and every
+  file a guarded `git clean` deletes (the paths its own `-n` lists), copied before the real command
+  deletes them. Paths outside any workspace go in too. Never kept: `/`, the home directory or an
+  ancestor of it, and anything holding or inside the state root (named). A directory `rm` will not
+  remove (no `-r`, and not `-d` on an empty one) is not kept. A file the trash cannot take is still
+  deleted, and named: up to 5 `not kept:` lines, then a count.
+- **FR-46** **Depth bound** (the ruling): the guards are the agent's own shell's. They are defined only
+  in a shell started with `-c` or an interactive one, never in a script run from a file. A guarded `-c`
+  shell exports `TIMELIKE_GUARD_SHELL=<its pid>`; a bash that inherits it and finds that shell among its
+  ancestors (`/proc/<pid>/stat`, builtin reads) defines nothing, and neither does a bash the guarded shell
+  exec'd in its own place. A marker naming a shell that is not an ancestor does not disarm the next
+  top-level `bash -c`. An interactive shell sets no marker, so a harness started from one gets guarded
+  shells of its own. A script's deletes are the scheduled snapshot's case (FR-32), and their exit codes
+  are their own.
+- **FR-47** `type -a rm` and `type -a git` show the function first, then the binary; `command rm` and
+  `command git` are the escape. The announcement says what is guarded, how to see and skip it, and that
+  scripts are covered by the scheduled snapshot instead (007's announcement contract, declared).
 
 ### Success criteria (slice 1)
 
 One test per criterion, named after its distinguishing text, bats in the image per invocation style, and
 pytest on the host where the host can reach it.
 - **SC-6** *"A recursive delete, a hard reset with uncommitted changes, a force push, and a clean of
-  untracked files each take an automatic snapshot before running, and the verdict names it"* — after
-  Item 22.
+  untracked files each take an automatic snapshot before running, and the verdict names it"* — the real
+  `rm -rf`, `git reset --hard`, `git clean -fdx` and `git push --force` (and `--no-verify --force`)
+  typed into the agent's shell against a real repository and a real bare remote; each line names its
+  snapshot, the store holds exactly one, and `undo` (or the printed push) puts things back, compared by
+  the test. A script the shell starts is not guarded, keeps its exit code, and is restored from the
+  scheduled snapshot; a decoy on PATH is never run; `type -a` shows the functions.
 - **SC-7** *"A directory removed by a script (not by the shell's delete command) is restorable from the
   most recent automatic or scheduled snapshot"* — a real Python script removes a directory with
   `shutil.rmtree` under `bash -c` and `bash -lc` with `TIMELIKE_SNAPSHOT_INTERVAL=0`; the scheduled
@@ -531,7 +585,8 @@ pytest on the host where the host can reach it.
   verdict names that snapshot"* — `undo --yes` names `S`; `undo S --yes` returns the workspace to the
   state the first restore replaced, compared by the test.
 - **SC-10** *"Deleted files are moved to a restorable trash that is purged by age and size limits"* —
-  the store, purge and restore through the helper now; through the guards after Item 22.
+  fed by the agent's own `rm` (FR-45); put back and compared by the test; purged by size and by age, each
+  purge named.
 - **SC-11** D16, Manual: observed by the operator after the lane.
 
 Further, from the decisions: the persistence line (FR-27) in a container without the volume and its
@@ -565,8 +620,18 @@ newest of a workspace, a busy store skipped rather than waited for (P2).
 beyond naming a live holder.
 
 **D-18 · The trash, fed per Item 22.** Its store, purge and restore are independent of what stands in
-front of `rm`, and are built now through `/opt/timelike/libexec/guard trash-put`. The restore lives on
-`undo` (`undo --trash`), so the destructive verb keeps one name (D-6).
+front of `rm`; `/opt/timelike/libexec/guard trash-put` is its entry point, and the guarded `rm` and
+`git clean` feed it (FR-45). The restore lives on `undo` (`undo --trash`), so the destructive verb keeps
+one name (D-6).
+
+**D-19 · The guards, per Item 22's ruling.** Functions over PATH wrappers: they answer only in the shells
+timelike's hook reaches, never a build tool's own `rm -rf`; `type -a` shows them; `command rm` is a
+visible escape. Bound to the agent's own shell, so a script's loop of deletes never forks the helper per
+file (the cost (b) was rejected for). The force push is recorded by git's own `pre-push` input (the
+remote's prior commit, read by git), with `--no-verify` caught by the function. Copy-then-delete keeps
+the real command's behaviour and exit code. Measured on the host (R17): a guarded single-file `rm` costs
+about 75 ms, a guarded `rm -r` in a 400-file workspace about 115–135 ms, `git status` through the
+function nothing measurable.
 
 **Carried into this cycle:** FOR-MENTOR Item 20 (`symbols` index to the state root, a second session
 finds it warm); 001's rule 10 contract text (`output-contract.md`).

@@ -33,7 +33,7 @@ except by a confirmed restore.
 |---|---|---|
 | `v` | int | record format, `1` |
 | `id` | int | the identifier |
-| `reason` | string | `on demand`, or `before undo <id>` (slice 1 adds more) |
+| `reason` | string | `on demand`, `before undo <id>`, `scheduled` *(Cycle 3)*, or `before <command>` from a guard *(Cycle 3, FR-43)* |
 | `label` | string or null | `-m TEXT` |
 | `workspace` | string | the workspace's real path |
 | `taken_at` | string | ISO 8601 UTC; shown only with `--verbose` (rule 11) |
@@ -46,6 +46,8 @@ except by a confirmed restore.
 | `excluded_bytes` | int | total size of excluded files |
 | `partial` | bool | `excluded` is not empty |
 | `caps` | object | `{max_bytes, max_file_bytes, max_entries}` in force when taken |
+| `session`, `agent` | string, string or null | who took it *(Cycle 3, FR-31)* |
+| `push` | list | only on a snapshot taken before a forced push *(Cycle 3, FR-44)*: `{remote, ref, prior, source}` per ref, plus `deleted` and `local_ref` from the pre-push step; `prior` is the remote's commit before the push (null when not known); `remote` never carries a user or password |
 
 **Entry:** `{path, kind}` plus, by kind:
 - `file`: `sha256`, `size`, `mode`;

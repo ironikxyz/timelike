@@ -189,7 +189,7 @@ SC-10), **US9** guards (SC-6) — **held for FOR-MENTOR Item 22**.
   recovery state lives and what a plain `docker run` means; the `symbols` line corrected. The `## README
   status` block **only if all five Automated criteria are met** (not while Item 22 holds two).
 - [X] T031 Host lane (ruff, mypy, shellcheck, `make test-host`), the cycle report § Cycle 3.
-- [ ] T032 [US9] The guards, the force-push record, what feeds the trash, SC-6's e2e — on Item 22's ruling
+- [X] T032 [US9] The guards, the force-push record, what feeds the trash, SC-6's e2e — on Item 22's ruling
   (`bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md`): bash functions `rm` and `git` in
   `image/rootfs/etc/timelike/shell-env.bash`, defined in the agent's own shell only (a marker each bash they start
   inherits); `/opt/timelike/libexec/guard` does the work (a guarded snapshot before `rm -r`, `git reset --hard`,

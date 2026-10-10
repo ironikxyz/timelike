@@ -115,7 +115,9 @@ in_rc() {
   remove_throwaway "$RC_NAME"
   start_throwaway "${RC_NAME}-2" -v "${RC_STATE}:/var/lib/timelike" -v "${RC_HOME}:/home/agent" ||
     flunk "cannot start the recreated container"
-  in_rc "${RC_NAME}-2" 'cd /home/agent/proj && rm -rf src tools && echo new >extra.txt && snapshot list --text'
+  # `command rm`: this cell is about the recreate, so the guard's own snapshot before rm -rf (SC-6) is kept
+  # out of the count it reads
+  in_rc "${RC_NAME}-2" 'cd /home/agent/proj && command rm -rf src tools && echo new >extra.txt && snapshot list --text'
   [[ "$status" == 0 && "${lines[1]}" == "verdict: 1 snapshots" ]] || flunk "the recreated container does not list it"
   in_rc "${RC_NAME}-2" 'cd /home/agent/proj && undo 1 --yes --text'
   [[ "$status" == 0 && "${lines[1]}" == "verdict: restored to snapshot 1: "* ]] || flunk "the restore after recreate"

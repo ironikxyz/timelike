@@ -207,3 +207,41 @@ per workspace.
 
 Taken by `/opt/timelike/libexec/scheduled-snapshot <workspace>` from the shell-start check. Silent when
 complete; one stderr line when partial or refused (FR-33). Its record has reason `scheduled`.
+
+### What "taken" and a restore verify (FR-35a; Item 22's ruling on stack note 12)
+
+`taken` (and `verified` in the data) means: the record read back, every object new to this snapshot
+re-hashed, and every object the last verified take proved (an unchanged file, through the stat cache)
+present as a regular file of its size. A restore (`undo ID --yes`, `undo --trash ID --yes`) re-hashes
+every object it will write before it writes any: a mismatch is exit 1,
+`restore of snapshot <id> refused: object <sha12> (for <path>) does not match its hash (removed; the next
+snapshot stores that content again); nothing was changed` (for the trash: `put back of trash item <id>
+refused: …`), with nothing written and no safety snapshot taken.
+
+### The guards (FR-42 to FR-47; not commands)
+
+Bash functions `rm` and `git` in the agent's own shell (`type -a rm git`; `command rm` skips them). Each
+prints on stderr, before the real command runs and with the real command's output and exit code
+unchanged:
+```
+timelike: snapshot <id> of <ws> taken before <command>: undo <id> --yes puts the workspace back
+timelike: no snapshot of <ws> before <command>: <why>
+timelike: no snapshot before <command>: <path> is in no workspace (the trash keeps it)
+timelike: trash item <id> keeps <n> files (<size>): undo --trash <id> --yes puts them back
+timelike: not kept: <path> (<why>)                      (up to 5, then: not kept: <k> more (undo --trash <id> --dry-run lists them))
+timelike: forced push: <remote> <ref> was <sha>[ (from the remote-tracking ref, which may be stale)]; put it back with: git push --force <remote> <sha>:<ref>
+timelike: not guarded: <helper> is missing: no snapshot[, no trash]
+```
+plus the not-persistent line (FR-27) and any `purged:` line (FR-37, FR-41). `<command>` is the command
+as typed, cut at 60 characters with `…`; the snapshot's reason is `before <command>`.
+
+| Command | Snapshot | Trash |
+|---|---|---|
+| `rm` with `-r`/`-R`/`--recursive`, or an option the guard cannot read | each operand's workspace, once | everything it deletes |
+| `rm` otherwise | none | the files and links it deletes (an empty dir with `-d`) |
+| `git reset --hard` | the worktree, when tracked changes are uncommitted (or status fails) | none |
+| `git clean` (not `-n`; `-f`, `-i`, or `clean.requireForce=false`) | the worktree | every path its `-n` lists |
+| `git push` forcing a ref (pre-push step; `--no-verify`: the function) | the worktree, once per push | none |
+| a git option before the subcommand the guard cannot read | the shell's workspace | none |
+| anything else | none, and no fork | none |
+

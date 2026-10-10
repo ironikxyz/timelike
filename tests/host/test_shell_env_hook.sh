@@ -216,15 +216,21 @@ q_out="$(cd "${tmp}" && env -i PATH=/nonexistent HOME="${tmp}" TIMELIKE_CGROUP_C
     [ -z "${!v+x}" ] || left+="$v "
   done
   printf "leftover_vars=%s\n" "${left:-none}"
-  # command_not_found_handle stays defined on purpose (feature 007 slice 1, spec FR-14); nothing else may.
-  funcs="$(declare -F)"
-  [ "${funcs}" != "${funcs/declare -f command_not_found_handle/}" ] && printf "cnf_handler=defined\n" || printf "cnf_handler=absent\n"
-  funcs="${funcs/declare -f command_not_found_handle/}"
-  printf "leftover_funcs=%s\n" "${funcs:-none}"
+  # command_not_found_handle stays defined on purpose (feature 007 slice 1, spec FR-14), and so do the
+  # guards rm and git in a -c shell (feature 005 slice 1, FR-42); nothing else may.
+  cnf=absent g="" funcs=""
+  while read -r _ _ f; do
+    case "$f" in
+      command_not_found_handle) cnf=defined ;;
+      rm | git) g+="$f " ;;
+      *) funcs+="$f " ;;
+    esac
+  done <<<"$(declare -F)"
+  printf "cnf_handler=%s\nguards=%s\nleftover_funcs=%s\n" "$cnf" "${g% }" "${funcs:-none}"
 ' </dev/null 2>&1)" || true
 check "Q1 sourcing twice equals sourcing once; errexit/nounset/pipefail survive unchanged; silent, status 0" \
   "${q_out}" once=status=0 idempotent=yes options=unchanged
-check "Q2 no local variable or function is left behind but command_not_found_handle (007 s1, kept on purpose)" "${q_out}" leftover_vars=none leftover_funcs=none cnf_handler=defined
+check "Q2 no local variable or function is left behind but command_not_found_handle (007 s1) and the guards rm and git (005 s1), kept on purpose" "${q_out}" leftover_vars=none leftover_funcs=none cnf_handler=defined "guards=git rm"
 
 # Silent and non-fatal even when both sources are missing or are directories, under -eux.
 q_out="$(cd "${tmp}" && env -i PATH=/nonexistent HOME="${tmp}" TIMELIKE_CGROUP_CPU_MAX="${tmp}" \
@@ -245,7 +251,12 @@ one="$(cd "${tmp}" && env -i PATH=/nonexistent HOME="${tmp}" TIMELIKE_CGROUP_CPU
 # shellcheck disable=SC2016 # expanded by the bash under test
 two="$(cd "${tmp}" && env -i PATH=/nonexistent HOME="${tmp}" TIMELIKE_CGROUP_CPU_MAX="${cm}" \
   TIMELIKE_PROC_STATUS="${st}" A_KEY=1 BASH_ENV="${hook}" HOOK="${hook}" "${BASH_BIN}" -c '. "$HOOK"; unset HOOK; declare -px' </dev/null 2>&1)"
-if [[ "${one}" == "${two}" ]]; then
+# The guards' marker holds each shell's own pid (005 slice 1), which differs between the two processes:
+# compared as present, with the pid itself left out.
+for v in one two; do
+  [[ "${!v}" =~ TIMELIKE_GUARD_SHELL=\"[0-9]+\" ]] && printf -v "$v" '%s' "${!v/"${BASH_REMATCH[0]}"/TIMELIKE_GUARD_SHELL=<pid>}"
+done
+if [[ "${one}" == "${two}" && "${one}" == *"TIMELIKE_GUARD_SHELL=<pid>"* ]]; then
   tap 0 "Q4 BASH_ENV plus an explicit source (the bash -lc path) equals BASH_ENV alone"
 else
   tap 1 "Q4 BASH_ENV plus an explicit source differs from BASH_ENV alone"
