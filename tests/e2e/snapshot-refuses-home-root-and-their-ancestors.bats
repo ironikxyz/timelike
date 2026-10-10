@@ -16,8 +16,9 @@
 #   /      → "is the filesystem root" (it also contains the store under /tmp; root is checked first,
 #            as FR-2 precedes FR-3 and the contract lists it first)
 #   /home  → "is an ancestor of your home directory"
-# Nothing is written to the store: no entry exists under <scratch>/<session>/snapshots/ (the session
-# event is agentio's and lives beside it, not in it). The test's own TIMELIKE_SCRATCH_ROOT keeps that
+# Nothing is written to the store: no entry exists under <scratch>/<session>/snapshots/ (slice 0's place)
+# or under the test's own state root's workspaces/ (slice 1's; the session event is agentio's and lives
+# in the scratch, not in either). The test's own TIMELIKE_SCRATCH_ROOT keeps that
 # measurement to this test.
 # Cells: bash -c and bash -lc, `notty`.
 
@@ -30,18 +31,20 @@ setup_file() {
 setup() {
   WORK="$(container_tmpdir frrefuse)"
   SCRATCH="${WORK}/scratch"
+  STATE="$(state_root_dir frrefuse)"  # slice 1: the store is in the state root (FR-23 as amended)
   HOME_REAL="$(exec_plain sh -c 'realpath "$HOME"')"
   [[ -n "$HOME_REAL" && "$HOME_REAL" != / ]] || { echo "agent HOME resolves to '${HOME_REAL}'" >&2; return 1; }
 }
 
 teardown() {
   container_rm "$WORK"
+  state_root_rm "$STATE"
 }
 
 # in_dir STYLE DIR CMD — run CMD after `cd DIR` (DIR is expanded by the container's shell, so "$HOME"
 # is the agent's), with this test's store; stderr to $WORK/stderr.
 in_dir() {
-  run_in -e "TIMELIKE_SCRATCH_ROOT=${SCRATCH}" -e "TIMELIKE_SESSION=refuse" "$1" notty \
+  run_in -e "TIMELIKE_SCRATCH_ROOT=${SCRATCH}" -e "TIMELIKE_STATE_ROOT=${STATE}" -e "TIMELIKE_SESSION=refuse" "$1" notty \
     "cd $2 && $3 2>'${WORK}/stderr'"
   assert_within 20
 }
@@ -57,6 +60,7 @@ flunk() {
 nothing_stored() {
   local found err
   found="$(exec_plain sh -c '[ -d "$1" ] || exit 0; find "$1" -path "*/snapshots/*" -print' found "$SCRATCH")"
+  found+="$(exec_plain sh -c '[ -d "$1" ] || exit 0; find "$1" -mindepth 1 -print' found "${STATE}/workspaces")"
   [[ -z "$found" ]] || flunk "the refused call wrote to the store: ${found}"
   err="$(exec_plain cat "${WORK}/stderr")"
   [[ -z "$err" ]] || flunk "a refusal is a result on stdout, but stderr carries: ${err}"

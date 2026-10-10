@@ -107,6 +107,10 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats \
   tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats \
   tests/e2e/snapshot-refuses-home-root-and-their-ancestors.bats \
+  tests/e2e/a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats \
+  tests/e2e/a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats \
+  tests/e2e/a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats \
+  tests/e2e/deleted-files-trash-restorable-and-purged-by-age-and-size.bats \
   tests/e2e/fixtures/bounded-read.sh \
   tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats \
   tests/e2e/view-range-context-missing-file-and-binary.bats \

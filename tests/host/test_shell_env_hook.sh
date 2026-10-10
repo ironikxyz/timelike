@@ -417,6 +417,7 @@ fi
 # directory holding .git under ${tmp}/kws, never HOME; the state root is ${tmp}/kstate.
 mkdir -p "${tmp}/kws/proj/.git" "${tmp}/kws/proj/sub" "${tmp}/kstate/stamps" "${tmp}/khome"
 khelper="${tmp}/khelper"
+# shellcheck disable=SC2016 # the fake helper's own text: $1 expands when it runs
 printf '#!/bin/bash\nprintf "%%s\\n" "$1" >>"%s"\necho "helper-stderr" >&2\n' "${tmp}/kcalls" >"${khelper}"
 chmod 755 "${khelper}"
 kenc="${tmp}/kws/proj"
@@ -454,6 +455,7 @@ check "K11 a state root that does not exist: not taken (no fork, nothing to stam
   "$(krun "${tmp}/kws/proj" ':' TIMELIKE_SNAPSHOT_INTERVAL=0 TIMELIKE_STATE_ROOT="${tmp}/absent-state")" calls=0
 # the bash -lc path sources the file twice (profile.d, then BASH_ENV): once only
 : >"${tmp}/kcalls"
+# shellcheck disable=SC2016 # expanded by the bash under test
 (cd "${tmp}/kws/proj" && env -i PATH=/usr/bin:/bin HOME="${tmp}/khome" BASH_ENV="${hook_real}" HOOK="${hook_real}" \
   TIMELIKE_STATE_ROOT="${tmp}/kstate" TIMELIKE_SCHEDULED_SNAPSHOT="${khelper}" TIMELIKE_SNAPSHOT_INTERVAL=0 \
   "${BASH_BIN}" -c '. "$HOOK"; :' </dev/null >/dev/null 2>&1) || true

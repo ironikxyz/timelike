@@ -315,3 +315,16 @@ FLAGGED: 004's e2e cell "nothing of Adele's is mounted into the agent: no mounts
 ASSUMED: the build's root-run steps must leave /var/lib/timelike empty (a root-owned VERSION would lock the agent out); checked in the announce RUN, as /tmp/timelike already is (confidence: high)
 ABSENT: any change to the vanilla image (P6); a build (no Docker here: the Dockerfile parses, 58 instructions, 0 unknown, by BuildKit's parser through the PyPI dockerfile package)
 Verification: test_state_root_image.py 6 passed; test_agent_runtimes.py unchanged (97 with it); the cell's regex checked in bash: matches the one volume, rejects a second mount
+SCOPE: out — tests/e2e/adele-isolation-grant-file-and-extend-unreachable-from-agent.bats, tests/unit/test_state_root_image.py (2 of 4 changed files) (task has FLAGGED: yes)
+
+### T028: e2e — SC-7, SC-8 (new session; recreate; persistence), SC-9, SC-10's restore and purge; slice 0's cells on per-test state roots
+**Started:** 2026-10-10T06:53:16Z (T027's commit time, from git) | **Completed:** 2026-10-10T05:57:59Z
+
+INHERITED: the state root, the hook, the trash helper, the volume — from T020–T027 (confidence: high)
+FLAGGED: the e2e harness (exec_in) runs every cell with TIMELIKE_SNAPSHOT_INTERVAL=off unless the cell sets it; chose that over leaving scheduled snapshots on in every feature's cells, because they shift snapshot ids in slice 0's cells and add up to 300 ms, and possibly a stderr line, to timed cells of features that don't test recovery. The scheduled snapshot's own cells set it, the default interval included. Stated in the cycle report as a gap: other features' cells don't run with it on (confidence: medium)
+FLAGGED: per-test state roots live on the agent's state volume (/var/lib/timelike/e2e-*), so slice 0's cells see the configuration compose gives the agent (no not-persistent line) and are isolated from each other; the slice-0 files change only their setup, env and teardown (and the refusal file's "nothing stored" check also reads the state root) (confidence: high)
+FLAGGED: SC-8's recreate is a throwaway container from the verified image on two FRESH named volumes (state root and /home/agent), removed and started again, never a simulation inside one container; the fresh state volume also shows the image's ownership reaching it (lore Q003) (confidence: high)
+ASSUMED: python3 is on the agent's PATH (007 Cycle 4, D-12) for SC-7's script (confidence: high)
+DEFERRED: SC-6 (the guards) and SC-10's feed — Item 22. The SC-10 file says in its header that it is partial
+ABSENT: running any cell (no Docker here); a "command starting with undo takes none" cell (it could not set the shell's working directory without a leading cd, so it would have passed vacuously; host test K6/K7 covers the rule)
+Verification: bats 1.14.0 --count parses all (new: 4, 4, 2, 4; slice 0's and the adele file unchanged: 10, 4, 16, 10, 4, 5); shellcheck clean over every changed shell file, the new ones added to Makefile's SHELLCHECK_FILES; host hook test 57 of 57

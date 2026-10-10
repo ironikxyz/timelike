@@ -102,10 +102,17 @@ ms_to_s() {
 # Sets EXEC_ELAPSED_MS.
 exec_in() {
   local -a envs=()
+  local sched=default
   while [[ "${1:-}" == -e ]]; do
     envs+=(-e "$2")
+    [[ "$2" == TIMELIKE_SNAPSHOT_INTERVAL=* ]] && sched=given
     shift 2
   done
+  # Feature 005 slice 1: a bash started inside a workspace takes a scheduled snapshot when one is due
+  # (/etc/timelike/shell-env.bash, FR-32). Cells of other features measure their own behaviour, so the
+  # harness turns it off unless a cell sets TIMELIKE_SNAPSHOT_INTERVAL itself; the scheduled snapshot's
+  # own cells set it, the default interval included (a-directory-removed-by-a-script-*.bats).
+  [[ "$sched" == given ]] || envs=(-e TIMELIKE_SNAPSHOT_INTERVAL=off "${envs[@]}")
   local style="$1" tty="$2" cmd="$3"
   local -a shell docker_args
   mapfile -t shell < <(_shell_argv "$style") || return 2
@@ -256,6 +263,26 @@ container_tmpdir() {
   d="${d//$'\r'/}"
   [[ "$d" == /tmp/"$1".* ]] || { echo "mktemp in container returned '$d'" >&2; return 1; }
   printf '%s' "$d"
+}
+
+# state_root_dir NAME — a per-test state root on the agent's state volume (feature 005 slice 1, FR-25):
+# the test's own snapshot stores, isolated from every other test's, on the volume's filesystem, so a
+# result carries no not-persistent line (FR-27), as in the configuration compose.yaml gives the agent.
+state_root_dir() {
+  local d
+  d="$(exec_plain mktemp -d "/var/lib/timelike/e2e-$1.XXXXXX")" || return 1
+  d="${d//$'\r'/}"
+  [[ "$d" == /var/lib/timelike/e2e-"$1".* ]] || { echo "mktemp on the state volume returned '$d'" >&2; return 1; }
+  printf '%s' "$d"
+}
+
+# state_root_rm PATH... — remove per-test state roots (only /var/lib/timelike/e2e-*).
+state_root_rm() {
+  local p
+  for p in "$@"; do
+    [[ -n "$p" && "$p" == /var/lib/timelike/e2e-?* ]] || continue
+    exec_plain rm -rf -- "$p" >/dev/null 2>&1 || true
+  done
 }
 
 # container_rm PATH... — remove paths created by a test (only under /tmp).
