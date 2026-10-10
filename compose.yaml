@@ -42,7 +42,12 @@ services:
     init: true
     read_only: false
     command: ["sleep", "infinity"]
-    # Deliberately no volumes, no ports and no Docker socket (constitution H1: only Adele holds it).
+    # Deliberately no ports and no Docker socket (constitution H1: only Adele holds it). One volume, and
+    # only timelike's own: the agent's state root (feature 005 slice 1, FR-26; rule 10 at revision 11), so
+    # snapshots, the trash and caches survive a new session, a restart and a recreate. Nothing of Adele's.
+    # Removing it is the operator's explicit act (`docker volume rm timelike_timelike-state`).
+    volumes:
+      - timelike-state:/var/lib/timelike
     # The agent reaches Adele only through her request interface, on `adele-request` (spec FR-2). It
     # keeps the default network, with egress, until slice 2's allowlist (spec D-2).
     networks: [default, adele-request]
@@ -153,6 +158,7 @@ networks:
     internal: true
 
 volumes:
+  timelike-state:
   adele-state:
   standin-state:
   adele-secret:

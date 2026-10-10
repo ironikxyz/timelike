@@ -208,6 +208,10 @@ RUN chown -hR root:root /opt/timelike/git-hooks \
  && command -v timeout >/dev/null
 
 # --- 4. Users (step 5; data-model.md) ----------------------------------------------------------------
+# /var/lib/timelike is the agent's state root (feature 005 slice 1, FR-25, FR-26; rule 10 at revision 11):
+# created here owned by agent, 0700, because a fresh named volume mounted there takes the ownership and
+# mode of the image's directory on first mount (lore docker-compose Q003). Without a volume it is the
+# container's own directory, and the recovery tools say so on every result (FR-27).
 # adele: reserved placeholder identity (feature 12 replaces the fixture), no login shell.
 # agent: uid 1000, empty home (no /etc/skel dotfiles: no defaults may live in rc files, FR-1), no
 # supplementary groups. Fail loudly if the base image already uses either id (lore docker-compose Q003).
@@ -227,7 +231,9 @@ RUN for id in 1000 10001; do \
  && useradd --uid 1000 --gid agent --no-create-home --home-dir /home/agent \
       --shell /bin/bash --no-log-init agent \
  && install -d -o agent -g agent -m 0750 /home/agent \
+ && install -d -o agent -g agent -m 0700 /var/lib/timelike \
  && test "$(id -u agent):$(id -G agent)" = "1000:1000" \
+ && test "$(stat -c '%a %U:%G' /var/lib/timelike)" = "700 agent:agent" \
  && test "$(stat -c '%a %U:%G' /var/lib/adele)" = "700 adele:adele" \
  && test "$(stat -c '%a %U:%G' /var/lib/adele/fixture.secret)" = "600 adele:adele"
 
@@ -305,6 +311,7 @@ ENV PATH="/opt/timelike/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bi
     npm_config_yes="true" \
     NO_UPDATE_NOTIFIER="1" \
     BASH_ENV="/etc/timelike/shell-env.bash" \
+    TIMELIKE_STATE_ROOT="/var/lib/timelike" \
     TZ="UTC" \
     PYTHON_BASIC_REPL="1"
 
@@ -330,7 +337,8 @@ RUN scratch="$(mktemp -d)" \
  && rm -rf "${scratch}" \
  && chmod 0444 /etc/timelike/announcement.md \
  && test "$(wc -l < /etc/timelike/announcement.md)" -le 60 \
- && test ! -e /tmp/timelike
+ && test ! -e /tmp/timelike \
+ && test -z "$(ls -A /var/lib/timelike)"
 
 # --- 9. Run as the unprivileged agent (step 10) ------------------------------------------------------
 # The session journal's shell record (feature 009): copied after the last RUN, so no build step is

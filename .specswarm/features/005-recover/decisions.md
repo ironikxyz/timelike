@@ -305,3 +305,13 @@ ASSUMED: a file that would take the trash past its cap is named "not kept" by th
 DEFERRED: what calls `guard trash-put` in the agent's shell — FOR-MENTOR Item 22 (Q1, Q3)
 ABSENT: an e2e cell (T028); a restored item stays in the trash, so a second put-back is refused as "exists" (not removed on restore)
 Verification: test_trash.py 5 passed (kept and put back verified by the test's walk, modes and links included; never overwrites; unknown id exit 3; purge by size and age, named; over the cap named); undo units unchanged (help within 40 lines)
+SCOPE: out — tests/unit/test_trash.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T027: the image's state root and compose's named volume (FR-25, FR-26)
+**Started:** 2026-10-10T05:51:57Z | **Completed:** 2026-10-10T05:53:16Z
+
+INHERITED: TIMELIKE_STATE_ROOT and its default — from T020 (confidence: high)
+FLAGGED: 004's e2e cell "nothing of Adele's is mounted into the agent: no mounts at all" now requires exactly one mount, the volume timelike-state at /var/lib/timelike; chose to change its assertion, declared in the cell and here, over leaving it to fail, because revision 11 asks for the volume and the send says it does not cross H1; the cell's intent (nothing of Adele's) is kept and still checked (confidence: high) — another feature's test, so it goes in changed_other_features
+ASSUMED: the build's root-run steps must leave /var/lib/timelike empty (a root-owned VERSION would lock the agent out); checked in the announce RUN, as /tmp/timelike already is (confidence: high)
+ABSENT: any change to the vanilla image (P6); a build (no Docker here: the Dockerfile parses, 58 instructions, 0 unknown, by BuildKit's parser through the PyPI dockerfile package)
+Verification: test_state_root_image.py 6 passed; test_agent_runtimes.py unchanged (97 with it); the cell's regex checked in bash: matches the one volume, rejects a second mount
