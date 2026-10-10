@@ -122,3 +122,53 @@ changes, `git stash`, a repository hook, a nested repository), plus files the to
 contents themselves (`find`, `sha256sum`, `stat -c %a`, and a listing of `.git` with each file's
 checksum), never the tool's message (P004). A restore that should change nothing, and one that should
 change everything, are both tested.
+
+---
+
+# Cycle 3 — 07 slice 1
+
+## R10 · The state root, and how a tool knows it is persistent
+
+- **Decision:** `TIMELIKE_STATE_ROOT`, default `/var/lib/timelike`, created in the image owned by `agent`,
+  mode 0700; `compose.yaml` mounts the named volume `timelike-state` there. Persistent ⇔ the root's
+  `st_dev` differs from `/`'s.
+- **Rationale:** a fresh named volume copies the ownership and mode of the image's directory at its mount
+  point on first mount (lore `docker-compose` Q003), so the agent can write it with no root step at start.
+  In a container the root filesystem is the overlay; a named volume or a bind mount is another device.
+  `os.path.ismount` would miss a state root set to a subdirectory of a volume, which the e2e tests use.
+- **Alternatives:** `~/.local/state/timelike` (inside the home, where `rm -r ~/…` reaches, and not a mount
+  point the operator would think to persist); a marker file the image writes and a volume hides (works
+  only for the default path).
+
+## R11 · The scheduled snapshot: cost, interval, stat cache
+
+Measured on the host, timelike's interpreter (3.14.8), slice 0's code, unchanged workspaces: 464 files /
+6.7 MB in 270–320 ms; 657 files / 51 MB in 620–700 ms. `snapshot list` alone: 100 ms (interpreter and
+agentio start). Slice 0 re-reads and re-copies every file on every take. **The default interval and the
+measured cost with the stat cache are recorded below after T-implement** (decisions.md).
+
+## R12 · Keying
+
+The real path, as slice 0 (D-13). A remount elsewhere is named, not hidden (FR-29).
+
+## R13 · Import of slice-0 stores
+
+Scan `<scratch root>/*/snapshots/<key>/` (the same key, the same user). Renumber in old order; mark the
+old store `imported`; verify each record as a take is.
+
+## R14 · Purge
+
+On write, under `TIMELIKE_PURGE_SECONDS`. Age first, then size, oldest first across workspaces by record
+mtime (written once at take time); never the newest per workspace; other stores only with a free lock;
+unreferenced objects deleted by mark and sweep within each purged store.
+
+## R15 · The lock
+
+`flock(2)` per workspace store: the kernel releases it when the holder exits, also across containers that
+share the volume on one host. The holder writes `pid session agent` into the lock file after acquiring it,
+so a timeout names who holds it.
+
+## R16 · The trash
+
+`<state>/trash/items/<id>.json` and `<state>/trash/objects/`; `guard trash-put PATH…` copies before the
+real delete; `undo --trash` lists and restores. What calls `trash-put` is Item 22's Q1/Q3.

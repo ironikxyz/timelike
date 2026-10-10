@@ -102,3 +102,29 @@ The workspace walked now (`current`) against a record (`snap`):
 `flock(LOCK_EX)` on `lock`, tried every 50 ms for up to 10 s. Holding it covers the walk, the store
 writes, the record write, and (for `undo --yes`) the safety snapshot, the apply and the verify. On
 timeout: exit 1, `another snapshot or undo is running on this workspace (lock held for 10 s)`.
+
+---
+
+## State root (Cycle 3, slice 1; supersedes § Store's location)
+
+```
+<state root>/                         TIMELIKE_STATE_ROOT, default /var/lib/timelike; mode 0700
+  VERSION                             "timelike-state 1" (P003: a later slice can tell an old layout)
+  workspaces/<key>/                   one store per workspace, the § Store layout, plus:
+    statcache.json                    path → [size, mtime_ns, ctime_ns, ino, sha256] of the last take
+    symbols.json                      `symbols`' index for this workspace (011; Item 20)
+  stamps/<encoded workspace path>     epoch seconds of the last scheduled attempt; '%' → %25, '/' → %2F
+  trash/
+    lock, next
+    items/<id>.json                   one deletion
+    objects/<aa>/<sha256>             its content, deduplicated
+```
+
+- `<key>` as before (16 hex of sha256 of the real path). The `lock` file's content after acquiring:
+  `<pid> <session> <agent or ->`.
+- **Record additions:** `session` (string), `agent` (string or null), and, for an imported record,
+  `imported: {"session": s, "id": n}`. `reason` gains `scheduled`. `v` stays 1.
+- **Trash item:** `v`, `id`, `deleted_at`, `session`, `agent`, `command` (argv of the deleting command,
+  redacted as an event's), `entries` (sorted: `{path (absolute), kind, mode, sha256|target, size}`),
+  `bytes`.
+- **Slice-0 store after import:** gains `imported` (`<old id> <new id>` per line); otherwise untouched.

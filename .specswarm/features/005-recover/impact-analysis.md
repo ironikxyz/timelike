@@ -68,3 +68,52 @@ new fields, which no reader requires.
 **Tech stack compliance:** stdlib only (`hashlib`, `os`, `stat`, `json`); no new technology.
 
 **Proceed:** yes.
+
+---
+
+## Cycle 3 — `bridge/sends/07-rev11-20261010-050829.md` (prompt 07 revision 11, slice 1)
+
+**Analysis date:** 2026-10-10 | **Command:** `/specswarm:modify 005 --from-send bridge/sends/07-rev11-20261010-050829.md`
+on `modify/005-slice-1` (from `master` `97641da`), **specswarm 4.0.1-botbaubble.2.44.0** (the expanded
+command's `PLUGIN_DIR`).
+
+### Provenance (modify Step 2)
+
+Row 4: the same prompt, `N = 11`, already in `audited_against [1..11]`. Added work, not a new revision;
+Step 9 does not run and nothing is appended (the send says the same).
+
+### What changes
+
+| Component | Impact | Notes |
+|---|---|---|
+| `tools/agentio/agentio.py` | Medium | `state_root()`, persistence check, shared by `snapshot`/`undo`/`symbols` |
+| `tools/bin/snapshot` (and `undo` through it) | High | store in the state root; import; attribution; stat cache; purge; lock holder; `--trash` on undo; not-persistent line |
+| `tools/libexec/scheduled-snapshot`, `tools/libexec/guard` (new) | New | scheduled take; the trash's put (fed after Item 22) |
+| `image/rootfs/etc/timelike/shell-env.bash` (001's) | Medium | the scheduled-snapshot due check, builtins only; forks only when due |
+| `image/Dockerfile` (001's) | Low | `install -d -o agent -m 0700 /var/lib/timelike`; ENV `TIMELIKE_STATE_ROOT` |
+| `compose.yaml` (001's) | Low | named volume `timelike-state` on the agent service; the H1 comment kept true |
+| `tools/bin/symbols` (011's) | Low | index path → the state root (Item 20); its manifest's `index` line |
+| 001 `contracts/output-contract.md` | Low | rule 10's text: the state root, declared |
+| README | Low | the `## README status` block, if all five Automated criteria are met (not this cycle: Item 22) |
+| tests: 005's units and five e2e files, `test_symbols.py` | Medium | the store's path moves; isolation by `TIMELIKE_STATE_ROOT` |
+
+### Breaking changes
+
+- **The store moves** from `<scratch>/<session>/snapshots/<key>/` to `<state>/workspaces/<key>/`. Old
+  stores are imported on first use (FR-30), so no snapshot is lost. Nothing outside 005 and 011 reads
+  either path.
+- **`symbols`' index moves**; an old index is just rebuilt once (it is a cache).
+- Output: a new line only when the state root is not persistent; new JSON fields (`state`, `session`,
+  `agent`, `purged`, `imported`). Existing verdict lines are unchanged.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| The scheduled snapshot adds latency to every shell | Builtins-only due check; fork only when due; stat cache; measured (R11) |
+| A scheduled snapshot of a damaged state hides the one the agent needs | Not taken when the command starts with `snapshot` or `undo` (FR-32); `undo` defaults are unchanged |
+| A purge removes what the agent wanted | Never the newest per workspace; names each drop; age default 30 days |
+| Two containers on one volume | `flock` across containers on one host; same uid (lore Q006 does not apply) |
+| Guards built on a design the mentor rejects | Not built until Item 22 is answered |
+
+**Proceed:** yes, with the guards held for Item 22.

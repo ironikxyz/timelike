@@ -137,3 +137,73 @@ nothing (rule 7). `undo <S> --yes` restores a safety snapshot, which undoes an u
 ## Session events
 
 One per invocation, written by agentio (`events.jsonl`), as for every tool.
+
+---
+
+## Slice 1 (Cycle 3)
+
+### Environment (added)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TIMELIKE_STATE_ROOT` | `/var/lib/timelike` | where every workspace's store, the stamps and the trash live (replaces the scratch root for the store) |
+| `TIMELIKE_SNAPSHOT_INTERVAL` | research R11 | seconds between scheduled snapshots of a workspace; `0` every shell start; `off` never |
+| `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` | `30` | purge snapshots older than this; `0` = none |
+| `TIMELIKE_STATE_MAX_BYTES` | `4294967296` | purge oldest snapshots while the state root's stored bytes exceed this; `0` = none |
+| `TIMELIKE_PURGE_SECONDS` | `2` | time bound on one purge |
+| `TIMELIKE_TRASH_MAX_AGE_DAYS` | `30` | purge trash items older than this; `0` = none |
+| `TIMELIKE_TRASH_MAX_BYTES` | `1073741824` | purge oldest trash items while the trash exceeds this; `0` = none |
+
+A value that is not a non-negative integer (or `off` for the interval) is a usage error (exit 2) naming it.
+
+### Lines every result may carry, in this order, after any `do instead:` line
+
+1. `not persistent: <root> is on the container's own filesystem, so this recovery state is lost when the
+   container is removed; mount a volume at <root> to keep it (compose.yaml mounts timelike-state)` — when
+   the state root is not on its own filesystem (FR-27). JSON `data.state = {root, persistent}` always.
+2. `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)` — once, on first use (FR-30);
+   `not imported: <session> snapshot <id>: <why>` for one that fails verification.
+3. `purged: snapshot <id> of <ws> (<older than N days | over TIMELIKE_STATE_MAX_BYTES>)`, and
+   `purge stopped: <why>; the state root is <size> over TIMELIKE_STATE_MAX_BYTES` (FR-36, FR-37).
+   JSON `data.purged`: list of `{workspace, id, why}`.
+
+Then the result's own lines (exclusions, plan). The verdict line is unchanged.
+
+### `snapshot list` (added)
+
+- With no snapshots for this workspace, one line per other workspace in the state root that has some:
+  `other workspace with snapshots: <path> (<n>)` (FR-29).
+- `--verbose` adds `session <s>` and `agent <a>` to each line; JSON carries `session` and `agent` always.
+
+### Refusals (changed)
+
+- `… contains the snapshot store (<store>)` has the remedy `set TIMELIKE_STATE_ROOT outside the workspace`.
+- A state root that cannot be created or written: error, exit 1, naming the path and `TIMELIKE_STATE_ROOT`.
+
+### Lock timeout (changed)
+
+`another snapshot or undo is running on this workspace (lock held for 10 s: <lock path>; holder pid <p>,
+session <s>, agent <a>)` — the holder part when the lock file names one.
+
+### `undo --trash` (FR-40)
+
+```
+undo --trash                       list the trash, newest first
+undo --trash ID --dry-run          list what would be put back
+undo --trash ID --yes              put item ID back where it was, verified
+```
+
+Scope `trash` (list) or `trash <id>`. Target: the workspace as for `undo`, though the trash is not
+per workspace.
+- List verdict `<N> items in the trash`; lines `<id>  <n> files  <size>  <first path>[ and <k> more]`.
+- Dry run verdict `dry run: trash item <id> — <n> to put back; nothing changed`; lines `put back <kind>
+  <abs path>`; a path that exists now: `refused: <abs path> exists` lines, verdict `… <m> blocked`.
+- `--yes`: verdict `put back trash item <id>: <n> paths; verified`; any occupied path: exit 1,
+  `refused: trash item <id> would overwrite <path>`, nothing written. Without `--yes`: exit 4, the
+  confirmation envelope.
+- Unknown ID: exit 3, `no trash item <id>`.
+
+### The scheduled snapshot (FR-32–FR-35; not a command)
+
+Taken by `/opt/timelike/libexec/scheduled-snapshot <workspace>` from the shell-start check. Silent when
+complete; one stderr line when partial or refused (FR-33). Its record has reason `scheduled`.

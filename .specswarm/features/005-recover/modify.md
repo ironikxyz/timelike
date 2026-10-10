@@ -64,3 +64,52 @@ on `master` (`586e298`) and merged in (`fc5b97d`), with the operator-accepted CV
 
 Compliant: stdlib Python only. No change to `tech-stack.md` from this modification (the git note was
 amended at the governance audit).
+
+---
+
+## Cycle 3 — `bridge/sends/07-rev11-20261010-050829.md` (07 slice 1, natural)
+
+**Status:** Active | **Created:** 2026-10-10 | **Impact analysis:** `impact-analysis.md` § Cycle 3 |
+specswarm 2.44.0
+
+### Summary
+
+Slice 1 of prompt 07 on `005-recover`: a persistent per-workspace state root on a named volume, a
+scheduled snapshot at shell start, purge by age and size, the trash's store and restore, the two
+revision-11 criteria, Item 20's `symbols` move and rule 10's text. **The guards (`rm`, `git`) and what feeds
+the trash are held for FOR-MENTOR Item 22.**
+
+### Functional changes
+
+- **F001 state root** (FR-25–FR-28): `TIMELIKE_STATE_ROOT`, default `/var/lib/timelike`, the named volume,
+  the not-persistent line.
+- **F002 keying and import** (FR-29, FR-30).
+- **F003 attribution** (FR-31).
+- **F004 scheduled snapshot** (FR-32–FR-35), with the stat cache.
+- **F005 purge** (FR-36, FR-37).
+- **F006 lock** per workspace, naming its holder (FR-38).
+- **F007 trash** store, purge and `undo --trash` (FR-39–FR-41).
+- **F008 carried:** `symbols`' index to the state root (Item 20); rule 10's text in 001's contract.
+- **Held:** F009 guards and F010 the force-push record (Item 22).
+
+### Data model changes
+
+D001: the state root layout (`VERSION`, `workspaces/`, `stamps/`, `trash/`). D002: the record gains
+`session`, `agent`, `imported` (optional); `v` stays 1. D003: `statcache.json` per store. D004: trash
+items.
+
+### API/contract changes
+
+A001: `snapshot`/`undo` JSON gains `state`, `purged`, `imported`; text gains the not-persistent,
+`purged:` and `imported` lines when they apply. A002: `undo --trash [ID] [--dry-run] [--yes]`. A003:
+the remedy for a store inside the workspace names `TIMELIKE_STATE_ROOT`.
+
+### Testing strategy
+
+Regression: 005's units and five e2e files (store path → state root), `test_symbols.py`, `make
+test-host`. New: units per FR; e2e per criterion (SC-7, SC-8 with a recreated container, SC-9; SC-10's
+restore); the hook's no-fork path in `tests/host/test_shell_env_hook.sh`. The mentor's Docker lane.
+
+### Tech stack compliance
+
+Compliant: stdlib Python, bash builtins, a Docker named volume (`tech-stack.md`'s compose).

@@ -180,12 +180,15 @@ else inside `.git/` byte-identical. Files that git ignores are captured like any
 
 ### Storage
 
-- **FR-23** Snapshots live outside the workspace, in the session's scratch directory (rule 10), one store
-  per workspace. Content is stored by copy, addressed by its hash, so identical content is stored once
+- **FR-23** Snapshots live outside the workspace, in the per-workspace state root (rule 10, revision 11;
+  FR-25), one store per workspace, shared by every session and agent working in it. Content is stored by copy, addressed by its hash, so identical content is stored once
   across snapshots. No hard links (an in-place edit would change the snapshot), no snapshotting
   filesystem and no container commit. *(Cycle 2: confirmed by discovery revision 11, which keeps the
   store's slice-0 location — outside the workspace — and moves it to a per-workspace state root in
   slice 1.)*
+  *(Amended in Cycle 3, declared, by copy, as the Cycle 2 note anticipated: slice 0 read "in the
+  session's scratch directory (rule 10), one store per workspace". Slice 1 moves the store to the state
+  root; the rest of the requirement stands as written.)*
 - **FR-24** Two invocations against the same store never interleave: a second waits for the first, up to
   a bounded time, and then exits 1 naming the holder.
 
@@ -224,8 +227,9 @@ Further, from the contract and the decisions below (not criteria of the prompt):
 ## Key Entities
 
 - **Workspace** — the directory a snapshot covers (FR-1 to FR-3), identified by its real path.
-- **Store** — one per workspace per session, under the session scratch directory: the snapshot records
-  and the content they refer to.
+- **Store** — one per workspace, under the state root (FR-25), shared by every session and agent: the
+  snapshot records and the content they refer to. *(Amended in Cycle 3, declared: slice 0 read "one per
+  workspace per session, under the session scratch directory".)*
 - **Snapshot** — identifier, reason, label, the workspace's real path, the entries captured (path, kind,
   content hash or link target, permission bits), the exclusions (path, size, reason), the counts and
   sizes, whether partial, and when it was taken.
@@ -290,7 +294,8 @@ coding-agent harnesses use for the same idea. Neither exists in the image (no De
 either). `undo` restores; `snapshot` takes and lists. Restore lives on `undo` alone, so the destructive
 verb has one name.
 
-**D-7 · Where snapshots live, and what survives.** In the session scratch directory
+**D-7 · Where snapshots live, and what survives.** *(Superseded in Cycle 3 by D-11 and D-12: the store
+is in the state root. The text below is slice 0's, kept as decided.)* In the session scratch directory
 (`<scratch root>/<session>/snapshots/<workspace key>/`), the only place rule 10 lets a tool keep state.
 Consequences, stated rather than hidden:
 - **a container restart keeps them** (the scratch root is in the container's writable layer);
@@ -358,3 +363,209 @@ cross-session store (slice 1's per-workspace state root, discovery revision 11).
    not decide recovery).
 4. A snapshot is consistent only if the workspace is not being changed while it is taken. Slice 0 does
    not freeze the workspace; a file that changes during the walk is recorded as read.
+
+## Slice 1 (Cycle 3, send `bridge/sends/07-rev11-20261010-050829.md`; natural)
+
+Added work on a body that stays true, recorded here, declared. One exception, which is the point of the
+slice: FR-23 (and the Store entity, D-7) said the store lives in the session scratch, and is amended
+above by declared copy. Revision 11 is already in `audited_against` (modify row 4); nothing is appended.
+
+Slice 1's six criteria, verbatim from the send:
+- *"A recursive delete, a hard reset with uncommitted changes, a force push, and a clean of untracked
+  files each take an automatic snapshot before running, and the verdict names it"* _(slice 1)_ —
+  **held for FOR-MENTOR Item 22** (Q1, Q2): how the guards reach `rm` and `git`.
+- *"A directory removed by a script (not by the shell's delete command) is restorable from the most
+  recent automatic or scheduled snapshot"* _(slice 1)_.
+- *"A snapshot taken in one session is listed and restorable from a new session, and after the agent's
+  container is recreated"* _(slice 1; revision 11)_.
+- *"A restore first snapshots the workspace, so the restore itself can be undone, and its verdict names
+  that snapshot"* _(slice 1; revision 11)_ — FR-19 already does this; re-established against the new store.
+- *"Deleted files are moved to a restorable trash that is purged by age and size limits"* _(slice 1)_ —
+  the trash's store, purge and restore are built here; **what feeds it is held for Item 22** (Q3).
+- *DEMO: "the Agent runs a guarded destructive command, a snapshot is taken automatically, and the Agent
+  restores from it"* (D16, Manual) _(slice 1)_.
+
+### Scenarios (slice 1)
+
+**Scenario 6: a script deletes a directory (criterion 2).** The agent runs `bash -c 'python3 tidy.py'`.
+The shell's start finds the workspace's last scheduled snapshot older than the interval and takes one
+(reason `scheduled`) before the command runs. The script removes `src/` with `shutil.rmtree`, which no
+guard sees. The agent runs `snapshot list`, finds the scheduled snapshot, and `undo <id> --yes` brings
+`src/` back, verified.
+
+**Scenario 7: a new session, then a new container (criterion 3).** Agent A in session `s1` takes a
+snapshot. Agent B, in session `s2`, runs `snapshot list` in the same workspace and sees it, with the
+session and agent that took it (`--verbose`, JSON). The operator recreates the container
+(`docker compose up --force-recreate`): the state volume outlives the container, and the snapshot is
+still listed and restorable.
+
+**Scenario 8: a plain `docker run`, no volume (seam 1).** The state root is then the container's own
+directory. Every `snapshot` and `undo` verdict carries one line saying the recovery state is not
+persistent and how to make it so. Nothing else changes.
+
+**Scenario 9: the store fills (seam 8).** Each take ends with a purge of the state root: snapshots older
+than the age limit go, then the oldest until the state root fits its size cap. The newest snapshot of
+each workspace is never removed. The verdict names each snapshot it dropped.
+
+### Functional requirements (slice 1)
+
+**The state root (seam 1; rule 10 at revision 11)**
+- **FR-25** Recovery state and caches live in the **state root**: `TIMELIKE_STATE_ROOT`, default
+  `/var/lib/timelike`. It is read from the environment by timelike's own code (agentio), never from the
+  agent's PATH or a workspace file (P002). Layout (data-model § State root): `VERSION` (the layout's
+  version, P003), `workspaces/<key>/` (one store per workspace), `stamps/` (the scheduled snapshot's
+  due times), `trash/`.
+- **FR-26** The image creates `/var/lib/timelike` owned by `agent`, mode `0700`, so a fresh named volume
+  mounted there takes that ownership on first mount (lore `docker-compose` Q003). `compose.yaml` mounts
+  the named volume `timelike-state` there on the agent service only. Vanilla gets nothing (P6).
+- **FR-27** **Persistence is stated, never implied (T2, P5).** The state root is **persistent** when it
+  lies on a different filesystem from the container's root (`st_dev` differs from `/`'s): a named
+  volume or a bind mount. When it is not, every `snapshot` and `undo` result (take, list, dry run,
+  restore, refusals after the workspace check) carries the line
+  `not persistent: <root> is on the container's own filesystem, so this recovery state is lost when the
+  container is removed; mount a volume at <root> to keep it (compose.yaml mounts timelike-state)`, and
+  JSON `data.state` = `{"root": …, "persistent": false}` (`true` otherwise, with no line). One line per
+  result, every result: a per-session "first time only" would need state the warning is about.
+- **FR-28** A state root that cannot be created or written is an error (exit 1) naming the path and
+  `TIMELIKE_STATE_ROOT`. A state root inside the workspace is refused (FR-3, now naming
+  `TIMELIKE_STATE_ROOT`).
+
+**Keying (seam 2)**
+- **FR-29** A workspace's store is keyed by its **real path** (the first 16 hex of its sha256, as in
+  slice 0). A workspace mounted at the same path in a recreated container finds its snapshots. A
+  workspace moved or mounted elsewhere is a different workspace: `snapshot list` and `undo` there say
+  `0 snapshots` / `no snapshot`, and name every other workspace in the state root that has snapshots,
+  with its path and count (`other workspaces with snapshots: <path> (<n>)`, up to the output cap), so a
+  moved workspace is told where its history is. Nothing is written into the workspace to key it (rule 10).
+
+**Slice 0's stores (seam 3)**
+- **FR-30** On a workspace's first use of the state root (any `snapshot` or `undo`), every slice-0 store
+  for the same workspace found under the scratch root (`<scratch root>/<session>/snapshots/<key>/`, any
+  session this user can read) is **imported**: each record, in its old order, gets the next identifier,
+  keeps its reason, label and time, and records `imported: {session, id}`; its objects are copied
+  (deduplicated) and each imported record is verified as a take is. The old store is left in place
+  with a file `imported` naming the new identifiers, so it is never imported twice. The result carries
+  `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)`. A record that fails
+  verification is not imported and is named. Nothing a user took vanishes silently.
+
+**Attribution (revision 11)**
+- **FR-31** Every record names the `session` and `agent` (`TIMELIKE_AGENT`, or null) that took it.
+  `snapshot list --verbose` shows them; JSON always carries them.
+
+**The scheduled snapshot (seam 6, criterion 2)**
+- **FR-32** At the start of an agent bash (`bash -c`, `bash -lc`, interactive; 001's hook paths),
+  `/etc/timelike/shell-env.bash` decides with **builtins only** whether a scheduled snapshot is due:
+  not for root; not when the workspace (the nearest ancestor of `$PWD` holding `.git`, else `$PWD`) is
+  `/`, `$HOME` or an ancestor of either; not when the command line starts with `snapshot` or `undo`
+  (a snapshot of the state the agent is about to inspect or restore would become the newest and hide
+  the one it needs); not when `TIMELIKE_SNAPSHOT_INTERVAL` is `off`; and only when the workspace's stamp
+  (`<state>/stamps/<encoded path>`, holding the epoch seconds of the last scheduled attempt) is older
+  than the interval or absent. Only then does it fork, once:
+  `/opt/timelike/libexec/scheduled-snapshot <workspace>` (absolute path, P002), synchronously, before
+  the command runs.
+- **FR-33** The helper writes the stamp first (so a failure is retried per interval, never per shell),
+  takes a snapshot with reason `scheduled`, waiting at most 1 s for the workspace's lock (if another
+  take or undo holds it, it skips), and is **silent on a complete snapshot**. A partial or refused
+  snapshot prints one stderr line: `timelike: scheduled snapshot <id> of <ws> is partial: excluded <E>
+  files (snapshot list; undo <id> --dry-run)` or `timelike: scheduled snapshot of <ws> refused: <why>`.
+  It never changes the shell's command, its output or its exit code.
+- **FR-34** `TIMELIKE_SNAPSHOT_INTERVAL`: seconds, default set in research from the measured cost
+  (R11); `0` = every shell start; `off` = never.
+- **FR-35** **Unchanged files are not re-read** (P2): each store keeps a stat cache (path → size,
+  mtime, ctime, inode, sha256) from its last take. A file whose stat matches and whose object is in the
+  store is recorded without being read. Verification (FR-9, stack note 12) still re-hashes every object
+  the record names. The cost is measured and reported (research R11).
+
+**Purge (seam 8)**
+- **FR-36** Every take (on demand, scheduled, safety, and later the guards') ends with a **purge** of the
+  state root, under the time bound `TIMELIKE_PURGE_SECONDS` (default 2): first, snapshots older than
+  `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` (default 30; 0 = none); then, while the state root's stored bytes
+  exceed `TIMELIKE_STATE_MAX_BYTES` (default 4 GiB; 0 = none), the oldest snapshot of any workspace.
+  **The newest snapshot of each workspace is never removed.** Content no remaining record names is
+  deleted. Another workspace's store is purged only if its lock is free at that moment; a busy store is
+  skipped and said.
+- **FR-37** The result names every snapshot it dropped (`purged: snapshot <id> of <ws> (<why>)`, bounded
+  by the output cap, the full list in JSON `data.purged`). If the time bound or the newest-snapshot rule
+  stops it above the cap, it says so with the bytes still over.
+
+**Concurrency (seam 9)**
+- **FR-38** FR-24's lock is per workspace store, shared by every session and agent (it was per session
+  in slice 0). It is `flock(2)`, which the kernel releases when its holder exits, so a lock held by a
+  process that no longer exists does not exist: there is no stale-lock state to clear. The lock file
+  carries the holder's pid, session and agent, and the timeout verdict names them. Taking the purge's
+  locks on other stores never waits.
+
+**The trash (seam 7; criterion 5, fed per Item 22)**
+- **FR-39** The trash lives in `<state>/trash/`: items (one record per deletion: the original absolute
+  paths, kinds, modes, content hashes or link targets, when, session, agent, and the command that
+  deleted them) and their deduplicated content. An item is written before the deletion happens.
+- **FR-40** `undo --trash` lists the trash, newest first (`<id>  <n> files  <size>  <first path>[ and <k>
+  more]`). `undo --trash ID --dry-run` lists what it would put back. `undo --trash ID --yes` puts every
+  path of the item back where it was, verified by re-reading; a path that now exists is refused, named,
+  and nothing is written. Without `--yes`: exit 4 and the confirmation envelope, as for a restore.
+- **FR-41** The trash is purged on write by age (`TIMELIKE_TRASH_MAX_AGE_DAYS`, default 30) and size
+  (`TIMELIKE_TRASH_MAX_BYTES`, default 1 GiB), oldest first, never the item just written, naming what it
+  dropped. It is never emptied silently.
+
+**Held for Item 22** (built after the ruling): what stands in front of `rm`, `git reset --hard` and
+`git clean` (Q1); the `pre-push` record of a force push (Q2); what feeds the trash (Q3); their
+announcement and `type -a` lines.
+
+### Success criteria (slice 1)
+
+One test per criterion, named after its distinguishing text, bats in the image per invocation style, and
+pytest on the host where the host can reach it.
+- **SC-6** *"A recursive delete, a hard reset with uncommitted changes, a force push, and a clean of
+  untracked files each take an automatic snapshot before running, and the verdict names it"* — after
+  Item 22.
+- **SC-7** *"A directory removed by a script (not by the shell's delete command) is restorable from the
+  most recent automatic or scheduled snapshot"* — a real Python script removes a directory with
+  `shutil.rmtree` under `bash -c` and `bash -lc` with `TIMELIKE_SNAPSHOT_INTERVAL=0`; the scheduled
+  snapshot taken at that shell's start restores it, compared by the test's own manifest (P004).
+- **SC-8** *"A snapshot taken in one session is listed and restorable from a new session, and after the
+  agent's container is recreated"* — another `TIMELIKE_SESSION` lists and restores it; then a throwaway
+  container from the agent image, with a fresh named state volume and a named project volume, is
+  removed and started again, and the snapshot is listed and restored, the content compared by the test.
+- **SC-9** *"A restore first snapshots the workspace, so the restore itself can be undone, and its
+  verdict names that snapshot"* — `undo --yes` names `S`; `undo S --yes` returns the workspace to the
+  state the first restore replaced, compared by the test.
+- **SC-10** *"Deleted files are moved to a restorable trash that is purged by age and size limits"* —
+  the store, purge and restore through the helper now; through the guards after Item 22.
+- **SC-11** D16, Manual: observed by the operator after the lane.
+
+Further, from the decisions: the persistence line (FR-27) in a container without the volume and its
+absence with it; import of a slice-0 store (FR-30); attribution (FR-31); purge never removing the newest
+(FR-36); a stale-lock-free lock (FR-38); the scheduled hook's no-fork path (FR-32) and its measured cost.
+
+### Decisions (the slice-1 seams; reasoning in `research.md` R10 to R16)
+
+**D-11 · The state root's place.** `/var/lib/timelike`, outside every workspace and outside the agent's
+home: a recursive delete under `~` (where projects live) cannot take the recovery state with it, and
+`/var/lib/<name>` is where a service's persistent state belongs. Overridden by `TIMELIKE_STATE_ROOT`.
+
+**D-12 · Persistence, every result.** A line on each result, rather than the first per session: the
+first-per-session rule needs a record of having warned, kept where the warning says nothing persists.
+
+**D-13 · Keying by real path.** Simple, collision-free in practice, writes nothing into the workspace.
+It breaks on a remount elsewhere; FR-29 says so where it happens. Keying by something inside the workspace
+(a marker file, a git config value) is refused by rule 10, and the root commit is absent outside git and
+shared by every clone.
+
+**D-14 · Import, not leave or ignore.** Leaving slice-0 stores would make a user's snapshots unreachable
+from `undo`. Import keeps them reachable and leaves the originals in the disposable scratch.
+
+**D-15 · A scheduled snapshot at shell start, no daemon (rule 10).** The send's natural reading. The
+due check costs no fork; the cost when due is measured (R11) and bounded by the interval and FR-35.
+
+**D-16 · Purge on write, time-bounded.** No schedule (no daemons). Age first, then size, never the
+newest of a workspace, a busy store skipped rather than waited for (P2).
+
+**D-17 · The lock.** Per workspace, `flock(2)`: a dead holder cannot hold it, so "stale" needs no rule
+beyond naming a live holder.
+
+**D-18 · The trash, fed per Item 22.** Its store, purge and restore are independent of what stands in
+front of `rm`, and are built now through `/opt/timelike/libexec/guard trash-put`. The restore lives on
+`undo` (`undo --trash`), so the destructive verb keeps one name (D-6).
+
+**Carried into this cycle:** FOR-MENTOR Item 20 (`symbols` index to the state root, a second session
+finds it warm); 001's rule 10 contract text (`output-contract.md`).
