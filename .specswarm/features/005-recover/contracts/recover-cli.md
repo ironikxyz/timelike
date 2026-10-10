@@ -161,7 +161,7 @@ A value that is not a non-negative integer (or `off` for the interval) is a usag
 1. `not persistent: <root> is not a mounted volume, so this recovery state dies with the container; mount
    one at <root> (compose.yaml: timelike-state)` — when
    the state root is not on its own filesystem (FR-27). JSON `data.state = {root, persistent}` always.
-2. `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)` — once, on first use (FR-30);
+2. `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)` (a single id where the range is one) — once, on first use (FR-30); JSON `data.imported`: list of `{session, was, now}`;
    `not imported: <session> snapshot <id>: <why>` for one that fails verification.
 3. `purged: snapshot <id> of <ws> (<older than N days | over TIMELIKE_STATE_MAX_BYTES>)`, and
    `purge stopped: <why>; the state root is <size> over TIMELIKE_STATE_MAX_BYTES` (FR-36, FR-37).

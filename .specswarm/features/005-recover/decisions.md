@@ -235,3 +235,14 @@ ASSUMED: slice-0 records lack session/agent; JSON shows them as null (confidence
 ASSUMED: one slice-0 unit relied on "another session = an empty store"; since slice 1 sessions share a store (FR-23 as amended), it now uses another state root (confidence: high)
 ABSENT: import (T022), stat cache (T023), purge (T025); e2e not run (no Docker here)
 Verification: test_snapshot.py, test_undo.py, test_snapshot_slice1.py — 84 passed (3.14.8 venv); the lock unit names its holder
+SCOPE: out — tests/unit/test_agentio_state.py, tests/unit/test_snapshot_slice1.py (2 of 5 changed files) (task has FLAGGED: yes)
+
+### T022: import of slice-0 stores (FR-30)
+**Started:** 2026-10-10T05:5xZ (after T021's commit) | **Completed:** 2026-10-10T05:35:12Z
+
+INHERITED: Store in the state root, NOTES/finish — from T021 (confidence: high)
+FLAGGED: import runs on any use (take, list, undo) and under the store's lock, re-scanning under the lock so two processes never import twice; chose import over leaving or ignoring (D-14) (confidence: high)
+ASSUMED: every session directory under the scratch root this user can read is in scope; another user's are unreadable and skipped (confidence: high)
+ASSUMED: a record that fails verification is named once and not retried: the old store is marked imported either way, and stays in place for a person to read (confidence: medium)
+ABSENT: deleting the old stores (the scratch is disposable, and nothing a user took is removed by timelike)
+Verification: 3 new units (in order and restorable; ids after an import; a damaged record named, not imported)

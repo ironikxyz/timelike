@@ -136,3 +136,71 @@ def test_a_restore_names_its_safety_snapshot_and_undoing_it_returns_the_replaced
     r2 = undo(lab, str(s), "--yes", "--json")
     assert r2.returncode == 0, r2.stdout
     assert tree(lab.ws) == replaced  # compared by the test, never by the message (P004)
+
+
+# ── FR-30: slice 0's stores in the session scratch are imported once, nothing lost ──────────
+
+
+def _make_slice0_store(lab: Lab, session: str) -> Path:
+    """A slice-0 store has the same layout as a state-root store; move one to the old place."""
+    old = lab.scratch / session / "snapshots" / lab.store().name
+    old.parent.mkdir(parents=True)
+    shutil.move(str(lab.store()), str(old))
+    return old
+
+
+def test_a_slice0_store_is_imported_once_in_order_and_restorable(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "first\n")
+    take(lab, "-m", "one")
+    write(lab.ws / "f.txt", "second\n")
+    take(lab)
+    old = _make_slice0_store(lab, "old-session")
+    write(lab.ws / "f.txt", "now\n")
+
+    r = snap(lab, "--json", "list")
+    raw = json.loads(r.stdout)
+    assert "imported 2 snapshots from session old-session (were 1–2, now 1–2)" in raw["lines"]
+    assert raw["imported"] == [{"session": "old-session", "was": [1, 2], "now": [1, 2]}]
+    rows = [(s["id"], s["label"], s["session"]) for s in raw["snapshots"]]
+    assert rows == [(2, None, SESSION), (1, "one", SESSION)]  # slice-0 records gain their session
+    rec = json.loads((lab.store() / "snaps" / "1.json").read_text())
+    assert rec["imported"] == {"session": "old-session", "id": 1}
+    assert (old / "imported").read_text() == "1 1\n2 2\n"
+    assert (old / "snaps" / "1.json").is_file()  # the old store is left in place
+
+    again = json.loads(snap(lab, "--json", "list").stdout)
+    assert not any(x.startswith("imported ") for x in again["lines"])  # once
+    assert [s["id"] for s in again["snapshots"]] == [2, 1]
+
+    assert undo(lab, "1", "--yes", "--json").returncode == 0
+    assert (lab.ws / "f.txt").read_text() == "first\n"
+
+
+def test_an_imported_record_follows_the_state_roots_own(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "old\n")
+    take(lab)
+    _make_slice0_store(lab, "s0")
+    write(lab.ws / "f.txt", "new\n")
+    d = take(lab)  # a take imports first, then takes: the import gets 1, the new snapshot 2
+    assert d["id"] == 2 and d["imported"][0]["now"] == [1]
+
+
+def test_a_damaged_slice0_record_is_named_not_imported(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "a\n")
+    take(lab)
+    write(lab.ws / "g.txt", "b\n")
+    take(lab)
+    old = _make_slice0_store(lab, "s0")
+    objs = sorted(p for p in (old / "objects").rglob("*") if p.is_file())
+    rec2 = json.loads((old / "snaps" / "2.json").read_text())
+    only2 = {e["sha256"] for e in rec2["entries"] if e["kind"] == "file"} - {
+        e["sha256"] for e in json.loads((old / "snaps" / "1.json").read_text())["entries"] if e["kind"] == "file"
+    }
+    bad = next(p for p in objs if p.name in only2)
+    bad.chmod(0o600)
+    bad.write_text("damaged\n")
+
+    raw = json.loads(snap(lab, "--json", "list").stdout)
+    assert "imported 1 snapshots from session s0 (were 1, now 1)" in raw["lines"], raw["lines"]
+    assert any(x.startswith("not imported: s0 snapshot 2: object ") for x in raw["lines"]), raw["lines"]
+    assert [s["id"] for s in raw["snapshots"]] == [1]

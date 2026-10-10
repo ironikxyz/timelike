@@ -515,6 +515,89 @@ class Store:
         return str(path)
 
 
+# ── slice 0's stores in the session scratch (FR-30, D-14) ─────────────────────────────────────
+
+
+def slice0_stores(store: Store) -> list[Path]:
+    """Every slice-0 store of this workspace under the scratch root, any session, not yet imported."""
+    found = []
+    with contextlib.suppress(OSError):
+        for sdir in sorted(agentio.scratch_root().iterdir()):
+            old = sdir / "snapshots" / store.key
+            with contextlib.suppress(OSError):
+                if (old / "imported").exists() or (old / "workspace").read_text().strip() != store.ws:
+                    continue
+                found.append(old)
+    return found
+
+
+def _ids(nums: list[int]) -> str:
+    return f"{nums[0]}" if nums[0] == nums[-1] else f"{nums[0]}–{nums[-1]}"
+
+
+def import_slice0(store: Store) -> list[dict[str, Any]]:
+    """Import every slice-0 store of this workspace into its state-root store, once (FR-30).
+
+    Each record keeps its order, reason, label and time, gets the next identifier, and records where it
+    came from; its objects are copied (deduplicated) and it is verified as a take is. The old store is
+    left in place, marked `imported` with the new identifiers, so it is never imported twice. Nothing a
+    user took vanishes silently: each import, and each record that fails verification, is a NOTES line.
+    """
+    olds = slice0_stores(store)
+    if not olds:
+        return []
+    store.create()
+    done = []
+    with store.lock():
+        for old in slice0_stores(store):  # again, under the lock: another process may have done it
+            session = old.parent.parent.name
+            recs = []
+            for p in (old / "snaps").glob("*.json"):
+                with contextlib.suppress(OSError, ValueError):
+                    recs.append(json.loads(p.read_text()))
+            pairs: list[tuple[int, int]] = []
+            for rec in sorted(recs, key=lambda r: int(r["id"])):
+                problem = _import_one(store, old, session, rec, pairs)
+                if problem:
+                    add_note(f"not imported: {session} snapshot {rec['id']}: {problem}")
+            text = "".join(f"{a} {b}\n" for a, b in pairs)
+            with contextlib.suppress(OSError):
+                store._write_atomic(old / "imported", text, 0o600)
+            if pairs:
+                was, now = [a for a, _ in pairs], [b for _, b in pairs]
+                add_note(
+                    f"imported {len(pairs)} snapshots from session {session} (were {_ids(was)}, now {_ids(now)})"
+                )
+                done.append({"session": session, "was": was, "now": now})
+    return done
+
+
+def _import_one(
+    store: Store, old: Path, session: str, rec: dict[str, Any], pairs: list[tuple[int, int]]
+) -> str | None:
+    for e in rec.get("entries", []):
+        if e.get("kind") == "file" and not store.has(e["sha256"]):
+            src = old / "objects" / e["sha256"][:2] / e["sha256"]
+            try:
+                sha, _, _ = store.put(str(src))
+            except OSError as err:
+                return f"object {e['sha256'][:12]} cannot be read ({err.strerror or err})"
+            if sha != e["sha256"]:
+                return f"object {e['sha256'][:12]} does not match its hash"
+    new = dict(rec)
+    new.update(id=store.next_id(), imported={"session": session, "id": rec["id"]})
+    new.setdefault("session", session)
+    new.setdefault("agent", None)
+    store.write_record(new)
+    problem = store.verify(new)
+    if problem is not None:
+        with contextlib.suppress(OSError):
+            store.record_path(new["id"]).unlink()
+        return problem
+    pairs.append((int(rec["id"]), new["id"]))
+    return None
+
+
 # ── taking a snapshot (FR-4 to FR-11) ─────────────────────────────────────────────────────────
 
 
@@ -697,6 +780,7 @@ def cut_or_lines(
 def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result:
     caps = caps_from_env()
     store = Store(ctx, ws)
+    imported = import_slice0(store)
     store.create()
     with store.lock():
         rec = take_locked(store, caps, "on demand", label)
@@ -731,6 +815,8 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
     }
     data["verified"] = True
     data["store"] = str(store.path)
+    if imported:
+        data["imported"] = imported
     return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
 
 
@@ -756,7 +842,9 @@ def other_lines(ws: str) -> tuple[list[str], list[dict[str, Any]]]:
 
 
 def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
-    recs = list(reversed(Store(ctx, ws).records()))
+    store = Store(ctx, ws)
+    imported = import_slice0(store)
+    recs = list(reversed(store.records()))
     lines, items = [], []
     for r in recs:
         whole = "partial" if r["partial"] else "complete"
@@ -771,6 +859,8 @@ def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
         lines.append(line)
         items.append(item)
     data: dict[str, Any] = {"snapshots": items}
+    if imported:
+        data["imported"] = imported
     if not recs:
         lines, data["other_workspaces"] = other_lines(ws)
     return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data=data)
@@ -998,6 +1088,7 @@ def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
 def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Result:
     check_workspace(ws, ctx, "undo")
     store = Store(ctx, ws)
+    import_slice0(store)
     if store.exists():
         store.check_owner()
     rec = _choose(store, ws, args.id)
