@@ -6,8 +6,9 @@
 lists its call sites grouped by enclosing function, and says it is text-based. `symbols dependents FILE…`
 lists the files that import the given files, ranked.
 
-An index of the workspace (the nearest ancestor holding .git, or the current directory) lives in the session
-scratch (rule 10, discovery revision 11: never inside the workspace) and is checked file by file on every
+An index of the workspace (the nearest ancestor holding .git, or the current directory) lives in the
+per-workspace state root (rule 10, revision 11: never inside the workspace; feature 005 slice 1 built it,
+FOR-MENTOR Item 20), so every session in the workspace shares it, and is checked file by file on every
 call, so the answer is never from stale content; the verdict says when the cache was stale and what it
 rebuilt. Python is read with its syntax tree (exact); JS/TS, Go, Rust and shell by line patterns
 (text-based), and the answer says which (P3). No tool beyond the interpreter is needed.
@@ -72,7 +73,7 @@ TOOL = agentio.Tool(
         "symbols callers NAME          # call sites grouped by enclosing function (text-based)",
         "symbols dependents FILE…      # the files that import these, ranked",
         "python is exact (its syntax tree); JS/TS, Go, Rust and shell are text-based, and say so",
-        "the index lives in the session scratch and is refreshed per file on every call",
+        "the index lives in the state root, shared by every session, and is refreshed per file on every call",
     ],
     probe=("outline", "/opt/timelike/bin/symbols"),
     exit_codes={
@@ -84,7 +85,7 @@ TOOL = agentio.Tool(
     },
     manifest_extra=lambda: {
         "languages": {k: PRECISION[k] for k in sorted(PRECISION)},
-        "index": "<scratch>/<session>/symbols/<key>.json",
+        "index": "<state root>/workspaces/<key>/symbols.json",
     },
 )
 
@@ -351,8 +352,10 @@ def workspace_root(start: str) -> tuple[str, bool]:
 class Index:
     def __init__(self, ctx: agentio.Context, root: str) -> None:
         self.root = root
-        key = hashlib.sha256(root.encode()).hexdigest()[:12]
-        self.path = ctx.scratch() / "symbols" / f"{key}.json"
+        # The workspace's directory in the state root, keyed as `snapshot` keys it (005 FR-29): every
+        # session finds the index warm (Item 20). It was <scratch>/<session>/symbols/<12 hex>.json.
+        key = hashlib.sha256(root.encode()).hexdigest()[:16]
+        self.path = agentio.state_root() / "workspaces" / key / "symbols.json"
         self.files: dict[str, dict[str, Any]] = {}
         self.state = "built"
         self.changed = 0
@@ -447,7 +450,13 @@ class Index:
 
     def save(self) -> None:
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            agentio.ensure_state_root()
+        except agentio.ToolError as e:
+            self.not_saved = e.what  # the answer stands; only the cache is not kept (contract)
+            return
+        try:
+            self.path.parent.parent.mkdir(exist_ok=True, mode=0o700)
+            self.path.parent.mkdir(exist_ok=True, mode=0o700)
             tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
             tmp.write_text(
                 json.dumps({"v": 1, "workspace": self.root, "built_at": time.time(), "files": self.files})

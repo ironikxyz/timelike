@@ -172,7 +172,17 @@ event's arguments redacted (`Context.event_args`).
 
 - **Session:** `TIMELIKE_SESSION` (default `default`), validated against `^[A-Za-z0-9._-]{1,64}$`.
   An invalid id is a usage error (exit 2).
-- **Scratch space:** `${TIMELIKE_SCRATCH_ROOT:-/tmp/timelike}/<session>/`, created with mode `0700`.
+- **Scratch space:** `${TIMELIKE_SCRATCH_ROOT:-/tmp/timelike}/<session>/`, created with mode `0700`. Per
+  session and disposable.
+- **State root** *(rule 10 at discovery revision 11; built by feature 005 slice 1 and declared there as a
+  change to this contract, which named the session scratch only)*: `${TIMELIKE_STATE_ROOT:-/var/lib/timelike}`,
+  mode `0700`, outside every workspace, holding recovery state and caches **per workspace**
+  (`workspaces/<key>/`, keyed by the workspace's real path), shared by every session and agent working
+  there, and carrying its layout's version (`VERSION`). In the image it is the named volume
+  `timelike-state`, so it survives a new session, a restart and a recreate; without a volume, a tool that
+  keeps recovery state there says so on every result. It is bounded by size and age, purged on write and
+  never on a schedule. A tool resolves it from the environment itself, never from PATH or the workspace.
+  Nothing is ever kept inside the workspace or its `.git`.
 - **Event log:** `<scratch>/events.jsonl`. Each invocation appends one line
   (`event.schema.json`) in a single `write()` on an `O_APPEND` descriptor, so concurrent writers within
   a session never interleave inside a line.

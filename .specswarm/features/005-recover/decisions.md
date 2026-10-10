@@ -318,7 +318,7 @@ Verification: test_state_root_image.py 6 passed; test_agent_runtimes.py unchange
 SCOPE: out — tests/e2e/adele-isolation-grant-file-and-extend-unreachable-from-agent.bats, tests/unit/test_state_root_image.py (2 of 4 changed files) (task has FLAGGED: yes)
 
 ### T028: e2e — SC-7, SC-8 (new session; recreate; persistence), SC-9, SC-10's restore and purge; slice 0's cells on per-test state roots
-**Started:** 2026-10-10T06:53:16Z (T027's commit time, from git) | **Completed:** 2026-10-10T05:57:59Z
+**Started:** 2026-10-10T05:53:22Z (T027's commit time, from git; 06:53:16Z was written here first, composed, and corrected) | **Completed:** 2026-10-10T05:57:59Z
 
 INHERITED: the state root, the hook, the trash helper, the volume — from T020–T027 (confidence: high)
 FLAGGED: the e2e harness (exec_in) runs every cell with TIMELIKE_SNAPSHOT_INTERVAL=off unless the cell sets it; chose that over leaving scheduled snapshots on in every feature's cells, because they shift snapshot ids in slice 0's cells and add up to 300 ms, and possibly a stderr line, to timed cells of features that don't test recovery. The scheduled snapshot's own cells set it, the default interval included. Stated in the cycle report as a gap: other features' cells don't run with it on (confidence: medium)
@@ -328,3 +328,16 @@ ASSUMED: python3 is on the agent's PATH (007 Cycle 4, D-12) for SC-7's script (c
 DEFERRED: SC-6 (the guards) and SC-10's feed — Item 22. The SC-10 file says in its header that it is partial
 ABSENT: running any cell (no Docker here); a "command starting with undo takes none" cell (it could not set the shell's working directory without a leading cd, so it would have passed vacuously; host test K6/K7 covers the rule)
 Verification: bats 1.14.0 --count parses all (new: 4, 4, 2, 4; slice 0's and the adele file unchanged: 10, 4, 16, 10, 4, 5); shellcheck clean over every changed shell file, the new ones added to Makefile's SHELLCHECK_FILES; host hook test 57 of 57
+SCOPE: out — tests/e2e/helpers.bash (1 of 12 changed files) (task has FLAGGED: yes)
+
+### T029: carried — symbols' index to the state root (Item 20); 001's rule 10 text
+**Started:** 2026-10-10T05:58:20Z | **Completed:** 2026-10-10T05:59:59Z
+
+INHERITED: agentio.state_root / ensure_state_root, the workspace key — from T020, T021 (confidence: high)
+FLAGGED: the index moves to `<state root>/workspaces/<key>/symbols.json`, keyed with snapshot's 16 hex (was 12, in the session scratch), so one workspace has one directory in the state root; chose sharing the directory over a separate `cache/` tree (confidence: high)
+FLAGGED: a state root that cannot be used leaves the answer standing and says "cache not saved (…)", as a save failure always did; chose that over failing `symbols` (confidence: high)
+ASSUMED: 011's contract line `index` changes with it — another feature's contract, declared in its file and in changed_other_features (confidence: high)
+ASSUMED: 001's output-contract § Session event gains a State root bullet (the send's carried item), declared in place (confidence: high)
+ABSENT: the README's prose about the index and the scratch (T030); the symbols e2e cells need no change (each cell has its own workspace, so its own key)
+Verification: test_symbols.py 56 passed (a second session finds the index warm; the index in the state root, rebuilt when removed); test_conform.py and test_announce.py unchanged (128 with symbols)
+FOR-MENTOR Item 20 closed in the register.

@@ -886,7 +886,14 @@ cycle after the batch, not in this one (code-track § Resume after pause-06).
 
 ## Item 20 — Feature 10 slice 1 (`011-code-intelligence`): the symbols index lives in the session scratch until the state root exists (not blocking)
 
-**Status:** open. Raised 2026-10-06 in dispatch batch `20261004-183704` (send
+**Status:** closed 2026-10-10T05:59:59Z (read from the clock). Answered by send `bridge/sends/07-rev11-20261010-050829.md`
+(§ Carried: "move the symbols index … Close Item 20 in your register when it is built") and built in 005
+Cycle 3, T029: the index is `<state root>/workspaces/<key>/symbols.json`, and a second session finds it
+warm (`tests/unit/test_symbols.py::test_a_second_session_finds_the_index_warm`). 011's contract line
+`index` changed with it, declared in 005's cycle report under changed_other_features. Whether the image
+shows it warm is lane 005s1's. The text below is kept as raised.
+
+**Raised as:** open. Raised 2026-10-06 in dispatch batch `20261004-183704` (send
 `bridge/sends/10-rev1-20261004-183704.md`, seam 1, which asks for this item), on `011-code-intelligence`.
 
 **What was built.** `symbols` keeps its index at `<scratch>/<session>/symbols/<key>.json`:

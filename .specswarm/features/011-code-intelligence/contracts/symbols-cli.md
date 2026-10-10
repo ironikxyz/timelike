@@ -28,7 +28,7 @@ symbols dependents FILE [FILE…]
 | `reads_stdin` | `false` |
 | `probe` | `["outline", "/opt/timelike/bin/symbols"]` |
 | `exit_codes` | `0` answered · `1` the index could not be read or written · `2` usage · `3` not found · `124` the index walk hit its limit |
-| extra | `languages: {"python": "exact", "javascript": "text-based", "typescript": "text-based", "go": "text-based", "rust": "text-based", "shell": "text-based"}`, `index: "<scratch>/<session>/symbols/<key>.json"` |
+| extra | `languages: {"python": "exact", "javascript": "text-based", "typescript": "text-based", "go": "text-based", "rust": "text-based", "shell": "text-based"}`, `index: "<state root>/workspaces/<key>/symbols.json"` *(changed by feature 005 slice 1, declared there: FOR-MENTOR Item 20; it was `<scratch>/<session>/symbols/<key>.json`)* |
 
 ## outline
 

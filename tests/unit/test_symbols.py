@@ -28,7 +28,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -619,18 +618,36 @@ def test_cache_built_then_fresh_then_stale_answers_from_new_content(lab: Lab) ->
     assert ws_files(lab) == before - {"pkg/two.py"}, "the index must not be written into the workspace"
 
 
-def test_index_lives_in_the_session_scratch_and_rebuilds_when_cleared(lab: Lab) -> None:
+def test_index_lives_in_the_state_root_and_rebuilds_when_cleared(lab: Lab) -> None:
+    """Moved from the session scratch by feature 005 slice 1 (FOR-MENTOR Item 20)."""
     plant(lab.ws, CACHED)
     as_json(lab, "def", "helper")
-    key = hashlib.sha256(os.path.realpath(lab.ws).encode()).hexdigest()[:12]
-    index = lab.scratch / SESSION / "symbols" / f"{key}.json"
-    assert index.is_file(), sorted(str(p) for p in lab.scratch.rglob("*"))
+    key = hashlib.sha256(os.path.realpath(lab.ws).encode()).hexdigest()[:16]
+    state = lab.scratch.with_name(lab.scratch.name + "-state")  # conftest's base_env
+    index = state / "workspaces" / key / "symbols.json"
+    assert index.is_file(), sorted(str(p) for p in state.rglob("*"))
+    assert not (lab.scratch / SESSION / "symbols").exists()
     data = json.loads(index.read_text())
     assert data["v"] == 1
     assert set(data["files"]) == set(CACHED)
-    shutil.rmtree(lab.scratch / SESSION / "symbols")
+    index.unlink()
     d = as_json(lab, "def", "helper")
     assert d["verdict"].endswith(f"; cache: built ({len(CACHED)} files)"), d["verdict"]
+
+
+def test_a_second_session_finds_the_index_warm(lab: Lab) -> None:
+    """Item 20: the first call in a new session no longer rebuilds the whole index."""
+    plant(lab.ws, CACHED)
+    first = as_json(lab, "def", "helper")
+    assert cache_of(first)["state"] == "built"
+    r = subprocess.run(
+        [sys.executable, str(SYMBOLS), "--json", "def", "helper"],
+        cwd=lab.ws, env={**lab.env(), "TIMELIKE_SESSION": "another-session"},
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+    )
+    d = json.loads(r.stdout)
+    assert d["verdict"].endswith("; cache: fresh"), d["verdict"]
+    assert cache_of(d)["state"] == "fresh"
 
 
 def test_ignored_files_are_not_indexed(lab: Lab) -> None:
