@@ -763,7 +763,7 @@ usage:
   symbols callers NAME          # call sites grouped by enclosing function (text-based)
   symbols dependents FILE…      # the files that import these, ranked
   python is exact (its syntax tree); JS/TS, Go, Rust and shell are text-based, and say so
-  the index lives in the session scratch and is refreshed per file on every call
+  the index lives in the state root, shared by every session, and is refreshed per file on every call
 options:
   --help  this help (at most 40 lines)
   --json  structured output (default when piped)
@@ -829,6 +829,7 @@ usage:
   undo ID --yes            # restore snapshot ID (see: snapshot list)
   without --yes: exit 4 and the confirmation envelope (its confirm is undo … --yes)
   never touches any .git; files left out of the snapshot are left alone
+  undo --trash [ID --yes]  # list deleted files kept in the trash, or put item ID back
 options:
   --help  this help (at most 40 lines)
   --json  structured output (default when piped)
@@ -838,6 +839,7 @@ options:
   --verbose  add timing; warn about event-log failures
   --dry-run  show the plan, change nothing
   --yes  confirm the mutation
+  --trash  list the trash, or put trash item ID back
 exit codes: 0 ok (restored and verified, or nothing to change), 1 refused, or the restore could not be verified, 2 usage, 3 no such snapshot, 4 confirmation required: rerun with --yes
 ```
 

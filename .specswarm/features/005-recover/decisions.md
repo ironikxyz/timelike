@@ -341,3 +341,12 @@ ASSUMED: 001's output-contract § Session event gains a State root bullet (the s
 ABSENT: the README's prose about the index and the scratch (T030); the symbols e2e cells need no change (each cell has its own workspace, so its own key)
 Verification: test_symbols.py 56 passed (a second session finds the index warm; the index in the state root, rebuilt when removed); test_conform.py and test_announce.py unchanged (128 with symbols)
 FOR-MENTOR Item 20 closed in the register.
+SCOPE: out — .specswarm/features/011-code-intelligence/contracts/symbols-cli.md, FOR-MENTOR.md, tests/unit/test_symbols.py (3 of 5 changed files) (task has FLAGGED: yes)
+
+### T030: README — the generated command reference only; prose and Status held (Item 22)
+**Started:** 2026-10-10T06:00:11Z | **Completed:** 2026-10-10T06:00:53Z
+
+INHERITED: the help of `undo` (--trash) and `symbols` (the index line) — from T026, T029 (confidence: high)
+FLAGGED: regenerated ONLY the generated command reference (scripts/readme_reference.py --write: undo's --trash line and option, symbols' index line), and left every prose line and the Status untouched; chose that because the send says "If an Item 22 leaves a criterion unbuilt, leave README.md untouched and say why" while CLAUDE.md's standing README rule says the reference is regenerated in the same cycle as any help change, and test_readme_reference.py fails the lane otherwise. The generated block is the script's output, not a reading. **For the mentor:** if "untouched" includes the generated block, revert this one commit's README hunk and the unit fails until T032 (confidence: medium)
+ABSENT, held for T032 after Item 22: the README status block (row 07, 18 of 38, the Status paragraph), and the snapshot/undo and scratch prose. That prose now says the store is in the session scratch, which this cycle made false; it is corrected with the block
+Verification: readme_reference --check current, 13 tools; test_readme_reference.py 21 passed

@@ -1549,7 +1549,7 @@ def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> a
 
 def undo_configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("id", nargs="?", metavar="ID", help="the snapshot to restore (default: the newest)")
-    p.add_argument("--trash", action="store_true", help="list the trash, or put trash item ID back (FR-40)")
+    p.add_argument("--trash", action="store_true", help="list the trash, or put trash item ID back")
 
 
 def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
