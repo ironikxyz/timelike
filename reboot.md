@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -14,6 +14,17 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   `5f3b94f`). Deny-list over the tag message and every object pushed: 0 on P1–P7, control positive.
 - **Plugins:** specswarm **2.40.0** and ccmentor 1.50.2, installed during the operator's pause (04:21Z). This session
   runs 2.40.0, which the expanded `PLUGIN_DIR` shows.
+- **`modify/005-slice-1`** (from `master` `97641da` = `public/main`, `v0.17.0`): **005 Cycle 3 = 07 slice 1**, send
+  `bridge/sends/07-rev11-20261010-050829.md`, specswarm **2.44.0** (row 4; nothing appended). Built T020–T031
+  (`fd3c423`…`748ec96`): the state root `/var/lib/timelike` (`TIMELIKE_STATE_ROOT`, named volume `timelike-state`,
+  the not-persistent line), import of slice-0 stores, the stat cache, the scheduled snapshot (builtins-only check
+  in `shell-env.bash`, `libexec/scheduled-snapshot`, 300 s), purge, the per-workspace lock, the trash
+  (`libexec/guard trash-put`, `undo --trash`), symbols' index moved (Item 20 closed), rule 10's text. **Held:
+  FOR-MENTOR Item 22** (`e488657`, raised 2026-10-10T05:15:03Z): the guards in front of `rm`/`git`, the force-push
+  record, the trash's feed (T032), and so the README status block. Cycle report § Cycle 3 written (2026-10-10T06:09:20Z).
+  **No commit until the mentor says the lane has ended.** Then: Item 22's answer (beside the item, in a
+  `bridge/feedback/` file), T032, the README block, an addendum. e2e harness: scheduled snapshots off unless a
+  cell sets `TIMELIKE_SNAPSHOT_INTERVAL`.
 - **`modify/008-slice-1`** (from `master` `ce1eaf2`): **008 Cycle 2 = 06 slice 1**, send
   `bridge/sends/06-rev1-20261009-102433.md` (row 4: `audited_against [1]` unchanged). Built: `edit --at` (view's anchors,
   checked with view's own `anchor_of`/`line_body`), the syntax check (Python by the interpreter's compiler, shell by

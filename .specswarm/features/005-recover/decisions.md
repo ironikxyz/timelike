@@ -360,3 +360,4 @@ ASSUMED: ruff format's rewrites are layout only; the units ran after them (confi
 FLAGGED: reconcile_mode `scoped`, not `full`: the guards criterion is not built (Item 22); an addendum corrects it if the ruling lets this cycle build them (confidence: high)
 ABSENT: the Docker lane (the mentor's); the README status block and prose (Item 22); T032
 Verification: make test-host exit 0 (1987 passed, 13 skipped; hook 57/57); ruff, mypy --strict, shellcheck clean; step 10 as the installed 2.44.0 blocks report it (unknown)
+SCOPE: out — tests/unit/test_scheduled_snapshot.py, tests/unit/test_snapshot_slice1.py, tests/unit/test_state_root_image.py, tests/unit/test_symbols.py, tests/unit/test_trash.py (5 of 8 changed files) (task has FLAGGED: yes)
