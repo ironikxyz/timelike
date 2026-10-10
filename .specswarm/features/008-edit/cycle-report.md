@@ -589,3 +589,65 @@ resolves it in the feedback file.
 
 **Then:** done. No commit until the mentor says lane 008s1-c has ended. Both feedback items (008s1-a and 008s1-b) are
 closed here once the mentor resolves them.
+
+### Cycle 2 addendum 3 — lane 008s1-c, D15, and spec.md's stale version (2026-10-10T04:00:50Z, read from the clock)
+
+- **Sign-off** (mentor, `bridge/history.md` 2026-10-10T03:58:31Z): 06 slice 1 signed off at `965844d`.
+- **Lane 008s1-c** (test only, at `965844d`, 2026-10-09T19:41:48Z to 20:31:26Z; log `bridge/.make-test-008s1-c.log`):
+  - build, up, runner, benchimg, unit and gounit pass. e2e rc 1.
+  - **The ten cells addendum 2 fixed all pass:** SC-2 171–172, SC-5 173–176, SC-1 193–196.
+  - **8 not ok, cells 112–119, all SC-8 in `tests/e2e/container-derived-defaults.bats`** (001's container-derived
+    defaults; this cycle does not touch that file, and it was green in 008s1-b). Each failed its precondition: the
+    throwaway `--cpus 1.5` container did not start in time, and `cpu.max` read back `unable to upgrade to tcp,
+    received 409`.
+  - **A host condition, not code**, per the mentor's diagnosis: starting a container with a CPU limit took over two
+    minutes, then 17 s, at a load average near 9. Plain and `--cpuset` starts were immediate.
+    - The file alone at 20:31:47Z failed the same way (`bridge/.e2e-container-derived-defaults-008s1-c-rerun.log`).
+    - **With `RUN_TIMEOUT=180` it passed 19 of 19** on `965844d`, 20:41:52Z to 20:43:00Z
+      (`bridge/.e2e-container-derived-defaults-008s1-c-rerun2.log`).
+  - Counts as read from the log: plan `1..623`, 615 ok, 8 not ok. The mentor's history entry says 621 of 629; the
+    log I read holds 623 cells, and I cannot reconcile the two from it.
+  - bench-images, scan and lint stand from 008s1-b at `29e65c2`; `965844d` touches only tests and the contract's
+    examples.
+- **criteria_reestablished, modes corrected** (each citation still matches exactly one line of the send; cell counts
+  are this lane's, by file):
+  - `06 · "changes only that text and prints the edited region with line numbers _(traces to: P1)_"` — **executed**
+    [`edit-replacing-text-appearing-once-changes-only-that-text-prints-edited-region.bats`, 4 of 4, lane 008s1-c].
+  - `06 · "succeeds and preserves CRLF endings and tabs _(traces to: P1)_"` — **executed**
+    [`edit-crlf-tab-indented-file-given-lf-and-spaces-preserves-crlf-and-tabs.bats`, 4 of 4, lane 008s1-c].
+  - `06 · "is refused with exit 3, listing each match's line number _(traces to: P2)_"` — **executed**
+    [`edit-matches-more-than-once-refused-exit-3-listing-line-numbers.bats`, 4 of 4, lane 008s1-c].
+  - `06 · "showing up to three nearest candidate regions with line numbers _(traces to: P2)_"` — **executed**
+    [`edit-matches-nowhere-refused-exit-3-nearest-candidates.bats`, 4 of 4, lane 008s1-c].
+  - `06 · "A dry run prints the unified diff and leaves the file byte-identical _(traces to: P2)_"` — **executed**
+    [`edit-dry-run-prints-unified-diff-file-byte-identical.bats`, 6 of 6, lane 008s1-c].
+  - `06 · "is refused, naming the changed lines, when they are not _(traces to: P1)_"` — **executed**
+    [`edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats`, 12 of 12, lane 008s1-c].
+  - `06 · "is refused with the checker's error, and the file is byte-identical _(traces to: P2)_"` — **executed**
+    [`edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats`, 31 of 31, lane 008s1-c].
+  - `06 · "on a failed match is shown the nearest candidates _(traces to: D6)_"` — **unconfirmed** in this cycle,
+    unchanged. Its automated counterpart above executed, but nobody looked at D6 again in this cycle. It was observed
+    on Cycle 1 (Addendum 1).
+  - `06 · "is rejected with the error and the file is left unchanged _(traces to: D15)_"` — **observed by the
+    operator**, on the transcript `bridge/.d15-demo-20261009T204324Z.txt`: the image lane 008s1-c built
+    (`965844d`), with refusals in Python, Go and shell, and the same refusal as JSON. The file's SHA-256 is unchanged
+    after each refusal, and the corrected edit then applies. The mentor accepted the end-of-file context (no marked
+    line when the error falls past the last line) as designed.
+  - The carried items (`edit-slice-0-carried-items.bats`, FR-28) passed 4 of 4 in this lane.
+- **not_verified, now closed by the lane:** everything in the image that Group C listed (the e2e cells, the
+  wheels' install and import check, the checker under the image's unit lane, the scan over the four distributions,
+  conformance). Compiler confirmation (lore P005) for Go ran: cell 231, `gofmt -e` in `GO_IMAGE`, ok in 826 ms, not
+  skipped (the log has no `# skip`). **Still open:** D6 in this cycle (above), and compiler confirmation for
+  TypeScript and Rust, which have none (R10).
+- **reconcile_mode:** `full`, unchanged.
+- **spec.md corrected** (declared, not regenerated). CPython moved to 3.14.8 under addendum 1's ruling, which made
+  two statements in the body false. No prompt revision moved, so `audited_against` is unchanged `[1]`.
+  - FR-19 (276): "CPython 3.14.7, the same version as the agent's" now reads "CPython at the version `pins.env` pins
+    as `PYTHON_VERSION`, the same as the agent's". It names no version, so the next pin bump leaves it true.
+  - Scenario 7 (223): the example verdict names `python 3.14.8 compile`, matching `contracts/edit-cli.md:185`.
+- **Feedback closed** (both resolved by the mentor beside each question):
+  `06-20261009-162833-lane-008s1-a-build-parse-and-new-cves.md` (2026-10-09T19:21:41Z) and
+  `06-20261009-192053-lane-008s1-b-slice-0-cells-pin-the-old-verdict.md` (2026-10-10T03:58:31Z).
+- **Deny-list:** run before the commit and over the merge (below in the report to the mentor).
+
+**Then:** merge `--no-ff` `modify/008-slice-1` into `master`. No push.

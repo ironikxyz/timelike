@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -21,8 +21,14 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   fail open), `--skip-syntax-check`, the README status block (17 of 38). **Lane 008s1-a failed** (feedback
   `06-20261009-162833`): the Dockerfile did not parse (fixed `765190a`), and the mentor ruled CPython 3.14.8 (uv 0.12.22)
   and CVE-2026-107161 baselined, origin git (`e275c26`); Cycle 2 addendum 1. **Lane 008s1-b**: slice 1 green; ten slice-0 cells pinned the old
-  verdict (feedback `06-20261009-192053`), fixed `5f5c246`, Cycle 2 addendum 2. **Next:** lane 008s1-c (test only),
-  then D15. **No commit until 008s1-c has ended.** Close both feedback items here once the mentor resolves them. Host evidence: venvs in the scratchpad (`venv-ts` with the cp312 wheels, `venv-plain` without).
+  verdict (feedback `06-20261009-192053`), fixed `5f5c246`, Cycle 2 addendum 2. **Lane 008s1-c** green (its 8 SC-8
+  failures were a slow `--cpus` container start on the host; the file alone passed 19 of 19 with `RUN_TIMEOUT=180`).
+  D15 observed by the operator. **Signed off at `965844d`** (2026-10-10T03:58:31Z). Cycle 2 addendum 3 corrects
+  spec.md FR-19 and Scenario 7 (3.14.7 was stale). **Merged `--no-ff` into `master`. Not pushed**: the mentor
+  discharges on the merge; push only on the discharge plus the operator's OK. The README Status is now 17 of 38, so
+  that push's tag is `v0.17.0`.
+  - **Feedback closed** (resolved by the mentor beside each question): `06-20261009-162833-…` (lane 008s1-a) and
+    `06-20261009-192053-…` (lane 008s1-b).
 - **`modify/002-rev8-carried`** (from `ec71f3d`): 002 Cycle 3, send `bridge/sends/02-rev8-20261009-043302.md`. Records
   only: revision 8 is re-recorded as `carried` to 02 slice 1, and `audited_against` stays `[1, 8]`. **Signed off at
   `28da1d0`** (records only, no lane) and **merged `--no-ff` into `master` as `bbb2c46`**. No tag (the slice count is

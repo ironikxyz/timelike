@@ -303,3 +303,14 @@ INHERITED: addendum 1's PYTHON_VERSION 3.14.8 — from A2 (confidence: high)
 FLAGGED: both examples in contracts/edit-cli.md move to 3.14.8 — line 185 (the one named) and line 271 (the refusal example, the same stale value) — chose updating them over making them version-neutral, because the contract's checker table already defines V as the interpreter's version, and an example reads better with a real one (confidence: high)
 ABSENT: spec.md lines 223 (the same refusal example) and 276 ("CPython 3.14.7, the same version as the agent's") — the spec body, not asked for, and left as the mentor's call; they are reported in the addendum
 SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 addendum 3 — sign-off (`bridge/history.md` 2026-10-10T03:58:31Z)
+
+### A5: spec.md's two stale 3.14.7 statements corrected, not regenerated
+**Started:** 2026-10-10T04:00:50Z | **Completed:** 2026-10-10T04:01:41Z
+
+INHERITED: addendum 1's PYTHON_VERSION 3.14.8 (A2) and the contract's examples (A4) — from A2 and A4 (confidence: high)
+FLAGGED: FR-19 (276) names no version ("CPython at the version `pins.env` pins as `PYTHON_VERSION`, the same as the agent's"); chose this over writing 3.14.8, because a requirement that restates a pin goes false on the next bump, as this one just did (confidence: high)
+FLAGGED: Scenario 7 (223) names 3.14.8; chose a concrete version over a placeholder, because it is an example verdict and matches contracts/edit-cli.md:185 (confidence: high)
+ABSENT: regeneration, and any change to the spec's frontmatter (`audited_against` stays [1]): no prompt revision moved; a pin bump made two statements false, which a declared correction fixes
+SCOPE: none — no files outside the feature's artifacts changed

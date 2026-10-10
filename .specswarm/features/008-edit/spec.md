@@ -220,7 +220,7 @@ The edit exits 3, naming the move (`lines 42-48 are now lines 45-51`). `do inste
 **Scenario 7: an edit that would break the syntax (D15).**
 1. The agent replaces `def f(x):` with `def f(x)` in a clean Python file.
 2. Exit 1:
-   `refused: the edit would make app.py fail its syntax check (python 3.14.7 compile): line 12, column 9: expected ':'; nothing written`.
+   `refused: the edit would make app.py fail its syntax check (python 3.14.8 compile): line 12, column 9: expected ':'; nothing written`.
 3. The lines around line 12 of the would-be result are shown numbered, with the error line marked. The
    file's SHA-256 is unchanged.
 
@@ -273,7 +273,7 @@ says the file still fails, and where. An edit that adds a new error in the lines
     (`syntax.status "not checked"`, `syntax.reason "language unknown"`).
 - **FR-19** **Checkers** (seam 1), all timelike's own and never the agent's runtime:
   - **Python:** timelike's interpreter's own compiler (`compile(…, "exec", ast.PyCF_ONLY_AST)`, which
-    parses and never runs), CPython 3.14.7, the same version as the agent's;
+    parses and never runs), CPython at the version `pins.env` pins as `PYTHON_VERSION`, the same as the agent's;
   - **shell:** `/bin/bash -n` (bash's own parser, which reads and never runs), with no startup files and
     no `BASH_ENV`;
   - **TypeScript, TSX, Go, Rust:** tree-sitter, through its Python binding and prebuilt grammar wheels
