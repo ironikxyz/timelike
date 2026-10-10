@@ -965,3 +965,131 @@ image.
 **For the mentor (route: plan, if plan rules):** (a), (b) or something else, and whether
 `PIP_BREAK_SYSTEM_PACKAGES=1` with `PIP_USER=1` is acceptable. If the answer is (a), it also needs feature
 02's ruling on vanilla.
+
+## Item 22 — Feature 07 slice 1 (`005-recover`, Cycle 3): how the guards reach `rm` and `git` (blocks two criteria: the guards and the trash)
+
+**Status:** open. Raised 2026-10-10T05:15:03Z (read from the clock) on `modify/005-slice-1`, from send
+`bridge/sends/07-rev11-20261010-050829.md`, seams 4, 5 and 7. The send asks for this item before the guards are
+built, where a decision would put a timelike wrapper in front of a standard command name or change another
+feature's contract. Both apply.
+
+**Blocked until this is answered:**
+- criterion "A recursive delete, a hard reset with uncommitted changes, a force push, and a clean of untracked files
+  each take an automatic snapshot before running, and the verdict names it";
+- criterion "Deleted files are moved to a restorable trash that is purged by age and size limits". The trash's
+  store, purge and restore don't depend on this answer, and I'm building them. Only the step that feeds deletes
+  into the trash does.
+
+**Going ahead meanwhile:** the state root and its volume (seam 1), keying by workspace (2), importing slice 0's
+stores (3), the scheduled snapshot (6), purging (8), the lock (9), the restore-first criterion against the new store,
+the cross-session and recreate criterion, Item 20's `symbols` move, and rule 10's text.
+
+### Q1 · `rm`, `git reset --hard` and `git clean`: what stands in front of them
+
+What every option below shares:
+- Every option calls a timelike helper by absolute path (`/opt/timelike/libexec/guard`, P002). The helper takes the
+  snapshot, prints one line naming it on stderr, and runs the real command with its arguments unchanged.
+- The real command's output and exit code pass through.
+- A command line the guard can't classify runs, with a snapshot taken anyway ("when in doubt").
+
+**(a) Bash functions named `rm` and `git`, in `/etc/timelike/shell-env.bash`. My recommendation.**
+- **Reach:**
+  - `bash -c`, `bash -lc` and interactive shells, the same paths 001's hook already reaches;
+  - every bash script those shells start, because `BASH_ENV` is exported.
+- **Not on PATH**, so `xargs rm`, `find -exec rm`, `make` recipes (`sh`), Python `subprocess` and `sh -c` get the
+  real binaries. Deletes that happen there are seam 6's case: the scheduled snapshot, criterion 2.
+- **The function body** is a `case` on the arguments, using builtins only:
+  - a guarded form calls the helper;
+  - anything else runs `command rm "$@"` / `command git "$@"` at once, with no fork added.
+  - `git status`, `git diff`, `rm file.txt` (trash only, below) and the like cost a function call.
+- **Transparency:**
+  - `type -a rm` prints `rm is a function`, its body, then `rm is /usr/bin/rm`;
+  - `command rm` is the visible escape;
+  - the announcement says both.
+- **The cost:** a timelike function now answers to the names `rm` and `git` in the agent's shells.
+
+**(b) Executable wrappers `/opt/timelike/bin/rm` and `/opt/timelike/bin/git`, first on PATH.**
+- They reach everything that resolves through PATH, including `xargs`, `find -exec`, `make` and `subprocess`.
+- They also put timelike in front of every program's own internal `rm -rf` and `git` calls: package managers,
+  build tools, test suites and git's own scripts. Each recursive delete in a build would snapshot the workspace.
+  That costs latency (below) and store churn, and turns the guard from the agent's commands into everyone's.
+- `type -a rm` would show the wrapper first, which is accurate but less obviously a wrapper.
+- This is the send's literal case. I don't recommend it.
+
+**(c) A `DEBUG` trap that inspects `$BASH_COMMAND`, with no name shadowed.**
+- It sees the command text before expansion, so `rm -rf "$dir"` is classified on the literal `$dir`.
+- It can't move a file to the trash without suppressing the command (`extdebug` returning non-zero) and running
+  its own in its place. That is a hidden wrapper.
+- `type -a rm` would show only `/usr/bin/rm`, which hides what the agent actually gets. That fails seam 4's
+  `type -a` condition.
+- It runs before every simple command in every shell.
+- Rejected.
+
+### Q2 · The force push (seams 4 and 5): a step in 001's hook dispatcher
+
+`git push --force` changes no file in the workspace. What it changes is the remote branch.
+
+**Recommended:** git's own `pre-push` hook. Git gives it, on stdin, each `<local ref> <local sha> <remote ref>
+<remote sha>`: the remote's prior commit, read by git itself during the push. No `ls-remote` is needed, and no
+refspec parsing.
+- The image already routes every hook through `/opt/timelike/git-hooks/dispatch` (001, discovery revision 7).
+- I'd add one timelike step there, before the repository's own `pre-push`. For each update whose remote sha is not
+  an ancestor of the local sha (a non-fast-forward, which is exactly a forced update), or whose remote object isn't
+  present locally ("when in doubt"), it would:
+  - take the snapshot (reason `before git push --force <remote> <ref>`);
+  - record the remote's prior sha in the snapshot record;
+  - print one line naming both, and the command that puts the branch back:
+    `git push --force <remote> <prior sha>:<ref>`.
+- The push goes through the agent's own credentials, never Adele (the send). It runs whether the agent typed
+  `--force`, `--force-with-lease` or `+ref`, and from any process, so it needs no function.
+- **The cost:**
+  - 001's dispatcher now does more than run the repository's hook under a time limit, and that changes another
+    feature's contract.
+  - `git push --no-verify` skips every hook, this one included. Under (a), the `git` function could catch
+    `--no-verify` with a force flag and record the prior commit from the local remote-tracking ref (which may be
+    stale, and the line would say so). With (b), the same.
+- **Alternative:** the `git` function alone parses push arguments and runs `git ls-remote` first. That is a second
+  network call per push, and refspec parsing that git already does. Not recommended.
+
+### Q3 · The trash (seam 7), which rides on Q1
+
+- **What goes in:**
+  - every file a guarded `rm` deletes, recursive or not;
+  - every file a guarded `git clean` deletes.
+
+  Each is copied into the state root's trash, deduplicated like snapshot content, and then the real command deletes
+  it. "Moved" is met by copy-then-delete, so the real command's behaviour and exit code are unchanged (seam 4).
+- **Paths:** only paths the agent owns. Paths outside any workspace (`rm -r /tmp/x`) go to the trash too. A
+  workspace snapshot can't cover them, and the criterion says "deleted files", not "workspace files".
+- **Restore:** `undo --trash` lists the trash, and `undo --trash ID --yes` puts an entry back at its original path.
+  It refuses, naming the path, when something now occupies it. It is built now, and testable now through the
+  helper.
+- **Purge:** on write, by age (`TIMELIKE_TRASH_MAX_AGE_DAYS`) and size (`TIMELIKE_TRASH_MAX_BYTES`). It names what it
+  dropped.
+- **Cost:** `rm` of a single file then forks the helper. On this host that is about 100 ms (timelike's 3.14.8
+  interpreter, `agentio` loaded). I'd accept that for P5 and say so. The alternative is trash for recursive deletes
+  only, which reads "deleted files" narrowly, and I'd raise that rather than choose it.
+
+### Also for the mentor (not blocking): the scheduled snapshot's cost (seam 6)
+
+Measured on this host with timelike's interpreter (3.14.8), the slice-0 code, unchanged workspaces:
+
+| Workspace | Files | Size | Snapshot time |
+|---|---|---|---|
+| This repository | 464 | 6.7 MB | 270–320 ms |
+| Synthetic | 657 | 51 MB | 620–700 ms |
+
+Slice 0 re-reads and re-copies every file, then re-hashes every object it names. A scheduled snapshot at shell
+start at that cost is not a small fraction of a second, so I'll bound it (in the spec, decided, with numbers in the
+cycle report):
+- it is taken only when the last one for the workspace is older than an interval;
+- the interval check is builtins only, with no fork when it isn't due;
+- a stat cache lets an unchanged file skip the copy.
+
+**One reading to confirm:** stack note 12 says every object a snapshot names is re-hashed before "taken". I'd keep
+that for objects new to this snapshot, and check size and type, not content, for objects an earlier verified snapshot
+already proved. If the mentor reads note 12 as "every object, every time", the scheduled snapshot's cost grows with
+the workspace's size, and I'll report it measured.
+
+**For the mentor (route: code):** Q1 (a), (b) or (c); Q2, whether 001's dispatcher may carry the `pre-push` step;
+Q3, as proposed or narrowed. Note 12's reading too.
