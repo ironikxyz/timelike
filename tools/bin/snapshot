@@ -47,6 +47,10 @@ DEFAULT_CAPS = {
     ENV_MAX_FILE_BYTES: 64 * 1024 * 1024,
     ENV_MAX_ENTRIES: 50_000,
 }
+ENV_MAX_AGE_DAYS = "TIMELIKE_SNAPSHOT_MAX_AGE_DAYS"
+ENV_STATE_MAX_BYTES = "TIMELIKE_STATE_MAX_BYTES"
+ENV_PURGE_SECONDS = "TIMELIKE_PURGE_SECONDS"
+PURGE_DEFAULTS = {ENV_MAX_AGE_DAYS: 30, ENV_STATE_MAX_BYTES: 4 * 1024**3, ENV_PURGE_SECONDS: 2}
 LOCK_WAIT_S = 10.0
 AGENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # TIMELIKE_AGENT, as the journal validates it (009)
 NOTES: list[str] = []  # lines every result of this invocation carries (FR-27, FR-30, FR-37), in order
@@ -131,6 +135,22 @@ def caps_from_env() -> dict[str, int]:
                 f"e.g. {var}={default}, or 0 for no cap",
             )
     return caps
+
+
+def purge_limits() -> dict[str, int]:
+    """FR-36's three limits from the environment; 0 = none. A bad value is a usage error naming it."""
+    out = {}
+    for var, default in PURGE_DEFAULTS.items():
+        raw = os.environ.get(var, "").strip()
+        if raw == "":
+            out[var] = default
+        elif raw.isdigit():
+            out[var] = int(raw)
+        else:
+            raise agentio.UsageError(
+                f"{var} must be a non-negative whole number, not {raw!r}", f"e.g. {var}={default}, or 0 for none"
+            )
+    return out
 
 
 class Outcome(Exception):
@@ -532,6 +552,151 @@ class Store:
         return str(path)
 
 
+# ── purge (FR-36, FR-37, D-16) ────────────────────────────────────────────────────────────────
+
+
+def _object_bytes(store_dir: Path) -> int:
+    total = 0
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(store_dir / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                with os.scandir(sub.path) as it:
+                    for f in it:
+                        with contextlib.suppress(OSError):
+                            total += f.stat(follow_symlinks=False).st_size
+    return total
+
+
+def _records_by_age(store_dir: Path) -> list[tuple[float, int]]:
+    """(record mtime, id), oldest first. A record is written once, so its mtime is when it was taken
+    (an imported record's is set to its own taken_at), and no record has to be parsed to age it."""
+    out = []
+    with contextlib.suppress(OSError):
+        for p in (store_dir / "snaps").glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append((p.stat().st_mtime, int(p.stem)))
+    return sorted(out)
+
+
+def _sweep(store_dir: Path) -> None:
+    """Delete every object no remaining record names (mark and sweep, within one locked store)."""
+    keep: set[str] = set()
+    for p in (store_dir / "snaps").glob("*.json"):
+        try:
+            rec = json.loads(p.read_text())
+        except (OSError, ValueError):
+            return  # a record that cannot be read may name anything: delete nothing
+        keep.update(e["sha256"] for e in rec.get("entries", []) if e.get("kind") == "file")
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(store_dir / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                for f in os.scandir(sub.path):
+                    if f.name not in keep and not f.name.startswith("."):
+                        with contextlib.suppress(OSError):
+                            os.unlink(f.path)
+
+
+@contextlib.contextmanager
+def _other_locks(mine: Store) -> Iterator[tuple[dict[Path, str], list[str]]]:
+    """Every other store whose lock is free at this moment, locked; and the busy ones, by workspace."""
+    held: dict[Path, str] = {}
+    busy: list[str] = []
+    fds = []
+    try:
+        with contextlib.suppress(OSError):
+            for d in sorted(Path(store_root()).iterdir()):
+                if d == mine.path:
+                    continue
+                try:
+                    ws = (d / "workspace").read_text().strip()
+                    fd = os.open(d / "lock", os.O_RDWR | os.O_CREAT, 0o600)
+                except OSError:
+                    continue
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(fd)
+                    busy.append(ws)
+                    continue
+                fds.append(fd)
+                held[d] = ws
+        yield held, busy
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
+def purge(store: Store) -> list[dict[str, Any]]:
+    """Purge the state root after a write; the caller holds `store`'s lock (FR-36, FR-37).
+
+    First every snapshot older than the age limit, then the oldest snapshot of any workspace while the
+    snapshot content exceeds the size cap. Never the newest snapshot of a workspace. Other workspaces'
+    stores are purged only when their lock is free now (no wait). Bounded by TIMELIKE_PURGE_SECONDS.
+    Each drop, and each reason it stopped short, is a NOTES line.
+    """
+    limits = purge_limits()
+    age_s = limits[ENV_MAX_AGE_DAYS] * 86400
+    cap, bound = limits[ENV_STATE_MAX_BYTES], limits[ENV_PURGE_SECONDS]
+    if not age_s and not cap:
+        return []
+    deadline = time.monotonic() + bound if bound else None
+    dropped: list[dict[str, Any]] = []
+    with _other_locks(store) as (others, busy):
+        stores = {store.path: store.ws, **others}
+        ages = {d: _records_by_age(d) for d in stores}
+        sizes = {d: _object_bytes(d) for d in stores} if cap else {}
+        now = time.time()
+
+        def drop(d: Path, ident: int, why: str) -> None:
+            with contextlib.suppress(OSError):
+                (d / "snaps" / f"{ident}.json").unlink()
+            ages[d] = [a for a in ages[d] if a[1] != ident]
+            dropped.append({"workspace": stores[d], "id": ident, "why": why})
+            add_note(f"purged: snapshot {ident} of {stores[d]} ({why})")
+
+        def over_time() -> bool:
+            return deadline is not None and time.monotonic() > deadline
+
+        stopped = None
+        if age_s:
+            for d in stores:
+                newest = max((i for _, i in ages[d]), default=None)
+                for mtime, ident in list(ages[d]):
+                    if ident != newest and now - mtime > age_s:
+                        drop(d, ident, f"older than {limits[ENV_MAX_AGE_DAYS]} days")
+        touched = {x_d for x_d in stores if any(x["workspace"] == stores[x_d] for x in dropped)}
+        for d in touched:
+            _sweep(d)
+            if cap:
+                sizes[d] = _object_bytes(d)
+        while cap and sum(sizes.values()) > cap:
+            if over_time():
+                stopped = f"the time bound ({ENV_PURGE_SECONDS}={bound}) was reached"
+                break
+            pick = None
+            for d in stores:
+                newest = max((i for _, i in ages[d]), default=None)
+                for mtime, ident in ages[d]:
+                    if ident != newest and (pick is None or mtime < pick[0]):
+                        pick = (mtime, d, ident)
+                    break  # oldest first: only each store's oldest can be the oldest overall
+            if pick is None:
+                stopped = "only each workspace's newest snapshot is left"
+                break
+            _, d, ident = pick
+            drop(d, ident, f"over {ENV_STATE_MAX_BYTES}")
+            _sweep(d)
+            sizes[d] = _object_bytes(d)
+        if stopped and cap and sum(sizes.values()) > cap:
+            add_note(
+                f"purge stopped: {stopped}; the snapshots are {human(sum(sizes.values()) - cap)}"
+                f" over {ENV_STATE_MAX_BYTES}"
+            )
+        for ws in busy:
+            add_note(f"purge skipped {ws}: another snapshot or undo holds it")
+    return dropped
+
+
 # ── slice 0's stores in the session scratch (FR-30, D-14) ─────────────────────────────────────
 
 
@@ -606,6 +771,9 @@ def _import_one(
     new.setdefault("session", session)
     new.setdefault("agent", None)
     store.write_record(new)
+    with contextlib.suppress(OSError, ValueError, KeyError):  # its age is its own, for the purge (FR-36)
+        t = datetime.fromisoformat(rec["taken_at"]).timestamp()
+        os.utime(store.record_path(new["id"]), (t, t))
     problem = store.verify(new)
     if problem is not None:
         with contextlib.suppress(OSError):
@@ -816,6 +984,7 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
     store.create()
     with store.lock():
         rec = take_locked(store, caps, "on demand", label)
+        purged = purge(store)
     size = human(rec["bytes"])
     if rec["partial"]:
         verdict = (
@@ -849,6 +1018,7 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
     data["store"] = str(store.path)
     if imported:
         data["imported"] = imported
+    data["purged"] = purged
     return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
 
 
@@ -910,6 +1080,7 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         raise agentio.UsageError("-m labels a new snapshot; snapshot list takes none", "run snapshot -m TEXT")
     if args.verb != "list":
         caps_from_env()  # a bad cap value is a usage error before anything is written
+        purge_limits()
     ws = find_workspace()
     scope = "list" if args.verb == "list" else "take"
     state = note_persistence()
@@ -1108,6 +1279,9 @@ def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
 def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if args.id is not None and not args.id.isdigit():
         raise agentio.UsageError(f"{args.id!r} is not a snapshot id", "ids are numbers; see: snapshot list")
+    if args.yes and not args.dry_run:
+        caps_from_env()  # bad values are usage errors before a restore starts, not after it ends
+        purge_limits()
     ws = find_workspace()
     state = note_persistence()
     try:
@@ -1176,6 +1350,7 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
                 f"the state before is snapshot {before['id']}; undo {before['id']} --yes returns to it",
             ) from None
         left = [ch for ch in make_plan(ws, rec) if ch["change"] != "keep"]
+        purged = purge(store) if not left else []
     if left:
         raise Outcome(
             agentio.EXIT_FAILURE,
@@ -1198,6 +1373,7 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
         "verified": True,
         "before": before["id"],
         "before_partial": before["partial"],
+        "purged": purged,
     }
     return agentio.Result(ws, scope, verdict, lines=shown, data=data, cut=cut)
 

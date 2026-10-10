@@ -480,8 +480,8 @@ each workspace is never removed. The verdict names each snapshot it dropped.
 **Purge (seam 8)**
 - **FR-36** Every take (on demand, scheduled, safety, and later the guards') ends with a **purge** of the
   state root, under the time bound `TIMELIKE_PURGE_SECONDS` (default 2): first, snapshots older than
-  `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` (default 30; 0 = none); then, while the state root's stored bytes
-  exceed `TIMELIKE_STATE_MAX_BYTES` (default 4 GiB; 0 = none), the oldest snapshot of any workspace.
+  `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` (default 30; 0 = none); then, while the snapshot content stored in the
+  state root (every workspace's objects; the trash has its own cap) exceeds `TIMELIKE_STATE_MAX_BYTES` (default 4 GiB; 0 = none), the oldest snapshot of any workspace.
   **The newest snapshot of each workspace is never removed.** Content no remaining record names is
   deleted. Another workspace's store is purged only if its lock is free at that moment; a busy store is
   skipped and said.

@@ -87,10 +87,15 @@ def main(argv: list[str]) -> int:
         store = snap.Store(ctx, ws)
         snap.import_slice0(store)
         store.create()
+        snap.purge_limits()  # a bad limit is named before anything is taken
         with store.lock(wait_s=LOCK_WAIT_S):
             rec = snap.take_locked(store, caps, "scheduled", None)
+            snap.purge(store)
     except Exception as e:  # noqa: BLE001 — one line, never a traceback at a shell's start
         return report(e, ws)
+    for line in snap.NOTES:
+        if line.startswith(("purged: ", "purge ")):
+            say(line)  # a purge is never silent, even here (FR-37)
     if rec["partial"]:
         say(
             f"scheduled snapshot {rec['id']} of {ws} is partial: excluded {len(rec['excluded'])} files"

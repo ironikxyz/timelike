@@ -264,3 +264,84 @@ def test_a_cached_file_whose_object_is_gone_is_read_again(lab: Lab) -> None:
     obj.unlink()
     assert _take_counting_opens(lab) == ["a.txt"]
     assert obj.is_file()
+
+
+# ── FR-36, FR-37: purge on write, by age then size, never a workspace's newest ──────────────
+
+
+def _age(lab: Lab, ident: int, days: float, ws: Path | None = None) -> None:
+    p = lab.store(ws) / "snaps" / f"{ident}.json"
+    t = p.stat().st_mtime - days * 86400
+    os.utime(p, (t, t))
+
+
+def _objects(lab: Lab, ws: Path | None = None) -> set[str]:
+    return {p.name for p in (lab.store(ws) / "objects").rglob("*") if p.is_file()}
+
+
+def test_age_purge_drops_old_snapshots_names_them_and_never_the_newest(lab: Lab) -> None:
+    for i in range(3):
+        write(lab.ws / "f.txt", f"version {i}\n")
+        take(lab)
+    for ident in (1, 2, 3):
+        _age(lab, ident, 40)
+    write(lab.ws / "f.txt", "now\n")
+    d = take(lab)
+    assert d["id"] == 4
+    assert d["purged"] == [
+        {"workspace": os.path.realpath(lab.ws), "id": i, "why": "older than 30 days"} for i in (1, 2, 3)
+    ]
+    real = os.path.realpath(lab.ws)
+    raw = json.loads(snap(lab, "--json", "list").stdout)  # list does not purge; the take's lines did
+    assert [s["id"] for s in raw["snapshots"]] == [4]
+    assert len(_objects(lab)) == 1  # content only the purged snapshots named is gone
+
+    # the newest is never removed, however old
+    _age(lab, 4, 400)
+    r = snap(lab, "--json", "list")
+    assert [s["id"] for s in json.loads(r.stdout)["snapshots"]] == [4]
+    t = snap(lab, "--text", TIMELIKE_SNAPSHOT_MAX_AGE_DAYS="1")
+    out = t.stdout.splitlines()
+    assert f"purged: snapshot 4 of {real} (older than 1 days)" in out  # 4 is no longer the newest
+
+
+def test_size_purge_drops_oldest_until_it_fits_and_says_when_it_cannot(lab: Lab) -> None:
+    for i in range(4):
+        write(lab.ws / f"f{i}.bin", os.urandom(1000))
+        (lab.ws / f"f{i - 1}.bin").unlink(missing_ok=True)
+        take(lab, TIMELIKE_STATE_MAX_BYTES="0")
+    assert len(_objects(lab)) == 4
+    d = take(lab, TIMELIKE_STATE_MAX_BYTES="2500")  # 5 = 4's content: 1 KB live, 3 KB stale
+    assert [x["id"] for x in d["purged"]] == [1, 2]
+    assert all(x["why"] == "over TIMELIKE_STATE_MAX_BYTES" for x in d["purged"])
+    assert len(_objects(lab)) == 2
+
+    lines = json.loads(snap(lab, "--json", TIMELIKE_STATE_MAX_BYTES="10").stdout)["lines"]
+    stopped = [x for x in lines if x.startswith("purge stopped: ")]
+    assert stopped and "only each workspace's newest snapshot is left" in stopped[0], lines
+    assert [s["id"] for s in json.loads(snap(lab, "--json", "list").stdout)["snapshots"]] == [6]
+
+
+def test_another_workspace_is_purged_when_free_and_skipped_when_busy(lab: Lab) -> None:
+    import fcntl
+
+    other = lab.tmp / "other"
+    for i in range(2):
+        write(other / "f.txt", f"o{i}\n")
+        assert snap(lab, "--json", cwd=other).returncode == 0
+    _age(lab, 1, 40, other)
+    with (lab.store(other) / "lock").open("a") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)
+        write(lab.ws / "f.txt", "x\n")
+        busy = json.loads(snap(lab, "--json").stdout)
+    assert f"purge skipped {os.path.realpath(other)}: another snapshot or undo holds it" in busy["lines"]
+    assert busy["purged"] == []
+    free = take(lab)
+    assert free["purged"] == [{"workspace": os.path.realpath(other), "id": 1, "why": "older than 30 days"}]
+
+
+def test_a_bad_purge_limit_is_a_usage_error_before_anything_is_written(lab: Lab) -> None:
+    write(lab.ws / "f.txt", "x\n")
+    r = snap(lab, "--json", TIMELIKE_STATE_MAX_BYTES="lots")
+    assert r.returncode == 2 and "TIMELIKE_STATE_MAX_BYTES" in r.stderr
+    assert not lab.store().exists()

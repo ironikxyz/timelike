@@ -278,3 +278,17 @@ Verification: host test K1–K13 (57 of 57); test_scheduled_snapshot.py 5 passed
 **Process failures recorded:**
 - The first run of the K cases used a bash fake helper, which inherited BASH_ENV, re-entered the hook and recursed until it was killed (about 3 minutes, a few hundred processes, in a temporary directory). That's why the re-entry guard exists, and K1 now counts exactly one call.
 - Cleaning up after it, `pkill -f` on a pattern matched my own command line and killed that shell, which my own notes say never to do. Nothing else was affected; the test's trap removed its directory.
+SCOPE: out — tests/unit/test_scheduled_snapshot.py (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T025: purge on write, by age then size (FR-36, FR-37)
+**Started:** 2026-10-10T05:44:04Z | **Completed:** 2026-10-10T05:49:11Z
+
+INHERITED: the store layout, NOTES, the lock — from T021–T024 (confidence: high)
+FLAGGED: a snapshot's age is its record file's mtime (written once at take time; an imported record's is set to its own taken_at), chose that over parsing every record, whose entries can be tens of thousands of lines (confidence: high)
+FLAGGED: TIMELIKE_STATE_MAX_BYTES counts the snapshot content of every workspace (their objects), not the trash, which has its own cap (FR-41); spec FR-36 and the contract say so, declared (confidence: high)
+FLAGGED: the purge runs after a take (on demand, scheduled) and after a verified restore, never between undo's safety snapshot and its apply, so it can never remove the snapshot being restored (confidence: high)
+ASSUMED: another workspace's store is purged only while its lock is free at that moment; a busy one is named and skipped (no wait, P2) (confidence: high)
+ASSUMED: a store whose records cannot all be read is not swept (a record that cannot be read may name anything) (confidence: high)
+ABSENT: a test of the time bound itself (TIMELIKE_PURGE_SECONDS is whole seconds and the host purges in milliseconds); the bound is in the loop, and the line it prints shares the "stopped" path the newest-only case exercises
+Verification: 4 units (age; size with the newest kept and the stop named; another workspace purged when free, skipped and named when busy; a bad limit is a usage error before anything is written); all recover units 104 passed
+**Process failure recorded:** an edit to undo's verification dropped its `if left:` guard, so every restore reported a failure; 16 units caught it before the commit.
