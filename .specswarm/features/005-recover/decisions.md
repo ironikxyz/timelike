@@ -361,3 +361,27 @@ FLAGGED: reconcile_mode `scoped`, not `full`: the guards criterion is not built 
 ABSENT: the Docker lane (the mentor's); the README status block and prose (Item 22); T032
 Verification: make test-host exit 0 (1987 passed, 13 skipped; hook 57/57); ruff, mypy --strict, shellcheck clean; step 10 as the installed 2.44.0 blocks report it (unknown)
 SCOPE: out — tests/unit/test_scheduled_snapshot.py, tests/unit/test_snapshot_slice1.py, tests/unit/test_state_root_image.py, tests/unit/test_symbols.py, tests/unit/test_trash.py (5 of 8 changed files) (task has FLAGGED: yes)
+
+## Lane 005s1-a fixes (`bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md`)
+
+### T033: SC-7's scheduled_ids returned its loop's status; SC-7's shells start in the repository
+**Started:** 2026-10-10T08:45:23Z | **Completed:** 2026-10-10T08:52:48Z (T033 and T034 were edited before either was committed; one completion time read for both)
+
+INHERITED: the SC-7 file and exec_in — from T028 (confidence: high)
+FLAGGED: `scheduled_ids` now matches with `if` and ends `return 0`, so it never returns a match's status; the callers' assertions are unchanged (count == 1, the undo's verdict, the manifest) (confidence: high)
+FLAGGED: the same shape elsewhere in this cycle's e2e files: SC-8's two loops (`[[ … ]] && found=yes`, `[[ … ]] && n=…`) were not a function's last statement, so they could not fail a cell, but become `if` too. helpers.bash's new loops (state_root_rm) end in `|| true`. Nothing else matched (confidence: high)
+FLAGGED: a second defect behind the first, found by reading what would run next: SC-7's `in_repo` started the shell in /home/agent (the image's WORKDIR) and `cd`ed in the command, after the hook had run. The hook snapshots the workspace of the directory a shell STARTS in, and skips $HOME, so no scheduled snapshot of the repository was ever taken and the count would have failed. Chose to start the shell in the repository (`exec_in -w DIR`, docker exec -w), as a harness starts the agent's shell in its workspace, over changing the hook to look at a later `cd`; it is the test's setup that was wrong, not the feature. No assertion was widened (confidence: high)
+ABSENT: running the cells (no Docker here); the lane reruns them. The SC-7 cells now reach the count, the undo and the manifest for the first time in the image
+Verification: shellcheck clean; bats --count 8 (4, 4); the fixed loop under `set -e` on a fake list returns 0 and finds the scheduled id
+SCOPE: in (3 changed files)
+
+### T034: the scan — eight git-layer entries in two baselines; the Docker CLI to 29.9.0
+**Started:** not read (begun right after T033's edits) | **Completed:** 2026-10-10T08:52:48Z
+
+INHERITED: the lane's proposed entries (scan/out/baseline.proposed.json, scan/out/timelike-vanilla/baseline.proposed.json) and grype.json's descriptions (confidence: high)
+FLAGGED: origin `git`, checked rather than assumed: the pinned trixie-slim base's dpkg status (78 packages, the layer of base digest a99cfc51…) lists no gnutls or krb5 package, and Debian trixie's Depends lead git → libcurl3t64-gnutls → libgnutls30t64 and libgssapi-krb5-2 → libkrb5-3, libk5crypto3, libkrb5support0 (librtmp1 and libngtcp2-crypto-gnutls8 → libgnutls30t64). From the base layer and the package index, not dpkg in a built image (confidence: high)
+FLAGGED: each entry has its own reason from the advisory's text, and the Critical (CVE-2026-95210) says what is still exposed (a peer holding a CA-issued certificate for the host, on the network path, could serve forged content to a fetch): accepted as bounded, not as nothing. reviewed and review_by unchanged (2026-12-27), a review_notes line per file (confidence: medium — the advisories' texts are short and name no affected code path)
+FLAGGED: DOCKER_CLI_IMAGE → docker:29.9.0-cli by its index digest (1a4c7cb6…, confirmed by the registry's Docker-Content-Digest), the newest docker CLI release (2026-10-09). Its /usr/local/bin/docker carries Go build info go1.26.9 (29.8.2 and 29.8.1: go1.26.8), read from the linux/amd64 layer pulled from the registry; the e2e runner and the bench driver both build from this one pin (tests/runner/Dockerfile, bench/driver/Dockerfile) (confidence: high)
+ABSENT: rebuilding either image or running `docker version` (no Docker here; the lane rebuilds both from the pin and the mentor's check reads Client.GoVersion); the arm64 layer's Go version (not read)
+Verification: evaluate.py report over the lane's own grype output with the new baselines: grype PASS, 0 blocking, in both images (the sbom line failed only on the placeholder image id I passed); test_agent_runtimes.py and test_scan*.py 349 passed
+SCOPE: out — pins.env, scan/baseline/timelike-agent.json, scan/baseline/timelike-vanilla.json (3 of 4 changed files) (task has FLAGGED: yes)

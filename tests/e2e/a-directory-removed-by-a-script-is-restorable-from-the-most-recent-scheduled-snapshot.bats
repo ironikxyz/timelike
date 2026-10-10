@@ -55,11 +55,13 @@ same_manifest() {
   return 1
 }
 
-# in_repo STYLE INTERVAL CMD — CMD in the repository with this test's state root and the given
+# in_repo STYLE INTERVAL CMD — CMD in a shell STARTED in the repository (-w: the hook snapshots the
+# workspace of the shell's starting directory, as a harness starts the agent's shell in its workspace;
+# a `cd` inside the command comes after the hook), with this test's state root and the given
 # TIMELIKE_SNAPSHOT_INTERVAL ("" = unset in effect: the hook's default); stderr to $WORK/stderr.
 in_repo() {
   run_in -e "TIMELIKE_STATE_ROOT=${STATE}" -e "TIMELIKE_SNAPSHOT_INTERVAL=$2" -e "TIMELIKE_SESSION=sc7" \
-    "$1" notty "cd '${REPO}' && $3 2>'${WORK}/stderr'"
+    -w "$REPO" "$1" notty "$3 2>'${WORK}/stderr'"
   assert_within 30
 }
 
@@ -72,14 +74,17 @@ flunk() {
 
 # scheduled_ids — the ids of this workspace's snapshots whose reason is `scheduled`, newest first, from
 # `snapshot list --text` (a command line starting with `snapshot` takes no scheduled snapshot itself).
+# Returns 0 whatever the last line was: the callers count SCHEDULED, never this function's status
+# (lane 005s1-a: a `[[ … ]] && …` as a loop's last command made the function return a non-match).
 scheduled_ids() {
   in_repo c off "snapshot list --text"
   [[ "$status" == 0 ]] || flunk "snapshot list failed"
   SCHEDULED=()
   local l
   for l in "${lines[@]}"; do
-    [[ "$l" =~ ^([0-9]+)\ \ scheduled\ \  ]] && SCHEDULED+=("${BASH_REMATCH[1]}")
+    if [[ "$l" =~ ^([0-9]+)\ \ scheduled\ \  ]]; then SCHEDULED+=("${BASH_REMATCH[1]}"); fi
   done
+  return 0
 }
 
 check_script_delete() {

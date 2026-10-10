@@ -189,7 +189,24 @@ SC-10), **US9** guards (SC-6) — **held for FOR-MENTOR Item 22**.
   recovery state lives and what a plain `docker run` means; the `symbols` line corrected. The `## README
   status` block **only if all five Automated criteria are met** (not while Item 22 holds two).
 - [X] T031 Host lane (ruff, mypy, shellcheck, `make test-host`), the cycle report § Cycle 3.
-- [ ] T032 [US9] **Held (Item 22):** the guards, the force-push record, what feeds the trash, SC-6's e2e.
+- [ ] T032 [US9] The guards, the force-push record, what feeds the trash, SC-6's e2e — on Item 22's ruling
+  (`bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md`): bash functions `rm` and `git` in
+  `image/rootfs/etc/timelike/shell-env.bash`, defined in the agent's own shell only (a marker each bash they start
+  inherits); `/opt/timelike/libexec/guard` does the work (a guarded snapshot before `rm -r`, `git reset --hard`,
+  `git clean`; the trash for every file a guarded `rm` or `git clean` deletes; `--no-verify` force pushes); a
+  `pre-push` step in `/opt/timelike/git-hooks/dispatch` (001's contract, declared) that records and never fails
+  the push; Note 12: `taken` re-hashes only objects new to the snapshot, a restore re-hashes every object before
+  writing any. Units, host tests, e2e SC-6 and SC-10's feed; spec, contract, data-model and the announcement.
+
+### Lane 005s1-a (`bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md`)
+
+- [X] T033 SC-7's `scheduled_ids` returned its loop's last `[[ … ]] && …` status: an explicit `if`, `return 0`;
+  the same shape in this cycle's other e2e files (SC-8's two loops). SC-7's shells start in the repository
+  (`exec_in -w`), since the hook snapshots the workspace a shell starts in and `/home/agent` is skipped.
+- [X] T034 Scan: CVE-2026-107778 (krb5, four packages) and CVE-2026-67693, -95184, -95209, -95210 (gnutls)
+  baselined in `timelike-agent` and `timelike-vanilla`, origin `git`, until 2026-12-27; `DOCKER_CLI_IMAGE` to
+  `docker:29.9.0-cli` (Go 1.26.9) by digest.
+- [ ] T035 README status block (if every slice-1 criterion is built), Cycle 3 addendum.
 
 **Order:** T020 → T021 → T022 → T023 → T024 → T025 → T026 → T027 → (T028, T029 in parallel) → T030 → T031;
-T032 after the ruling.
+then the lane; T033, T034 → T032 → T035.

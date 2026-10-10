@@ -96,16 +96,18 @@ ms_to_s() {
   printf '%d.%03d' $(($1 / 1000)) $(($1 % 1000))
 }
 
-# exec_in [-e K=V]... STYLE TTY CMD
+# exec_in [-e K=V]... [-w DIR] STYLE TTY CMD
 # Runs CMD in the agent container, bounded by RUN_TIMEOUT on the runner side. No `run` wrapper: the
 # exit status is the command's (or 124 on timeout). Prints the container output unmodified.
+# -w starts the shell in DIR (docker exec -w), as a harness starts the agent's shell in its workspace;
+# without it the shell starts in the image's WORKDIR, /home/agent.
 # Sets EXEC_ELAPSED_MS.
 exec_in() {
   local -a envs=()
   local sched=default
-  while [[ "${1:-}" == -e ]]; do
-    envs+=(-e "$2")
-    [[ "$2" == TIMELIKE_SNAPSHOT_INTERVAL=* ]] && sched=given
+  while [[ "${1:-}" == -e || "${1:-}" == -w ]]; do
+    envs+=("$1" "$2")
+    if [[ "$1" == -e && "$2" == TIMELIKE_SNAPSHOT_INTERVAL=* ]]; then sched=given; fi
     shift 2
   done
   # Feature 005 slice 1: a bash started inside a workspace takes a scheduled snapshot when one is due
@@ -146,7 +148,7 @@ exec_in() {
   return "$rc"
 }
 
-# run_in [-e K=V]... STYLE TTY CMD — the entry point tests use.
+# run_in [-e K=V]... [-w DIR] STYLE TTY CMD — the entry point tests use.
 # bats `run` around exec_in. Sets $status, $output (CRs stripped), ${lines[@]}, and:
 #   ELAPSED_MS  wall time of the whole docker exec, measured on the runner side, in ms
 #   ELAPSED_S   the same, as seconds with 3 decimals

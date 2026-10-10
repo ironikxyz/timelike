@@ -76,7 +76,7 @@ check_new_session() {
   in_repo "$style" s2 agent-b "snapshot list --verbose --text"
   [[ "$status" == 0 && "${lines[1]}" == "verdict: 1 snapshots" ]] || flunk "session s2 does not list it"
   for l in "${lines[@]}"; do
-    [[ "$l" == "1  on demand  "*"  session s1  agent agent-a" ]] && found=yes
+    if [[ "$l" == "1  on demand  "*"  session s1  agent agent-a" ]]; then found=yes; fi
   done
   [[ "$found" == yes ]] || flunk "s2's list does not name the session and agent that took snapshot 1"
   for l in "${lines[@]}"; do
@@ -129,6 +129,6 @@ in_rc() {
   [[ "$status" == 0 ]] || flunk "snapshot in a plain container"
   local want="not persistent: /var/lib/timelike is not a mounted volume, so this recovery state dies with the container; mount one at /var/lib/timelike (compose.yaml: timelike-state)"
   local n=0 l
-  for l in "${lines[@]}"; do [[ "$l" == "$want" ]] && n=$((n + 1)); done
+  for l in "${lines[@]}"; do if [[ "$l" == "$want" ]]; then n=$((n + 1)); fi; done
   [[ "$n" == 2 ]] || flunk "want the not-persistent line once in each of the two results, got ${n}"
 }
