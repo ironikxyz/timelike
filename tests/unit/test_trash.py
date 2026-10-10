@@ -24,8 +24,12 @@ def guard_rm(lab: Lab, *paths: str, cwd: Path | None = None, **env: str) -> subp
     """What a guarded `rm -rf PATH...` does: keep them in the trash, then the real rm deletes them."""
     g = subprocess.run(
         [sys.executable, str(GUARD), "trash-put", "--command", "rm -rf " + " ".join(paths), "--", *paths],
-        cwd=str(cwd or lab.ws), env=lab.env(**env), stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=30,
+        cwd=str(cwd or lab.ws),
+        env=lab.env(**env),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     subprocess.run(["rm", "-rf", "--", *paths], cwd=str(cwd or lab.ws), check=True)
     return g
@@ -101,4 +105,6 @@ def test_the_trash_is_purged_by_size_and_age_naming_what_it_dropped(lab: Lab) ->
 def test_a_file_over_the_cap_is_named_not_kept(lab: Lab) -> None:
     write(lab.ws / "big.bin", os.urandom(5000))
     g = guard_rm(lab, "big.bin", TIMELIKE_TRASH_MAX_BYTES="1000")
-    assert f"timelike: not kept: {lab.ws / 'big.bin'} (over TIMELIKE_TRASH_MAX_BYTES)" in g.stderr.splitlines()
+    assert (
+        f"timelike: not kept: {lab.ws / 'big.bin'} (over TIMELIKE_TRASH_MAX_BYTES)" in g.stderr.splitlines()
+    )

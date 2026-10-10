@@ -350,3 +350,13 @@ INHERITED: the help of `undo` (--trash) and `symbols` (the index line) — from 
 FLAGGED: regenerated ONLY the generated command reference (scripts/readme_reference.py --write: undo's --trash line and option, symbols' index line), and left every prose line and the Status untouched; chose that because the send says "If an Item 22 leaves a criterion unbuilt, leave README.md untouched and say why" while CLAUDE.md's standing README rule says the reference is regenerated in the same cycle as any help change, and test_readme_reference.py fails the lane otherwise. The generated block is the script's output, not a reading. **For the mentor:** if "untouched" includes the generated block, revert this one commit's README hunk and the unit fails until T032 (confidence: medium)
 ABSENT, held for T032 after Item 22: the README status block (row 07, 18 of 38, the Status paragraph), and the snapshot/undo and scratch prose. That prose now says the store is in the session scratch, which this cycle made false; it is corrected with the block
 Verification: readme_reference --check current, 13 tools; test_readme_reference.py 21 passed
+SCOPE: in (2 changed files)
+
+### T031: host lane, lint, the cycle report § Cycle 3
+**Started:** 2026-10-10T06:01:04Z | **Completed:** 2026-10-10T06:09:00Z
+
+INHERITED: everything from T020–T030 (confidence: high)
+ASSUMED: ruff format's rewrites are layout only; the units ran after them (confidence: high)
+FLAGGED: reconcile_mode `scoped`, not `full`: the guards criterion is not built (Item 22); an addendum corrects it if the ruling lets this cycle build them (confidence: high)
+ABSENT: the Docker lane (the mentor's); the README status block and prose (Item 22); T032
+Verification: make test-host exit 0 (1987 passed, 13 skipped; hook 57/57); ruff, mypy --strict, shellcheck clean; step 10 as the installed 2.44.0 blocks report it (unknown)

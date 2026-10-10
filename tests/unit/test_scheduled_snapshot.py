@@ -1,4 +1,6 @@
-"""tools/libexec/scheduled-snapshot (feature 005 slice 1, T024; spec FR-33, FR-34; contracts § The scheduled snapshot).
+"""tools/libexec/scheduled-snapshot (feature 005 slice 1, T024; spec FR-33, FR-34).
+
+Contract: contracts/recover-cli.md § The scheduled snapshot.
 
 Run as the hook runs it: a subprocess, given the workspace, with the lab's environment. The store and the
 stamp are read by the test itself (P004). The hook's own due check is tests/host/test_shell_env_hook.sh K.
@@ -23,8 +25,12 @@ HELPER = REPO / "tools" / "libexec" / "scheduled-snapshot"
 def run_helper(lab: Lab, ws: Path | None = None, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(HELPER), str(ws or lab.ws)],
-        cwd=str(lab.tmp), env=lab.env(**env), stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=30,
+        cwd=str(lab.tmp),
+        env=lab.env(**env),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
 
@@ -71,7 +77,9 @@ def test_a_refused_scheduled_snapshot_says_why_and_is_still_stamped(lab: Lab) ->
         write(lab.ws / f"f{i}.txt", "x\n")
     r = run_helper(lab, TIMELIKE_SNAPSHOT_MAX_ENTRIES="2")
     assert r.returncode == 0 and r.stdout == ""
-    assert r.stderr.startswith(f"timelike: scheduled snapshot of {lab.ws} refused: {lab.ws} has more than 2 entries")
+    assert r.stderr.startswith(
+        f"timelike: scheduled snapshot of {lab.ws} refused: {lab.ws} has more than 2 entries"
+    )
     assert stamp(lab).is_file()  # retried per interval, never per shell
     assert not (lab.store() / "snaps").exists() or records(lab) == []
 
@@ -92,5 +100,7 @@ def test_a_busy_workspace_is_skipped_silently(lab: Lab) -> None:
 def test_a_bad_interval_is_named(lab: Lab) -> None:
     write(lab.ws / "f.txt", "x\n")
     r = run_helper(lab, TIMELIKE_SNAPSHOT_INTERVAL="soon")
-    assert r.stderr.startswith("timelike: TIMELIKE_SNAPSHOT_INTERVAL='soon' is not a number of seconds or 'off'")
+    assert r.stderr.startswith(
+        "timelike: TIMELIKE_SNAPSHOT_INTERVAL='soon' is not a number of seconds or 'off'"
+    )
     assert [x["reason"] for x in records(lab)] == ["scheduled"]

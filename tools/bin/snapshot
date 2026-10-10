@@ -149,7 +149,8 @@ def purge_limits() -> dict[str, int]:
             out[var] = int(raw)
         else:
             raise agentio.UsageError(
-                f"{var} must be a non-negative whole number, not {raw!r}", f"e.g. {var}={default}, or 0 for none"
+                f"{var} must be a non-negative whole number, not {raw!r}",
+                f"e.g. {var}={default}, or 0 for none",
             )
     return out
 
@@ -749,7 +750,8 @@ def import_slice0(store: Store) -> list[dict[str, Any]]:
             if pairs:
                 was, now = [a for a, _ in pairs], [b for _, b in pairs]
                 add_note(
-                    f"imported {len(pairs)} snapshots from session {session} (were {_ids(was)}, now {_ids(now)})"
+                    f"imported {len(pairs)} snapshots from session {session}"
+                    f" (were {_ids(was)}, now {_ids(now)})"
                 )
                 done.append({"session": session, "was": was, "now": now})
     return done
@@ -1057,7 +1059,9 @@ def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
         item = {k: r[k] for k in ("id", "reason", "label", "files", "bytes", "partial")}
         item["session"], item["agent"] = r.get("session"), r.get("agent")  # FR-31 (slice-0 records: null)
         if ctx.verbose:
-            line += f"  taken {r['taken_at']}  session {r.get('session') or '-'}  agent {r.get('agent') or '-'}"
+            line += (
+                f"  taken {r['taken_at']}  session {r.get('session') or '-'}  agent {r.get('agent') or '-'}"
+            )
             item["taken_at"] = r["taken_at"]
         lines.append(line)
         items.append(item)
@@ -1266,7 +1270,8 @@ def trash_limits() -> dict[str, int]:
             out[var] = int(raw)
         else:
             raise agentio.UsageError(
-                f"{var} must be a non-negative whole number, not {raw!r}", f"e.g. {var}={default}, or 0 for none"
+                f"{var} must be a non-negative whole number, not {raw!r}",
+                f"e.g. {var}={default}, or 0 for none",
             )
     return out
 
@@ -1274,7 +1279,7 @@ def trash_limits() -> dict[str, int]:
 class Trash(Store):
     """The trash shares the store's mechanics (objects, atomic writes, ids, the lock), not its records."""
 
-    def __init__(self, ctx: agentio.Context) -> None:  # noqa: D107 — no workspace: the trash is global
+    def __init__(self, ctx: agentio.Context) -> None:  # no workspace: the trash is global
         self.ctx = ctx
         self.ws = "trash"
         self.key = "trash"
@@ -1355,19 +1360,28 @@ def trash_put(ctx: agentio.Context, paths: list[str], command: list[str]) -> dic
                     continue
                 if e["kind"] == "file":
                     if cap and total + e["size"] > cap:
-                        not_kept.append({"path": e["path"], "size": e["size"], "reason": f"over {ENV_TRASH_MAX_BYTES}"})
+                        not_kept.append(
+                            {"path": e["path"], "size": e["size"], "reason": f"over {ENV_TRASH_MAX_BYTES}"}
+                        )
                         continue
                     try:
                         sha, read, _ = trash.put(e["path"])
                     except OSError as err:
-                        not_kept.append({"path": e["path"], "size": e["size"], "reason": f"unreadable: {err.strerror or err}"})
+                        not_kept.append(
+                            {
+                                "path": e["path"],
+                                "size": e["size"],
+                                "reason": f"unreadable: {err.strerror or err}",
+                            }
+                        )
                         continue
                     e = {**e, "sha256": sha, "size": read}
                     total += read
                 entries.append({k: v for k, v in e.items() if k != "error"})
-        item = {
+        ident = trash.next_id()
+        item: dict[str, Any] = {
             "v": RECORD_VERSION,
-            "id": trash.next_id(),
+            "id": ident,
             "deleted_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "session": ctx.session,
             "agent": agent_id(),
@@ -1378,8 +1392,8 @@ def trash_put(ctx: agentio.Context, paths: list[str], command: list[str]) -> dic
             "files": sum(1 for e in entries if e["kind"] == "file"),
             "bytes": total,
         }
-        trash._write_atomic(trash.item_path(item["id"]), json.dumps(item, indent=1) + "\n", 0o600)
-        purge_trash(trash, limits, keep=item["id"])
+        trash._write_atomic(trash.item_path(ident), json.dumps(item, indent=1) + "\n", 0o600)
+        purge_trash(trash, limits, keep=ident)
     return item
 
 
@@ -1498,7 +1512,9 @@ def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> a
     if args.id is None:
         items = list(reversed(trash.items())) if trash.path.is_dir() else []
         lines = [trash_line(i) for i in items]
-        data = {"items": [{k: i[k] for k in ("id", "files", "bytes", "roots", "session", "agent")} for i in items]}
+        data = {
+            "items": [{k: i[k] for k in ("id", "files", "bytes", "roots", "session", "agent")} for i in items]
+        }
         return agentio.Result(target, "trash", f"{len(items)} items in the trash", lines=lines, data=data)
     item = trash.item(int(args.id)) if trash.path.is_dir() else None
     scope = f"trash {args.id}"
@@ -1517,18 +1533,24 @@ def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> a
         if blocked:
             verdict += f"; {len(blocked)} blocked"
         lines = blocked + plan + [f"not kept: {x['path']} ({x['reason']})" for x in item.get("not_kept", [])]
-        return agentio.Result(target, scope, verdict, lines=lines, data={"id": item["id"], "blocked": blocked})
+        return agentio.Result(
+            target, scope, verdict, lines=lines, data={"id": item["id"], "blocked": blocked}
+        )
     if blocked:
         raise Outcome(
             agentio.EXIT_FAILURE,
-            f"refused: trash item {item['id']} would overwrite or has no place: {blocked[0].removeprefix('refused: ')}",
+            f"refused: trash item {item['id']} would overwrite or has no place:"
+            f" {blocked[0].removeprefix('refused: ')}",
             "move what is there aside, or put back the item that held its directory first",
             blocked,
         )
     if not args.yes:
         if ctx.limit > 0 and len(plan) > ctx.limit:
             more = len(plan) - (ctx.limit - 1)
-            plan = [*plan[: ctx.limit - 1], f"… and {more} more: undo --trash {item['id']} --dry-run --limit 0"]
+            plan = [
+                *plan[: ctx.limit - 1],
+                f"… and {more} more: undo --trash {item['id']} --dry-run --limit 0",
+            ]
         return agentio.confirm_required(ctx, target=target, scope=scope, plan=plan)
     with trash.lock():
         _put_back(trash, item)
@@ -1587,7 +1609,14 @@ def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     try:
         r = undo_trash(args, ctx, ws) if args.trash else _undo(args, ctx, ws)
     except Outcome as o:
-        r = o.result(ws, f"trash {args.id}" if args.trash and args.id else "trash" if args.trash else f"restore {args.id or 'newest'}")
+        r = o.result(
+            ws,
+            f"trash {args.id}"
+            if args.trash and args.id
+            else "trash"
+            if args.trash
+            else f"restore {args.id or 'newest'}",
+        )
     return finish(r, state)
 
 

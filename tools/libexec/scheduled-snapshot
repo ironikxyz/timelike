@@ -1,5 +1,5 @@
 #!/opt/timelike/python/bin/python3 -I
-"""scheduled-snapshot — the snapshot a shell's start takes when one is due (feature 005 slice 1; FR-32 to FR-34).
+"""scheduled-snapshot — the snapshot a shell's start takes when one is due (005 slice 1; FR-32 to FR-34).
 
 Not a tool: never on PATH, no manifest, no session event. /etc/timelike/shell-env.bash runs it by its
 absolute path when the workspace's last scheduled attempt is older than TIMELIKE_SNAPSHOT_INTERVAL, as
@@ -75,13 +75,11 @@ def main(argv: list[str]) -> int:
     except (agentio.ToolError, OSError):
         return 0  # the shell checked the root is writable; a race here is not worth a line per shell
     if interval not in ("", "off") and not interval.isdigit():
-        say(f"{INTERVAL_ENV}={interval!r} is not a number of seconds or 'off'; using 300 (snapshot every 5 min)")
+        say(f"{INTERVAL_ENV}={interval!r} is not a number of seconds or 'off'; using 300 (every 5 min)")
     ws = os.path.realpath(given)
     try:
         snap = load_snapshot()
-        ctx = agentio.Context(
-            snap.TOOL, [], agentio.session_id(), agentio.scratch_root(), "text", 0, False
-        )
+        ctx = agentio.Context(snap.TOOL, [], agentio.session_id(), agentio.scratch_root(), "text", 0, False)
         snap.check_workspace(ws, ctx, "snapshot")
         caps = snap.caps_from_env()
         store = snap.Store(ctx, ws)
@@ -91,7 +89,7 @@ def main(argv: list[str]) -> int:
         with store.lock(wait_s=LOCK_WAIT_S):
             rec = snap.take_locked(store, caps, "scheduled", None)
             snap.purge(store)
-    except Exception as e:  # noqa: BLE001 — one line, never a traceback at a shell's start
+    except Exception as e:  # one line, never a traceback at a shell's start
         return report(e, ws)
     for line in snap.NOTES:
         if line.startswith(("purged: ", "purge ")):

@@ -642,8 +642,12 @@ def test_a_second_session_finds_the_index_warm(lab: Lab) -> None:
     assert cache_of(first)["state"] == "built"
     r = subprocess.run(
         [sys.executable, str(SYMBOLS), "--json", "def", "helper"],
-        cwd=lab.ws, env={**lab.env(), "TIMELIKE_SESSION": "another-session"},
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+        cwd=lab.ws,
+        env={**lab.env(), "TIMELIKE_SESSION": "another-session"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     d = json.loads(r.stdout)
     assert d["verdict"].endswith("; cache: fresh"), d["verdict"]

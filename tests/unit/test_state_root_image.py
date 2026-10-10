@@ -25,7 +25,7 @@ def test_the_image_creates_the_state_root_owned_by_agent_0700() -> None:
     users = [r for r in runs if "useradd --uid 1000" in r]
     assert len(users) == 1, "one RUN creates the agent user"
     assert re.search(r"install -d -o agent -g agent -m 0700 /var/lib/timelike\b", users[0])
-    assert "test \"$(stat -c '%a %U:%G' /var/lib/timelike)\" = \"700 agent:agent\"" in users[0]
+    assert 'test "$(stat -c \'%a %U:%G\' /var/lib/timelike)" = "700 agent:agent"' in users[0]
 
 
 def test_the_env_names_the_state_root_and_nothing_writes_it_at_build() -> None:

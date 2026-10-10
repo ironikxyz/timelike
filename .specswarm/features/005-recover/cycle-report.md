@@ -746,3 +746,235 @@ this section):
   Under this project's recorded choice the merge is not blocked. No number was produced, and none was
   filled in by hand.
 - Not exercised: Step 5's `ship-summary-state` line (Step 4 was not run here).
+
+## Cycle 3 — bridge/sends/07-rev11-20261010-050829.md
+
+**Written:** 2026-10-10T06:09:00Z (read from the clock). Not in dispatch mode. **specswarm 4.0.1-botbaubble.2.44.0**:
+the expanded `modify`, `plan`, `tasks` and `implement` commands name the cache path
+`…/specswarm/4.0.1-botbaubble.2.44.0` (lore `specswarm` Q002; the operator ran `/plugin` in this session after
+the install). The sequence was `/specswarm:modify 005 --from-send bridge/sends/07-rev11-20261010-050829.md` on
+`modify/005-slice-1` (from `master` `97641da`), then `/specswarm:plan`, `/specswarm:tasks` and
+`/specswarm:implement` (Phase 7, T020–T031; T032 held). **Nothing was pushed or merged.**
+
+This path is the send's, `code/.specswarm/features/005-recover/cycle-report.md`; CLAUDE.md names the same file.
+
+**Status in one line:** the state root, its volume, the scheduled snapshot, purge, the lock, import, the trash's
+store and restore, and the two revision-11 criteria are built and pass on the host. **The guards (`rm`,
+`git reset --hard`, `git push --force`, `git clean`) and what feeds the trash are not built: FOR-MENTOR Item 22
+(`e488657`) asks how they reach `rm` and `git`, and is unanswered.** So two of slice 1's five Automated criteria
+cannot be met yet, and the README status block is not applied. Nothing has run in the image.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/07-rev11-20261010-050829.md |
+| source_prompt | plan/.discover/prompts/07-recover.md |
+| prompt_revision | 11 |
+| discovery_revision | 15 |
+| slice | 1 |
+
+The spec's frontmatter is unchanged (`prompt_revision: 1`, `discovery_revision: 10`,
+`audited_against: [1, …, 11]`).
+
+### Provenance (modify Step 2 and Step 9)
+
+Row 4: the same prompt, `N = 11`, already in `audited_against`. Step 9 did not run and nothing was appended, as
+the send said. No `audit-log.md` row: no mode was recorded or corrected.
+
+### What was built (Phase 7)
+
+| Task | Commit | What |
+|---|---|---|
+| — | `e488657` | FOR-MENTOR Item 22, raised before any guard was built |
+| — | `19f151f`, `36a03de` | modify, impact analysis, spec slice 1, plan, research R10–R16, data model, contract, tasks |
+| T020 | `fd3c423` | agentio: `TIMELIKE_STATE_ROOT` (default `/var/lib/timelike`), `VERSION` (P003), persistence by `st_dev` |
+| T021 | `4c97c1c` | the store in `<state>/workspaces/<key>/`; the not-persistent line (FR-27); `session`/`agent` (FR-31); other workspaces named (FR-29); the lock names its holder (FR-38) |
+| T022 | `294ffbd` | slice-0 stores imported once, in order, verified (FR-30) |
+| T023 | `c01767b` | the stat cache (FR-35) |
+| T024 | `d888a46` | the scheduled snapshot: the builtins-only due check in `shell-env.bash`, `libexec/scheduled-snapshot`, default interval 300 s (FR-32–FR-34) |
+| T025 | `d54925f` | purge on write: age, then size, never a workspace's newest, time-bounded, named (FR-36, FR-37) |
+| T026 | `18eec08` | the trash: `libexec/guard trash-put`, `undo --trash`, its purge (FR-39–FR-41) |
+| T027 | `5d8857b` | `/var/lib/timelike` in the image (agent, 0700), the ENV, compose's named volume `timelike-state` |
+| T028 | `519385f` | e2e cells (below) |
+| T029 | `2811c2b` | carried: `symbols`' index in the state root (Item 20, closed); rule 10's contract text |
+| T030 | `bddd93a` | README: the generated command reference only |
+| T031 | this commit | the host lane, lint fixes, this report |
+
+### The seams, as decided (spec § Slice 1, D-11 to D-18; research R10 to R16)
+
+1. **State root:** `/var/lib/timelike`, outside every workspace and the home; `TIMELIKE_STATE_ROOT`, read by
+   timelike (P002); created in the image owned by `agent`, 0700, so a fresh named volume takes it (Q003).
+   **Without a volume, every `snapshot` and `undo` result carries one line** (FR-27):
+   `not persistent: /var/lib/timelike is not a mounted volume, so this recovery state dies with the container;
+   mount one at /var/lib/timelike (compose.yaml: timelike-state)`. Every result, not the first per session: a
+   "first per session" needs a record kept where the line says nothing persists. Vanilla gets nothing.
+2. **Keying:** by real path (as slice 0). A workspace moved elsewhere sees `0 snapshots`, and `snapshot list`
+   and `undo` name every other workspace in the state root with snapshots, with its path and count.
+3. **Slice 0's stores:** imported on first use, in order, verified, marked `imported` in place, each import
+   and each failure named.
+4. **Guards:** Item 22 (Q1, Q2). Not built.
+5. **Force push:** Item 22 Q2 (git's own `pre-push` input, through 001's dispatcher). Not built.
+6. **Scripts:** a scheduled snapshot at the shell's start when the last one is older than
+   `TIMELIKE_SNAPSHOT_INTERVAL` (default 300 s; `0`, `off`). Measured (R11): **not due, +0.5 ms per shell
+   start and no fork; due, 120–145 ms (464 files, 6.7 MB) and 270–300 ms (657 files, 51 MB) on an unchanged
+   workspace**. Not taken when the command starts with `snapshot` or `undo`.
+7. **Trash:** the store, `undo --trash [ID] [--dry-run] [--yes]`, purge by `TIMELIKE_TRASH_MAX_AGE_DAYS` (30)
+   and `TIMELIKE_TRASH_MAX_BYTES` (1 GiB). What feeds it: Item 22 Q3.
+8. **Purge:** on write (after a take and after a verified restore), `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` (30),
+   `TIMELIKE_STATE_MAX_BYTES` (4 GiB) over every workspace's content, `TIMELIKE_PURGE_SECONDS` (2); never a
+   workspace's newest; a busy workspace skipped and named.
+9. **Concurrency:** one `flock` per workspace store, shared by every session and agent; the kernel releases a
+   dead holder's lock, so there is no stale-lock state; a live holder is named.
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used and no subagent ran.
+
+**criteria_reestablished** (each citation matches exactly one line of the send, `grep -cF` = 1 for all eleven).
+Nothing has run in the image, so every mode is `unconfirmed`; host evidence is listed and changes no mode.
+
+- `07 · "records tracked, untracked and ignored-but-not-excluded files of the workspace and prints its identifier, file count and size _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `snapshot-records-tracked-untracked-and-ignored-files.bats`, now on a per-test state
+  root; host: test_snapshot.py).
+- `07 · "removes files created after it, and a dry run lists exactly those changes first _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `restore-returns-captured-content-and-removes-files-created-after.bats`).
+- `07 · "history, index and stash are unchanged by taking or restoring a snapshot _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats`).
+- `07 · "would exceed the size cap is refused or partial, and the verdict names what was excluded and why _(traces to: P2)_"` —
+  **unconfirmed** (slice 0; `snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`).
+- `07 · "a force push, and a clean of untracked files each take an automatic snapshot before running, and the verdict names it _(traces to: P5)_"` —
+  **unconfirmed: not built.** Held for FOR-MENTOR Item 22; no e2e file yet.
+- `07 · "is restorable from the most recent automatic or scheduled snapshot _(traces to: P5)_"` — **unconfirmed**
+  (`a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats`, 4 cells;
+  host: test_scheduled_snapshot.py restores a directory a Python script removed).
+- `07 · "is listed and restorable from a new session, and after the agent's container is recreated _(traces to: P5)_"` —
+  **unconfirmed** (`a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats`,
+  4 cells: two new-session cells, the recreate on fresh named volumes, and the no-volume line; host: the
+  new-session half in test_snapshot_slice1.py).
+- `07 · "so the restore itself can be undone, and its verdict names that snapshot _(traces to: P5)_"` —
+  **unconfirmed** (`a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats`, 2 cells; host:
+  test_snapshot_slice1.py). FR-19 already did this; nothing in it had to change against the new store.
+- `07 · "Deleted files are moved to a restorable trash that is purged by age and size limits _(traces to: P5)_"` —
+  **unconfirmed: partly built.** The trash's store, put-back and purge are built and have cells
+  (`deleted-files-trash-restorable-and-purged-by-age-and-size.bats`, 4 cells, fed through `guard trash-put`);
+  what moves the agent's deletes into it is held for Item 22. The file's header says it is partial.
+- `07 · "deletes the wrong directory and restores it with one undo command _(traces to: D7)_"` — **unconfirmed**
+  in this cycle (Manual; observed by the operator in Cycle 2, transcript `bridge/.d7-demo-20261004T044030Z.txt`;
+  nobody has looked again on this cycle's code).
+- `07 · "a snapshot is taken automatically, and the Agent restores from it _(traces to: D16)_"` — **unconfirmed**
+  (Manual; the mentor captures it after the lane; it needs a guarded destructive command, so Item 22 first).
+
+**reconcile_mode:** `scoped`. Slice 0's four criteria and four of slice 1's five Automated ones have cells on
+this cycle's code; the guards criterion is not built. If Item 22's ruling lets the guards be built in this
+cycle, an addendum says so and corrects the mode.
+
+**not_verified**
+- **Everything in the image:** every e2e cell above; the hook in the image's three bash styles; the helpers'
+  shebang interpreter; the named volume's first-mount ownership (the recreate cell checks it).
+- **The scheduled snapshot under other features' cells:** the e2e harness turns it off unless a cell sets
+  `TIMELIKE_SNAPSHOT_INTERVAL` (`helpers.bash` `exec_in`), so no other feature's cell runs with it on. Its own
+  cells run it at `0` and at the default.
+- **Latency in the image:** R11's figures are the host's (3.14.8 venv), not the container's.
+- **Note 12's cost on a large store:** verification re-hashes every object a snapshot names, so a scheduled
+  snapshot of a workspace with much stored content costs more than R11 shows. Item 22 asks the mentor whether
+  to narrow it.
+- **Two containers on one volume** (two agents in two containers): `flock` works across containers on one
+  host, but no cell runs two containers at once.
+- **The purge's time bound** has no test of its own (R14; decisions.md T025).
+- **D7 and D16.**
+
+**changed_other_features**
+- **001:** `image/rootfs/etc/timelike/shell-env.bash` gains the scheduled-snapshot block (builtins only; forks
+  once only when due; never re-entered); `image/Dockerfile` creates `/var/lib/timelike` and sets
+  `TIMELIKE_STATE_ROOT`; `compose.yaml` mounts `timelike-state` on the agent, and its "Deliberately no volumes"
+  comment now names the one volume; `contracts/output-contract.md` § Session event gains the State root (rule
+  10, declared, the send's carried item); `tests/e2e/helpers.bash` gains `state_root_dir`/`state_root_rm` and
+  turns scheduled snapshots off by default in `exec_in`.
+- **004 (Adele, feature 12's cells):** `adele-isolation-grant-file-and-extend-unreachable-from-agent.bats`'s first
+  cell read "no mounts at all"; it now requires exactly one mount, `timelike-state` at `/var/lib/timelike`, and
+  still that nothing of Adele's is mounted.
+- **011 (`symbols`):** the index moves to `<state root>/workspaces/<key>/symbols.json` (Item 20); its usage line,
+  its manifest's `index` and `contracts/symbols-cli.md`'s `index` line change with it, declared.
+- **README:** only the generated command reference (`undo --trash`; `symbols`' index line). The prose that says
+  snapshots and the index live in the session scratch is now false and is corrected with the README status
+  block, after Item 22.
+- `pyproject.toml`: the two new helpers are linted and type-checked.
+
+**process_failures_recorded**
+- The first run of the hook's K cases used a bash fake helper, which inherited `BASH_ENV`, re-entered the hook
+  and recursed until it was killed; the hook now has a re-entry guard and K1 counts exactly one call.
+- Cleaning up after it, `pkill -f` on a pattern matched my own command line and killed that shell (against my
+  own standing notes).
+- An edit to undo's verification dropped its `if left:` guard; 16 units caught it before the commit.
+- Three task start times were written composed, not read (T021, T022, T028); each is corrected in
+  `decisions.md` from git's commit times, with the correction stated.
+- The tasks commit `36a03de` was made before the deny-list ran; it passed when run straight after.
+- The not-persistent line was first 217 characters, over rule 13's 200, and was cut; shortened, with the spec
+  and contract, before any commit of the tool.
+
+**retired_prompts_seen:** none.
+
+### Host lane
+
+Advisory: files, units and the hooks' logic on the host, never the image. Python 3.14.8 (a scratch venv).
+- `make test-host`: **1987 passed, 13 skipped** (pytest tests/unit, 364 s); `test_env_layer.sh` 60 of 60;
+  `test_shell_env_hook.sh` **57 of 57** (K1–K13 new: the due check, the re-entry guard, and K13, the no-fork
+  probe from inside a workspace with a fresh stamp, which ran rather than skipped); `test_command_not_found.sh`
+  33 of 33. Exit 0.
+- New units: test_agentio_state.py 6, test_snapshot_slice1.py 15, test_scheduled_snapshot.py 5,
+  test_trash.py 5, test_state_root_image.py 6, test_symbols.py +1 (and one moved).
+- ruff 0.16.9 (`check` and `format --check`, the Makefile's paths): clean. mypy 2.3.1 `--strict` (pyproject's
+  files, the two helpers added): no issues in 30 files.
+- shellcheck (scratch shellcheck-py 0.11.0.1) over every changed shell file and the four new e2e files: clean;
+  the new files are in Makefile's `SHELLCHECK_FILES`.
+- bats 1.14.0 `--count` parses every new and changed e2e file; the slice-0 files' counts are unchanged.
+- BuildKit's Dockerfile parser (PyPI `dockerfile` 3.4.0): 58 instructions, 0 unknown.
+- Deny-list: PASS before every commit of this cycle (7 entries, P1–P7 0/0), except the tasks commit `36a03de`,
+  checked straight after (above).
+
+### Implement step 10 — quality validation (specswarm 2.44.0), as the installed blocks reported it
+
+Run from a scratch script executing the installed blocks (detector, `run_tests`, `run_coverage`, `quality-components`, `quality-scale` with its 2.44.0 rubric-coverage fields, `unmeasured-explains-itself`). Verbatim from the components on:
+
+```
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+QS_POINTS_TOTAL=115.0000 QS_COVERAGE=0
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The score is `unknown`, not a number: the merge bar is the mentor's Docker lane, as the send says.
+
+### Then
+
+Done for what Item 22 does not block. **No commit until the mentor says the lane has ended.** After Item 22 is
+answered: T032 (the guards, the force-push record, the trash's feed, SC-6's cells), the README status block,
+and an addendum here.

@@ -113,7 +113,10 @@ def test_a_moved_workspace_sees_none_and_is_told_where_snapshots_are(lab: Lab) -
     r = undo(lab, "--json", "--dry-run", cwd=moved)
     assert r.returncode == 3
     u = doc_of(r)
-    assert u["lines"] == ["do instead: take one with: snapshot", f"other workspace with snapshots: {real} (2)"]
+    assert u["lines"] == [
+        "do instead: take one with: snapshot",
+        f"other workspace with snapshots: {real} (2)",
+    ]
 
 
 # ── criterion 4 (revision 11): a restore first snapshots the workspace, and can itself be undone ──
@@ -194,7 +197,9 @@ def test_a_damaged_slice0_record_is_named_not_imported(lab: Lab) -> None:
     objs = sorted(p for p in (old / "objects").rglob("*") if p.is_file())
     rec2 = json.loads((old / "snaps" / "2.json").read_text())
     only2 = {e["sha256"] for e in rec2["entries"] if e["kind"] == "file"} - {
-        e["sha256"] for e in json.loads((old / "snaps" / "1.json").read_text())["entries"] if e["kind"] == "file"
+        e["sha256"]
+        for e in json.loads((old / "snaps" / "1.json").read_text())["entries"]
+        if e["kind"] == "file"
     }
     bad = next(p for p in objs if p.name in only2)
     bad.chmod(0o600)
@@ -235,7 +240,12 @@ def _take_counting_opens(lab: Lab) -> list[str]:
     real = os.path.realpath(lab.ws)
     r = subprocess.run(
         [sys.executable, "-c", _AUDIT, real, str(log), str(SNAPSHOT)],
-        cwd=lab.ws, env=lab.env(), capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+        cwd=lab.ws,
+        env=lab.env(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        stdin=subprocess.DEVNULL,
     )
     assert r.returncode == 0, (r.stdout, r.stderr)
     return [x for x in log.read_text().splitlines() if x]
