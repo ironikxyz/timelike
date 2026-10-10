@@ -192,3 +192,172 @@ Anchors, syntax checks (slice 1). Creating files. Several edits in one call.
 
 - Python's `difflib` is the similarity and diff engine (stdlib, H5).
 - The image installs no other `edit` (verified by the `type -a` cell).
+
+---
+
+## Slice 1 (Cycle 2, send `bridge/sends/06-rev1-20261009-102433.md`; natural)
+
+Built by `/specswarm:modify 008` on `modify/008-slice-1`, cut from `master` `ce1eaf2`. Prompt 06 is still at
+revision 1, and `audited_against [1]` is current (modify row 4). The slice-1 criteria were in revision 1
+from the start, so this is **added work** on a body that stays true. FR-1's invocation gains two flags
+(FR-13, FR-25), declared. The exit codes stay 0, 1, 2 and 3 (FR-10). The `Out of scope (slice 0)` list
+above is history. The reasoning for each decision is in `research.md` R9 to R15.
+
+### Scenarios
+
+**Scenario 5: an edit addressed by anchors.**
+1. The agent runs `view --anchors src/app.py:40-48` and sees ` 42 a3f9c1 return x` … ` 48 0b11e2 }`.
+2. It runs `edit src/app.py --at 42:a3f9c1..48:0b11e2 --new $'…'`. Both anchored lines are unchanged, so
+   lines 42–48 are replaced, and the edited region is shown as in FR-8.
+3. If line 42 changed in the meantime, the edit exits 3 with
+   `line 42 changed (anchor a3f9c1, now 7d01be)`. It shows lines 39–51 as they are now, with their anchors,
+   so the next call can use them.
+
+**Scenario 6: a line that moved.** Three lines were inserted above line 42, so its bytes are now line 45.
+The edit exits 3, naming the move (`lines 42-48 are now lines 45-51`). `do instead:` gives the exact
+`--at 45:a3f9c1..51:0b11e2` to rerun with.
+
+**Scenario 7: an edit that would break the syntax (D15).**
+1. The agent replaces `def f(x):` with `def f(x)` in a clean Python file.
+2. Exit 1:
+   `refused: the edit would make app.py fail its syntax check (python 3.14.8 compile): line 12, column 9: expected ':'; nothing written`.
+3. The lines around line 12 of the would-be result are shown numbered, with the error line marked. The
+   file's SHA-256 is unchanged.
+
+**Scenario 8: a file that was already broken.** The agent is midway through a repair: the file fails its
+check before the edit. An edit that adds no new error in the lines it writes applies, and the verdict
+says the file still fails, and where. An edit that adds a new error in the lines it writes is refused.
+
+### Functional requirements
+
+**Anchors** (send seam 7)
+- **FR-13** `edit FILE --at N:hhhhhh --new TEXT` replaces line N whole. `--at A:aaaaaa..B:bbbbbb`
+  replaces lines A to B inclusive (A ≤ B). The form is 006 FR-34's.
+  - `--at` with `--old` is a usage error (exit 2): one way of addressing per call.
+  - `--at` without `--new` is a usage error.
+  - A malformed `--at` is a usage error naming the form.
+- **FR-14** **One definition.** The anchor is `view`'s own `anchor_of` (006 FR-33), over lines as `view`
+  splits them (`line_body`, factored out of `view`'s window). Both are loaded from the `view` beside
+  `edit`, as `edit` already loads `view`'s `file_type`. Nothing is copied.
+- **FR-15** **Unchanged** means each anchored end, read at its line number now, has the anchor given.
+  The interior lines of a range are not checked, because the form carries the ends only. The verdict
+  says which lines were checked (`anchors checked at lines 42 and 48`).
+- **FR-16** **Stale** means an anchored line is missing or has another anchor. Exit 3, scope
+  `anchors stale`, nothing written.
+  - The verdict names each changed line: `line 42 changed (anchor a3f9c1, now 7d01be)`, or
+    `line 42 is past the end (120 lines)`.
+  - **A pure move:** both ends' bytes are found at the same offset elsewhere, and the range between them
+    is still a range (`lines 42-48 are now lines 45-51`). This is **refused, naming where they moved**,
+    with `do instead:` the exact `--at` that would apply it. The agent's `--new` was written against a
+    view that is now stale (P2's verdict names the cause; R11).
+  - Otherwise `do instead:` is `view --anchors FILE:A-B`, then rerun with the anchors it shows.
+  - The current lines A−3 to B+3 are printed as `view --anchors` prints them (` 42>7d01be text`, with
+    `>` on the anchored ends). JSON carries `anchors_now: ["N:hhhhhh", …]` for those lines,
+    `changed: [{line, expected, now}]` and, on a move, `moved_to: {start, end}`.
+- **FR-17** **The replacement:**
+  - `--new`'s line endings become the region's (the ending of its first line, as at level 2), and one
+    trailing newline in `--new` is dropped, since the region keeps its last line's ending;
+  - an empty `--new` deletes the lines, endings included;
+  - indentation is taken as given (the agent saw the lines it is replacing);
+  - shown after as in FR-8. The verdict says `(addressed by anchors)`; JSON `level: "anchors"` and
+    `anchors: {"start": "A:aaaaaa", "end": "B:bbbbbb"}`.
+
+**The syntax check** (send seams 1 to 6)
+- **FR-18** **Language** (seam 4):
+  - by extension first: `.py` and `.pyi` are Python; `.ts`, `.mts` and `.cts` are TypeScript; `.tsx` is
+    TSX (TypeScript with JSX, its own grammar); `.go` is Go; `.rs` is Rust; `.sh` and `.bash` are shell;
+  - an extensionless file is identified by its shebang (`python`, `python3`, `python3.N`, `bash`, `sh`;
+    directly or through `/usr/bin/env`);
+  - anything else is **unknown**: the edit applies, the verdict says
+    `syntax: not checked (language unknown)`, and JSON says the same
+    (`syntax.status "not checked"`, `syntax.reason "language unknown"`).
+- **FR-19** **Checkers** (seam 1), all timelike's own and never the agent's runtime:
+  - **Python:** timelike's interpreter's own compiler (`compile(…, "exec", ast.PyCF_ONLY_AST)`, which
+    parses and never runs), CPython at the version `pins.env` pins as `PYTHON_VERSION`, the same as the agent's;
+  - **shell:** `/bin/bash -n` (bash's own parser, which reads and never runs), with no startup files and
+    no `BASH_ENV`;
+  - **TypeScript, TSX, Go, Rust:** tree-sitter, through its Python binding and prebuilt grammar wheels
+    pinned by hash in `pins.env` and installed into timelike's interpreter. A parse whose tree holds an
+    `ERROR` or `MISSING` node is a syntax error at that node's position.
+
+  The check runs in a **child process**: `libexec/syntax-check`, resolved from `edit`'s own real path and
+  run by `edit`'s own interpreter with `-I`. Nothing is resolved from `PATH`, the agent's `PYTHONPATH` or
+  `~/.local` (lore P002).
+- **FR-20** The check runs on **the bytes that would be written**, with their line endings and encoding.
+  The result is checked first; the original is checked only when the result fails (FR-21).
+- **FR-21** **What refuses** (seam 3):
+  - if the original passes its check and the result fails, the edit is **refused**;
+  - if the original already fails, the edit is **refused only when the result has an error inside the
+    lines it writes that the original does not have**. An error's identity is its message plus the text
+    of its line, so a shifted line is the same error. Otherwise the edit applies, and the verdict says
+    `syntax: FILE already failed its check before this edit (line N: message); no new error in lines S-E`.
+- **FR-22** **The refusal** (seam: "with the checker's error"):
+  - exit 1, scope `refused`;
+  - the verdict is `refused: the edit would make FILE fail its syntax check (CHECKER): line L, column C:
+    MESSAGE; nothing written`;
+  - the lines show up to 3 errors, each with the would-be result's lines L−2 to L+2, numbered and with
+    the error line marked, bounded by rule 3;
+  - `do instead:` is to correct `--new` and rerun, with `--dry-run` to see the diff first. **It never
+    suggests skipping the check** (T4);
+  - JSON carries `syntax: {status: "refused", language, checker, errors: [{line, column, message}]}`;
+  - the file is byte-identical.
+- **FR-23** **`--dry-run`** with a syntax error prints the diff and then the errors, exits 1 as the real edit
+  would, and writes nothing.
+- **FR-24** **The checker's own failure** (seam 5): a checker that is missing, crashes, has no grammar, or
+  exceeds its **10 s** limit does not stop the edit.
+  - The child is killed at the limit, and the call concludes.
+  - The edit applies, and the verdict says `syntax: not checked (checker failed: REASON)`.
+  - **Fail open**, because a check that cannot run says nothing about the file. Refusing would block the
+    agent's work on timelike's fault, not the file's (P2: the checker's failure is not the file's).
+  - The file is still written whole or not at all (FR-7).
+- **FR-25** **The skip** (seam 6): `--skip-syntax-check`, in the agent's own command.
+  - The verdict says `syntax: skipped (--skip-syntax-check)`, and JSON `syntax.status "skipped"`.
+  - The session event's `args` carry the flag, as they carry every flag.
+  - `--help` lists it. No verdict, refusal or `do instead:` suggests it (T4: the environment never
+    suggests a skip).
+- **FR-26** Every edit's and dry run's verdict carries the check's outcome, and JSON always has `syntax`.
+  The outcomes are `syntax: ok (CHECKER)`, `skipped`, `not checked (…)` or `already failed …`. The no-op
+  (`--old` equal to `--new`) checks nothing and says nothing.
+- **FR-27** **The manifest and the announcement:**
+  - usage gains the anchor form and the check;
+  - manifest extras gain `anchor_form: "N:hhhhhh[..M:hhhhhh]"`, `syntax_checkers` (language → checker)
+    and `syntax_time_limit_s: 10`;
+  - exit 1's text gains "would break the file's syntax", and exit 3's gains "stale anchors";
+  - the announcement and `timelike tools` regenerate from `--agent-info`;
+  - `timelike-conform` passes over the new `edit`.
+
+**Carried from slice 0** (008 Cycle 1's `not_verified`)
+- **FR-28** The slice-0 e2e files gain `bash -lc` cells.
+  - The `type -a edit` cell also runs under `bash -lc`, where Debian's `/etc/profile` resets `PATH`.
+  - The atomic write's owner branch runs under a real second uid: a file owned by another user,
+    writable by the agent, is refused with `cannot keep FILE's owner`, and its hash is unchanged.
+
+### Success criteria (slice 1)
+
+The criterion text is the send's, copied exactly. Each automated criterion is one e2e file in the image,
+under `bash -c` and `bash -lc`. Each byte-identical claim is checked by a hash the test reads (P004).
+
+- **SC-7** "An edit addressed by viewer anchors applies when the anchored lines are unchanged and is
+  refused, naming the changed lines, when they are not". The expected anchors are computed by the test
+  with `hashlib` over the raw line bytes, not by calling `view` (P005). Cases: unchanged (applies), a
+  changed end (exit 3, named), and a move (exit 3, named, with the rerun command). *(slice 1)*
+- **SC-8** "An edit that would make a Python, TypeScript, Go, Rust or shell file fail its syntax check is
+  refused with the checker's error, and the file is byte-identical". For each language, a valid fixture
+  written by the test is edited into an invalid one, and the edit is refused with the checker's line and
+  message, with the hash unchanged. A valid edit applies. A decoy `python3` and `bash` on the agent's
+  `PATH` change nothing (P002). *(slice 1)*
+- **SC-9** "DEMO: the Agent's edit that would break the file's syntax is rejected with the error and the
+  file is left unchanged" (D15). Manual: the mentor captures it after the lane. *(slice 1)*
+
+### Decisions (the slice-1 seams; reasoning in `research.md` R9 to R15)
+
+| Point | Decision |
+|---|---|
+| Checker carrier (seam 1) | Python: timelike's interpreter's compiler. Shell: `bash -n`. TS/TSX/Go/Rust: tree-sitter's Python binding and prebuilt grammar wheels, pinned by hash, in timelike's interpreter (the CLI would need a compiler) |
+| Direction of error (seam 2) | Python and shell are exact (the language's own parser). Tree-sitter errs both ways, measured per grammar in R10; only *introduced* errors refuse, so a grammar's gap costs an edit that adds the construct, never other work |
+| An already-broken file (seam 3) | Refuse only a new error inside the lines written. Identity is message plus line text |
+| Language (seam 4) | Extension, then shebang; `.tsx` uses the TSX grammar; `.mts`/`.cts` are TypeScript; unknown applies with `not checked (language unknown)` |
+| The checker's failure (seam 5) | Fail open, with `not checked (checker failed: …)`; 10 s limit; child killed |
+| The skip (seam 6) | `--skip-syntax-check`, visible in the command, verdict and event; never suggested |
+| Anchors (seam 7) | `--at N:h[..M:h]` with `--new` only; the ends are checked; a move is refused, naming where it went; view's own `anchor_of` and `line_body` |
+| The refusal's code | Syntax: exit 1 (the operation ran and refused, as binary or unwritable does). Stale anchors: exit 3 (the addressed text is not there, as no match) |

@@ -86,3 +86,112 @@ Conventions are as in 003–007:
 
 MVP is US1 (exact match, shown after). US2 to US4 are the same tool and land in T006, which is tested
 against T004 and T005 before T008.
+
+---
+
+# Cycle 2 — slice 1 (send `bridge/sends/06-rev1-20261009-102433.md`)
+
+<!-- Tech Stack Validation: PASSED — plan § Tech Stack Compliance Report (Cycle 2): tree-sitter binding and three grammars approved in tech-stack 1.6.0; none prohibited; the installed tech-stack-taskscan block found no prohibited technology in these tasks -->
+
+**Input:** spec § Slice 1, plan § Cycle 2, research R9 to R16, contract § Slice 1, data-model § Slice 1.
+Conventions are as Cycle 1's: one commit per task, `[008] Tnnn: …`, a `decisions.md` section per task with
+a SCOPE line, delegates own disjoint files and do not commit.
+
+**Story map:** US5 is anchors (SC-7). US6 is the syntax check (SC-8, D15). US7 is the carried items
+(FR-28).
+
+## Phase 5: Setup
+
+- [X] T010 Pins and the image (R9):
+  - `pins.env` gains `TREE_SITTER_VERSION`/`_SHA256`, `TREE_SITTER_TYPESCRIPT_*`, `TREE_SITTER_GO_*` and
+    `TREE_SITTER_RUST_*`, with the cp314 manylinux wheel's hash for the binding;
+  - `compose.yaml` passes them as build args;
+  - `image/Dockerfile`, in the final stage after § 3, declares the `ARG`s and rejects empty or malformed
+    ones. It installs the wheels into timelike's purelib with the pinned `uv`
+    (`--target --require-hashes --no-deps --only-binary :all:`), imports each grammar and parses a line,
+    and copies `tools/libexec/` to `/opt/timelike/libexec/` (root, 0755);
+  - `tests/unit/test_agent_runtimes.py`'s pin, `ARG` and compose lists gain the new keys.
+
+  The `runtimes` stage and `bench/vanilla/Dockerfile` are untouched.
+
+## Phase 6: Tests first (delegated, from the contract)
+
+- [X] T011 [P] [US5] [US6] Units, `tests/unit/test_edit_slice1.py`, from `contracts/edit-cli.md` § Slice 1:
+  - the anchors: applied, a changed end, past the end, a move, an ambiguous move, the usage errors, CRLF;
+    the expected anchors are computed with `hashlib` in the test (P005);
+  - the languages (extension, shebang, unknown);
+  - each language: refused (with line and message), applied and ok;
+  - an already-broken file (no new error applies, a new error in the written lines refuses);
+  - the dry run that would be refused;
+  - the checker's failures, via a lab copy of `edit` with a fake `libexec/syntax-check` (missing, crash,
+    garbage output, hang at the 10 s limit);
+  - the skip, and that no refusal names the skip flag;
+  - the JSON `syntax` object;
+  - a decoy `python3` and `bash` on PATH (P002).
+
+  Grammar-dependent cases skip when `tree_sitter_typescript` is not importable.
+- [X] T012 [P] [US5] [US6] [US7] e2e in the image, from the contract:
+  - `tests/e2e/edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats` (SC-7);
+  - `tests/e2e/edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats` (SC-8:
+    five languages and TSX, hash before and after, a decoy `python3`/`bash` in `~/.local/bin`, Go's
+    valid fixture confirmed by `gofmt -e` in `GO_IMAGE` when set);
+  - `tests/e2e/edit-slice-0-carried-items.bats` (FR-28: `type -a edit` under `bash -lc`, the owner branch
+    under uid 1001);
+  - `bash -lc` cells added to the five slice-0 criterion files;
+  - each new file in `Makefile`'s `SHELLCHECK_FILES`.
+
+## Phase 7: US5 — anchors (SC-7)
+
+- [X] T013 [US5] `tools/bin/view`: `line_body()` factored out of `window()` (output unchanged). `tools/bin/edit`:
+  `--at` parsing and usage errors, the anchor check with `view.anchor_of`/`view.line_body`, the
+  replacement, the stale and moved refusals with `view --anchors`-format lines, and `level: "anchors"`.
+
+## Phase 8: US6 — the syntax check (SC-8, D15)
+
+- [X] T014 [US6] `tools/libexec/syntax-check`: the child (Python compile, `bash -n`, tree-sitter), per the
+  contract's protocol.
+- [X] T015 [US6] `tools/bin/edit`:
+  - language detection;
+  - the child's run (own session, group killed at 10 s);
+  - R12's refusal rule;
+  - the refusal and the dry run that would be refused;
+  - fail-open on the checker's failure;
+  - `--skip-syntax-check`;
+  - `syntax` in every verdict and in the JSON;
+  - the manifest extras and exit-code texts;
+  - `tests/unit/test_edit.py`'s `test_manifest`, updated.
+
+## Phase 9: Polish
+
+- [X] T016 Lint and docs:
+  - `pyproject.toml` (`syntax-check` in the ruff and mypy lists; `tree_sitter*` untyped imports);
+  - `README.md`: the command reference via `scripts/readme_reference.py --write`, and the send's README
+    status block **only if** SC-7, SC-8 and the D15 path are built;
+  - `reboot.md`.
+- [X] T017 Host lane:
+  - ruff, mypy and shellcheck;
+  - units with the wheels in a scratch venv and without them;
+  - `make test-host`;
+  - `timelike-conform` over `tools/bin`;
+  - the child's start-up cost, measured.
+
+  Results go in `decisions.md`.
+- [X] T018 `cycle-report.md` § Cycle 2 (the send's block), and the final scope record. No commit after the
+  report until the mentor says the lane has ended.
+
+## Dependencies (Cycle 2)
+
+- T010 is first, for the pin names.
+- T011 and T012 depend on the contract only, and run beside T013 to T015.
+- T013 comes before T015, since both edit `tools/bin/edit`. T014 comes before T015.
+- T016 depends on T015. T017 comes after T011 to T016. T018 is last.
+
+## Parallel (Cycle 2)
+
+Two delegates write T011 and T012 while T013 to T015 are built here. Their files are disjoint from
+`tools/` and `.specswarm/`.
+
+## Strategy (Cycle 2)
+
+The MVP is US6 (the syntax check), because it carries the Manual demo D15. US5 comes first only because
+it touches `edit` with a smaller diff. US7 is tests only.

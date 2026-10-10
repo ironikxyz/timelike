@@ -62,6 +62,9 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/edit-matches-more-than-once-refused-exit-3-listing-line-numbers.bats \
   tests/e2e/edit-matches-nowhere-refused-exit-3-nearest-candidates.bats \
   tests/e2e/edit-dry-run-prints-unified-diff-file-byte-identical.bats tests/e2e/edit-name-and-manifest.bats \
+  tests/e2e/edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats \
+  tests/e2e/edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats \
+  tests/e2e/edit-slice-0-carried-items.bats \
   image/rootfs/etc/timelike/journal-exit.bash \
   tests/e2e/journal-lists-every-tool-invocation-in-order-with-pointer.bats \
   tests/e2e/journal-shell-commands-outside-tools-with-exit-codes.bats \

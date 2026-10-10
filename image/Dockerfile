@@ -120,6 +120,56 @@ RUN site="$(/opt/timelike/python/bin/python3 -I -c 'import sysconfig; print(sysc
 COPY --chmod=0755 tools/bin/ /opt/timelike/bin/
 RUN chown -R root:root /opt/timelike/bin
 
+# --- 3a. edit's syntax checker (feature 008 slice 1; research R9) ------------------------------------
+# tree-sitter's Python binding and three prebuilt grammar wheels (TypeScript/TSX, Go, Rust) go into
+# timelike's interpreter's own site-packages, beside agentio. They are never put in the agent's runtime and
+# never in the vanilla image (RB1). Each wheel is pinned by version and by the SHA-256 PyPI publishes
+# (pins.env): --require-hashes refuses any other file, --no-deps admits nothing unpinned, and
+# --only-binary means no compiler is needed, which the image has none of. Python and shell need nothing
+# here: the checker uses this interpreter's compiler and /bin/bash -n. The checker itself lives in
+# /opt/timelike/libexec, off PATH; edit runs it from its own location (lore P002).
+# Every line of a RUN ends in a backslash, the Python import check included: the Dockerfile parser joins
+# only those (lane 008s1-a: a multi-line -c program broke the parse), so the check is one logical line.
+ARG TREE_SITTER_VERSION
+ARG TREE_SITTER_SHA256
+ARG TREE_SITTER_TYPESCRIPT_VERSION
+ARG TREE_SITTER_TYPESCRIPT_SHA256
+ARG TREE_SITTER_GO_VERSION
+ARG TREE_SITTER_GO_SHA256
+ARG TREE_SITTER_RUST_VERSION
+ARG TREE_SITTER_RUST_SHA256
+COPY --chmod=0755 tools/libexec/ /opt/timelike/libexec/
+RUN for pin in "tree-sitter:${TREE_SITTER_VERSION:-}:${TREE_SITTER_SHA256:-}" \
+               "tree-sitter-typescript:${TREE_SITTER_TYPESCRIPT_VERSION:-}:${TREE_SITTER_TYPESCRIPT_SHA256:-}" \
+               "tree-sitter-go:${TREE_SITTER_GO_VERSION:-}:${TREE_SITTER_GO_SHA256:-}" \
+               "tree-sitter-rust:${TREE_SITTER_RUST_VERSION:-}:${TREE_SITTER_RUST_SHA256:-}"; do \
+      IFS=: read -r name version sha <<<"${pin}"; \
+      [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "${sha}" =~ ^[0-9a-f]{64}$ ]] \
+        || { echo "error: ${name}'s version or SHA-256 build arg is missing or malformed — pass them from pins.env" >&2; exit 1; }; \
+      printf '%s==%s --hash=sha256:%s\n' "${name}" "${version}" "${sha}"; \
+    done >/tmp/syntax-check.requirements \
+ && site="$(/opt/timelike/python/bin/python3 -I -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
+ && UV_NO_CACHE=1 uv pip install --python /opt/timelike/python/bin/python3 --target "${site}" \
+      --require-hashes --no-deps --only-binary :all: -r /tmp/syntax-check.requirements \
+      || { echo "error: the syntax checker's wheels did not install as pinned (pins.env TREE_SITTER_*)" >&2; exit 1; } \
+ && rm -f /tmp/syntax-check.requirements \
+ && chown -R root:root "${site}" /opt/timelike/libexec \
+ && cd / && /opt/timelike/python/bin/python3 -I -c \
+      'import importlib.metadata as md, sys, tree_sitter as ts, tree_sitter_typescript as t, tree_sitter_go as g, tree_sitter_rust as r; \
+       names = ["tree-sitter", "tree-sitter-typescript", "tree-sitter-go", "tree-sitter-rust"]; \
+       bad = [f"{n} is {md.version(n)}, pinned {v}" for n, v in zip(names, sys.argv[1:]) if md.version(n) != v]; \
+       bad += ["a grammar parsed nothing" for lang in (t.language_typescript, t.language_tsx, g.language, r.language) \
+               if ts.Parser(ts.Language(lang())).parse(b"x").root_node is None]; \
+       sys.exit("error: " + "; ".join(bad) if bad else 0)' \
+      "${TREE_SITTER_VERSION}" "${TREE_SITTER_TYPESCRIPT_VERSION}" "${TREE_SITTER_GO_VERSION}" "${TREE_SITTER_RUST_VERSION}" \
+ && test -x /opt/timelike/libexec/syntax-check \
+ && for probe in 'python:def f(x)' $'go:package p\nfunc f() {' 'shell:if true; then'; do \
+      lang="${probe%%:*}"; src="${probe#*:}"; \
+      out="$(printf '%s\n' "${src}" | /opt/timelike/python/bin/python3 -I /opt/timelike/libexec/syntax-check "${lang}" "$(( ${#src} + 1 ))")"; \
+      [[ "${out}" == *'"result": [{'* ]] \
+        || { echo "error: the syntax checker did not find the error in a broken ${lang} line: ${out}" >&2; exit 1; }; \
+    done
+
 # --- 3b. The agent's runtimes, configured for user locations (007 spec FR-25 to FR-28; discovery revision 14)
 # For the agent, never for timelike's tools (stack note 3: they run /opt/timelike/python with -I, which never
 # reads the user site). Root owns both prefixes. The configuration is scoped to each runtime (ruling Q3):

@@ -111,10 +111,15 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 > so the parser reads it as approved, and Version Updates item 1. Unchanged: everything else. Revision 15 is appended to
 > `governance_audited_against`.
 
+> **Amended 2026-10-09 (1.5.0 → 1.6.0, an addition)** by `/specswarm:plan` for 008 Cycle 2 (send
+> `bridge/sends/06-rev1-20261009-102433.md`; justification in `features/008-edit/research.md` R9). This is not a discovery
+> audit, so `governance_audited_against` is unchanged. Changed: four Python packages under Approved Libraries (tree-sitter's
+> binding and three grammars), for `edit`'s syntax check, in timelike's interpreter only. Unchanged: everything else.
+
 # Tech Stack - Timelike
 
-**Version**: 1.5.0
-**Last Updated**: 2026-10-08
+**Version**: 1.6.0
+**Last Updated**: 2026-10-09
 **Auto-Generated**: No. Derived from `../bridge/governance-context.md` (stack option A, discovery
 revision 2; audited against revisions 3 to 11, per the notes above)
 
@@ -276,6 +281,15 @@ Merge gate from discovery revision 3 (H9). All pinned.
 
 Both languages are **stdlib only** by default. Go additionally has the SQLite driver above. Any
 addition needs justification in the feature plan and an entry here.
+
+Python additions (feature 008 slice 1, `edit`'s syntax check; `features/008-edit/research.md` R9). Installed into
+timelike's own interpreter only (`/opt/timelike/python`), never the agent's runtime and never the vanilla image. Each is a
+prebuilt wheel pinned by version and SHA-256 in `pins.env` and installed with `--require-hashes --no-deps`. They are the
+Python carrier of the stack's **tree-sitter** entry: the CLI compiles grammars with a C compiler, which the image does not have.
+- **tree-sitter** 0.26.0 (tree-sitter's Python binding, PyPI `tree-sitter`)
+- **tree-sitter-typescript** 0.23.2 (TypeScript and TSX grammars)
+- **tree-sitter-go** 0.25.0 (Go grammar)
+- **tree-sitter-rust** 0.24.2 (Rust grammar)
 
 ---
 

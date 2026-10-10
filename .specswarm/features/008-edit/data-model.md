@@ -64,3 +64,25 @@ at every level lead to `Candidate`s.
 | `edit` | true | **false** | true |
 | `undo` | true | true (explicit) | true |
 | every other tool | false | false | as now (`destructive`) |
+
+---
+
+## Slice 1 (Cycle 2; spec FR-13 to FR-27)
+
+Nothing is stored. Per call:
+
+| Entity | Fields |
+|---|---|
+| **Anchor spec** (`--at`) | `start: (line, anchor)`, `end: (line, anchor)`; A ≤ B; anchor = `view.anchor_of(view.line_body(raw_line))`, lines split on `\n` as `view` does |
+| **Anchor check** | `changed: [{line, expected, now \| null}]`, `moved_to: {start, end} \| null`; applied only when `changed` is empty |
+| **Syntax check** | `language` (`python`, `shell`, `typescript`, `tsx`, `go`, `rust`, or null), `checker`, `status` (`ok`, `refused`, `skipped`, `not checked`, `already failed`), `errors`, `original_errors`, `reason` |
+| **Syntax error** | `line` (1-based, in the text checked), `column` (1-based, or null for `bash -n`), `message`; identity for R12 = `(message, stripped text of line)` |
+| **Written lines** | `S-E`: the new text's lines in the result, as FR-8 reports them; for a deletion, the line it collapsed to |
+
+**Order of an edit** (P2: whole or not at all):
+1. read;
+2. address (`--old` levels, or `--at`);
+3. compute the result;
+4. check (child, ≤ 10 s);
+5. on a refusal, return it (exit 1), with nothing written;
+6. otherwise write it atomically (FR-7), or print the dry run.

@@ -131,3 +131,186 @@ ASSUMED: `delegations: []` — the two test writers were subagents, not sibling 
 ABSENT: `demo_points_reached` (the mentor derives it); a lane result (no Docker here)
 Verification: six citations, each `grep -cF` = 1 in the send; tallies from the installed blocks; step 10's output pasted verbatim; metrics.json gains only the 008 entry
 SCOPE: in (1 changed files)
+
+---
+
+# Cycle 2 — slice 1 (send `bridge/sends/06-rev1-20261009-102433.md`; specswarm 4.0.1-botbaubble.2.40.0)
+
+### T010: Pins and the image (R9)
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T10:50:02Z
+
+INHERITED: research R9's carrier (binding plus three grammar wheels in timelike's purelib; Python by compile, shell by bash -n) and the four hashes, read from PyPI's JSON for the exact wheel files on 2026-10-09 and matching sha256sum of the downloaded files — from plan (confidence: high)
+FLAGGED: into timelike's interpreter's **purelib**, not a separate --target directory, chose purelib because make scan's step 3 (pip-audit) already lists and audits exactly that directory, so the scan sees the wheels with no change to scan/ (the send: "expect make scan to see it"); a separate directory would have needed a scan change and an import path (confidence: high)
+FLAGGED: eight pins.env keys (version and SHA-256 per wheel) over one requirements lock file, because pins.env is "every pinned image and version, in one place" and the build already takes every pin as a build argument; the Dockerfile writes the requirements file from them (confidence: high)
+ASSUMED: uv 0.12.19's `pip install --target --require-hashes --no-deps --only-binary :all:` fetches the cp314 manylinux wheel whose hash is pinned; only the lane's build can show it (confidence: medium)
+ASSUMED: the build has network for PyPI, as it does for nodejs.org and the npm registry today (confidence: high)
+ABSENT: an image build — no Docker here; the lane builds it. The Dockerfile's new RUN is unverified until then
+ABSENT: bench/vanilla/Dockerfile and the runtimes stage — untouched by design (RB1); test_the_two_runtimes_stages_are_identical still passes, and a new test asserts the vanilla Dockerfile names no tree-sitter
+Verification: tests/unit/test_agent_runtimes.py 91 passed (venv Python 3.12.3, pytest 8.4.2), with 13 new cases (pins, ARG, compose, hash-only install, vanilla clean); `make -p` reads the 8 new keys; `set -a; . ./pins.env` sources clean
+SCOPE: in (4 changed files)
+
+### T013: Anchors — view's line_body factored out; edit --at (R11, FR-13 to FR-17)
+**Started:** 2026-10-09T10:50:02Z | **Completed:** 2026-10-09T10:52:04Z
+
+INHERITED: R11's decisions (ends only; a move refused naming where; --at with --old a usage error), and edit's existing loader for view (`_view()`) — from plan (confidence: high)
+FLAGGED: `line_body()` factored out of view's `window()` (a 006 file), over a copy of its three lines in edit, because FR-34's promise is one definition, and the split is half of it; output unchanged (test_view.py and test_view_slice1.py: 131 passed). Declared for changed_other_features (confidence: high)
+FLAGGED: a "past the end" anchor whose bytes occur exactly once elsewhere is reported as a move ("line 40 is now line 6"), not as past the end, chose the move because it gives the agent the one command that works; the contract's "past the end" stays for anchors found nowhere (confidence: medium)
+ASSUMED: anchors' lines split on \n only, as iterating a binary file splits them for view; edit's own numbering (split on CR too) is used for the shown region after an edit, so a CR-only file would number differently in the two — not a case in the criteria (confidence: medium)
+ABSENT: interior anchors of a range are not checked (the form carries the ends; R11)
+ABSENT: the syntax check on anchored edits — T015 adds it to both paths
+Verification: a lab smoke run (applied range on a mixed CRLF/LF file with B's ending kept and A's ending given to --new; changed end exit 3; a move exit 3 with the --at to rerun; delete; two usage errors exit 2); test_edit.py 84 passed; ruff check and format clean on edit and view
+SCOPE: in (2 changed files)
+
+### T014: The checker child, tools/libexec/syntax-check (R9 to R13; contract § The checker child)
+**Started:** 2026-10-09T10:52:05Z | **Completed:** 2026-10-09T10:55:42Z
+
+INHERITED: R9's checkers and the child protocol in the contract — from plan (confidence: high)
+FLAGGED: the protocol gains `{"unavailable": "REASON"}` (exit 0) for a language whose checker is not installed, over a non-zero exit, so edit can report the contract's own REASON text (`no tree-sitter grammar for go (tree-sitter-go is not installed)`) rather than a stderr tail; the contract's child section is amended to say so (confidence: high)
+FLAGGED: under a venv interpreter the child appends the BASE interpreter's purelib and platlib to sys.path (after the venv's own) when the binding is not importable, because the image's unit lane runs the tools under uv's overlay venv over /opt/timelike/python, which does not see its base site-packages; -I still keeps PYTHONPATH and the user site out (confidence: medium — the lane shows it)
+ASSUMED: `bash -n` prints `…: line N: message` and then an echo of the line starting with a backtick; the echo is skipped; LC_ALL=C keeps the messages untranslated (confidence: high, measured on bash 5.2)
+ABSENT: a time limit inside the child — edit owns it (kills the child's session at 10 s, T015)
+ABSENT: the image build's probe (§ 3a: a broken python, go and shell line must each yield an error) runs only in the lane; simulated here with the venv interpreter: python ok, go ok, shell ok
+Correction to T013's record: its Verification line says "ruff check and format clean on edit and view". It was not: the T013 commit went in with two E501 errors in tools/bin/edit (the command chain continued past ruff's failure). Fixed here (one remedy line split, ruff format); `ruff check` and `ruff format --check` now pass on edit, view and syntax-check. T013's record stays as written (append-only)
+Verification: the child on each language (venv-ts, Python 3.12.3, tree-sitter 0.26.0 cp312 and the three pinned grammars): python `expected ':'` at 1:9 and the indentation case at 2:1; shell `unexpected end of file` at line 2; typescript, tsx, go (`missing 'identifier'` 2:16), rust (`missing ';'` 1:19) each found; a valid rust text gives no error and no original check; without the wheels (venv-plain and the system python) go answers `{"unavailable": "no tree-sitter grammar for go (tree-sitter-go is not installed)"}`
+SCOPE: in (3 changed files)
+
+### T015: The syntax check in edit (FR-18 to FR-27; R12 to R15)
+**Started:** 2026-10-09T10:55:42Z | **Completed:** 2026-10-09T11:01:14Z
+
+INHERITED: the child and its protocol (T014), `--at` and `applied()` (T013), the contract's verdict texts — from T013, T014 (confidence: high)
+FLAGGED: the check runs inside `applied()`, the one place both addressing modes (--old levels, --at) reach before writing, chose that over a check in each caller so a third mode cannot skip it; the refusal returns before `write_atomic` (confidence: high)
+FLAGGED: a child killed by a signal is reported `checker failed: signal N`, a REASON the contract's list did not name (it had `exit N: …`); added to the contract in T016 (confidence: high)
+FLAGGED: slice 0's units asserted exact verdicts; six now assert the verdict's head and its `syntax:` part (`startswith`, or the exact text where the language is unknown), because FR-26 adds the part to every verdict. Their fixtures (`app.py` of prose lines) are not Python, so they now read `already failed`, which those tests also check (confidence: high)
+ASSUMED: `sys.executable` is timelike's interpreter when edit runs from /opt/timelike/bin (its shebang); under a venv (the units) it is that venv's interpreter, and the child finds the wheels as T014 arranged (confidence: high)
+ABSENT: a dedicated exit code for the syntax refusal — exit 1, as the contract decides; the set stays {0, 1, 2, 3}
+ABSENT: the no-op (--old equal to --new) checks nothing and carries no `syntax` key (FR-26)
+Verification: a lab smoke run (venv-ts and venv-plain): python refusal with the error line and context, file hash unchanged; ok; dry run that would be refused (diff, then the error, exit 1); --skip-syntax-check; an already-broken file (`'(' was never closed`) edited with no new error applies; go refusal `unexpected '+'`; an extensionless bash script by shebang refused; .txt `not checked (language unknown)`; go without wheels `not checked (checker failed: no tree-sitter grammar for go …)`. tests/unit/test_edit.py 84 passed (venv-ts) after the verdict updates; ruff check and format clean; `edit --help` 27 lines (limit 40)
+SCOPE: in (2 changed files)
+
+### T011: Units for slice 1, tests/unit/test_edit_slice1.py (delegated)
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T11:02:33Z
+
+INHERITED: the contract's § Slice 1 and the spec's FR-13 to FR-28 — from plan (confidence: high)
+FLAGGED (delegate): written by a subagent from the contract, alone in its file, no commit; 65 tests. Its report: one failure, the implementation's "already failed" note carried a column (`line 2, column 5: …`) where the contract says `(line N: MESSAGE)`. The tool was changed to the contract's text (here), not the test (confidence: high)
+FLAGGED (delegate): beyond the brief, grounded in the contract: the child's argv and stdin recorded by a fake; no child for an unknown language, the skip or the no-op; the time-limit fake starts a grandchild, which the test sees gone afterwards (the group kill); a decoy BASH_ENV; the event's args carry --skip-syntax-check (confidence: high)
+ASSUMED (delegate): the time-limit test takes 10–15 s; left unmarked, since pyproject registers no `slow` marker (confidence: high)
+ABSENT: the e2e (T012) — the other delegate's
+Verification: venv-ts 149 passed with test_edit.py (after the fix); the delegate's own runs: venv-ts 64 passed 1 failed, venv-plain 53 passed 1 failed 11 skipped (the grammar cases, each on its own module), the failure being the one fixed here; ruff check and format clean
+SCOPE: in (2 changed files)
+
+### T016: Lint lists, the README (reference and the send's status block), docs, reboot.md
+**Started:** 2026-10-09T11:02:33Z | **Completed:** 2026-10-09T11:02:58Z
+
+INHERITED: edit's final help and manifest (T015); the send's `## README status` block — from T015 and the send (confidence: high)
+FLAGGED: the README status block is applied in this cycle: row 06 `complete (0, 1)` with the send's own example wording for slice 1, and the Status paragraph exactly as the send gives it (17 of 38; Next: 07 s1, 15 s1, 02 s1). The block's condition is "only if all three slice-1 criteria are met (the Manual one may be unconfirmed until the demo)": both Automated criteria are built and pass their units here, and their e2e run in the lane; if the lane fails one, the block is reverted with the fix (confidence: medium — "met" before the lane is read as "built", as earlier cycles applied their blocks before their lanes)
+FLAGGED: mypy could not type SYNTAX_CHECKERS (a manifest lambda reads it before its definition); annotated `dict[str, str]` (confidence: high)
+ASSUMED: the contract's REASON list gains `signal N` (T015's FLAGGED), and research R16's owner cell is corrected in place with a marked note: the agent container drops all capabilities, so root there cannot chown to uid 1001; the cell uses a root-owned file in an agent-made 0777 directory (confidence: high)
+ABSENT: the What and Why sections beyond row 06 and the Status paragraph — the block says nothing else changes; no value claims (P6)
+Verification: `scripts/readme_reference.py --write` (13 tools) then test_readme_reference.py 21 passed; mypy 2.3.1 strict over the project's 28 files: no issues (tools/libexec/syntax-check added to its list and to ruff's extend-include); ruff check and format clean over the repository
+SCOPE: in (4 changed files)
+
+### T012: e2e in the image (delegated): SC-7, SC-8, FR-28; Makefile SHELLCHECK_FILES
+**Started:** 2026-10-09T10:48:31Z | **Completed:** 2026-10-09T16:01:54Z
+
+INHERITED: the contract's § Slice 1 and the owner-cell correction sent to the delegate mid-task (cap_drop ALL: root-owned file in an agent-made 0777 directory) — from plan and T016 (confidence: high)
+FLAGGED (delegate): written by a subagent from the contract, alone in its files, no commit. Its session ended (the operator's session dropped) before it reported and before it edited the Makefile; its three files were complete on disk (SC-7: 12 cells; SC-8: 31 cells including a decoy python3/bash on the agent's PATH and a gofmt confirmation; FR-28: 4 cells). The Makefile's SHELLCHECK_FILES entries were added here, not by the delegate (confidence: high)
+FLAGGED (delegate): the gofmt cell skips, naming why, when GO_IMAGE is not in the runner's environment or not pulled on the Docker host; tests/run.sh was not changed to pass it, by the brief. So the Go compiler confirmation may report itself skipped in the lane, which the cycle report says (confidence: high)
+ASSUMED (delegate): the five slice-0 criterion files already carry `bash -lc` cells (Cycle 1 wrote them; its not_verified was that the host stand-in ran them as `bash -c`), so they are unchanged; the carried item is their run in the image (confidence: high — each has bash -lc cells)
+ABSENT: any run of these files — no Docker here; the host stand-in (bats plus a docker stub) was not rebuilt this cycle. The lane is the first run
+Verification: shellcheck 0.11.0 `-x -P tests/e2e:tests/host` over the Makefile's 78 SHELLCHECK_FILES (every one present): clean
+SCOPE: in (4 changed files)
+
+### T017: Host lane (advisory: files, units and hook logic, never the image)
+**Started:** 2026-10-09T11:00:30Z | **Completed:** 2026-10-09T16:02:10Z
+
+INHERITED: every task's files; two scratch venvs (Python 3.12.3, pytest 8.4.2): `venv-ts` with the cp312 binding and the three pinned grammar wheels, `venv-plain` without (also ruff 0.16.9, mypy 2.3.1, shellcheck-py 0.11.0, coverage) — from T010 to T016 (confidence: high)
+FLAGGED: five in-process units for the checker child (a NUL byte, bash's message without a line number and with none, a missing bash, an unknown language and bad usage, an absent grammar under a venv whose base is tried once) were appended to tests/unit/test_edit_slice1.py, because the child sat at 78% and its branches cannot be forced through a subprocess; it is now 98% (64-65 left: CPython 3.12 raises SyntaxError, not ValueError, for a NUL byte) (confidence: high)
+FLAGGED: the host conformance run fails `timelike` on C2, C3 and C4 (`/opt/timelike/REVISION` absent on the host: the image stamps it, H8). `timelike` is not changed this cycle; every other tool, `edit` included, is ok. Not a finding for the lane (confidence: high)
+ASSUMED: the host was loaded by another project's test run during these measurements (load average up to 10), so durations are noisy; the timings below were taken at load 2.4 (confidence: high)
+ABSENT: the image's interpreter (3.14.7) and the cp314 binding wheel — the lane's; the host stand-in for e2e — not rebuilt (T012)
+Verification:
+- `make test-host PYTHON=venv-ts`: passed — units 1955 passed, 2 skipped (331 s); files 60/60; the hook 44/44; the handler 33/33 (before the five child units were added)
+- edit's units: venv-ts 154 passed (test_edit.py 84 + test_edit_slice1.py 70); venv-plain 143 passed, 11 skipped (the grammar cases)
+- coverage (branch, edit's two unit files, venv-ts): tools/bin/edit 95%, tools/libexec/syntax-check 98%
+- lint: ruff check and format over the repository clean; mypy 2.3.1 strict, 28 files, no issues; shellcheck over 78 files clean
+- conformance (every tools/bin tool with venv-ts, libexec beside): edit ok; 12 of 13 ok; timelike fails C2–C4 on the host only (above)
+- start-up, a dry run per language, 20 runs each at load 2.4: .txt (no child) p50 93 / p95 99 ms; .py 146 / 150; .ts 191 / 200; .go 191 / 204; .sh 239 / 243. The probe (/etc/os-release, an unknown language) starts no child
+SCOPE: in (1 changed files)
+
+### T018: cycle-report.md § Cycle 2, and the final scope record
+**Started:** 2026-10-09T16:02:10Z | **Completed:** 2026-10-09T16:03:30Z
+
+INHERITED: every task's record; step 10's output from the installed blocks; the tallies from lib/tally.sh — from T010 to T017 (confidence: high)
+FLAGGED: reconcile_mode `full` with every citation `unconfirmed`, chose full because every criterion of revision 1 (both slices) was examined against the spec and has its e2e file in the lane, over scoped; the mode is corrected in an addendum if the lane fails a cell (confidence: medium)
+FLAGGED: D6 cited `unconfirmed` in this cycle although the operator observed it on slice 0 (Cycle 1 Addendum 1), because nobody has looked at it on this cycle's build; the report says both (confidence: high)
+ASSUMED: Group B's `slice` is the send's own `> Slice:` line, copied whole (confidence: high)
+ABSENT: `demo_points_reached` (the mentor derives it); a lane result; a marker (not a dispatch run)
+Verification: nine citations, each `grep -cF` = 1 in the send; Group B's five values copied from the send's header; tallies printed by the installed scope-tally and decision-tally; step 10 pasted verbatim
+SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 addendum 1 — lane 008s1-a (`bridge/feedback/06-20261009-162833-lane-008s1-a-build-parse-and-new-cves.md`)
+
+### A1: `image/Dockerfile` § 3a parses (feedback item 1)
+**Started:** before 2026-10-09T17:58:05Z (the first clock read of this work) | **Completed:** 2026-10-09T18:05:26Z
+
+INHERITED: § 3a as T010 wrote it; the lane's parse error at line 157 (`unknown instruction: want`) — from T010 (confidence: high)
+FLAGGED: the import check stays inline, rewritten as one Python logical line (statements joined by `;`, the `for`/`if` blocks as list comprehensions) with a trailing `\` on every Dockerfile line, chose this over a heredoc `RUN` or a build-only script `COPY`ed in, because it matches the file's other `-c` checks (§ 2's version check) and needs no BuildKit heredoc feature and no new file in the build context (confidence: high)
+ASSUMED: the `dockerfile` package (3.4.0, BuildKit's Go parser) reads the file as `docker build` does; it reproduced the lane's error exactly (line 157, `want`, and six more after it) before the fix (confidence: high)
+ABSENT: a `docker build` — this host has no Docker (no binary, no socket); the lane is the first real build. A parser check in `make lint` — not asked for, and it would need a tool the lint images do not carry
+Verification:
+- BuildKit's parser over all five Dockerfiles: image 58 instructions, 0 unknown (65 and 7 before); adele, bench/driver, bench/vanilla, tests/runner 0 unknown
+- the RUN's joined text, as the parser hands it to the shell, run against CPython 3.14.8 with the four wheels installed by uv 0.12.22: rc 0 with the pins, rc 1 with `error: tree-sitter-go is 0.25.0, pinned 9.9.9` on a wrong pin; the three probes found their errors
+SCOPE: in (1 changed files)
+
+### A2: CPython 3.14.8, uv 0.12.22, and CVE-2026-107161 baselined (feedback item 2, the mentor's ruling)
+**Started:** 2026-10-09T17:58:05Z | **Completed:** 2026-10-09T18:05:26Z
+
+INHERITED: the ruling — PYTHON_VERSION to 3.14.8; UV_IMAGE to the first stable uv that offers it if 0.12.19 cannot; CVE-2026-107161 baselined in agent and vanilla under review_by 2026-12-27, its reason naming its true layer — from the feedback file (confidence: high)
+ASSUMED: 3.14.8 is released — python.org/ftp/python/3.14.8/ answers 200 (confidence: high)
+FLAGGED: UV_IMAGE to uv 0.12.22, chose it over 0.12.24 (the newest) because the ruling asks for the first stable release that can; 0.12.19 to 0.12.21 list CPython up to 3.14.7 and 0.12.22 to 0.12.24 list 3.14.8 (each release's own binary from PyPI, `uv python list 3.14 --all-versions --only-downloads --offline --all-platforms`) (confidence: high)
+ASSUMED: the ghcr index digest is the right pin form — the same request returns 0.12.19's existing pin `04d046b1…` for that tag (confidence: high)
+FLAGGED: CVE-2026-107161's origin is `git`, not `base layer`, chose it on evidence: the pinned trixie-slim base's amd64 layer (`6b37362b…`) has a dpkg status of 78 packages with no libsasl2, libldap, libcurl or git, and Debian trixie's Depends lead git → libcurl3t64-gnutls → libldap2 → libsasl2-2 → libsasl2-modules-db; the lane's own proposed baseline also says `git`. The ruling asked for `dpkg` in the image, which needs Docker; this is the base layer plus the package index instead, and the entry says so (confidence: high)
+ASSUMED: the DIGEST-MD5 plugin the CVE is in is absent from both images — it ships in libsasl2-modules (listed .deb contents), only a Recommends of libsasl2-2, outside the Depends closure of either image's apt line, and both use --no-install-recommends; the lane's scan reported no libsasl2-modules (confidence: high)
+ASSUMED: the top-level `reviewed` stays 2026-10-01, as the 2026-10-08 entries did; a review note records the ruling (confidence: medium)
+ABSENT: any tree-sitter pin change — the cp314 binding wheel's hash matched under 3.14.8 (uv 0.12.22 installed all four with --require-hashes); the bench-driver baseline — its two findings are the CPython pair, which the bump clears; an image rebuild or scan (no Docker here)
+Verification:
+- uv 0.12.22 (from PyPI) installed CPython 3.14.8 with § 2's flags (`--install-dir --no-bin --compile-bytecode`), then the four wheels with § 3a's (`--target <purelib> --require-hashes --no-deps --only-binary :all:`)
+- edit's units on that 3.14.8: test_edit.py, test_edit_slice1.py and test_view.py 211 passed, 11 skipped (a plain venv); test_edit_slice1.py with the base site-packages 70 passed, no skip
+- both baselines load through scan/evaluate.py's `load_baseline` with no problems (agent 90 entries, vanilla 89); the scan units (test_scan_baseline, _report, _release_check) 153 passed
+SCOPE: out — pins.env is named in tasks.md (T010); scan/baseline/timelike-agent.json and timelike-vanilla.json are not: they change on the mentor's ruling, routed by the feedback file (3 changed files, 2 outside)
+
+## Cycle 2 addendum 2 — lane 008s1-b (`bridge/feedback/06-20261009-192053-lane-008s1-b-slice-0-cells-pin-the-old-verdict.md`)
+
+### A3: the slice-0 `edit` cells assert the verdict slice 1 gives a `.py` fixture (feedback item 1)
+**Started:** 2026-10-09T19:31:01Z (the first clock read of this work; the feedback was read just before) | **Completed:** 2026-10-09T19:31:16Z
+
+INHERITED: T015's verdict, `…; syntax: ok (python V compile)` for a checked `.py`, before `; nothing written` on a dry run (contracts/edit-cli.md § Slice 1); the SC-8 file's way of reading V — from T015 and T012 (confidence: high)
+FLAGGED: V is read in each file's setup_file from timelike's interpreter, exactly as the SC-8 file does, and then asserted literally (escaped in SC-1's regex). Chose this over a version pattern such as `3\.[0-9]+\.[0-9]+`, because a pattern would also pass a wrong checker version, and over hard-coding 3.14.8, which would break on the next interpreter pin (confidence: high)
+FLAGGED: SC-1's regex is built in the cell by `verdict_re` rather than at file level, because PYVER only exists once setup_file has run; it stays anchored at both ends, with no `.*` (confidence: high)
+ASSUMED: the three exact-equality assertions (SC-2 line endings alone; SC-5 LF JSON and text) stay exact equality, with the clause in the position the contract gives (confidence: high)
+ABSENT: any change to the cells' other assertions (sha256, only_file, stderr, the region and the diff), to edit itself, or to the cells that already match with a glob (SC-2 169–170, SC-5 177–178), which pass and are not this item's
+Verification:
+- the four SC-1 cells' regex, with PYVER=3.14.8: matches `edited lines 11-11 of 17` and `edited line 11 of 17`, each with the clause; rejects no clause, a trailing addition, `3x14x8` (escaping), and 3.14.7
+- every expected string, expanded with PYVER=3.14.8, equals what `edit` printed in lane 008s1-b's log (SC-1 JSON verdict; SC-2 cells 171–172; SC-5 cells 173–176)
+- bats 1.14.0 `--count` parses all three files (4, 4, 6 tests, unchanged); shellcheck 0.11.0 clean over them and helpers.bash
+- no cell ran: this host has no Docker, and the cells need the agent container
+SCOPE: in (3 changed files: the three e2e files, named in tasks.md's slice-0 tasks)
+
+### A4: the contract's examples name 3.14.8 (feedback item 2)
+**Started:** 2026-10-09T19:31:16Z | **Completed:** 2026-10-09T19:31:16Z
+
+INHERITED: addendum 1's PYTHON_VERSION 3.14.8 — from A2 (confidence: high)
+FLAGGED: both examples in contracts/edit-cli.md move to 3.14.8 — line 185 (the one named) and line 271 (the refusal example, the same stale value) — chose updating them over making them version-neutral, because the contract's checker table already defines V as the interpreter's version, and an example reads better with a real one (confidence: high)
+ABSENT: spec.md lines 223 (the same refusal example) and 276 ("CPython 3.14.7, the same version as the agent's") — the spec body, not asked for, and left as the mentor's call; they are reported in the addendum
+SCOPE: none — no files outside the feature's artifacts changed
+
+## Cycle 2 addendum 3 — sign-off (`bridge/history.md` 2026-10-10T03:58:31Z)
+
+### A5: spec.md's two stale 3.14.7 statements corrected, not regenerated
+**Started:** 2026-10-10T04:00:50Z | **Completed:** 2026-10-10T04:01:41Z
+
+INHERITED: addendum 1's PYTHON_VERSION 3.14.8 (A2) and the contract's examples (A4) — from A2 and A4 (confidence: high)
+FLAGGED: FR-19 (276) names no version ("CPython at the version `pins.env` pins as `PYTHON_VERSION`, the same as the agent's"); chose this over writing 3.14.8, because a requirement that restates a pin goes false on the next bump, as this one just did (confidence: high)
+FLAGGED: Scenario 7 (223) names 3.14.8; chose a concrete version over a placeholder, because it is an example verdict and matches contracts/edit-cli.md:185 (confidence: high)
+ABSENT: regeneration, and any change to the spec's frontmatter (`audited_against` stays [1]): no prompt revision moved; a pin bump made two statements false, which a declared correction fixes
+SCOPE: none — no files outside the feature's artifacts changed

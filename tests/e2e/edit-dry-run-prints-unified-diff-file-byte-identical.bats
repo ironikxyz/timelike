@@ -33,6 +33,12 @@ setup_file() {
   stamp_check
   EDIT_DIR="$(container_tmpdir edit-sc5)"
   export EDIT_DIR
+  # Since slice 1 a .py fixture's verdict carries `syntax: ok (python V compile)` (contracts/edit-cli.md
+  # § Slice 1): V is read by the test from timelike's interpreter (edit's own), as the SC-8 file reads it.
+  PYVER="$(exec_plain "$AGENT_PY" -I -c 'import platform; print(platform.python_version())')"
+  PYVER="${PYVER//$'\r'/}"
+  [[ "$PYVER" =~ ^3\.[0-9]+\.[0-9]+$ ]] || { echo "cannot read timelike's Python version: '${PYVER}'" >&2; return 1; }
+  export PYVER
 }
 
 teardown_file() {
@@ -229,7 +235,7 @@ check_lf_json() {
   no_stderr
 
   json_dry_fields
-  expect_j verdict "dry run: would edit lines 10-11 of 17 (matched exactly); nothing written"
+  expect_j verdict "dry run: would edit lines 10-11 of 17 (matched exactly); syntax: ok (python ${PYVER} compile); nothing written"
   jpy "print('\n'.join(g('lines', [])))"
   same_text "the diff (JSON lines)" "$WANT_DIFF" "$JPY"
 }
@@ -243,7 +249,7 @@ check_lf_text() {
   no_stderr
 
   [[ "${lines[0]:-}" == "edit: ${FILE} ["*"]" ]] || flunk "header line: ${lines[0]:-<none>}"
-  [[ "${lines[1]:-}" == "verdict: dry run: would edit lines 10-11 of 17 (matched exactly); nothing written" ]] || flunk "verdict line: ${lines[1]:-<none>}"
+  [[ "${lines[1]:-}" == "verdict: dry run: would edit lines 10-11 of 17 (matched exactly); syntax: ok (python ${PYVER} compile); nothing written" ]] || flunk "verdict line: ${lines[1]:-<none>}"
   same_text "the diff printed after the verdict" "$WANT_DIFF" "$(printf '%s\n' "${lines[@]:2}")"
 }
 

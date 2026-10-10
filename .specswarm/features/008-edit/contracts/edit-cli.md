@@ -157,3 +157,163 @@ do instead: copy the text from a candidate (view src/app.py:40-42), or search fo
 | `--old`/`--new` missing | 2 | — | usage error |
 
 Every refusal leaves the file byte-identical. The tests check that with `sha256sum`, not with the verdict.
+
+---
+
+## Slice 1 (Cycle 2, send `bridge/sends/06-rev1-20261009-102433.md`)
+
+Additive. Every slice-0 outcome above stands, plus a `syntax` part in each verdict that writes or would
+write (FR-26). Spec FR-13 to FR-28; research R9 to R16.
+
+```
+edit FILE --at N:hhhhhh --new TEXT                 replace line N, if its anchor is unchanged
+edit FILE --at A:aaaaaa..B:bbbbbb --new TEXT       replace lines A-B, if both anchors are unchanged
+edit FILE … --skip-syntax-check                    apply without the syntax check (shown in the verdict)
+```
+
+### Flags
+
+| Flag | Meaning | Errors (exit 2, usage) |
+|---|---|---|
+| `--at SPEC` | `N:hhhhhh` or `A:aaaaaa..B:bbbbbb`: N, A, B ≥ 1, A ≤ B, six lowercase hex characters each | malformed (the message names the form); `--at` with `--old`; `--at` without `--new` |
+| `--skip-syntax-check` | No check runs, and no child is started | — |
+
+### Anchored edit applied (exit 0)
+
+```
+edit: src/app.py [lines 42-44 of 121]
+verdict: edited lines 42-44 of 121 (addressed by anchors; checked at lines 42 and 48); syntax: ok (python 3.14.8 compile)
+ 39      def run(self):
+ …
+```
+
+- **The region** is lines A to B, from the first byte of A to the end of B's content. B's line ending
+  stays.
+- **`--new`:**
+  - its line endings become the ending of line A (or the file's most common one, for a last line
+    without an ending), and one trailing newline in `--new` is dropped;
+  - an empty `--new` deletes lines A to B, endings included (`edited at line A (7 lines removed)`).
+- **JSON:** as an edit above, with `level: "anchors"`, `mapping: null`,
+  `anchors: {"start": "A:aaaaaa", "end": "B:bbbbbb"}` (one `N:hhhhhh` for both ends when A = B).
+
+### Anchors stale (exit 3, nothing written)
+
+```
+edit: src/app.py [anchors stale]
+verdict: anchored lines changed: line 42 (anchor a3f9c1, now 7d01be); nothing written
+ 39 0c1d2e      def run(self):
+ 40 9a8b7c          x = self.load()
+ 41 51e0aa          if x:
+ 42>7d01be              return y
+ …
+do instead: view --anchors src/app.py:42-48, then rerun with the anchors it shows
+```
+
+- **Each changed end is named:**
+  - `line N (anchor h, now h′)`;
+  - `line N is past the end (T lines)`;
+  - with both ends changed: `lines 42 and 48`, listing each.
+- **A move** is recognised when each end's anchor occurs exactly once in the file, both at the same shift
+  `d ≠ 0`:
+  - the verdict is `anchored lines moved: lines 42-48 are now lines 45-51; nothing written`;
+  - `do instead:` is `rerun with --at 45:a3f9c1..51:0b11e2 (view --anchors src/app.py:45-51 shows them)`;
+  - the lines shown are the moved region's.
+- **The lines shown** are the addressed region (or the moved one) with 3 lines of context, clipped to the
+  file. They use `view --anchors`'s layout, `{n:>W}{m}{anchor} {text}`, with `>` on the anchored ends.
+- **JSON:**
+  - `changed: [{"line": 42, "expected": "a3f9c1", "now": "7d01be" | null}]` (`now` is null past the end);
+  - `moved_to: {"start": 45, "end": 51}` or null;
+  - `anchors_now: ["N:hhhhhh", …]` for the lines shown;
+  - `remedy`.
+
+### The syntax check
+
+**Languages and checkers** (manifest `syntax_checkers`):
+
+| Language | Files | Checker named in the verdict |
+|---|---|---|
+| `python` | `.py`, `.pyi`; shebang `python`, `python3`, `python3.N` | `python X.Y.Z compile` (the checker's interpreter) |
+| `shell` | `.sh`, `.bash`; shebang `bash`, `sh` | `bash -n` |
+| `typescript` | `.ts`, `.mts`, `.cts` | `tree-sitter-typescript V` |
+| `tsx` | `.tsx` | `tree-sitter-typescript V (tsx)` |
+| `go` | `.go` | `tree-sitter-go V` |
+| `rust` | `.rs` | `tree-sitter-rust V` |
+
+V is the installed grammar's version, read by the checker.
+
+**The verdict's `syntax:` part, appended with `; `:**
+
+| Outcome | Text | JSON `syntax.status` |
+|---|---|---|
+| passes | `syntax: ok (CHECKER)` | `ok` |
+| an unknown language | `syntax: not checked (language unknown)` | `not checked` |
+| the checker failed | `syntax: not checked (checker failed: REASON)` | `not checked` |
+| skipped | `syntax: skipped (--skip-syntax-check)` | `skipped` |
+| already failing, nothing new | `syntax: FILE already failed its check before this edit (line N: MESSAGE); no new error in lines S-E` | `already failed` |
+| refused | (below) | `refused` |
+
+REASON is one of these:
+- `checker not installed at PATH`;
+- `no tree-sitter grammar for LANGUAGE (NAME is not installed)`;
+- `time limit 10 s`;
+- `exit N: <the last stderr line>`;
+- `signal N` (the child was killed by a signal; added in T015);
+- `unreadable output`.
+
+**JSON `syntax`** is `{"status", "language" (null when unknown), "checker" (null when none ran), "errors":
+[{"line", "column" (null for bash), "message"}], "reason" (null unless not checked or skipped),
+"original_errors": […] (only when the original was checked)}`.
+
+### Refused by the syntax check (exit 1, nothing written)
+
+```
+edit: app.py [refused]
+verdict: refused: the edit would make app.py fail its syntax check (python 3.14.8 compile): line 12, column 9: expected ':'; nothing written
+── syntax error 1: line 12, column 9: expected ':' ──
+ 10      x = 1
+ 11
+ 12> def f(x)
+ 13      return x
+ 14
+do instead: correct --new and rerun (add --dry-run to see the diff first)
+```
+
+- **Which errors refuse:**
+  - the original passes and the result does not: every result error is listed;
+  - the original already fails: only the result errors inside the written lines S to E that the original
+    lacks (identity: message plus the stripped text of the line) refuse, and only those are listed.
+- **Bounds:** up to 3 errors are shown, each with the would-be result's lines L−2 to L+2. Their
+  numbering is `edit`'s (`{n:>W}{m} {text}`), with `>` on line L. More than 3: `… and N more` (JSON
+  carries all, up to 20).
+- **No suggestion to skip:** neither `do instead:` nor any line names `--skip-syntax-check` (T4).
+- **A dry run that would be refused** prints the diff, then the error sections, and exits 1. Its verdict
+  is `dry run: would be refused: the edit would make … ; nothing written`.
+
+### Manifest (additions)
+
+| Field | Value |
+|---|---|
+| `anchor_form` | `"N:hhhhhh[..M:hhhhhh]"` |
+| `syntax_checkers` | `{"python": "python compile", "shell": "bash -n", "typescript": "tree-sitter-typescript", "tsx": "tree-sitter-typescript (tsx)", "go": "tree-sitter-go", "rust": "tree-sitter-rust"}` |
+| `syntax_time_limit_s` | `10` |
+| `exit_codes` | `1`: refused: binary, unwritable, too large, changed meanwhile, **or the edit would break the file's syntax**; nothing written · `3`: no such file, no match, more than one match, **or stale anchors**; nothing written |
+| `probe` | unchanged (`/etc/os-release` is an unknown language: no child) |
+
+### The checker child (`libexec/syntax-check`; internal, not a tool)
+
+- **Resolved** as `<dirname(realpath(edit))>/../libexec/syntax-check`, and run as
+  `[sys.executable, "-I", CHECKER, LANGUAGE, str(len(result))]`. It is started in its own session, and
+  its group is killed at 10 s.
+- **stdin** is the result's bytes, then the original's bytes.
+- **stdout** is one JSON object: `{"checker": "...", "result": [errors], "original": [errors] | null}`, or
+  `{"unavailable": "REASON"}` when the language's checker is not installed (exit 0; `edit` reports
+  `not checked (checker failed: REASON)`).
+  The original is checked only when the result has errors.
+- **Exit 0** means it ran. Any other exit, or unreadable output, is the checker's failure (FR-24).
+- **Errors:** at most 20 per text, in file order. Tree-sitter reports the outermost `ERROR` and `MISSING`
+  nodes only:
+  - `ERROR` reads `unexpected 'TEXT'`, the node's text up to 20 characters of its first line;
+  - `MISSING` reads `missing 'TOKEN'`.
+- **Imports:** tree-sitter is imported from the checker's own interpreter's site-packages; under a venv
+  interpreter (the image's unit lane), the base interpreter's. `-I` keeps `PYTHONPATH` and the user site
+  out.

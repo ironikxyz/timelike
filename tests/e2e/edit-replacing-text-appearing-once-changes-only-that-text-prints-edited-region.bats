@@ -28,6 +28,12 @@ setup_file() {
   stamp_check
   EDIT_DIR="$(container_tmpdir edit-sc1)"
   export EDIT_DIR
+  # Since slice 1 a .py fixture's verdict carries `syntax: ok (python V compile)` (contracts/edit-cli.md
+  # § Slice 1): V is read by the test from timelike's interpreter (edit's own), as the SC-8 file reads it.
+  PYVER="$(exec_plain "$AGENT_PY" -I -c 'import platform; print(platform.python_version())')"
+  PYVER="${PYVER//$'\r'/}"
+  [[ "$PYVER" =~ ^3\.[0-9]+\.[0-9]+$ ]] || { echo "cannot read timelike's Python version: '${PYVER}'" >&2; return 1; }
+  export PYVER
 }
 
 teardown_file() {
@@ -174,7 +180,11 @@ ORIG='import os\n\n\nclass App:\n    def load(self):\n        return os.environ.
 # The same 17 lines, line 11 reading `return x + 1`: written out, not derived from the tool.
 WANT='import os\n\n\nclass App:\n    def load(self):\n        return os.environ.get("APP")\n\n    def run(self):\n        x = self.load()\n        if x:\n            return x + 1\n        log("none")\n        return None\n\n\ndef log(msg):\n    print(msg)\n'
 EDIT_ARGS="--old 'return x' --new 'return x + 1'"
-VERDICT_RE='^edited lines? 11(-11)? of 17 \(matched exactly\)$'
+# verdict_re — sets VERDICT_RE: the match, then the syntax part a .py fixture's verdict ends with since
+# slice 1, anchored at both ends. Built in the cell, where setup_file's PYVER is set.
+verdict_re() {
+  VERDICT_RE="^edited lines? 11(-11)? of 17 \\(matched exactly\\); syntax: ok \\(python ${PYVER//./\\.} compile\\)\$"
+}
 
 # make_fixture NAME STYLE TTY — a fresh cell: the original file, the expected bytes, and the fixture's
 # own facts checked (P004). Sets SHA_ORIG and SHA_WANT.
@@ -216,6 +226,7 @@ check_json() {
   expect_j changed true
   expect_j sha256_before "$SHA_ORIG"
   expect_j sha256_after "$SHA_WANT"
+  verdict_re
   [[ "$(jval verdict)" =~ $VERDICT_RE ]] || flunk "verdict: $(jval verdict)"
 
   local want
@@ -235,6 +246,7 @@ check_text() {
   no_stderr
 
   [[ "${lines[0]:-}" == "edit: ${FILE} ["*"]" ]] || flunk "header line: ${lines[0]:-<none>}"
+  verdict_re
   [[ "${lines[1]:-}" == "verdict: "* && "${lines[1]#verdict: }" =~ $VERDICT_RE ]] || flunk "verdict line: ${lines[1]:-<none>}"
   local want
   want="$(numbered "${CELL}.want" 8 14 11 11)"
