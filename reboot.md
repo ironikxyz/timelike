@@ -20,11 +20,16 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   the not-persistent line), import of slice-0 stores, the stat cache, the scheduled snapshot (builtins-only check
   in `shell-env.bash`, `libexec/scheduled-snapshot`, 300 s), purge, the per-workspace lock, the trash
   (`libexec/guard trash-put`, `undo --trash`), symbols' index moved (Item 20 closed), rule 10's text. **Held:
-  FOR-MENTOR Item 22** (`e488657`, raised 2026-10-10T05:15:03Z): the guards in front of `rm`/`git`, the force-push
-  record, the trash's feed (T032), and so the README status block. Cycle report § Cycle 3 written (2026-10-10T06:09:20Z).
-  **No commit until the mentor says the lane has ended.** Then: Item 22's answer (beside the item, in a
-  `bridge/feedback/` file), T032, the README block, an addendum. e2e harness: scheduled snapshots off unless a
-  cell sets `TIMELIKE_SNAPSHOT_INTERVAL`.
+  FOR-MENTOR Item 22** (`e488657`), then **answered** (`bridge/feedback/07-20261010-064701-…`) and closed. **Lane
+  005s1-a failed** (feedback `07-20261010-081905`): SC-7's helper returned its loop's status, and new CVEs. Fixed:
+  T033 `6e9c60b` (the helper, and SC-7's shells start in the repo via `exec_in -w`), T034 `93725e5` (krb5/gnutls
+  baselined, origin git; `DOCKER_CLI_IMAGE` docker:29.9.0-cli, Go 1.26.9). **T032 `c2da532`:** the guards (bash
+  functions `rm`/`git` in `shell-env.bash`, the agent's own shell only: `TIMELIKE_GUARD_SHELL` + an ancestor walk;
+  `libexec/guard rm|git|pre-push`), the `pre-push` step in 001's dispatcher, the trash fed by `rm`/`git clean`,
+  note 12 (taken re-hashes new objects; a restore re-hashes what it writes). T035: the README block (18 of 38),
+  Cycle 3 addendum 1. **No commit until lane 005s1-b has ended.** Held for the mentor: README § "The session
+  scratch" is now false (the block said nothing else changes). e2e harness: scheduled snapshots off unless a cell
+  sets `TIMELIKE_SNAPSHOT_INTERVAL`; the guards always on.
 - **`modify/008-slice-1`** (from `master` `ce1eaf2`): **008 Cycle 2 = 06 slice 1**, send
   `bridge/sends/06-rev1-20261009-102433.md` (row 4: `audited_against [1]` unchanged). Built: `edit --at` (view's anchors,
   checked with view's own `anchor_of`/`line_body`), the syntax check (Python by the interpreter's compiler, shell by

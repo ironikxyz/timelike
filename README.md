@@ -33,7 +33,7 @@ Whether it works is a measured claim: see Status.
 | 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all; a missing command names how to get it, package installs need no privilege, and `timelike budget` shows the resource budget | complete (0, 1) |
 | 05 | `view`, `search` | Bounded reads and searches, each ending with the next command; a directory overview within a budget | complete (0, 1) |
 | 06 | `edit` | One exact replacement per call, tolerant of CRLF and tab/space indentation; the nearest candidates on a miss; lines addressed by `view`'s anchors; an edit that would break the file's syntax is refused and the file left as it was | complete (0, 1) |
-| 07 | `snapshot`, `undo` | Snapshot the workspace, git-ignored files too, and restore it | slice 0 of 0–2 |
+| 07 | `snapshot`, `undo` | Snapshot the workspace, git-ignored files too, and restore it; destructive commands snapshot first, deleted files go to a trash, and snapshots survive new sessions and a recreated container | slices 0, 1 of 0–2 |
 | 08 | `journal` | A session's timeline: tool calls, shell commands and grant uses, by agent and session | slice 1 of 1–2 |
 | 09 | `services` | Start long-running processes, return when ready or dead, and stop the whole process tree | slice 1 of 1–2 |
 | 10 | `symbols` | Outlines, definitions, callers and dependents: exact for Python, text-based (and saying so) for others | slice 1 of 1–2 |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**17 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+**18 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03 and 07–12 have their first slice or slices. Features
 13–17 are not started.
 
-**Next:** 07 slice 1 (a persistent state root), 15 slice 1, 02 slice 1.
+**Next:** 15 slice 1, 02 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -394,17 +394,41 @@ snapshot list                       # this workspace's snapshots, newest first
   never seen it, with its permission bits. **Never anything inside a `.git`**, at any depth: history,
   index, stash and hooks are the project's, and neither `snapshot` nor `undo` reads or writes them.
 - **Stored once.** Content is stored by its hash, so a repeated snapshot costs only what changed
-  (`stored_bytes` in `snapshot --json`). "Taken" is said only after the record and every stored file
-  it names are read back and re-hashed; otherwise the snapshot is not taken, and says why.
+  (`stored_bytes` in `snapshot --json`), and a file unchanged since the last snapshot is not read again.
+  "Taken" is said only after the record is read back and every file new to the store is re-hashed (one
+  the last snapshot already proved is checked for its size); otherwise the snapshot is not taken, and
+  says why. A restore re-hashes everything it will write before writing any of it, and refuses, naming
+  the file, if anything differs.
 - **Caps, stated rather than implied.** A snapshot adds at most 256 MiB of new content to the store
   (`TIMELIKE_SNAPSHOT_MAX_BYTES`; content already stored counts as nothing), files up to 64 MiB each
   (`TIMELIKE_SNAPSHOT_MAX_FILE_BYTES`), in a workspace of at most 50,000 entries
   (`TIMELIKE_SNAPSHOT_MAX_ENTRIES`); `0` lifts a cap. Over the size cap the snapshot is **partial**: it
   leaves out the largest new files first and names each one and why. `undo` leaves files that were
   left out alone. Over the entry cap it is refused.
-- **Where they live:** in the session scratch directory (`/tmp/timelike/<session>/snapshots/`). They
-  survive a container restart, not a recreate, and each `TIMELIKE_SESSION` has its own.
-- Slice 1 adds automatic snapshots before destructive commands and a restorable trash.
+- **Where they live:** in the state root, `/var/lib/timelike` (`TIMELIKE_STATE_ROOT`), per workspace,
+  shared by every session and agent working there; each snapshot names the session and agent that took
+  it (`snapshot list --verbose`). `compose.yaml` mounts the named volume `timelike-state` there, so
+  snapshots survive a new session, a restart and a recreated container; removing the volume is your own
+  act. **In a plain `docker run` without that volume, every `snapshot` and `undo` result says
+  `not persistent:`** and how to mount one: the snapshots then die with the container. Snapshots a
+  session took before this, in its scratch directory, are imported on first use.
+- **Bounded:** purged on write, oldest first, by age (`TIMELIKE_SNAPSHOT_MAX_AGE_DAYS`, 30) and by the
+  state root's size (`TIMELIKE_STATE_MAX_BYTES`, 4 GiB). A purge never removes a workspace's newest
+  snapshot, and names everything it drops.
+- **Destructive commands snapshot first.** In the shell you run commands in, `rm -r`, `git reset --hard`
+  with uncommitted changes, `git clean` and a forced `git push` take a snapshot before they run, and a
+  line names it and the `undo` that puts the workspace back. A forced push also records the remote's
+  previous commit and prints the command that puts the branch back. The commands' own output and exit
+  codes are unchanged, and nothing is blocked. `type -a rm git` shows these guards; `command rm` skips
+  them.
+- **Deleted files go to a trash.** Every file `rm` or `git clean` deletes is kept first, workspace or
+  not; `undo --trash` lists them and `undo --trash ID --yes` puts one deletion back, never over a file
+  that is there now. Purged by age (`TIMELIKE_TRASH_MAX_AGE_DAYS`, 30) and size
+  (`TIMELIKE_TRASH_MAX_BYTES`, 1 GiB), each purge named.
+- **Scripts are covered by time, not by the guards.** The guards answer in your shell, not in the
+  scripts it starts. A shell that starts in a workspace takes a snapshot when the last one is older than
+  5 minutes (`TIMELIKE_SNAPSHOT_INTERVAL`; `0` every start, `off` never), so a directory a script deletes
+  is restorable from it.
 
 #### journal — what happened in a session, in order
 
@@ -479,8 +503,9 @@ symbols dependents app/models.py   # the files that import it, direct first, ran
   resolved calls.
 - **No build step:** every call checks the index file by file, re-reads what changed, and ends its
   verdict with the cache state (`fresh`, `stale: N changed; rebuilt`, `built`).
-- **The index lives in the session scratch,** outside the workspace (rule 10), and is rebuilt once per
-  session. On 1,000 files that took 1.9 s cold and about 0.3 s warm, measured on the host.
+- **The index lives in the state root** (`/var/lib/timelike`), per workspace and outside it (rule 10),
+  so a new session finds it warm. On 1,000 files that took 1.9 s cold and about 0.3 s warm, measured on
+  the host.
 
 #### verify — failures only, and only what a change affects
 

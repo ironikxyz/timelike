@@ -405,3 +405,15 @@ ABSENT: running any cell in the image (no Docker here); SC-11 (D16), Manual; git
 ABSENT: the session-scratch paragraph of README.md (§ The session scratch) still says snapshots live there; the send's block says "Nothing else in the README changes", so it is held and flagged for the mentor in T035
 Verification: tests/unit/test_guard.py 26 passed (real bash with the hook, the real rm and git, a bare remote, the dispatcher through GIT_CONFIG_*); test_snapshot, test_trash, test_announce, test_git_hook_dispatch pass; host hook test 57/57 (Q2, Q4 updated for the functions and the pid marker); shellcheck clean over the 84 SHELLCHECK_FILES (the dispatcher and the new bats file added); ruff, mypy --strict clean; measured costs in research R17
 SCOPE: out — .specswarm/features/007-announcements-discovery/contracts/timelike-announce-tools.md, FOR-MENTOR.md, tests/e2e/a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats, tests/unit/test_guard.py, tests/unit/test_trash.py (5 of 16 changed files) (task has FLAGGED: yes)
+
+### T035: the README status block; Cycle 3 addendum 1
+**Started:** 2026-10-10T09:25:09Z (T032's commit time) | **Completed:** 2026-10-10T09:34:47Z
+
+INHERITED: every slice-1 Automated criterion built (T020–T032); the send's `## README status` block (confidence: high)
+FLAGGED: applied the block now that every slice-1 criterion is built, as the operator's instruction 4 reads ("if every slice-1 criterion is built"), though none of T032 has run in the image; chose that over waiting for lane 005s1-b because the instruction names "built", and the lane judges it either way (confidence: medium)
+FLAGGED: the `snapshot`/`undo` section's "Taken" sentence follows note 12's ruling (it said every stored file is re-hashed, which is no longer true); inside the block's section, so in scope (confidence: high)
+FLAGGED: README § "The session scratch" (outside the block's sections) still says snapshots and the symbols index live in the scratch and that the state root is "not yet built", now false; the block says "Nothing else in the README changes", so it is untouched and raised in the addendum for the mentor (confidence: high)
+ASSUMED: reconcile_mode corrected to `full` in the addendum: every criterion of the send is built and has cells on this cycle's code (confidence: high)
+ABSENT: the README's session-scratch paragraph; running the host lane's e2e or any image step; implement step 10 rerun (unchanged: unknown)
+Verification: readme_reference --check current (13 tools), test_readme_reference.py 21 passed; no "faster", "fewer turns" or "more reliable" in README.md; host lane on this tree: make test-host exit 0, 2014 passed, 13 skipped; hook 57/57
+SCOPE: out — reboot.md (1 of 2 changed files) (task has FLAGGED: yes)

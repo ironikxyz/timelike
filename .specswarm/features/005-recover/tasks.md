@@ -206,7 +206,7 @@ SC-10), **US9** guards (SC-6) — **held for FOR-MENTOR Item 22**.
 - [X] T034 Scan: CVE-2026-107778 (krb5, four packages) and CVE-2026-67693, -95184, -95209, -95210 (gnutls)
   baselined in `timelike-agent` and `timelike-vanilla`, origin `git`, until 2026-12-27; `DOCKER_CLI_IMAGE` to
   `docker:29.9.0-cli` (Go 1.26.9) by digest.
-- [ ] T035 README status block (if every slice-1 criterion is built), Cycle 3 addendum.
+- [X] T035 README status block (if every slice-1 criterion is built), Cycle 3 addendum.
 
 **Order:** T020 → T021 → T022 → T023 → T024 → T025 → T026 → T027 → (T028, T029 in parallel) → T030 → T031;
 then the lane; T033, T034 → T032 → T035.
