@@ -206,3 +206,19 @@ FLAGGED: none
 ABSENT: no Docker lane (R10); no ship or merge; no demo_points_reached; no Group A (no marker on this path); audited_against unchanged (T018)
 Verification: make test-host 895 passed, 60/60, 29/29; coverage 92% for the two tools; ruff, mypy, shellcheck clean; stand-in 40/44; implement step 10 from the installed 2.32.0 blocks (unknown, warned); all five criterion citations match one send line each (grep -cF)
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)
+
+---
+
+## Cycle 3 — 07 slice 1 (send `bridge/sends/07-rev11-20261010-050829.md`), specswarm 2.44.0
+
+Guards and the trash's feed are held for FOR-MENTOR Item 22 (`e488657`, raised 2026-10-10T05:15:03Z).
+
+### T020: agentio's state root
+**Started:** 2026-10-10T05:21:06Z | **Completed:** 2026-10-10T05:22:15Z
+
+INHERITED: (none — first task of the cycle); spec FR-25–FR-28, research R10
+FLAGGED: persistence decided by `st_dev` differing from `/`'s, chose it over `os.path.ismount` because the e2e cells use a subdirectory of the volume as their state root, which ismount calls not mounted though it persists (confidence: high)
+ASSUMED: an unreadable root is "not persistent" — unknown is never reported as the good answer (confidence: high)
+ASSUMED: unit tests get a state root beside the scratch root (`<scratch>-state`) in conftest's base_env, so no test writes /var/lib/timelike (confidence: high)
+ABSENT: any caller yet — snapshot moves in T021; no cache-wide layout migration (VERSION 1 is the first layout)
+Verification: test_agentio_state.py 6 passed; test_agentio.py and test_agentio_startup.py unchanged (83 passed with them, 3.14.8 venv)
