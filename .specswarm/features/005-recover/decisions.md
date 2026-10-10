@@ -225,7 +225,7 @@ Verification: test_agentio_state.py 6 passed; test_agentio.py and test_agentio_s
 SCOPE: out — tests/unit/test_agentio_state.py (1 of 3 changed files) (task has FLAGGED: yes)
 
 ### T021: snapshot's store in the state root; persistence line; attribution; other workspaces; lock holder
-**Started:** 2026-10-10T05:24Z (after T020's commit) | **Completed:** 2026-10-10T05:34:08Z
+**Started:** 2026-10-10T05:22:21Z (T020's commit time, from git; a composed time was written here first and corrected) | **Completed:** 2026-10-10T05:34:08Z
 
 INHERITED: agentio.state_root / ensure_state_root / state_persistent / not_persistent_line — from T020 (confidence: high)
 FLAGGED: the not-persistent line is set aside by slice 0's unit helpers (text_of, doc_of) and asserted by test_snapshot_slice1.py on raw stdout, chose that over pointing unit state roots at a device unlike `/`, because the image's unit lane has no such device and the line's presence must follow the filesystem, not the test (confidence: high)
@@ -238,7 +238,7 @@ Verification: test_snapshot.py, test_undo.py, test_snapshot_slice1.py — 84 pas
 SCOPE: out — tests/unit/test_agentio_state.py, tests/unit/test_snapshot_slice1.py (2 of 5 changed files) (task has FLAGGED: yes)
 
 ### T022: import of slice-0 stores (FR-30)
-**Started:** 2026-10-10T05:5xZ (after T021's commit) | **Completed:** 2026-10-10T05:35:12Z
+**Started:** 2026-10-10T05:34:14Z (T021's commit time, from git; a composed time was written here first and corrected) | **Completed:** 2026-10-10T05:35:12Z
 
 INHERITED: Store in the state root, NOTES/finish — from T021 (confidence: high)
 FLAGGED: import runs on any use (take, list, undo) and under the store's lock, re-scanning under the lock so two processes never import twice; chose import over leaving or ignoring (D-14) (confidence: high)
@@ -246,3 +246,18 @@ ASSUMED: every session directory under the scratch root this user can read is in
 ASSUMED: a record that fails verification is named once and not retried: the old store is marked imported either way, and stays in place for a person to read (confidence: medium)
 ABSENT: deleting the old stores (the scratch is disposable, and nothing a user took is removed by timelike)
 Verification: 3 new units (in order and restorable; ids after an import; a damaged record named, not imported)
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T023: the stat cache (FR-35)
+**Started:** 2026-10-10T05:35:48Z | **Completed:** 2026-10-10T05:36:32Z
+
+INHERITED: the store and record layout — from T021 (confidence: high)
+FLAGGED: a file is trusted unchanged when size, mtime_ns, ctime_ns and inode all match the last take and its object is still stored, chose that over content hashing every file (slice 0) because P2 bounds the scheduled snapshot; ctime cannot be set back by an unprivileged writer, so a rewrite always misses the cache (confidence: high)
+ASSUMED: a write landing in the same nanosecond as the cached stat is not a case to design for (git's "racily clean" case is about second-granular mtimes) (confidence: medium)
+ASSUMED: verification still re-hashes every object the record names (stack note 12 as written; Item 22 asks the mentor whether to narrow it) (confidence: high)
+ABSENT: caching directories or links (they are read from the walk, never from content)
+Measured (host, 3.14.8, take of an unchanged workspace, ms; first figure = first take into an empty state root):
+- this repository's tree (464 files, 6.7 MB): 545, then 164, 167, 176, 152 (slice 0: 270–320)
+- synthetic (657 files, 51 MB): 1543, then 298, 318, 295, 328 (slice 0: 620–700)
+- what remains is the interpreter and agentio (about 100 ms, `snapshot list` alone), the walk, and verification re-reading every stored object (the larger share at 51 MB)
+Verification: 2 units (an unchanged file is not opened, per an audit hook; a changed one is, and is what a restore brings back; a cached file whose object is gone is read again)

@@ -204,3 +204,63 @@ def test_a_damaged_slice0_record_is_named_not_imported(lab: Lab) -> None:
     assert "imported 1 snapshots from session s0 (were 1, now 1)" in raw["lines"], raw["lines"]
     assert any(x.startswith("not imported: s0 snapshot 2: object ") for x in raw["lines"]), raw["lines"]
     assert [s["id"] for s in raw["snapshots"]] == [1]
+
+
+# ── FR-35: unchanged files are not re-read ──────────────────────────────────────────────────
+
+_AUDIT = """
+import os, runpy, sys
+ws, log, tool = sys.argv[1], sys.argv[2], sys.argv[3]
+seen = []
+def hook(event, args):
+    if event == "open" and isinstance(args[0], str) and args[0].startswith(ws + "/"):
+        seen.append(os.path.relpath(args[0], ws))
+sys.addaudithook(hook)
+sys.argv = [tool, "--json"]
+try:
+    runpy.run_path(tool, run_name="__main__")
+finally:
+    open(log, "w").write("\\n".join(sorted(set(seen))))
+"""
+
+
+def _take_counting_opens(lab: Lab) -> list[str]:
+    """Run a take with an audit hook recording every workspace file the tool opens (by name)."""
+    import subprocess
+    import sys
+
+    from test_snapshot import SNAPSHOT
+
+    log = lab.tmp / "opens.txt"
+    real = os.path.realpath(lab.ws)
+    r = subprocess.run(
+        [sys.executable, "-c", _AUDIT, real, str(log), str(SNAPSHOT)],
+        cwd=lab.ws, env=lab.env(), capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+    )
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    return [x for x in log.read_text().splitlines() if x]
+
+
+def test_an_unchanged_file_is_not_reread_and_a_changed_one_is(lab: Lab) -> None:
+    write(lab.ws / "a.txt", "alpha\n")
+    write(lab.ws / "sub" / "b.txt", "beta\n")
+    assert sorted(_take_counting_opens(lab)) == ["a.txt", "sub/b.txt"]  # the first take reads both
+    assert _take_counting_opens(lab) == []  # nothing changed: nothing read (FR-35)
+
+    write(lab.ws / "a.txt", "ALPHA\n")  # same size, new content
+    assert _take_counting_opens(lab) == ["a.txt"]
+    write(lab.ws / "a.txt", "changed again\n")
+    assert undo(lab, "3", "--yes", "--json").returncode == 0
+    assert (lab.ws / "a.txt").read_text() == "ALPHA\n"  # the re-read content is what was captured
+
+
+def test_a_cached_file_whose_object_is_gone_is_read_again(lab: Lab) -> None:
+    write(lab.ws / "a.txt", "alpha\n")
+    take(lab)
+    rec = json.loads((lab.store() / "snaps" / "1.json").read_text())
+    sha = next(e["sha256"] for e in rec["entries"] if e["path"] == "a.txt")
+    obj = lab.store() / "objects" / sha[:2] / sha
+    obj.chmod(0o600)
+    obj.unlink()
+    assert _take_counting_opens(lab) == ["a.txt"]
+    assert obj.is_file()
