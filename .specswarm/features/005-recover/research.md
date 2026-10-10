@@ -147,6 +147,17 @@ Measured on the host, timelike's interpreter (3.14.8), slice 0's code, unchanged
 agentio start). Slice 0 re-reads and re-copies every file on every take. **The default interval and the
 measured cost with the stat cache are recorded below after T-implement** (decisions.md).
 
+**Measured in T023–T024** (host, 3.14.8, `bash -c :` from inside a git workspace; averages of 100):
+- no hook 2.8 ms; the hook as it was before this cycle 7.1 ms; the hook now, **not due**, 7.6 ms. The due
+  check adds about **0.5 ms** and no fork (host test K13, with forking made impossible).
+- **due**, an unchanged workspace (the stat cache, FR-35): 120–145 ms for 464 files / 6.7 MB; 270–300 ms
+  for 657 files / 51 MB. The first take into an empty state root: 263 ms and 615 ms. Of what remains,
+  about 100 ms is the interpreter and agentio, and the rest grows with stored content, because
+  verification re-hashes every object (stack note 12; Item 22 asks the mentor about narrowing it).
+- **Decision:** default interval **300 s**. At most one due start per workspace per 5 minutes pays the
+  cost above; every other shell start pays 0.5 ms. A shorter interval narrows what a script deletion can
+  lose, at that cost per interval; `0` is for tests.
+
 ## R12 · Keying
 
 The real path, as slice 0 (D-13). A remount elsewhere is named, not hidden (FR-29).

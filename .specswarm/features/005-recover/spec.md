@@ -469,8 +469,9 @@ each workspace is never removed. The verdict names each snapshot it dropped.
   snapshot prints one stderr line: `timelike: scheduled snapshot <id> of <ws> is partial: excluded <E>
   files (snapshot list; undo <id> --dry-run)` or `timelike: scheduled snapshot of <ws> refused: <why>`.
   It never changes the shell's command, its output or its exit code.
-- **FR-34** `TIMELIKE_SNAPSHOT_INTERVAL`: seconds, default set in research from the measured cost
-  (R11); `0` = every shell start; `off` = never.
+- **FR-34** `TIMELIKE_SNAPSHOT_INTERVAL`: seconds, default **300**, set from the measured cost (research
+  R11); `0` = every shell start; `off` = never. A value that is neither is named by the helper's one line
+  and read as 300.
 - **FR-35** **Unchanged files are not re-read** (P2): each store keeps a stat cache (path → size,
   mtime, ctime, inode, sha256) from its last take. A file whose stat matches and whose object is in the
   store is recorded without being read. Verification (FR-9, stack note 12) still re-hashes every object

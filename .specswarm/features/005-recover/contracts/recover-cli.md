@@ -147,7 +147,7 @@ One per invocation, written by agentio (`events.jsonl`), as for every tool.
 | Variable | Default | Meaning |
 |---|---|---|
 | `TIMELIKE_STATE_ROOT` | `/var/lib/timelike` | where every workspace's store, the stamps and the trash live (replaces the scratch root for the store) |
-| `TIMELIKE_SNAPSHOT_INTERVAL` | research R11 | seconds between scheduled snapshots of a workspace; `0` every shell start; `off` never |
+| `TIMELIKE_SNAPSHOT_INTERVAL` | `300` (research R11) | seconds between scheduled snapshots of a workspace; `0` every shell start; `off` never |
 | `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` | `30` | purge snapshots older than this; `0` = none |
 | `TIMELIKE_STATE_MAX_BYTES` | `4294967296` | purge oldest snapshots while the state root's stored bytes exceed this; `0` = none |
 | `TIMELIKE_PURGE_SECONDS` | `2` | time bound on one purge |

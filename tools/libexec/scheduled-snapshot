@@ -1,0 +1,116 @@
+#!/opt/timelike/python/bin/python3 -I
+"""scheduled-snapshot — the snapshot a shell's start takes when one is due (feature 005 slice 1; FR-32 to FR-34).
+
+Not a tool: never on PATH, no manifest, no session event. /etc/timelike/shell-env.bash runs it by its
+absolute path when the workspace's last scheduled attempt is older than TIMELIKE_SNAPSHOT_INTERVAL, as
+
+    scheduled-snapshot WORKSPACE        (the path the shell resolved; the snapshot is of its real path)
+
+It writes the stamp first (<state root>/stamps/<WORKSPACE, % → %25, / → %2F>, epoch seconds), so a
+failure is retried per interval and never per shell; then takes a snapshot with reason `scheduled`,
+waiting at most 1 s for the workspace's lock (another take or undo holding it means one is being taken
+anyway, so this one is skipped). It is SILENT on a complete snapshot, and prints one stderr line when the
+snapshot is partial, refused or failed (T2: recovery is never implied silently). It never writes to
+stdout, never reads stdin, and its exit status is ignored by the shell.
+
+`snapshot`, next to timelike's other tools, holds the implementation; it is loaded from this file's own
+location (bin/ beside libexec/), never from PATH (P002).
+"""
+
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+import sys
+import time
+from pathlib import Path
+from types import ModuleType
+
+import agentio
+
+LOCK_WAIT_S = 1.0
+INTERVAL_ENV = "TIMELIKE_SNAPSHOT_INTERVAL"
+
+
+def load_snapshot() -> ModuleType:
+    here = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(os.path.dirname(here), "bin", "snapshot")
+    loader = importlib.machinery.SourceFileLoader("timelike_snapshot", path)
+    spec = importlib.util.spec_from_loader("timelike_snapshot", loader)
+    if spec is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["timelike_snapshot"] = module
+    loader.exec_module(module)
+    return module
+
+
+def stamp_name(ws: str) -> str:
+    """As shell-env.bash encodes it with builtins: % first, then /."""
+    return ws.replace("%", "%25").replace("/", "%2F")
+
+
+def write_stamp(root: Path, ws: str) -> None:
+    stamps = root / "stamps"
+    stamps.mkdir(mode=0o700, exist_ok=True)
+    name = stamp_name(ws)
+    tmp = stamps / f".{name[:200]}.{os.getpid()}.tmp"
+    tmp.write_text(f"{int(time.time())}\n")
+    os.replace(tmp, stamps / name)
+
+
+def say(line: str) -> None:
+    print(f"timelike: {line}", file=sys.stderr)
+
+
+def main(argv: list[str]) -> int:
+    if os.geteuid() == 0 or len(argv) != 2:
+        return 0
+    given = argv[1]
+    interval = os.environ.get(INTERVAL_ENV, "")
+    try:
+        root = agentio.ensure_state_root()
+        write_stamp(root, given)
+    except (agentio.ToolError, OSError):
+        return 0  # the shell checked the root is writable; a race here is not worth a line per shell
+    if interval not in ("", "off") and not interval.isdigit():
+        say(f"{INTERVAL_ENV}={interval!r} is not a number of seconds or 'off'; using 300 (snapshot every 5 min)")
+    ws = os.path.realpath(given)
+    try:
+        snap = load_snapshot()
+        ctx = agentio.Context(
+            snap.TOOL, [], agentio.session_id(), agentio.scratch_root(), "text", 0, False
+        )
+        snap.check_workspace(ws, ctx, "snapshot")
+        caps = snap.caps_from_env()
+        store = snap.Store(ctx, ws)
+        snap.import_slice0(store)
+        store.create()
+        with store.lock(wait_s=LOCK_WAIT_S):
+            rec = snap.take_locked(store, caps, "scheduled", None)
+    except Exception as e:  # noqa: BLE001 — one line, never a traceback at a shell's start
+        return report(e, ws)
+    if rec["partial"]:
+        say(
+            f"scheduled snapshot {rec['id']} of {ws} is partial: excluded {len(rec['excluded'])} files"
+            f" (snapshot list; undo {rec['id']} --dry-run)"
+        )
+    return 0
+
+
+def report(e: Exception, ws: str) -> int:
+    snap = sys.modules.get("timelike_snapshot")
+    if snap is not None and isinstance(e, snap.LockBusy):
+        return 0  # another take or undo holds this workspace: one is being taken anyway
+    if snap is not None and isinstance(e, snap.Outcome):
+        say(f"scheduled snapshot of {ws} refused: {e.verdict.removeprefix('refused: ')}")
+    elif isinstance(e, agentio.ToolError):
+        say(f"scheduled snapshot of {ws} failed: {e.what}")
+    else:
+        say(f"scheduled snapshot of {ws} failed: {type(e).__name__}: {e}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

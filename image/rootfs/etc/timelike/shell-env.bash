@@ -218,3 +218,69 @@
     trap ". '${TIMELIKE_JOURNAL_EXIT:-/etc/timelike/journal-exit.bash}'" EXIT
   fi
 } 2>/dev/null
+
+# ── Feature 005 slice 1: the scheduled snapshot (spec FR-32 to FR-34; research R11) ────────────────
+# A directory a script removes is restorable from the most recent scheduled snapshot (criterion 2), with
+# no daemon (rule 10): at a shell's start, take one when the workspace's last attempt is older than
+# TIMELIKE_SNAPSHOT_INTERVAL seconds (0 = every shell start, off = never). Deciding is builtins only, so
+# a shell start still costs no fork when no snapshot is due (F1); only a due start forks, once, running
+# /opt/timelike/libexec/scheduled-snapshot by its absolute path (P002), synchronously, before the
+# command. Its one line, when a snapshot is partial or refused, goes to the shell's own stderr (fd 3
+# here); everything else this block does is silent, as above.
+# Not taken: for root; when the workspace (the nearest ancestor of $PWD holding .git, else $PWD) is /,
+# $HOME or an ancestor of either; when the command line starts with `snapshot` or `undo` (a snapshot
+# then would become the newest and hide the one the agent is about to inspect or restore); when the
+# state root is not a writable directory; when the workspace's stamp name would pass 255 bytes.
+# The stamp, <state root>/stamps/<workspace with % → %25 and / → %2F>, holds the epoch seconds of the
+# last attempt; the helper writes it first, so a failure is retried per interval, not per shell.
+# Set once per shell (the login path sources this file twice). Leaves one non-exported variable. The
+# helper runs with TIMELIKE_SNAPSHOT_SCHEDULING=1, and a bash it starts skips this block: never re-entered
+# (a host test's bash helper, inheriting BASH_ENV, once recursed without it).
+# TIMELIKE_SCHEDULED_SNAPSHOT is a test-only override of the helper's path; nothing in the image sets it.
+{
+  if [[ -z "${__timelike_sched_once-}" && -z "${TIMELIKE_SNAPSHOT_SCHEDULING-}" ]] && ((EUID != 0)); then
+    __timelike_sched_once=1
+    __timelike_sched() {
+      local -
+      set +o errexit +o nounset +o xtrace
+      local iv="${TIMELIKE_SNAPSHOT_INTERVAL-}" first="${BASH_EXECUTION_STRING-}" home="${HOME-}" ws d t=0
+      local root="${TIMELIKE_STATE_ROOT:-/var/lib/timelike}" enc
+      local helper="${TIMELIKE_SCHEDULED_SNAPSHOT:-/opt/timelike/libexec/scheduled-snapshot}"
+      case "$iv" in
+        off) return 0 ;;
+        '' | *[!0-9]*) iv=300 ;; # unset or not a number: the default (research R11); the helper names a bad value
+      esac
+      first="${first#"${first%%[![:space:]]*}"}"
+      case "$first" in
+        snapshot | snapshot[[:space:]]* | undo | undo[[:space:]]*) return 0 ;;
+      esac
+      ws="$PWD"
+      d="$PWD"
+      while [[ -n "$d" ]]; do
+        if [[ -e "$d/.git" || -L "$d/.git" ]]; then
+          ws="$d"
+          break
+        fi
+        [[ "$d" == / ]] && break
+        d="${d%/*}"
+        [[ -n "$d" ]] || d=/
+      done
+      [[ -n "$ws" && "$ws" != / ]] || return 0
+      home="${home%/}"
+      if [[ -n "$home" ]] && [[ "$ws" == "$home" || "$home" == "$ws"/* ]]; then
+        return 0
+      fi
+      [[ -d "$root" && -w "$root" && -x "$helper" ]] || return 0
+      enc="${ws//%/%25}"
+      enc="${enc//\//%2F}"
+      ((${#enc} <= 255)) || return 0
+      [[ -r "$root/stamps/$enc" ]] && read -r t <"$root/stamps/$enc"
+      [[ "$t" =~ ^[0-9]+$ ]] || t=0
+      ((iv > 0 && EPOCHSECONDS - 10#$t < iv)) && return 0
+      TIMELIKE_SNAPSHOT_SCHEDULING=1 "$helper" "$ws" </dev/null 2>&3 3>&-
+      return 0
+    }
+    __timelike_sched
+    unset -f __timelike_sched
+  fi
+} 3>&2 2>/dev/null

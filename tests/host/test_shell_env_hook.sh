@@ -411,6 +411,67 @@ else
 $(jread "${tmp}/jroot-f" j6)" TIMELIKE_CPUS=2 lines=1 0.exit=0
 fi
 
+# ── K: the scheduled snapshot's due check (feature 005 slice 1; spec FR-32 to FR-34) ─────────────
+# A fake helper (TIMELIKE_SCHEDULED_SNAPSHOT, the test-only override) logs its argument and prints one
+# stderr line, so a case can count calls and see the line reach the shell's stderr. The workspace is a
+# directory holding .git under ${tmp}/kws, never HOME; the state root is ${tmp}/kstate.
+mkdir -p "${tmp}/kws/proj/.git" "${tmp}/kws/proj/sub" "${tmp}/kstate/stamps" "${tmp}/khome"
+khelper="${tmp}/khelper"
+printf '#!/bin/bash\nprintf "%%s\\n" "$1" >>"%s"\necho "helper-stderr" >&2\n' "${tmp}/kcalls" >"${khelper}"
+chmod 755 "${khelper}"
+kenc="${tmp}/kws/proj"
+kenc="${kenc//%/%25}"
+kenc="${kenc//\//%2F}"
+# krun CWD CMD [VAR=VALUE]... — `bash -c CMD` from CWD with the hook as BASH_ENV; prints calls= and err=
+krun() {
+  local cwd="$1" cmd="$2" err
+  shift 2
+  : >"${tmp}/kcalls"
+  err="$(cd "${cwd}" && env -i PATH=/usr/bin:/bin HOME="${tmp}/khome" BASH_ENV="${hook_real}" \
+    TIMELIKE_STATE_ROOT="${tmp}/kstate" TIMELIKE_SCHEDULED_SNAPSHOT="${khelper}" "$@" \
+    "${BASH_BIN}" -c "${cmd}" </dev/null 2>&1 >/dev/null)" || true
+  printf 'calls=%s\narg=%s\nerr=%s\n' "$(grep -c . "${tmp}/kcalls")" "$(head -1 "${tmp}/kcalls")" "${err//$'\n'/|}"
+}
+rm -f "${tmp}/kstate/stamps/${kenc}"
+check "K1 no stamp: due; the helper runs once, given the workspace (from a subdirectory), its stderr reaches the shell's" \
+  "$(krun "${tmp}/kws/proj/sub" ':')" calls=1 arg="${tmp}/kws/proj" err=helper-stderr
+echo "$(($(date +%s) - 10))" >"${tmp}/kstate/stamps/${kenc}"
+check "K2 a stamp 10 s old under the default interval: not due, no helper" "$(krun "${tmp}/kws/proj" ':')" calls=0 err=
+check "K3 the same stamp with TIMELIKE_SNAPSHOT_INTERVAL=5: due" \
+  "$(krun "${tmp}/kws/proj" ':' TIMELIKE_SNAPSHOT_INTERVAL=5)" calls=1
+check "K4 TIMELIKE_SNAPSHOT_INTERVAL=0: due at every shell start" \
+  "$(krun "${tmp}/kws/proj" ':' TIMELIKE_SNAPSHOT_INTERVAL=0)" calls=1
+check "K5 TIMELIKE_SNAPSHOT_INTERVAL=off: never" "$(krun "${tmp}/kws/proj" ':' TIMELIKE_SNAPSHOT_INTERVAL=off)" calls=0
+check "K6 a command line starting with undo: not taken" \
+  "$(krun "${tmp}/kws/proj" '  undo 3 --yes' TIMELIKE_SNAPSHOT_INTERVAL=0)" calls=0
+check "K7 a command line starting with snapshot: not taken" \
+  "$(krun "${tmp}/kws/proj" 'snapshot list' TIMELIKE_SNAPSHOT_INTERVAL=0)" calls=0
+check "K8 a command that merely contains undo: taken" \
+  "$(krun "${tmp}/kws/proj" 'echo undo' TIMELIKE_SNAPSHOT_INTERVAL=0)" calls=1
+check "K9 the workspace is HOME: not taken" "$(krun "${tmp}/khome" ':' TIMELIKE_SNAPSHOT_INTERVAL=0)" calls=0
+check "K10 the workspace is an ancestor of HOME: not taken" "$(krun "${tmp}" ':' TIMELIKE_SNAPSHOT_INTERVAL=0 HOME="${tmp}/kws/proj/sub")" calls=0
+check "K11 a state root that does not exist: not taken (no fork, nothing to stamp)" \
+  "$(krun "${tmp}/kws/proj" ':' TIMELIKE_SNAPSHOT_INTERVAL=0 TIMELIKE_STATE_ROOT="${tmp}/absent-state")" calls=0
+# the bash -lc path sources the file twice (profile.d, then BASH_ENV): once only
+: >"${tmp}/kcalls"
+(cd "${tmp}/kws/proj" && env -i PATH=/usr/bin:/bin HOME="${tmp}/khome" BASH_ENV="${hook_real}" HOOK="${hook_real}" \
+  TIMELIKE_STATE_ROOT="${tmp}/kstate" TIMELIKE_SCHEDULED_SNAPSHOT="${khelper}" TIMELIKE_SNAPSHOT_INTERVAL=0 \
+  "${BASH_BIN}" -c '. "$HOOK"; :' </dev/null >/dev/null 2>&1) || true
+check "K12 sourced twice (the bash -lc path): the helper runs once" "calls=$(grep -c . "${tmp}/kcalls")" calls=1
+# K13: not due → no fork (F1's probe, from inside the workspace with a fresh stamp)
+date +%s >"${tmp}/kstate/stamps/${kenc}"
+# shellcheck disable=SC2016 # expanded by the bash under test
+out="$(cd "${tmp}/kws/proj" && timeout 5 env -i PATH=/nonexistent HOME="${tmp}/khome" TIMELIKE_CGROUP_CPU_MAX="${cm}" \
+  TIMELIKE_PROC_STATUS="${st}" HOOK="${hook_real}" TIMELIKE_STATE_ROOT="${tmp}/kstate" \
+  TIMELIKE_SCHEDULED_SNAPSHOT="${khelper}" "${BASH_BIN}" -c \
+  'ulimit -u 1 2>/dev/null; . "$HOOK"; printf "TIMELIKE_CPUS=%s\n" "${TIMELIKE_CPUS-<unset>}"' \
+  </dev/null 2>/dev/null)" || out="rc=$?"
+if [[ "$(value_of TIMELIKE_CPUS "${control}")" == 2 ]]; then
+  tap 0 "K13 # SKIP the no-fork probe cannot fail here (as X2)"
+else
+  check "K13 in a workspace with a fresh stamp, the hook runs with forking impossible" "${out}" TIMELIKE_CPUS=2
+fi
+
 # ── X1: the same C/E/S assertions against an EMPTY hook must all fail ───────────────────────────
 real_n=${n}
 real_failures=${failures}

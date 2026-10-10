@@ -261,3 +261,20 @@ Measured (host, 3.14.8, take of an unchanged workspace, ms; first figure = first
 - synthetic (657 files, 51 MB): 1543, then 298, 318, 295, 328 (slice 0: 620–700)
 - what remains is the interpreter and agentio (about 100 ms, `snapshot list` alone), the walk, and verification re-reading every stored object (the larger share at 51 MB)
 Verification: 2 units (an unchanged file is not opened, per an audit hook; a changed one is, and is what a restore brings back; a cached file whose object is gone is read again)
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T024: the scheduled snapshot — helper and the shell-start due check (FR-32–FR-34)
+**Started:** 2026-10-10T05:37:19Z | **Completed:** 2026-10-10T05:43:10Z
+
+INHERITED: Store, import, LockBusy, take_locked — from T021–T023 (confidence: high)
+FLAGGED: the due check lives in 001's /etc/timelike/shell-env.bash, builtins only, forking once only when due; chose that file (already reached by bash -c, -lc and interactive shells) over a new sourced file, which would cost a file read on every shell start for nothing (confidence: high)
+FLAGGED: the helper's stderr line reaches the shell's stderr through fd 3 (the block's original stderr), while everything else stays silent; chose that over a line on every snapshot because a scheduled one that is complete says nothing (FR-33) (confidence: high)
+FLAGGED: default interval 300 s, from the measurements in research R11 (confidence: medium — the mentor may prefer another figure)
+FLAGGED: not taken when the command line starts with `snapshot` or `undo`: a scheduled snapshot of the damaged state would become the newest and hide the one the agent needs (confidence: high)
+ASSUMED: a bash the helper starts must never re-enter the hook: the helper runs with TIMELIKE_SNAPSHOT_SCHEDULING=1, and the block skips under it (confidence: high)
+ABSENT: a stamp for a workspace path whose encoded name passes 255 bytes (no scheduled snapshot there; spec FR-32 says so); purge after a scheduled take (T025)
+Measured: research R11 — not due +0.5 ms per shell start, no fork; due 120–300 ms on the two workspaces above
+Verification: host test K1–K13 (57 of 57); test_scheduled_snapshot.py 5 passed (complete is silent and restores a directory a script removed; partial and refused say so in one line; a busy workspace is skipped; a bad interval is named)
+**Process failures recorded:**
+- The first run of the K cases used a bash fake helper, which inherited BASH_ENV, re-entered the hook and recursed until it was killed (about 3 minutes, a few hundred processes, in a temporary directory). That's why the re-entry guard exists, and K1 now counts exactly one call.
+- Cleaning up after it, `pkill -f` on a pattern matched my own command line and killed that shell, which my own notes say never to do. Nothing else was affected; the test's trap removed its directory.
