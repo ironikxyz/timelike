@@ -1192,3 +1192,31 @@ committed:** no commit until lane 005s1-b has ended.
   `process_failures_recorded`); SC-7's two defects and my missed `set -e` check (`process_failures_recorded`);
   the Docker CLI not rebuilt here and the baselines awaiting a person's review (lane item 3). Nothing else
   was found after it.
+
+### Addendum 3 — lane 005s1-c: the `bash -ic` cells read output by line position
+
+**Written:** 2026-10-11T07:29:16Z (read from the clock), on `modify/005-slice-1`. Committed with T036.
+
+- **Addendum 2's "Not yet committed" line is stale:** it went in as it stood in `7306473`, on the operator's
+  instruction, after lane 005s1-b was void (the stamp-check refused the dirty tree).
+- **Lane 005s1-c** (`7306473`; rerun c2): unit 2024 passed, 3 skipped; e2e 646 of 649; bench-images, scan and
+  lint pass. The Docker CLI reports `29.9.0 go1.26.9`. Lane 005s1-a's items are fixed in the image.
+- **The three failures were this cycle's test defect,** not the feature's: SC-7 `[bash -ic]`, and SC-6
+  `[bash -ic]`'s recursive delete and `type -a`. An interactive bash with no terminal prints two job-control lines
+  first, and the cells read by position.
+- **T036:** `drop_ic_notty_lines` (`tests/e2e/helpers.bash`) drops exactly those two lines in the ic style.
+  - Each line is matched whole, at most once, in bash's order, and only at the start. Only the process group may
+    vary: `-1` here, a pid on a host.
+  - Both files' `in_repo` call it, so every positional assertion stays as written, unloosened.
+  - `:191`'s id read (a `bash -c` cell the ic lines can't reach) now finds the newest row by its form and
+    requires it to be `scheduled`.
+  - No other file of this cycle has an ic cell.
+- **criteria_reestablished:** unchanged from addendum 1. Every mode stays `unconfirmed` until lane 005s1-d runs
+  SC-6 and SC-7 in the image.
+- **not_verified:** the cells in the image. On the host, the helper was exercised under a real `bash -ic` with no
+  terminal. shellcheck is clean over the 84 files.
+- **changed_other_features:** `tests/e2e/helpers.bash` gains the helper. It is called only from this cycle's two
+  files.
+- **process_failures_recorded:** the ic cells went to the lane unrun. T036's start time was not read.
+- **Then:** lane 005s1-d is `test` only. Bench-images, scan and lint at `7306473` stand. D16 is captured, and
+  the mentor holds it for the operator's interview.

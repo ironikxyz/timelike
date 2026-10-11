@@ -58,10 +58,12 @@ same_manifest() {
 # in_repo STYLE INTERVAL CMD — CMD in a shell STARTED in the repository (-w: the hook snapshots the
 # workspace of the shell's starting directory, as a harness starts the agent's shell in its workspace;
 # a `cd` inside the command comes after the hook), with this test's state root and the given
-# TIMELIKE_SNAPSHOT_INTERVAL ("" = unset in effect: the hook's default); stderr to $WORK/stderr.
+# TIMELIKE_SNAPSHOT_INTERVAL ("" = unset in effect: the hook's default); stderr to $WORK/stderr. In the
+# ic style, bash's own two no-terminal lines (printed before CMD's redirection) are dropped first.
 in_repo() {
   run_in -e "TIMELIKE_STATE_ROOT=${STATE}" -e "TIMELIKE_SNAPSHOT_INTERVAL=$2" -e "TIMELIKE_SESSION=sc7" \
     -w "$REPO" "$1" notty "$3 2>'${WORK}/stderr'"
+  if [[ "$1" == ic ]]; then drop_ic_notty_lines; fi
   assert_within 30
 }
 

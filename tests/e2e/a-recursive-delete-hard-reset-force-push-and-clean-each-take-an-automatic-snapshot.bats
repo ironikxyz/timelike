@@ -56,10 +56,12 @@ flunk() {
   return 1
 }
 
-# in_repo STYLE CMD [INTERVAL] — CMD in a shell started in the repository, this test's state root.
+# in_repo STYLE CMD [INTERVAL] — CMD in a shell started in the repository, this test's state root. In the
+# ic style, bash's own two no-terminal lines are dropped first (drop_ic_notty_lines, helpers.bash).
 in_repo() {
   run_in -e "TIMELIKE_STATE_ROOT=${STATE}" -e TIMELIKE_SESSION=sc6 -e "TIMELIKE_SNAPSHOT_INTERVAL=${3:-off}" \
     -w "$REPO" "$1" notty "$2"
+  if [[ "$1" == ic ]]; then drop_ic_notty_lines; fi
   assert_within 60
 }
 
@@ -188,7 +190,15 @@ remote_main() {
   [[ -n "$output" && "$(printf '%s\n' "${lines[@]}" | sort -u)" == "scheduled" ]] ||
     flunk "want only scheduled snapshots"
   in_repo c "snapshot list --text"
-  id="${lines[2]%%  *}"
+  # The newest snapshot's id: the first row of the list (`<id>  <reason>  …`), found by its form, not
+  # its line number.
+  id=""
+  local l
+  for l in "${lines[@]}"; do
+    if [[ "$l" =~ ^([0-9]+)\ \ scheduled\ \  ]]; then id="${BASH_REMATCH[1]}"; break; fi
+    if [[ "$l" =~ ^[0-9]+\ \  ]]; then break; fi
+  done
+  [[ -n "$id" ]] || flunk "the newest snapshot is not a scheduled one"
   in_repo c "undo ${id} --yes --text"
   after="$(manifest)"
   [[ "$after" == "$before" ]] || { diff <(echo "$before") <(echo "$after") >&2; flunk "not restored"; }

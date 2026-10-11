@@ -417,3 +417,12 @@ ASSUMED: reconcile_mode corrected to `full` in the addendum: every criterion of 
 ABSENT: the README's session-scratch paragraph; running the host lane's e2e or any image step; implement step 10 rerun (unchanged: unknown)
 Verification: readme_reference --check current (13 tools), test_readme_reference.py 21 passed; no "faster", "fewer turns" or "more reliable" in README.md; host lane on this tree: make test-host exit 0, 2014 passed, 13 skipped; hook 57/57
 SCOPE: out — reboot.md (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T036: lane 005s1-c — the `bash -ic` cells read output by line position
+**Started:** 2026-10-11T07:29:16Z (read from the clock, after the change was made: the start was not read) | **Completed:** 2026-10-11T07:29:16Z
+
+INHERITED: SC-6's and SC-7's cells (T032, T033); lane 005s1-c's feedback `bridge/feedback/07-20261011-055059-…` (confidence: high)
+FLAGGED: dropped exactly bash's two no-terminal lines in one helper (`drop_ic_notty_lines`, helpers.bash), each matched whole, at most once, in bash's order, only at the start, and only in the ic style (both files' `in_repo`), over finding lines by prefix. Every positional assertion stays as written, so `type -a`'s first line must still be `rm is a function` and the restore's verdict must still be line 1. The process group is the one field allowed to vary: the lane printed `-1`, and a host bash prints a pid (confidence: high)
+FLAGGED: SC-6's no-guard cell (`bash -c`, which the ic lines can't reach) took `lines[2]` as the newest snapshot's id. It now takes the first row of the form `<id>  <reason>  `, and requires that row to be `scheduled`, which the cell's earlier assertion (every snapshot is scheduled) already implies. Not looser (confidence: high)
+ABSENT: running the cells in the image (no Docker here); a change to `run_in` itself (other features' ic cells read by key or never met these lines, and this cycle's other files have no ic cell); any assertion text
+Verification: the helper exercised under a real `bash -ic` with no terminal on the host (the two lines dropped, the rest unchanged) and on non-matching, out-of-order and trailing-text cases (left alone); the id read exercised on a scheduled and a non-scheduled newest row; shellcheck 0.11.0 clean over the Makefile's 84 files; bats --count: SC-6 12, SC-7 4

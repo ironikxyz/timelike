@@ -171,6 +171,24 @@ run_in() {
   fi
 }
 
+# drop_ic_notty_lines — after a `bash -ic` run with no terminal, remove the two lines bash itself prints
+# before anything else (job control has no terminal), and only those: each in its exact text (the
+# process group is the one field allowed to vary: `-1` in docker exec, a pid elsewhere), at most once,
+# in bash's order, and only at the very start. Rebuilds $output and ${lines[@]} from what is left, so a
+# cell's positional reads mean what they mean in the -c and -lc styles. Lane 005s1-c: three ic cells
+# read the restore's verdict and `type -a`'s first line two lines late.
+IC_NOTTY_LINES=(
+  '^bash: cannot set terminal process group \((-1|[0-9]+)\): Inappropriate ioctl for device$'
+  '^bash: no job control in this shell$'
+)
+drop_ic_notty_lines() {
+  local known
+  for known in "${IC_NOTTY_LINES[@]}"; do
+    if ((${#lines[@]} > 0)) && [[ "${lines[0]}" =~ $known ]]; then lines=("${lines[@]:1}"); fi
+  done
+  if ((${#lines[@]} > 0)); then output="$(printf '%s\n' "${lines[@]}")"; else output=""; fi
+}
+
 # exec_plain CMD... — `docker exec` (no shell, no tty) for setup, teardown and control reads.
 # Bounded like everything else. Not a style under test.
 exec_plain() {

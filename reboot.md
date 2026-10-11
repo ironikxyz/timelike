@@ -27,8 +27,10 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   functions `rm`/`git` in `shell-env.bash`, the agent's own shell only: `TIMELIKE_GUARD_SHELL` + an ancestor walk;
   `libexec/guard rm|git|pre-push`), the `pre-push` step in 001's dispatcher, the trash fed by `rm`/`git clean`,
   note 12 (taken re-hashes new objects; a restore re-hashes what it writes). T035: the README block (18 of 38),
-  Cycle 3 addendum 1. **No commit until lane 005s1-b has ended.** Held for the mentor: README § "The session
-  scratch" is now false (the block said nothing else changes). e2e harness: scheduled snapshots off unless a cell
+  Cycle 3 addendum 1. `7306473`: README § "The session scratch" corrected, Addendum 2 (lane 005s1-b was void:
+  the tree was dirty; **commit everything before reporting done**). Lane 005s1-c: 646 of 649 e2e, the three
+  `bash -ic` cells read by line position; T036 (`drop_ic_notty_lines`), Addendum 3. **No commit until lane
+  005s1-d (`test` only) has ended.** D16 captured by the mentor, awaiting the operator's interview. e2e harness: scheduled snapshots off unless a cell
   sets `TIMELIKE_SNAPSHOT_INTERVAL`; the guards always on.
 - **`modify/008-slice-1`** (from `master` `ce1eaf2`): **008 Cycle 2 = 06 slice 1**, send
   `bridge/sends/06-rev1-20261009-102433.md` (row 4: `audited_against [1]` unchanged). Built: `edit --at` (view's anchors,
