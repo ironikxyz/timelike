@@ -1174,3 +1174,21 @@ Implement step 10 was not rerun. The installed blocks can't run pytest here, so 
 
 Done. **No commit until lane 005s1-b has ended.** Lane 005s1-b is the full lane (`test`, `bench-images`,
 `scan`, `lint`): T032 reaches the image, and the pins moved. D16 is the mentor's, after the lane.
+
+### Addendum 2 — README § "The session scratch" corrected, on the operator's word
+
+**Written:** 2026-10-10T13:58:04Z (read from the clock), on `modify/005-slice-1`, after `0be6679`. **Not yet
+committed:** no commit until lane 005s1-b has ended.
+
+- **Addendum 1's held item is resolved.** The operator said to correct the paragraph, and to keep the README
+  current with each build from now on. § "The session scratch" no longer lists snapshots or the `symbols` index
+  in the scratch, and no longer says the state root is not yet built. A new paragraph names what lives in the
+  state root (`/var/lib/timelike`, `TIMELIKE_STATE_ROOT`): snapshots, the trash and the `symbols` index, on the
+  `timelike-state` volume. The intro's What and Status are untouched.
+- **changed_other_features** gains: README § "The session scratch" (001's scratch description).
+- **The findings reported to the operator at addendum 1's close are all in addendum 1:** the guards on in
+  other features' e2e cells with no switch (`not_verified`); git aliases and a harness under a guarded `-c`
+  shell (`not_verified`); the unexplained unguarded measurement session (`not_verified`,
+  `process_failures_recorded`); SC-7's two defects and my missed `set -e` check (`process_failures_recorded`);
+  the Docker CLI not rebuilt here and the baselines awaiting a person's review (lane item 3). Nothing else
+  was found after it.

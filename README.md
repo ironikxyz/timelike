@@ -177,9 +177,13 @@ Its credential is a canary, generated inside Docker into a volume, never on the 
 
 Every tool writes its records and saved output under one scratch directory per session:
 `/tmp/timelike/<session>/` (`TIMELIKE_SCRATCH_ROOT`, `TIMELIKE_SESSION`; the session is `default` when
-none is set). That is where `run`'s logs, the session events, snapshots, `search`'s saved hit lists,
-the `symbols` index and the `services` registry live. The scratch is disposable (contract rule 10): it
-survives a container restart, not a recreate. A persistent state root is 07 slice 1, not yet built.
+none is set). That is where `run`'s logs, the session events, `search`'s saved hit lists and the
+`services` registry live. The scratch is disposable (contract rule 10): it survives a container
+restart, not a recreate.
+
+What has to outlive a session lives in the **state root** instead, `/var/lib/timelike`
+(`TIMELIKE_STATE_ROOT`): snapshots, the trash and the `symbols` index. `compose.yaml` mounts the named
+volume `timelike-state` there, so they survive a new session, a restart and a recreated container.
 
 ## Install (typical)
 
