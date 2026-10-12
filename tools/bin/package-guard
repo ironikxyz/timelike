@@ -483,7 +483,7 @@ def py_req(text: str, origin: str, cwd: Path) -> Req:
     if direct:  # PEP 508 direct reference, `name @ https://…`, before any path test: it may end in .whl
         return Req(direct.group(1), pep503(direct.group(1)), "", "url", origin)
     if (
-        t.startswith((".", "/", "~"))
+        t.startswith((".", "/", "~/"))
         or ("/" in t and not URL_RE.match(t) and "@" not in t)
         or ARCHIVE_RE.search(t)
         or (cwd / t / "pyproject.toml").is_file()
@@ -519,7 +519,7 @@ def npm_req(text: str, origin: str, cwd: Path, spec_of: str | None = None) -> Re
         t = text.strip()
         if URL_RE.match(t) or t.startswith(("github:", "gitlab:", "bitbucket:", "gist:")):
             return Req(t, t, "", "url", origin)
-        if t.startswith((".", "/", "~", "file:")) or ARCHIVE_RE.search(t):
+        if t.startswith((".", "/", "~/", "file:")) or ARCHIVE_RE.search(t):
             return Req(t, t, "", "local", origin)
         if "/" in t and not t.startswith("@"):  # user/repo: GitHub shorthand
             return Req(t, t, "", "url", origin)
@@ -533,7 +533,7 @@ def npm_req(text: str, origin: str, cwd: Path, spec_of: str | None = None) -> Re
         return real
     if URL_RE.match(spec) or spec.startswith(("github:", "gitlab:", "bitbucket:", "gist:")):
         return Req(name, name, spec, "url", origin)
-    if spec.startswith(("file:", "link:", "workspace:", "portal:", ".", "/", "~")):
+    if spec.startswith(("file:", "link:", "workspace:", "portal:", ".", "/", "~/")):  # ~1.2 is a range
         return Req(name, name, spec, "local", origin)
     if "/" in spec and not spec.startswith("@"):
         return Req(name, name, spec, "url", origin)
@@ -1763,7 +1763,7 @@ def _add_release(out: Lookup, version: str, t: dt.datetime | None, yanked: bool)
 
 
 def lookup_npm(registry: str, name: str, timeout: float) -> Lookup:
-    path = urllib.parse.quote(name, safe="@")  # @scope/name → @scope%2fname, as npm asks
+    path = urllib.parse.quote(name, safe="@").replace("%2F", "%2f")  # @scope/name → @scope%2fname, as npm asks
     url = f"{_clean_url(registry).rstrip('/')}/{path}"
     try:
         _, _, body = _fetch(url, "application/json", timeout)
@@ -2007,23 +2007,24 @@ def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[
     else:
         npm_files = npm_config_files(inst, env, cwd, resolve)
     registries: list[str] = []
+    slots: list[Check | None] = []  # the command's order; None is a registry check still to come
     for req in inst.packages:
         if req.source == "local":
-            checks.append(Check(req, "unchecked", detail="a local path: nothing comes from a registry"))
+            slots.append(Check(req, "unchecked", detail="a local path: nothing comes from a registry"))
             continue
         if req.source == "url":
-            checks.append(Check(req, "unchecked-source", detail="unchecked source: a URL or VCS reference, which no registry vouches for"))
+            slots.append(Check(req, "unchecked-source", detail="unchecked source: a URL or VCS reference, which no registry vouches for"))
             continue
         lock = pinned(req, inst.ecosystem, locks)
         if lock is not None:
-            checks.append(Check(req, "pinned", detail=f"pinned in {lock.path}; no registry was asked"))
+            slots.append(Check(req, "pinned", detail=f"pinned in {lock.path}; no registry was asked"))
             continue
         if inst.local_bin and root is not None and (root / "node_modules" / ".bin" / inst.local_bin).exists():
-            checks.append(Check(req, "unchecked", detail=f"node_modules/.bin/{inst.local_bin} is already installed here"))
+            slots.append(Check(req, "unchecked", detail=f"node_modules/.bin/{inst.local_bin} is already installed here"))
             continue
         if inst.ecosystem == "pypi":
             if not py_indexes:
-                checks.append(Check(req, "unchecked", detail="--no-index: installed from local files only"))
+                slots.append(Check(req, "unchecked", detail="--no-index: installed from local files only"))
                 continue
             regs = py_indexes
             for r in regs:
@@ -2036,12 +2037,18 @@ def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[
             regs = [reg]
             jobs.append((f"{reg}|{req.key}", functools.partial(lookup_npm, reg, req.key, timeout)))
         plan_for.append((req, regs))
+        slots.append(None)
         for r in regs:
             if display_url(r) not in registries:
                 registries.append(display_url(r))
     unique = list(dict(jobs).items())
     results = run_lookups(unique, timeout)
-    for req, regs in plan_for:
+    pending = iter(plan_for)
+    for slot in slots:
+        if slot is not None:
+            checks.append(slot)
+            continue
+        req, regs = next(pending)
         looks = [
             results.get(f"{r}|{req.key}")
             or Lookup(display_url(r), "unreachable", f"timed out after {timeout:g} s ({TIMEOUT_ENV})")
