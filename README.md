@@ -674,6 +674,33 @@ options:
 exit codes: 0 entries shown, or none found, 1 the ledger could not be read, or is not a JSON array, 2 usage, 3 no such session
 ```
 
+### `package-guard`
+
+```text
+package-guard: install [help]
+check an install's packages before it runs: in their registry, at least TIMELIKE_PACKAGE_MIN_AGE_DAYS (default 2) days old, or pinned in the lockfile
+usage:
+  package-guard [--yes] [--dry-run] [--timeout S] -- CMD [ARG...]   $? is CMD's
+  CMD: pip/pip3/python -m pip install, uv pip install|sync, uv add|sync, uvx, npm install|ci, npx,
+       npm init NAME, pnpm add|install|dlx; any other command runs unchanged, unchecked
+  refused (exit 4, CMD not run): not in its registry; release younger than
+    TIMELIKE_PACKAGE_MIN_AGE_DAYS (default 2); registry unreachable (never called absent)
+  pinned in the project's lockfile: passes with no registry request
+  a refusal's confirm, package-guard --yes -- CMD, proceeds and records the override
+  lookups: TIMELIKE_PACKAGE_TIMEOUT seconds (default 10); global flags go before --
+options:
+  --help  this help (at most 40 lines)
+  --json  structured output (default when piped)
+  --text  terse text output (default on a terminal)
+  --agent-info  machine-readable manifest
+  --limit  output cap in lines; 0 = no cap
+  --verbose  add timing; warn about event-log failures
+  --yes  confirm the mutation
+  --dry-run  check and report; run nothing
+  --timeout  run's limit for CMD, in seconds
+exit codes: 0 every check passed and CMD exited 0, or --dry-run, 1 internal: run could not be started or read, 2 usage: no CMD, or an unknown option, 4 refused before CMD ran: rerun the envelope's confirm to proceed, 124 run's limit ended CMD; otherwise the command's own exit
+```
+
 ### `run`
 
 ```text

@@ -89,25 +89,25 @@ the image, and the event's `override` field. Those tasks are written once the ru
 
 ## Phase 5 — e2e in the image, and polish
 
-- [ ] T012 `tests/e2e/helpers.bash`: `standin_start` (copies the stand-in and a catalog into the container and
+- [X] T012 `tests/e2e/helpers.bash`: `standin_start` (copies the stand-in and a catalog into the container and
   starts it on loopback with timelike's interpreter), `standin_stop`, `standin_log`.
-- [ ] T013 [P] SC-1:
+- [X] T013 [P] SC-1:
   `tests/e2e/installing-a-package-name-absent-from-its-registry-is-refused-with-exit-4-before-anything-is-downloaded.bats`
   — pip, `uv pip install`, npm; exit 4; the envelope's package and the stand-in's URL; no file request; nothing
   new in site-packages or node_modules; an unreachable registry is not called absent.
-- [ ] T014 [P] SC-2:
+- [X] T014 [P] SC-2:
   `tests/e2e/installing-a-package-whose-newest-release-is-younger-than-the-minimum-age-is-refused-naming-the-release-date.bats`
   — the one-day-old newest release refused through pip and npm, naming the stand-in's date; the named older
   release installs; `TIMELIKE_PACKAGE_MIN_AGE_DAYS=0` passes.
-- [ ] T015 [P] SC-3:
+- [X] T015 [P] SC-3:
   `tests/e2e/installing-packages-already-pinned-in-the-projects-lockfile-proceeds-without-registry-checks.bats`
   — `uv lock` and `npm install` write real lockfiles; then the guarded install, `npm ci` and `uv sync --locked`
   make no request with the guard's user agent, and the installer runs.
-- [ ] T016 [P] SC-4:
+- [X] T016 [P] SC-4:
   `tests/e2e/re-running-a-refused-install-with-the-confirm-flag-proceeds-and-records-the-override.bats`
   — run the refusal's own `confirm`: the installer's exit and the package on disk; `events.jsonl` has the
   tool's event with `ref.log`; the record names the package, ecosystem, registry, reason and session.
-- [ ] T017 Polish:
+- [X] T017 Polish:
   - the Makefile's `SHELLCHECK_FILES` (the four bats files);
   - `scripts/readme_reference.py --write` (the command reference);
   - the measurement (R8 Measurements: one and five passing packages; a hung registry);

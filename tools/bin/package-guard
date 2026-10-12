@@ -2458,7 +2458,10 @@ def _env_float(name: str, default: float) -> float | str:
 TOOL = agentio.Tool(
     name="package-guard",
     target="install",
-    summary="check the packages an install names (exist, old enough, pinned) before the installer runs",
+    summary=(
+        "check an install's packages before it runs: in their registry, at least"
+        " TIMELIKE_PACKAGE_MIN_AGE_DAYS (default 2) days old, or pinned in the lockfile"
+    ),
     usage=[
         "package-guard [--yes] [--dry-run] [--timeout S] -- CMD [ARG...]   $? is CMD's",
         "CMD: pip/pip3/python -m pip install, uv pip install|sync, uv add|sync, uvx, npm install|ci, npx,",

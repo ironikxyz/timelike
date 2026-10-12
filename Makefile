@@ -112,6 +112,10 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh tests/run.sh 
   tests/e2e/a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats \
   tests/e2e/deleted-files-trash-restorable-and-purged-by-age-and-size.bats \
   tests/e2e/a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats image/rootfs/opt/timelike/git-hooks/dispatch \
+  tests/e2e/installing-a-package-name-absent-from-its-registry-is-refused-with-exit-4-before-anything-is-downloaded.bats \
+  tests/e2e/installing-a-package-whose-newest-release-is-younger-than-the-minimum-age-is-refused-naming-the-release-date.bats \
+  tests/e2e/installing-packages-already-pinned-in-the-projects-lockfile-proceeds-without-registry-checks.bats \
+  tests/e2e/re-running-a-refused-install-with-the-confirm-flag-proceeds-and-records-the-override.bats \
   tests/e2e/fixtures/bounded-read.sh \
   tests/e2e/view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats \
   tests/e2e/view-range-context-missing-file-and-binary.bats \

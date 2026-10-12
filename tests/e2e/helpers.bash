@@ -552,3 +552,86 @@ exec /bin/uv --quiet tool run --python ${AGENT_PY} '${name}@${ver}' \"\$@\""
   out="$(exec_plain sh -c 'cd "$1" && printf "x: int = 1\n" >warm.py && ./mypy warm.py' warm "$dir" 2>&1)" ||
     { printf 'install_uv_tool_wrappers: mypy warm-up failed:\n%s\n' "$out" >&2; return 1; }
 }
+
+# ── The registry stand-in (feature 013, the package guard; spec D-10, FR-33) ────────────────────────
+# tests/fixtures/registry-standin.py, run INSIDE the agent container on its loopback with timelike's own
+# interpreter, so no cell reaches a public registry (lore P005) and nothing is added to compose. It logs every
+# request; a cell reads that log, never the guard's message, to see what was fetched (lore P004).
+STANDIN_PY=/opt/timelike/python/bin/python3
+GUARD_AGENT=timelike-package-guard/
+
+# standin_start DIR [CATALOG] — copy the stand-in and a catalog (default tests/fixtures/registry-catalog.json)
+# into DIR in the container and start it. Sets STANDIN_DIR, STANDIN_URL, STANDIN_SIMPLE (PyPI's Simple API
+# root) and STANDIN_NPM (the npm registry root, with its trailing slash).
+standin_start() {
+  local dir="$1" catalog="${2:-${BATS_TEST_DIRNAME}/../fixtures/registry-catalog.json}" port="" i
+  copy_into_container "${BATS_TEST_DIRNAME}/../fixtures/registry-standin.py" "${dir}/registry-standin.py" || return 1
+  copy_into_container "$catalog" "${dir}/catalog.json" || return 1
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c '"$1" -I "$2/registry-standin.py" --catalog "$2/catalog.json" --dir "$2/run" \
+    </dev/null >"$2/standin.err" 2>&1 &' s "$STANDIN_PY" "$dir" || return 1
+  for i in $(seq 100); do
+    port="$(exec_plain cat "${dir}/run/port" 2>/dev/null)" && port="${port//[^0-9]/}" && [[ -n "$port" ]] && break
+    sleep 0.1
+  done
+  if [[ -z "$port" ]]; then
+    echo "standin_start: the stand-in did not start ($i tries): $(exec_plain cat "${dir}/standin.err" 2>&1)" >&2
+    return 1
+  fi
+  STANDIN_DIR="$dir"
+  STANDIN_URL="http://127.0.0.1:${port}"
+  # shellcheck disable=SC2034 # read by the package guard's .bats files
+  STANDIN_SIMPLE="${STANDIN_URL}/simple"
+  # shellcheck disable=SC2034 # read by the package guard's .bats files
+  STANDIN_NPM="${STANDIN_URL}/npm/"
+}
+
+# standin_stop — stop the stand-in by the pid it wrote (never by a name match).
+standin_stop() {
+  [[ -n "${STANDIN_DIR:-}" ]] || return 0
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c 'p="$(cat "$1/run/pid" 2>/dev/null)" && kill "$p" 2>/dev/null; true' s "$STANDIN_DIR" || true
+}
+
+# standin_count WHAT — how many logged requests match: guard (the guard's user agent), files (a wheel or a
+# tarball: anything downloaded), all. Read in the container from the stand-in's own log.
+standin_count() {
+  # shellcheck disable=SC2016 # python source, expanded by python
+  exec_plain "$STANDIN_PY" -I -c '
+import json, sys
+what, agent = sys.argv[2], sys.argv[3]
+rows = [json.loads(x) for x in open(sys.argv[1], encoding="utf-8") if x.strip()]
+if what == "guard":
+    rows = [r for r in rows if r["user_agent"].startswith(agent)]
+elif what == "files":
+    rows = [r for r in rows if r["path"].startswith("/files/") or "/-/" in r["path"]]
+print(len(rows))' "${STANDIN_DIR}/run/requests.jsonl" "$1" "$GUARD_AGENT"
+}
+
+# standin_clear — empty the stand-in's log (between a cell's setup and what it measures).
+standin_clear() {
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c ': > "$1/run/requests.jsonl"' s "$STANDIN_DIR"
+}
+
+# standin_released ECOSYSTEM NAME VERSION — the release date the stand-in itself serves (PyPI's earliest
+# upload-time, npm's time[VERSION]), as YYYY-MM-DD: what a refusal must name, read from the registry's data.
+standin_released() {
+  # shellcheck disable=SC2016 # python source, expanded by python
+  exec_plain "$STANDIN_PY" -I -c '
+import json, sys, urllib.request
+eco, base, name, ver = sys.argv[1:5]
+if eco == "pypi":
+    req = urllib.request.Request(f"{base}/simple/{name}/", headers={"Accept": "application/vnd.pypi.simple.v1+json"})
+    doc = json.load(urllib.request.urlopen(req, timeout=10))
+    times = [f["upload-time"] for f in doc["files"] if f"-{ver}-" in f["filename"]]
+    print(min(times)[:10])
+else:
+    doc = json.load(urllib.request.urlopen(f"{base}/npm/{name}", timeout=10))
+    print(doc["time"][ver][:10])' "$1" "$STANDIN_URL" "$2" "$3"
+}
+
+# pyj CODE — run CODE with timelike's interpreter in the agent container, the last run's $output on stdin.
+pyj() {
+  printf '%s' "$output" | timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" "$STANDIN_PY" -I -c "$1"
+}

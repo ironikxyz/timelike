@@ -193,6 +193,30 @@ Analysed for the FOR-MENTOR item; nothing here is built.
 
   These were measured with bash 5.2 on the host, with a function and a decoy directory.
 
-## Measurements
+## Measurements (FR-18; T017)
 
-Filled in by T-measure once the tool exists (host, the stand-in on loopback, timelike's 3.14.8 interpreter).
+**Measured** 2026-10-12 around 00:59Z on the host:
+- 56 CPUs, load average about 3.8;
+- timelike's 3.14.8 in a scratch venv;
+- the registry stand-in on loopback, a catalog of five 300-day-old packages;
+- the host's pip 24.0 and npm 10.9.7.
+
+Each figure is the median of 5 runs. "Added" is through the guard minus direct.
+
+| Install | Direct | Through `package-guard` | Added | The check alone (`--dry-run`) |
+|---|---|---|---|---|
+| `pip install --target t` 1 package | 712 ms | 1039 ms | 327 ms | 198 ms |
+| `pip install --target t` 5 packages | 1191 ms | 1520 ms | 329 ms | 204 ms |
+| `npm install` 1 package | 533 ms | 826 ms | 293 ms | — |
+| `npm install` 5 packages | 776 ms | 1122 ms | 346 ms | — |
+
+**How to read it:**
+- **The added time does not grow with the number of packages:** the lookups run concurrently.
+- **The check (~200 ms)** is the tool's start and the lookups. The rest (~100–130 ms) is `run`'s concluding
+  wrapper and reading its result.
+- **A route for the bare commands that execs the installer on a pass** (Item 24's recommendation) would add about
+  the check alone.
+- **These are loopback figures.** A real registry adds its own round trip, once, since the lookups are concurrent.
+- **A hung registry** is bounded by `TIMELIKE_PACKAGE_TIMEOUT`: with a 30 s stall and a 1 s limit, the whole check
+  ended in under 4 s with the other name still checked (`test_a_hung_registry_is_bounded_by_one_time_limit`).
+- **Not measured in the image.** No claim about the agent's speed is made from these (P6).
