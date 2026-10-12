@@ -87,7 +87,9 @@ def build_wheel(name: str, version: str) -> tuple[str, bytes]:
     files = {
         f"{module}/__init__.py": f'NAME = "{name}"\nVERSION = "{version}"\n'.encode(),
         f"{info}/METADATA": f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n".encode(),
-        f"{info}/WHEEL": b"Wheel-Version: 1.0\nGenerator: registry-standin\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        f"{info}/WHEEL": (
+            b"Wheel-Version: 1.0\nGenerator: registry-standin\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+        ),
     }
     record = []
     for path, data in files.items():
@@ -158,7 +160,12 @@ class Registry:
                 f["upload-time"] = pypi_time(released_at(rel))
             files.append(f)
             versions.append(rel["version"])
-        self.pypi[normalize(name)] = {"name": normalize(name), "files": files, "versions": versions, "entry": entry}
+        self.pypi[normalize(name)] = {
+            "name": normalize(name),
+            "files": files,
+            "versions": versions,
+            "entry": entry,
+        }
 
     def _add_npm(self, name: str, entry: dict[str, Any]) -> None:
         releases = entry.get("releases", [])
@@ -202,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
     log_lock = threading.Lock()
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 — the base class's name
+    def log_message(self, format: str, *args: Any) -> None:  # the base class's name for it
         pass  # the JSON log below is the record
 
     def _log(self, status: int) -> None:

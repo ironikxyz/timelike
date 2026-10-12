@@ -1,4 +1,5 @@
-"""package-guard's choice of registry: the one the installer would use (feature 013, T004; FR-10 to FR-13; R3).
+"""package-guard's choice of registry: the one the installer would use (feature 013, T004; FR-10 to FR-13;
+research R3).
 
 Each test builds the configuration files in a temporary home and checks the order pip, uv and npm document.
 The machine's own /etc files are not written; the host has none (research R3, `pip config debug`).
@@ -40,12 +41,18 @@ def test_pip_order_user_site_env_file_env_cli(tmp_path: Path) -> None:
     inst = pip_inst("pip install x", tmp_path, str(venv / "bin" / "python"))
     assert PG.pip_indexes(inst, env)[0] == ["https://user.example/simple"]
     # the site file (the venv's own pip.conf) beats the user's; [install] beats [global]
-    write(venv / "pip.conf", "[global]\nindex-url = https://site.example/simple\n[install]\nindex-url = https://site-install.example/simple\n")
+    write(
+        venv / "pip.conf",
+        "[global]\nindex-url = https://site.example/simple\n[install]\nindex-url = https://site-install.example/simple\n",
+    )
     assert PG.pip_indexes(inst, env)[0] == ["https://site-install.example/simple"]
     # PIP_CONFIG_FILE beats the site file, and when it exists the user file is not read at all
     f = write(tmp_path / "custom.conf", "[global]\nextra-index-url = https://extra.example/simple\n")
     env2 = {**env, "PIP_CONFIG_FILE": str(f)}
-    assert PG.pip_indexes(inst, env2)[0] == ["https://site-install.example/simple", "https://extra.example/simple"]
+    assert PG.pip_indexes(inst, env2)[0] == [
+        "https://site-install.example/simple",
+        "https://extra.example/simple",
+    ]
     # the environment beats every file; the command line beats the environment
     env3 = {**env2, "PIP_INDEX_URL": "https://env.example/simple"}
     assert PG.pip_indexes(inst, env3)[0][0] == "https://env.example/simple"
@@ -66,7 +73,9 @@ def test_pip_no_index_and_isolated(tmp_path: Path) -> None:
     env = {"HOME": str(tmp_path), "PIP_NO_INDEX": "1"}
     assert PG.pip_indexes(pip_inst("pip install x", tmp_path), env)[0] == []
     env = {"HOME": str(tmp_path), "PIP_INDEX_URL": "https://env.example/simple"}
-    assert PG.pip_indexes(pip_inst("pip install --isolated x", tmp_path), env)[0] == ["https://pypi.org/simple"]
+    assert PG.pip_indexes(pip_inst("pip install --isolated x", tmp_path), env)[0] == [
+        "https://pypi.org/simple"
+    ]
 
 
 def test_shebang_names_pips_interpreter(tmp_path: Path) -> None:
@@ -80,12 +89,18 @@ def uv_inst(cmd: str, cwd: Path) -> object:
 
 def test_uv_order(tmp_path: Path) -> None:
     env = {"HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path / "xdg")}
-    assert PG.uv_indexes(uv_inst("uv pip install x", tmp_path), env, tmp_path)[0] == ["https://pypi.org/simple"]
+    assert PG.uv_indexes(uv_inst("uv pip install x", tmp_path), env, tmp_path)[0] == [
+        "https://pypi.org/simple"
+    ]
     write(tmp_path / "pyproject.toml", '[project]\nname="p"\n[[tool.uv.index]]\nurl = "https://proj.example/simple"\n'
           '[[tool.uv.index]]\nurl = "https://default.example/simple"\ndefault = true\n')  # fmt: skip
     got = PG.uv_indexes(uv_inst("uv add x", tmp_path), env, tmp_path)[0]
     assert got == ["https://proj.example/simple", "https://default.example/simple"]
-    env2 = {**env, "UV_INDEX": "named=https://envidx.example/simple", "UV_DEFAULT_INDEX": "https://envdef.example/simple"}
+    env2 = {
+        **env,
+        "UV_INDEX": "named=https://envidx.example/simple",
+        "UV_DEFAULT_INDEX": "https://envdef.example/simple",
+    }
     got = PG.uv_indexes(uv_inst("uv add --index https://cli.example/simple x", tmp_path), env2, tmp_path)[0]
     assert got == ["https://cli.example/simple", "https://envidx.example/simple", "https://proj.example/simple",
                    "https://envdef.example/simple"]  # fmt: skip
@@ -95,11 +110,14 @@ def test_uv_order(tmp_path: Path) -> None:
 def test_uv_user_config_file(tmp_path: Path) -> None:
     write(tmp_path / "xdg" / "uv" / "uv.toml", 'index-url = "https://uvtoml.example/simple"\n')
     env = {"HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path / "xdg")}
-    assert PG.uv_indexes(uv_inst("uv pip install x", tmp_path), env, tmp_path)[0] == ["https://uvtoml.example/simple"]
+    assert PG.uv_indexes(uv_inst("uv pip install x", tmp_path), env, tmp_path)[0] == [
+        "https://uvtoml.example/simple"
+    ]
 
 
 def npm_world(tmp: Path) -> tuple[dict[str, str], object]:
-    """A fake Node prefix with a global npmrc and an npm package holding a builtin npmrc, as the image lays it out."""
+    """A fake Node prefix with a global npmrc and an npm package holding a builtin npmrc, as the image lays
+    it out."""
     node = write(tmp / "node" / "bin" / "node", "")
     npm_pkg = tmp / "node" / "lib" / "node_modules" / "npm"
     write(npm_pkg / "package.json", '{"name": "npm"}')
@@ -124,13 +142,19 @@ def test_npm_order_builtin_global_user_project_env_cli(tmp_path: Path) -> None:
     assert registry("npm install x", proj, env, resolve) == "https://builtin.example/"
     write(tmp_path / "node" / "etc" / "npmrc", "prefix=${HOME}/.local\nregistry=https://global.example/\n")
     assert registry("npm install x", proj, env, resolve) == "https://global.example/"
-    write(tmp_path / "home" / ".npmrc", "registry = \"https://user.example/\"\n")
+    write(tmp_path / "home" / ".npmrc", 'registry = "https://user.example/"\n')
     assert registry("npm install x", proj, env, resolve) == "https://user.example/"
     write(proj / ".npmrc", "; a comment\nregistry=https://${REG_HOST}/\n")
-    assert registry("npm install x", proj, {**env, "REG_HOST": "proj.example"}, resolve) == "https://proj.example/"
+    assert (
+        registry("npm install x", proj, {**env, "REG_HOST": "proj.example"}, resolve)
+        == "https://proj.example/"
+    )
     env2 = {**env, "REG_HOST": "proj.example", "NPM_CONFIG_REGISTRY": "https://env.example/"}
     assert registry("npm install x", proj, env2, resolve) == "https://env.example/"
-    assert registry("npm install --registry https://cli.example/ x", proj, env2, resolve) == "https://cli.example/"
+    assert (
+        registry("npm install --registry https://cli.example/ x", proj, env2, resolve)
+        == "https://cli.example/"
+    )
 
 
 def test_npm_scope_registry(tmp_path: Path) -> None:
@@ -138,11 +162,16 @@ def test_npm_scope_registry(tmp_path: Path) -> None:
     write(tmp_path / "home" / ".npmrc", "@tl:registry=https://scope.example/\n")
     assert registry("npm install @tl/x", tmp_path, env, resolve, "@tl") == "https://scope.example/"
     # a scope's own registry is used even when --registry names another (npm's rule)
-    assert registry("npm install --registry https://cli.example/ @tl/x", tmp_path, env, resolve, "@tl") == "https://scope.example/"
+    assert (
+        registry("npm install --registry https://cli.example/ @tl/x", tmp_path, env, resolve, "@tl")
+        == "https://scope.example/"
+    )
     assert registry("npm install @other/x", tmp_path, env, resolve, "@other") == "https://builtin.example/"
 
 
 def test_credentials_are_redacted_in_display_and_never_sent(tmp_path: Path) -> None:
-    assert PG.display_url("https://u:p@reg.example/simple") == "https://[REDACTED:credential]@reg.example/simple"
+    assert (
+        PG.display_url("https://u:p@reg.example/simple") == "https://[REDACTED:credential]@reg.example/simple"
+    )
     assert PG.display_url("https://reg.example/simple") == "https://reg.example/simple"
     assert PG._clean_url("https://u:p@reg.example:8443/x") == "https://reg.example:8443/x"

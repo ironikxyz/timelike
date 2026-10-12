@@ -144,7 +144,8 @@ def py_version(text: str) -> PyVersion | None:
     local = None
     if m.group("local"):
         local = tuple(
-            (1, int(s), "") if s.isdigit() else (0, 0, s.lower()) for s in re.split(r"[-_.]", m.group("local"))
+            (1, int(s), "") if s.isdigit() else (0, 0, s.lower())
+            for s in re.split(r"[-_.]", m.group("local"))
         )
     return PyVersion(
         text=text.strip(),
@@ -172,16 +173,14 @@ class PySpec:
     prefix: tuple[int, ...] | None  # ==1.2.* / !=1.2.*
 
     def admits(self, v: PyVersion) -> bool:
-        if self.op == "===":
+        if self.op == "===" or self.version is None:
             return v.text.lower() == self.text.lower()
         if self.prefix is not None:
-            assert self.version is not None
             n = len(self.prefix)
             padded = (v.release + (0,) * n)[:n]
             hit = v.epoch == self.version.epoch and padded == self.prefix
             return hit if self.op == "==" else not hit
         s = self.version
-        assert s is not None
         if self.op in ("==", "!="):
             same = v.key(with_local=s.local is not None) == s.key()
             return same if self.op == "==" else not same
@@ -252,7 +251,8 @@ def py_select(
 ) -> tuple[list[tuple[PyVersion, Release]], bool]:
     """The releases pip could pick, newest first, and whether pre-releases were let in.
 
-    pip's rules (FR-15): yanked files are ignored unless pinned exactly (PEP 592); pre-releases only when asked
+    pip's rules (FR-15): yanked files are ignored unless pinned exactly (PEP 592); pre-releases only when
+    asked
     (`--pre`, or a specifier that names one), or when nothing else matches.
     """
     exact = any(s.op in ("==", "===") and s.prefix is None for s in specs)
@@ -339,7 +339,8 @@ def _partial(text: str) -> tuple[int | None, int | None, int | None, tuple[str |
 
 
 def _comparators(part: str) -> list[Comparator]:
-    """One comparator token (`^1.2`, `~1`, `>=1.2.3`, `1.x`) as plain comparators (node-semver's desugaring)."""
+    """One comparator token (`^1.2`, `~1`, `>=1.2.3`, `1.x`) as plain comparators (node-semver's
+    desugaring)."""
     if part in ("", "*", "x", "X"):
         return []
     if part.startswith("^"):
@@ -362,7 +363,8 @@ def _comparators(part: str) -> list[Comparator]:
         hi = _upper(ma + 1, 0, 0) if mi is None else _upper(ma, mi + 1, 0)
         return [(">=", lo), ("<", hi)]
     m = re.match(r"^(<=|>=|<|>|=)?\s*(.+)$", part)
-    assert m is not None
+    if m is None:
+        raise SpecError(f"cannot read the version range {part!r}")
     op, rest = m.group(1) or "", m.group(2)
     ma, mi, pa, pre = _partial(rest)
     if ma is None:
@@ -554,8 +556,11 @@ class Options:
         self.values = set(values)
         self.switches = set(switches)
 
-    def split(self, args: Sequence[str]) -> Iterator[tuple[str, str | None]]:
-        """Yield (option, value) for options and ("", word) for positionals; raise SpecError when unclear."""
+    def split(self, args: Sequence[str]) -> Iterator[tuple[str, str]]:
+        """Yield (option, value) for options, with "" as a switch's value, and ("", word) for positionals.
+
+        Raises SpecError when a word could be an option's value or a package (FR-9).
+        """
         i = 0
         positional_only = False
         while i < len(args):
@@ -573,23 +578,28 @@ class Options:
                 yield a, args[i + 1]
                 i += 1
             elif a in self.switches or a.startswith("--no-"):
-                yield a, None
+                yield a, ""
             elif not a.startswith("--") and len(a) > 2 and a[:2] in self.values:
                 yield a[:2], a[2:]  # -rfile, -ihttps://…
             elif not a.startswith("--") and len(a) > 2 and all(f"-{c}" in self.switches for c in a[1:]):
                 for c in a[1:]:
-                    yield f"-{c}", None
+                    yield f"-{c}", ""
             elif i + 1 < len(args) and not args[i + 1].startswith("-"):
-                raise SpecError(f"{a} is not an option the guard knows, so {args[i + 1]!r} could be its value or a package")
+                raise SpecError(
+                    f"{a} is not an option the guard knows, so {args[i + 1]!r} could be its value"
+                    " or a package"
+                )
             else:
-                yield a, None
+                yield a, ""
             i += 1
 
 
 PIP_INSTALL = Options(
     values=(
-        "-r", "--requirement", "-c", "--constraint", "-e", "--editable", "-i", "--index-url", "--extra-index-url",
-        "-f", "--find-links", "-t", "--target", "--prefix", "--root", "--src", "--upgrade-strategy", "--platform",
+        "-r", "--requirement", "-c", "--constraint", "-e", "--editable", "-i", "--index-url",
+        "--extra-index-url",
+        "-f", "--find-links", "-t", "--target", "--prefix", "--root", "--src", "--upgrade-strategy",
+        "--platform",
         "--python-version", "--implementation", "--abi", "--only-binary", "--no-binary", "--progress-bar",
         "--report", "-C", "--config-settings", "--global-option", "--log", "--cache-dir", "--trusted-host",
         "--proxy", "--timeout", "--retries", "--exists-action", "--cert", "--client-cert", "--python",
@@ -598,10 +608,13 @@ PIP_INSTALL = Options(
     ),
     switches=(
         "-U", "--upgrade", "--force-reinstall", "-I", "--ignore-installed", "--ignore-requires-python",
-        "--no-deps", "--pre", "--user", "--no-index", "--no-build-isolation", "--use-pep517", "--no-use-pep517",
+        "--no-deps", "--pre", "--user", "--no-index", "--no-build-isolation", "--use-pep517",
+        "--no-use-pep517",
         "--check-build-dependencies", "--break-system-packages", "--compile", "--no-compile",
-        "--no-warn-script-location", "--no-warn-conflicts", "--prefer-binary", "--require-hashes", "--no-clean",
-        "--dry-run", "-q", "-v", "--quiet", "--verbose", "--isolated", "--no-input", "--disable-pip-version-check",
+        "--no-warn-script-location", "--no-warn-conflicts", "--prefer-binary", "--require-hashes",
+        "--no-clean",
+        "--dry-run", "-q", "-v", "--quiet", "--verbose", "--isolated", "--no-input",
+        "--disable-pip-version-check",
         "--no-cache-dir", "--no-color", "--require-virtualenv", "--debug", "--no-python-version-warning",
         "--only-deps",
     ),
@@ -609,12 +622,17 @@ PIP_INSTALL = Options(
 UV_PIP = Options(
     values=(
         *PIP_INSTALL.values, "-p", "--index", "--default-index", "--override", "--resolution", "--prerelease",
-        "--exclude-newer", "--index-strategy", "--config-setting", "--python-platform", "--directory", "--project",
-        "--config-file", "--color", "--extra", "-P", "--upgrade-package", "--reinstall-package", "--link-mode",
+        "--exclude-newer", "--index-strategy", "--config-setting", "--python-platform", "--directory",
+        "--project",
+        "--config-file", "--color", "--extra", "-P", "--upgrade-package", "--reinstall-package",
+        "--link-mode",
         "--refresh-package", "--no-binary-package", "--only-binary-package", "--torch-backend",
-        "--allow-insecure-host", "--no-build-package", "--with-requirements", "--with", "--from", "--with-editable",
-        "--group", "--optional", "--rev", "--tag", "--branch", "--package", "--script", "--bounds", "--marker",
-        "-m", "--env-file", "--cache-dir", "--python-preference", "--no-group", "--only-group", "--build-constraints",
+        "--allow-insecure-host", "--no-build-package", "--with-requirements", "--with", "--from",
+        "--with-editable",
+        "--group", "--optional", "--rev", "--tag", "--branch", "--package", "--script", "--bounds",
+        "--marker",
+        "-m", "--env-file", "--cache-dir", "--python-preference", "--no-group", "--only-group",
+        "--build-constraints",
         "--constraints", "--overrides", "-w",
     ),
     switches=(
@@ -628,27 +646,47 @@ UV_PIP = Options(
 )  # fmt: skip
 NPM = Options(
     values=(
-        "--registry", "--prefix", "-C", "--cache", "--userconfig", "--globalconfig", "-w", "--workspace", "--tag",
-        "--omit", "--include", "--save-prefix", "--loglevel", "--scope", "--otp", "--before", "--install-strategy",
+        "--registry", "--prefix", "-C", "--cache", "--userconfig", "--globalconfig", "-w", "--workspace",
+        "--tag",
+        "--omit", "--include", "--save-prefix", "--loglevel", "--scope", "--otp", "--before",
+        "--install-strategy",
         "--location", "--cpu", "--os", "--libc", "-p", "--package", "-c", "--call", "--dir", "--filter", "-F",
         "--store-dir", "--virtual-store-dir", "--reporter", "--config", "--node-linker", "--lockfile-dir",
-        "--modules-dir", "--resolution-mode", "--network-concurrency", "--child-concurrency", "--fetch-timeout",
+        "--modules-dir", "--resolution-mode", "--network-concurrency", "--child-concurrency",
+        "--fetch-timeout",
         "--test-pattern", "--changed-files-ignore-pattern", "--allow-build",
     ),
     switches=(
-        "-S", "--save", "-D", "--save-dev", "-O", "--save-optional", "-E", "--save-exact", "-B", "--save-bundle",
+        "-S", "--save", "-D", "--save-dev", "-O", "--save-optional", "-E", "--save-exact", "-B",
+        "--save-bundle",
         "--save-peer", "--no-save", "-g", "--global", "--legacy-peer-deps", "--force", "-f", "--dry-run",
-        "--ignore-scripts", "--prefer-offline", "--offline", "--prefer-online", "--production", "--prod", "-P",
-        "--strict-peer-deps", "--foreground-scripts", "--package-lock-only", "--silent", "-s", "--quiet", "-q",
+        "--ignore-scripts", "--prefer-offline", "--offline", "--prefer-online", "--production", "--prod",
+        "-P",
+        "--strict-peer-deps", "--foreground-scripts", "--package-lock-only", "--silent", "-s", "--quiet",
+        "-q",
         "--verbose", "-d", "--yes", "-y", "--no", "--json", "--global-style", "--install-links", "--audit",
-        "--fund", "--bin-links", "--dev", "--frozen-lockfile", "--prefer-frozen-lockfile", "--recursive", "-r",
+        "--fund", "--bin-links", "--dev", "--frozen-lockfile", "--prefer-frozen-lockfile", "--recursive",
+        "-r",
         "--workspace-root", "--ignore-workspace", "--shamefully-hoist", "--fix-lockfile", "--lockfile-only",
         "--optional", "--strict-ssl", "--color", "--progress", "--include-workspace-root", "--workspaces",
         "--ws", "--if-present", "--no-optional", "--save-catalog",
     ),
 )  # fmt: skip
 
-NPM_INSTALL = {"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add"}
+NPM_INSTALL = {
+    "install",
+    "i",
+    "in",
+    "ins",
+    "inst",
+    "insta",
+    "instal",
+    "isnt",
+    "isnta",
+    "isntal",
+    "isntall",
+    "add",
+}
 NPM_INSTALL_TEST = {"install-test", "it"}
 NPM_CI = {"ci", "clean-install", "ic", "install-clean", "isntall-clean"}
 NPM_CI_TEST = {"install-ci-test", "cit", "clean-install-test", "sit"}
@@ -662,7 +700,9 @@ class NotInstall(Exception):
     """CMD installs nothing the guard reads (FR-9's unlisted forms): it runs unchanged."""
 
 
-def classify(argv: list[str], cwd: Path, env: dict[str, str], resolve: Callable[[str], str | None]) -> Install:
+def classify(
+    argv: list[str], cwd: Path, env: dict[str, str], resolve: Callable[[str], str | None]
+) -> Install:
     """Which installer, which packages. Raises NotInstall for a command that installs nothing."""
     exe = os.path.basename(argv[0])
     rest = argv[1:]
@@ -698,9 +738,11 @@ def classify(argv: list[str], cwd: Path, env: dict[str, str], resolve: Callable[
 
 PIP_GLOBAL = Options(
     values=("--log", "--proxy", "--retries", "--timeout", "--exists-action", "--trusted-host", "--cert",
-            "--client-cert", "--cache-dir", "--python", "--use-feature", "--use-deprecated", "--keyring-provider"),
+            "--client-cert", "--cache-dir", "--python", "--use-feature", "--use-deprecated",
+            "--keyring-provider"),
     switches=("-q", "-v", "--quiet", "--verbose", "--isolated", "--no-input", "--disable-pip-version-check",
-              "--no-cache-dir", "--no-color", "--require-virtualenv", "--debug", "-h", "--help", "-V", "--version"),
+              "--no-cache-dir", "--no-color", "--require-virtualenv", "--debug", "-h", "--help", "-V",
+              "--version"),
 )  # fmt: skip
 
 
@@ -760,19 +802,15 @@ def _pip_install(inst: Install, args: list[str], cwd: Path, env: dict[str, str])
     try:
         for k, v in PIP_INSTALL.split(args):
             if k == "":
-                assert v is not None
                 inst.packages.append(py_req(v, "argv", cwd))
             elif k in ("-r", "--requirement"):
-                assert v is not None
                 _read_requirements(inst, cwd / v, cwd, env, set())
             elif k in ("-e", "--editable"):
-                assert v is not None
                 r = py_req(v, "argv", cwd)
                 inst.packages.append(r if r.source != "registry" else Req(v, v, "", "local", "argv"))
             elif k in ("-i", "--index-url"):
                 inst.index_url = v
             elif k == "--extra-index-url":
-                assert v is not None
                 inst.extra_index_urls.append(v)
             elif k == "--no-index":
                 inst.no_index = True
@@ -781,7 +819,6 @@ def _pip_install(inst: Install, args: list[str], cwd: Path, env: dict[str, str])
             elif k == "--isolated":
                 inst.isolated = True
             elif k == "--group":
-                assert v is not None
                 _pyproject_group(inst, cwd, v)
             elif k in ("--python",):
                 inst.interpreter = v
@@ -819,9 +856,10 @@ def _read_requirements(inst: Install, path: Path, cwd: Path, env: dict[str, str]
     for line in [x for x in lines if x]:
         words = shlex.split(line)
         if words[0].startswith("-"):
-            opt, val = (words[0].split("=", 1) + [None])[:2] if "=" in words[0] else (words[0], None)
-            if val is None and len(words) > 1:
-                val = words[1]
+            if "=" in words[0]:
+                opt, val = words[0].split("=", 1)
+            else:
+                opt, val = words[0], (words[1] if len(words) > 1 else "")
             if opt in ("-r", "--requirement") and val:
                 _read_requirements(inst, (path.parent / val), cwd, env, seen)
             elif opt in ("-e", "--editable") and val:
@@ -883,9 +921,9 @@ def _pyproject_group(inst: Install, cwd: Path, spec: str) -> None:
 UV_GLOBAL = Options(
     values=("--directory", "--project", "--cache-dir", "--config-file", "--color", "--python-preference",
             "--allow-insecure-host"),
-    switches=("-q", "-v", "--quiet", "--verbose", "--offline", "--native-tls", "--no-cache", "-n", "--preview",
-              "--no-config", "--no-progress", "--no-python-downloads", "--isolated", "-h", "--help", "-V",
-              "--version"),
+    switches=("-q", "-v", "--quiet", "--verbose", "--offline", "--native-tls", "--no-cache", "-n",
+              "--preview", "--no-config", "--no-progress", "--no-python-downloads", "--isolated", "-h",
+              "--help", "-V", "--version"),
 )  # fmt: skip
 
 
@@ -952,33 +990,27 @@ def _subcommand_index(args: Sequence[str], opts: Options) -> int:
 
 
 def _uv_options(inst: Install, args: list[str], cwd: Path, env: dict[str, str], positional: str) -> None:
-    """uv's install options. positional: requirement (each is a package), none, or stop (the rest is a command)."""
+    """uv's install options. positional: requirement (each is a package), none, or stop (the rest is a
+    command)."""
     try:
         i_pairs = UV_PIP.split(args) if positional != "stop" else _until_positional(UV_PIP, args)
         for k, v in i_pairs:
             if k == "":
-                assert v is not None
                 if positional == "requirement":
                     inst.packages.append(py_req(_uv_at(v), "argv", cwd))
                 continue
-            assert k
             if k in ("-r", "--requirement", "--with-requirements"):
-                assert v is not None
                 _read_requirements(inst, cwd / v, cwd, env, set())
             elif k == "--with":
-                assert v is not None
                 for part in [p for p in v.split(",") if p.strip()]:
                     inst.packages.append(py_req(_uv_at(part), "--with", cwd))
             elif k in ("-e", "--editable", "--with-editable"):
-                assert v is not None
                 inst.packages.append(Req(v, v, "", "local", "argv"))
             elif k in ("-i", "--index-url", "--default-index"):
                 inst.index_url = v
             elif k == "--index":
-                assert v is not None
                 inst.indexes.append(v.split("=", 1)[1] if re.match(r"^[A-Za-z0-9_-]+=", v) else v)
             elif k == "--extra-index-url":
-                assert v is not None
                 inst.extra_index_urls.append(v)
             elif k == "--no-index":
                 inst.no_index = True
@@ -996,9 +1028,9 @@ def _uv_options(inst: Install, args: list[str], cwd: Path, env: dict[str, str], 
         inst.unreadable.append(str(e))
 
 
-def _until_positional(opts: Options, args: list[str]) -> list[tuple[str, str | None]]:
+def _until_positional(opts: Options, args: list[str]) -> list[tuple[str, str]]:
     """Options up to the first positional: `uv run [opts] CMD…`, where CMD's own words are not uv's."""
-    out: list[tuple[str, str | None]] = []
+    out: list[tuple[str, str]] = []
     i = _subcommand_index(args, opts)
     for k, v in opts.split(args[:i]):
         out.append((k, v))
@@ -1021,7 +1053,6 @@ def _uv_tool_run(inst: Install, args: list[str], cwd: Path) -> None:
         pairs = _until_positional(UV_PIP, args)
         named_from = False
         for k, v in pairs:
-            assert v is not None or k
             if k == "--from" and v:
                 inst.packages.append(py_req(_uv_at(v), "--from", cwd))
                 named_from = True
@@ -1051,7 +1082,7 @@ def _uv_pip_sync(inst: Install, args: list[str], cwd: Path, env: dict[str, str])
     """`uv pip sync FILE…`: installs exactly what the files say; hashed pins pass with no lookup (FR-26)."""
     try:
         for k, v in UV_PIP.split(args):
-            if k == "" and v is not None:
+            if k == "":
                 _read_requirements(inst, cwd / v, cwd, env, set())
             elif k in ("-i", "--index-url", "--default-index"):
                 inst.index_url = v
@@ -1117,7 +1148,7 @@ def _npm_positional(args: list[str]) -> list[str]:
     out = []
     try:
         for k, v in NPM.split(args):
-            if k == "" and v is not None:
+            if k == "":
                 out.append(v)
     except SpecError:
         return []
@@ -1138,7 +1169,6 @@ def _npm_options(inst: Install, args: list[str], cwd: Path, positional: str) -> 
     try:
         for k, v in NPM.split(args):
             if k == "":
-                assert v is not None
                 if positional == "package":
                     inst.packages.append(npm_req(v, "argv", cwd))
             elif k == "--registry":
@@ -1156,7 +1186,8 @@ def _npm_options(inst: Install, args: list[str], cwd: Path, positional: str) -> 
 
 
 def _npx(inst: Install, args: list[str], cwd: Path) -> None:
-    """`npx [-p PKG]… CMD` / `npm exec` / `pnpm dlx`: -p names the packages, else CMD is the package (FR-6)."""
+    """`npx [-p PKG]… CMD` / `npm exec` / `pnpm dlx`: -p names the packages, else CMD is the package
+    (FR-6)."""
     try:
         named = False
         first: str | None = None
@@ -1215,10 +1246,15 @@ def _package_json_deps(inst: Install, cwd: Path, args: list[str]) -> None:
     except (OSError, ValueError) as e:
         inst.unreadable.append(f"cannot read {path}: {e}")
         return
-    omit_dev = "--production" in args or "--prod" in args or "--omit=dev" in args or (
-        "--omit" in args and args[args.index("--omit") + 1 : args.index("--omit") + 2] == ["dev"]
+    omit_dev = (
+        "--production" in args
+        or "--prod" in args
+        or "--omit=dev" in args
+        or ("--omit" in args and args[args.index("--omit") + 1 : args.index("--omit") + 2] == ["dev"])
     )
-    sections = ["dependencies", "optionalDependencies", "peerDependencies"] + ([] if omit_dev else ["devDependencies"])
+    sections = ["dependencies", "optionalDependencies", "peerDependencies"] + (
+        [] if omit_dev else ["devDependencies"]
+    )
     for section in sections:
         deps = doc.get(section) or {}
         if not isinstance(deps, dict):
@@ -1302,7 +1338,8 @@ def pip_indexes(inst: Install, env: dict[str, str]) -> tuple[list[str], list[str
 
 
 def uv_indexes(inst: Install, env: dict[str, str], cwd: Path) -> tuple[list[str], list[str]]:
-    """uv's indexes in its first-index order: --index and UV_INDEX, extra indexes, configured ones, default."""
+    """uv's indexes in its first-index order: --index and UV_INDEX, extra indexes, configured ones, the
+    default."""
     used: list[str] = []
     cfg_indexes: list[str] = []
     cfg_default: str | None = None
@@ -1341,7 +1378,9 @@ def uv_indexes(inst: Install, env: dict[str, str], cwd: Path) -> tuple[list[str]
             used.append(str(path))
     if inst.no_index or env.get("UV_NO_INDEX", "").lower() in ("1", "true"):
         return [], sorted(set(used))
-    env_index = [x.split("=", 1)[1] if re.match(r"^[A-Za-z0-9_-]+=", x) else x for x in env.get("UV_INDEX", "").split()]
+    env_index = [
+        x.split("=", 1)[1] if re.match(r"^[A-Za-z0-9_-]+=", x) else x for x in env.get("UV_INDEX", "").split()
+    ]
     extra = inst.extra_index_urls + env.get("UV_EXTRA_INDEX_URL", "").split()
     default = (
         inst.index_url
@@ -1375,12 +1414,16 @@ def _npmrc(path: Path, env: dict[str, str]) -> dict[str, str]:
         k, v = (x.strip() for x in line.split("=", 1))
         if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
             v = v[1:-1]
-        v = re.sub(r"\$\{([A-Za-z0-9_]+)(\?)?\}", lambda m: env.get(m.group(1), "" if m.group(2) else m.group(0)), v)
+        v = re.sub(
+            r"\$\{([A-Za-z0-9_]+)(\?)?\}", lambda m: env.get(m.group(1), "" if m.group(2) else m.group(0)), v
+        )
         out[k] = v
     return out
 
 
-def npm_config_files(inst: Install, env: dict[str, str], cwd: Path, resolve: Callable[[str], str | None]) -> list[Path]:
+def npm_config_files(
+    inst: Install, env: dict[str, str], cwd: Path, resolve: Callable[[str], str | None]
+) -> list[Path]:
     """npm's files, highest precedence first: project, user, global (from Node's real path), builtin."""
     files: list[Path] = []
     root = node_root(_resolve_dir(cwd, inst.project_dir))
@@ -1416,7 +1459,9 @@ def _env_ci(env: dict[str, str], name: str) -> str | None:
     return None
 
 
-def npm_registry_for(inst: Install, scope: str | None, env: dict[str, str], files: list[Path]) -> tuple[str, str]:
+def npm_registry_for(
+    inst: Install, scope: str | None, env: dict[str, str], files: list[Path]
+) -> tuple[str, str]:
     """(the registry for this package, where that came from)."""
     if scope and scope in inst.scoped_registries:
         return inst.scoped_registries[scope], "the command line"
@@ -1433,6 +1478,45 @@ def npm_registry_for(inst: Install, scope: str | None, env: dict[str, str], file
     if scope:
         return npm_registry_for(inst, None, env, files)
     return NPM_DEFAULT, "npm's default"
+
+
+def pnpm_registry_for(
+    inst: Install,
+    scope: str | None,
+    env: dict[str, str],
+    cwd: Path,
+    resolve: Callable[[str], str | None],
+    files: list[Path],
+    timeout: float,
+) -> tuple[str, str]:
+    """pnpm's registry, asked of pnpm itself (`pnpm config get`). Which variables pnpm reads depends on its
+    version: pnpm 11.5.1 reads pnpm_config_* and ignores npm_config_* (measured, research R3), older ones read
+    npm_config_*. Asking it is the one answer that is the install's own (P001). If it cannot answer, the
+    npmrc chain is read with pnpm_config_* first, and the source says so."""
+    if scope and scope in inst.scoped_registries:
+        return inst.scoped_registries[scope], "the command line"
+    if not scope and inst.registry:
+        return inst.registry, "the command line"
+    pnpm = resolve("pnpm")
+    key = f"{scope}:registry" if scope else "registry"
+    if pnpm:
+        try:
+            p = subprocess.run(
+                [pnpm, "config", "get", key], cwd=str(_resolve_dir(cwd, inst.project_dir)), env=env,
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False,
+            )  # fmt: skip
+            said = [x.strip() for x in p.stdout.splitlines() if x.strip()]
+            if p.returncode == 0 and said and URL_RE.match(said[-1]):
+                return said[-1], "pnpm config get"
+            if p.returncode == 0 and said and said[-1] == "undefined" and scope:
+                return pnpm_registry_for(inst, None, env, cwd, resolve, files, timeout)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    v = _env_ci(env, f"pnpm_config_{key}")
+    if v:
+        return v, f"pnpm_config_{key} (pnpm did not answer)"
+    reg, src = npm_registry_for(inst, scope, env, files)
+    return reg, f"{src} (pnpm did not answer)"
 
 
 def display_url(url: str) -> str:
@@ -1682,8 +1766,13 @@ def _parse_time(text: Any) -> dt.datetime | None:
 
 
 def _fetch(url: str, accept: str, timeout: float) -> tuple[int, str, bytes]:
-    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": user_agent()})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 — the configured registry
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(
+            f"a {scheme or 'schemeless'} URL is not a registry the guard asks (http or https only)"
+        )
+    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": user_agent()})  # noqa: S310
+    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 — http(s) only, checked above
         body = r.read(MAX_BODY + 1)
         if len(body) > MAX_BODY:
             raise ValueError(f"the answer is larger than {MAX_BODY >> 20} MiB")
@@ -1720,7 +1809,7 @@ def lookup_pypi(index: str, key: str, timeout: float) -> Lookup:
     url = f"{_clean_url(index).rstrip('/')}/{key}/"
     try:
         _, ctype, body = _fetch(url, SIMPLE_ACCEPT, timeout)
-    except Exception as e:  # noqa: BLE001 — every failure is named, never raised (P2)
+    except Exception as e:  # every failure is named, never raised (P2)
         status, how = _failure(e, timeout)
         return Lookup(display_url(index), status, how)
     out = Lookup(display_url(index), "found")
@@ -1763,11 +1852,13 @@ def _add_release(out: Lookup, version: str, t: dt.datetime | None, yanked: bool)
 
 
 def lookup_npm(registry: str, name: str, timeout: float) -> Lookup:
-    path = urllib.parse.quote(name, safe="@").replace("%2F", "%2f")  # @scope/name → @scope%2fname, as npm asks
+    path = urllib.parse.quote(name, safe="@").replace(
+        "%2F", "%2f"
+    )  # @scope/name → @scope%2fname, as npm asks
     url = f"{_clean_url(registry).rstrip('/')}/{path}"
     try:
         _, _, body = _fetch(url, "application/json", timeout)
-    except Exception as e:  # noqa: BLE001 — every failure is named, never raised (P2)
+    except Exception as e:  # every failure is named, never raised (P2)
         status, how = _failure(e, timeout)
         return Lookup(display_url(registry), status, how)
     try:
@@ -1789,7 +1880,8 @@ def lookup_npm(registry: str, name: str, timeout: float) -> Lookup:
 
 
 def run_lookups(jobs: list[tuple[str, Callable[[], Lookup]]], timeout: float) -> dict[str, Lookup]:
-    """Run every lookup concurrently under one deadline (FR-17). Daemon threads: a hung one never holds the exit."""
+    """Run every lookup concurrently under one deadline (FR-17). Daemon threads: a hung one never holds
+    the exit."""
     results: dict[str, Lookup] = {}
     if not jobs:
         return results
@@ -1824,7 +1916,9 @@ def run_lookups(jobs: list[tuple[str, Callable[[], Lookup]]], timeout: float) ->
 @dataclass
 class Check:
     req: Req
-    result: str  # ok | pinned | unchecked | absent | too-new | unreachable | age-unknown | unchecked-source | unreadable | no-match
+    # ok | pinned | unchecked | absent | too-new | unreachable | age-unknown | unchecked-source | unreadable
+    # | no-match
+    result: str
     registry: str = ""
     release: str = ""
     released: dt.datetime | None = None
@@ -1844,7 +1938,10 @@ def min_age_days(env: dict[str, str]) -> float:
     try:
         v = float(raw)
     except ValueError:
-        raise agentio.UsageError(f"{MIN_AGE_ENV}={raw!r} is not a number of days", f"set {MIN_AGE_ENV} to a number, 0 to turn the age check off") from None
+        raise agentio.UsageError(
+            f"{MIN_AGE_ENV}={raw!r} is not a number of days",
+            f"set {MIN_AGE_ENV} to a number, 0 to turn the age check off",
+        ) from None
     if v < 0:
         raise agentio.UsageError(f"{MIN_AGE_ENV}={raw!r} is below 0", f"set {MIN_AGE_ENV} to 0 or more")
     return v
@@ -1857,9 +1954,13 @@ def lookup_timeout(env: dict[str, str]) -> float:
     try:
         v = float(raw)
     except ValueError:
-        raise agentio.UsageError(f"{TIMEOUT_ENV}={raw!r} is not a number of seconds", f"set {TIMEOUT_ENV} to seconds above 0") from None
+        raise agentio.UsageError(
+            f"{TIMEOUT_ENV}={raw!r} is not a number of seconds", f"set {TIMEOUT_ENV} to seconds above 0"
+        ) from None
     if v <= 0:
-        raise agentio.UsageError(f"{TIMEOUT_ENV}={raw!r} must be above 0", f"set {TIMEOUT_ENV} to seconds above 0")
+        raise agentio.UsageError(
+            f"{TIMEOUT_ENV}={raw!r} must be above 0", f"set {TIMEOUT_ENV} to seconds above 0"
+        )
     return v
 
 
@@ -1898,7 +1999,9 @@ def pick_npm(req: Req, look: Lookup) -> tuple[list[tuple[str, Release]], str]:
         hit = next((v for v, p in good.items() if str(p) == exact), None)
         return ([(hit, rel[hit])], "") if hit else ([], f"no release {req.spec}")
     sets = npm_range(req.spec or "*")
-    admitted = sorted((v for v, p in good.items() if npm_satisfies(p, sets)), key=lambda v: good[v].key(), reverse=True)
+    admitted = sorted(
+        (v for v, p in good.items() if npm_satisfies(p, sets)), key=lambda v: good[v].key(), reverse=True
+    )
     latest = look.dist_tags.get("latest")
     if latest in admitted and latest is not None:
         admitted.remove(latest)
@@ -1913,7 +2016,11 @@ def pick_npm(req: Req, look: Lookup) -> tuple[list[tuple[str, Release]], str]:
 def suggest(eco: str, req: Req, ranked: list[tuple[str, Release]], min_age: float, now: dt.datetime) -> str:
     for v, r in ranked:
         if r.uploaded is not None and _age_days(r.uploaded, now) >= min_age:
-            pin = f"{req.name}=={v}" if eco == "pypi" else f"{req.alias_of + '@npm:' if req.alias_of else ''}{req.name}@{v}"
+            pin = (
+                f"{req.name}=={v}"
+                if eco == "pypi"
+                else f"{req.alias_of + '@npm:' if req.alias_of else ''}{req.name}@{v}"
+            )
             return f"{v}, released {_date(r.uploaded)}: pin it as {shlex.quote(pin)}"
     return ""
 
@@ -1929,12 +2036,17 @@ def check_package(
             lk = failed[0]
             res = "unreachable" if lk.status == "unreachable" else "unreadable"
             others = "; ".join(f"{x.registry}: {x.how}" for x in looks if x is not lk)
-            detail = f"{lk.registry} unreachable from this container: {lk.how}" if res == "unreachable" else f"{lk.registry}: {lk.how}"
+            detail = (
+                f"{lk.registry} unreachable from this container: {lk.how}"
+                if res == "unreachable"
+                else f"{lk.registry}: {lk.how}"
+            )
             return Check(req, res, lk.registry, detail=detail + (f"; {others}" if others else ""))
         names = ", ".join(lk.registry for lk in looks)
         how = "; ".join(f"{lk.how}" for lk in looks)
         return Check(req, "absent", names, detail=f"not in {names} ({how})")
-    # the release the installer would take: pip, the best across every index; uv and npm, the first that has it
+    # the release the installer would take: pip, the best across every index; uv and npm, the first that
+    # has it
     look = found[0]
     if eco == "pypi" and len(found) > 1:
         merged = Lookup(look.registry, "found")
@@ -1983,17 +2095,21 @@ class Plan:
         return [c for c in self.checks if c.refused]
 
 
-def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[[str], str | None], now: dt.datetime) -> Plan:
+def build_plan(
+    inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[[str], str | None], now: dt.datetime
+) -> Plan:
     min_age = min_age_days(env)
     timeout = lookup_timeout(env)
     root, locks = project_locks(inst, cwd)
     checks: list[Check] = []
     for problem in inst.unreadable:
-        checks.append(Check(Req("(command)", "(command)", "", "registry", "argv"), "unreadable", detail=problem))
+        checks.append(
+            Check(Req("(command)", "(command)", "", "registry", "argv"), "unreadable", detail=problem)
+        )
     for lock in locks:
         if not lock.readable:
-            checks.append(Check(Req(lock.path, lock.path, "", "local", "lockfile"), "unchecked",
-                                detail=f"the lockfile could not be read ({lock.why}); its names are checked"))  # fmt: skip
+            note = f"the lockfile could not be read ({lock.why}); its names are checked"
+            checks.append(Check(Req(lock.path, lock.path, "", "local", "lockfile"), "unchecked", detail=note))
     if inst.lockfile_only:
         return Plan(inst, root, locks, [], [], checks, 0, min_age)
     # which registry each name goes to
@@ -2002,8 +2118,11 @@ def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[
     plan_for: list[tuple[Req, list[str]]] = []
     py_indexes: list[str] = []
     npm_files: list[Path] = []
+    pnpm_cache: dict[str | None, tuple[str, str]] = {}
     if inst.ecosystem == "pypi":
-        py_indexes, config_files = pip_indexes(inst, env) if inst.tool == "pip" else uv_indexes(inst, env, cwd)
+        py_indexes, config_files = (
+            pip_indexes(inst, env) if inst.tool == "pip" else uv_indexes(inst, env, cwd)
+        )
     else:
         npm_files = npm_config_files(inst, env, cwd, resolve)
     registries: list[str] = []
@@ -2013,14 +2132,24 @@ def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[
             slots.append(Check(req, "unchecked", detail="a local path: nothing comes from a registry"))
             continue
         if req.source == "url":
-            slots.append(Check(req, "unchecked-source", detail="unchecked source: a URL or VCS reference, which no registry vouches for"))
+            slots.append(
+                Check(
+                    req,
+                    "unchecked-source",
+                    detail="unchecked source: a URL or VCS reference, which no registry vouches for",
+                )
+            )
             continue
-        lock = pinned(req, inst.ecosystem, locks)
-        if lock is not None:
-            slots.append(Check(req, "pinned", detail=f"pinned in {lock.path}; no registry was asked"))
+        pin = pinned(req, inst.ecosystem, locks)
+        if pin is not None:
+            slots.append(Check(req, "pinned", detail=f"pinned in {pin.path}; no registry was asked"))
             continue
         if inst.local_bin and root is not None and (root / "node_modules" / ".bin" / inst.local_bin).exists():
-            slots.append(Check(req, "unchecked", detail=f"node_modules/.bin/{inst.local_bin} is already installed here"))
+            slots.append(
+                Check(
+                    req, "unchecked", detail=f"node_modules/.bin/{inst.local_bin} is already installed here"
+                )
+            )
             continue
         if inst.ecosystem == "pypi":
             if not py_indexes:
@@ -2031,8 +2160,16 @@ def build_plan(inst: Install, cwd: Path, env: dict[str, str], resolve: Callable[
                 jobs.append((f"{r}|{req.key}", functools.partial(lookup_pypi, r, req.key, timeout)))
         else:
             scope = req.key.split("/")[0] if req.key.startswith("@") else None
-            reg, src = npm_registry_for(inst, scope, env, npm_files)
-            if src not in ("npm's default", "the command line") and src not in config_files:
+            if inst.tool == "pnpm":
+                if scope not in pnpm_cache:
+                    pnpm_cache[scope] = pnpm_registry_for(inst, scope, env, cwd, resolve, npm_files, timeout)
+                reg, src = pnpm_cache[scope]
+            else:
+                reg, src = npm_registry_for(inst, scope, env, npm_files)
+            if (
+                src not in ("npm's default", "the command line", "pnpm config get")
+                and src not in config_files
+            ):
                 config_files.append(src)
             regs = [reg]
             jobs.append((f"{reg}|{req.key}", functools.partial(lookup_npm, reg, req.key, timeout)))
@@ -2140,7 +2277,9 @@ def plan_data(plan: Plan) -> dict[str, Any]:
                 "result": c.result,
                 "registry": c.registry,
                 "release": c.release,
-                "released": c.released.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if c.released else None,
+                "released": c.released.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if c.released
+                else None,
                 "reason": c.detail,
                 "suggestion": c.suggestion,
             }
@@ -2175,8 +2314,11 @@ def sibling(name: str) -> str:
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), name)
 
 
-def run_installer(cmd: list[str], resolved: str, ctx: agentio.Context, timeout: float | None) -> dict[str, Any]:
-    """CMD through `run --json` (003's concluding run), as verify does; its event stays in this session's scratch."""
+def run_installer(
+    cmd: list[str], resolved: str, ctx: agentio.Context, timeout: float | None
+) -> dict[str, Any]:
+    """CMD through `run --json` (003's concluding run), as verify does; its event stays in this session's
+    scratch."""
     run = sibling("run")
     argv = [run, "--json", "--limit", "0"]
     if timeout is not None:
@@ -2184,9 +2326,21 @@ def run_installer(cmd: list[str], resolved: str, ctx: agentio.Context, timeout: 
     argv += ["--", resolved, *cmd[1:]]
     env = {**os.environ, "TIMELIKE_SCRATCH_ROOT": str(ctx.scratch() / RECORD_DIR / "run")}
     try:
-        p = subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace", check=False)
+        p = subprocess.run(
+            argv,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
     except OSError as e:
-        raise agentio.ToolError(agentio.EXIT_FAILURE, f"run could not be started: {run}: {e.strerror}", "check the image's /opt/timelike/bin") from None
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"run could not be started: {run}: {e.strerror}",
+            "check the image's /opt/timelike/bin",
+        ) from None
     try:
         doc = json.loads(p.stdout)
         if not isinstance(doc, dict):
@@ -2201,7 +2355,9 @@ def run_installer(cmd: list[str], resolved: str, ctx: agentio.Context, timeout: 
     return doc
 
 
-def record_override(ctx: agentio.Context, plan: Plan, cmd: list[str], command_exit: int | None, path: Path | None) -> Path:
+def record_override(
+    ctx: agentio.Context, plan: Plan, cmd: list[str], command_exit: int | None, path: Path | None
+) -> Path:
     """FR-30: the override record, in this session's scratch; written before CMD runs, rewritten after."""
     if path is None:
         d = ctx.scratch() / RECORD_DIR
@@ -2234,7 +2390,9 @@ def record_override(ctx: agentio.Context, plan: Plan, cmd: list[str], command_ex
 
 
 def _secretish(arg: str) -> bool:
-    return bool(re.search(r"(?i)(token|password|secret|_auth)", arg)) or bool(urllib.parse.urlsplit(arg).password)
+    return bool(re.search(r"(?i)(token|password|secret|_auth)", arg)) or bool(
+        urllib.parse.urlsplit(arg).password
+    )
 
 
 # ── the tool ────────────────────────────────────────────────────────────────────────────────────
@@ -2246,15 +2404,41 @@ def _manifest() -> dict[str, Any]:
         "revision": revision(),
         "installers": {
             "pip": ["pip install", "pip3 install", "python -m pip install"],
-            "uv": ["uv pip install", "uv pip sync", "uv add", "uv sync", "uv tool install", "uv tool run",
-                   "uvx", "uv run --with"],
-            "npm": ["npm install (and its aliases)", "npm ci", "npx", "npm exec", "npm init NAME", "npm create NAME"],
+            "uv": [
+                "uv pip install",
+                "uv pip sync",
+                "uv add",
+                "uv sync",
+                "uv tool install",
+                "uv tool run",
+                "uvx",
+                "uv run --with",
+            ],
+            "npm": [
+                "npm install (and its aliases)",
+                "npm ci",
+                "npx",
+                "npm exec",
+                "npm init NAME",
+                "npm create NAME",
+            ],
             "pnpm": ["pnpm add", "pnpm install", "pnpm dlx", "pnpm create NAME"],
-        },  # fmt: skip
-        "checks": ["exists in the registry the installer would use", "release at least the minimum age",
-                   "pinned in the project's lockfile: no registry request"],  # fmt: skip
-        "min_age_days": {"env": MIN_AGE_ENV, "default": DEFAULT_MIN_AGE_DAYS, "value": _env_float(MIN_AGE_ENV, DEFAULT_MIN_AGE_DAYS)},
-        "lookup_timeout_s": {"env": TIMEOUT_ENV, "default": DEFAULT_TIMEOUT_S, "value": _env_float(TIMEOUT_ENV, DEFAULT_TIMEOUT_S)},
+        },
+        "checks": [
+            "exists in the registry the installer would use",
+            "release at least the minimum age",
+            "pinned in the project's lockfile: no registry request",
+        ],
+        "min_age_days": {
+            "env": MIN_AGE_ENV,
+            "default": DEFAULT_MIN_AGE_DAYS,
+            "value": _env_float(MIN_AGE_ENV, DEFAULT_MIN_AGE_DAYS),
+        },
+        "lookup_timeout_s": {
+            "env": TIMEOUT_ENV,
+            "default": DEFAULT_TIMEOUT_S,
+            "value": _env_float(TIMEOUT_ENV, DEFAULT_TIMEOUT_S),
+        },
         "lockfiles": [*PY_LOCKS, "requirements files with == and --hash", *NODE_LOCKS],
         "unreachable": "refused, never called absent; --yes proceeds",
         "adele": "registry lookups are not yet a grant under Adele (feature 12 slice 2)",
@@ -2321,7 +2505,9 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if not cmd:
         raise agentio.UsageError("nothing to run", "package-guard [--yes] [--dry-run] -- CMD [ARG...]")
     if os.path.basename(cmd[0]) == TOOL.name:
-        raise agentio.UsageError("package-guard does not guard itself", "package-guard [--yes] -- CMD [ARG...]")
+        raise agentio.UsageError(
+            "package-guard does not guard itself", "package-guard [--yes] -- CMD [ARG...]"
+        )
     own = list(ctx.argv[: len(ctx.argv) - len(cmd)])
     if own and own[-1] == "--":
         own = own[:-1]
@@ -2362,8 +2548,14 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
 
 
 def installer_result(
-    doc: dict[str, Any], target: str, scope: str, lines: list[str], data: dict[str, Any], plan: Plan | None,
-    cmd: list[str], record: Path | None,
+    doc: dict[str, Any],
+    target: str,
+    scope: str,
+    lines: list[str],
+    data: dict[str, Any],
+    plan: Plan | None,
+    cmd: list[str],
+    record: Path | None,
 ) -> agentio.Result:
     exit_ = int(doc.get("exit", agentio.EXIT_FAILURE))
     command_exit = doc.get("command_exit")
@@ -2375,7 +2567,8 @@ def installer_result(
     if plan is None:
         verdict = f"not an install: ran {name} unchecked; {ended}"
     elif record is not None:
-        verdict = f"proceeded over {len(plan.refused)} refusal{'s' if len(plan.refused) != 1 else ''} (recorded: {record}); {ended}"
+        n = len(plan.refused)
+        verdict = f"proceeded over {n} refusal{'s' if n != 1 else ''} (recorded: {record}); {ended}"
     else:
         verdict = f"{summary(plan)}; {ended}"
     if cause not in ("command",) and run_verdict:
@@ -2394,11 +2587,17 @@ def installer_result(
     )
 
 
-def run_unchecked(ctx: agentio.Context, args: argparse.Namespace, cmd: list[str], resolved: str | None) -> agentio.Result:
+def run_unchecked(
+    ctx: agentio.Context, args: argparse.Namespace, cmd: list[str], resolved: str | None
+) -> agentio.Result:
     """A command that installs nothing the guard reads runs unchanged, unchecked (FR-9)."""
     target = str(Path.cwd())
     if args.dry_run:
-        return agentio.Result(target, "not an install", f"would run {os.path.basename(cmd[0])} unchecked: not an install the guard reads")
+        return agentio.Result(
+            target,
+            "not an install",
+            f"would run {os.path.basename(cmd[0])} unchecked: not an install the guard reads",
+        )
     doc = run_installer(cmd, resolved or cmd[0], ctx, args.timeout)
     return installer_result(doc, target, "not an install", [], {}, None, cmd, None)
 

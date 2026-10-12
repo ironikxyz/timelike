@@ -47,10 +47,25 @@ def test_pip_forms(tmp_path: Path, cmd: str) -> None:
 
 @pytest.mark.parametrize(
     "cmd",
-    ["pip list", "pip show x", "pip download x", "pip", "python -c 'print(1)'", "python script.py install x",
-     "python -m venv .venv", "npm run test", "npm test", "npm update", "npm init", "uv run pytest",
-     "uv lock", "pnpm run build", "ls -la", "npx"],
-)  # fmt: skip
+    [
+        "pip list",
+        "pip show x",
+        "pip download x",
+        "pip",
+        "python -c 'print(1)'",
+        "python script.py install x",
+        "python -m venv .venv",
+        "npm run test",
+        "npm test",
+        "npm update",
+        "npm init",
+        "uv run pytest",
+        "uv lock",
+        "pnpm run build",
+        "ls -la",
+        "npx",
+    ],
+)
 def test_not_installs_run_unchanged(tmp_path: Path, cmd: str) -> None:
     with pytest.raises(PG.NotInstall):
         classify(cmd, tmp_path)
@@ -58,10 +73,22 @@ def test_not_installs_run_unchanged(tmp_path: Path, cmd: str) -> None:
 
 def test_pip_names_versions_extras_markers(tmp_path: Path) -> None:
     inst = classify(
-        ["pip", "install", "-U", "Tl_Old==1.2", "tl-fresh[extra]>=1,<2", "tl-x; python_version<'3.13'", "--pre"],
+        [
+            "pip",
+            "install",
+            "-U",
+            "Tl_Old==1.2",
+            "tl-fresh[extra]>=1,<2",
+            "tl-x; python_version<'3.13'",
+            "--pre",
+        ],
         tmp_path,
     )
-    assert names(inst) == [("tl-old", "==1.2", "registry"), ("tl-fresh", ">=1,<2", "registry"), ("tl-x", "", "registry")]
+    assert names(inst) == [
+        ("tl-old", "==1.2", "registry"),
+        ("tl-fresh", ">=1,<2", "registry"),
+        ("tl-x", "", "registry"),
+    ]
     assert inst.allow_pre is True and not inst.unreadable
 
 
@@ -69,16 +96,29 @@ def test_pip_local_url_and_vcs(tmp_path: Path) -> None:
     (tmp_path / "proj").mkdir()
     (tmp_path / "proj" / "pyproject.toml").write_text("[project]\nname='p'\n")
     inst = classify(
-        ["pip", "install", "./dist/x-1.0-py3-none-any.whl", "proj", "-e", ".", "git+https://example.com/r.git",
-         "name @ https://example.com/x.whl", "https://example.com/y.tar.gz"],
+        [
+            "pip",
+            "install",
+            "./dist/x-1.0-py3-none-any.whl",
+            "proj",
+            "-e",
+            ".",
+            "git+https://example.com/r.git",
+            "name @ https://example.com/x.whl",
+            "https://example.com/y.tar.gz",
+        ],
         tmp_path,
-    )  # fmt: skip
+    )
     assert [r.source for r in inst.packages] == ["local", "local", "local", "url", "url", "url"]
 
 
 def test_pip_index_options(tmp_path: Path) -> None:
-    inst = classify("pip install -i https://a.example/simple --extra-index-url https://b.example/simple x", tmp_path)
-    assert inst.index_url == "https://a.example/simple" and inst.extra_index_urls == ["https://b.example/simple"]
+    inst = classify(
+        "pip install -i https://a.example/simple --extra-index-url https://b.example/simple x", tmp_path
+    )
+    assert inst.index_url == "https://a.example/simple" and inst.extra_index_urls == [
+        "https://b.example/simple"
+    ]
     assert classify("pip install --no-index -f ./wheels x", tmp_path).no_index is True
 
 
@@ -131,7 +171,10 @@ def test_unreadable_version(tmp_path: Path) -> None:
         ("uvx ruff@0.5.0 check .", [("ruff", "==0.5.0", "registry")]),
         ("uvx --from black==24.1 blackd", [("black", "==24.1", "registry")]),
         ("uv tool run cowsay -t hi", [("cowsay", "", "registry")]),
-        ("uv run --with tl-old,tl-fresh python x.py", [("tl-old", "", "registry"), ("tl-fresh", "", "registry")]),
+        (
+            "uv run --with tl-old,tl-fresh python x.py",
+            [("tl-old", "", "registry"), ("tl-fresh", "", "registry")],
+        ),
         ("uv --directory sub pip install tl-old", [("tl-old", "", "registry")]),
     ],
 )
@@ -145,7 +188,10 @@ def test_uv_sync_reads_pyproject_unless_locked(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "p"\ndependencies = ["tl-old>=1"]\n[dependency-groups]\ndev = ["tl-fresh"]\n'
     )
-    assert names(classify("uv sync", tmp_path)) == [("tl-old", ">=1", "registry"), ("tl-fresh", "", "registry")]
+    assert names(classify("uv sync", tmp_path)) == [
+        ("tl-old", ">=1", "registry"),
+        ("tl-fresh", "", "registry"),
+    ]
     locked = classify("uv sync --locked", tmp_path)
     assert locked.lockfile_only and locked.packages == []
 
@@ -158,11 +204,20 @@ def test_uv_sync_reads_pyproject_unless_locked(tmp_path: Path) -> None:
         ("npm add @tl/scoped@^2", [("@tl/scoped", "^2", "registry")]),
         ("npm isntall -D tl-left@next", [("tl-left", "next", "registry")]),
         ("npm install my-alias@npm:tl-left@1", [("tl-left", "1", "registry")]),
-        ("npm install ../lib ./x.tgz file:../y", [("../lib", "", "local"), ("./x.tgz", "", "local"), ("file:../y", "", "local")]),
-        ("npm install github:u/r u/r git+https://e.example/r.git", [("github:u/r", "", "url"), ("u/r", "", "url"), ("git+https://e.example/r.git", "", "url")]),
+        (
+            "npm install ../lib ./x.tgz file:../y",
+            [("../lib", "", "local"), ("./x.tgz", "", "local"), ("file:../y", "", "local")],
+        ),
+        (
+            "npm install github:u/r u/r git+https://e.example/r.git",
+            [("github:u/r", "", "url"), ("u/r", "", "url"), ("git+https://e.example/r.git", "", "url")],
+        ),
         ("npm --registry http://r.example/ install tl-left", [("tl-left", "", "registry")]),
         ("npx tl-left --flag", [("tl-left", "", "registry")]),
-        ("npx -p tl-left -p @tl/scoped some-cmd", [("tl-left", "", "registry"), ("@tl/scoped", "", "registry")]),
+        (
+            "npx -p tl-left -p @tl/scoped some-cmd",
+            [("tl-left", "", "registry"), ("@tl/scoped", "", "registry")],
+        ),
         ("npm exec --package=tl-left -- cmd", [("tl-left", "", "registry")]),
         ("npm init tl-app", [("create-tl-app", "", "registry")]),
         ("npm create @tl", [("@tl/create", "", "registry")]),
@@ -171,7 +226,7 @@ def test_uv_sync_reads_pyproject_unless_locked(tmp_path: Path) -> None:
         ("pnpm dlx tl-left", [("tl-left", "", "registry")]),
         ("pnpm create tl-app", [("create-tl-app", "", "registry")]),
     ],
-)  # fmt: skip
+)
 def test_node_forms(tmp_path: Path, cmd: str, want: list[tuple[str, str, str]]) -> None:
     inst = classify(cmd, tmp_path)
     assert inst.ecosystem == "npm" and not inst.unreadable
@@ -179,7 +234,10 @@ def test_node_forms(tmp_path: Path, cmd: str, want: list[tuple[str, str, str]]) 
 
 
 def test_npm_registry_and_scope_options(tmp_path: Path) -> None:
-    inst = classify(["npm", "install", "--registry", "http://r.example/", "--@tl:registry=http://s.example/", "x"], tmp_path)
+    inst = classify(
+        ["npm", "install", "--registry", "http://r.example/", "--@tl:registry=http://s.example/", "x"],
+        tmp_path,
+    )
     assert inst.registry == "http://r.example/" and inst.scoped_registries == {"@tl": "http://s.example/"}
 
 

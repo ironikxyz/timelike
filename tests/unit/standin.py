@@ -87,13 +87,22 @@ class Standin:
 # release is a day old (an older one is not), one yanked at its newest, and the same on npm, with a scope.
 CATALOG: dict[str, Any] = {
     "pypi": {
-        "tl-old": {"releases": [{"version": "1.0.0", "age_days": 400}, {"version": "1.2.0", "age_days": 300}]},
-        "tl-fresh": {"releases": [{"version": "1.0.0", "age_days": 120}, {"version": "1.1.0", "age_days": 1}]},
+        "tl-old": {
+            "releases": [{"version": "1.0.0", "age_days": 400}, {"version": "1.2.0", "age_days": 300}]
+        },
+        "tl-fresh": {
+            "releases": [{"version": "1.0.0", "age_days": 120}, {"version": "1.1.0", "age_days": 1}]
+        },
         "tl-brandnew": {"releases": [{"version": "0.1.0", "age_days": 0.5}]},
         "tl-yanked": {
-            "releases": [{"version": "1.0.0", "age_days": 200}, {"version": "2.0.0", "age_days": 100, "yanked": True}]
+            "releases": [
+                {"version": "1.0.0", "age_days": 200},
+                {"version": "2.0.0", "age_days": 100, "yanked": True},
+            ]
         },
-        "tl-pre": {"releases": [{"version": "1.0.0", "age_days": 300}, {"version": "2.0.0rc1", "age_days": 1}]},
+        "tl-pre": {
+            "releases": [{"version": "1.0.0", "age_days": 300}, {"version": "2.0.0rc1", "age_days": 1}]
+        },
         "tl-nodates": {"releases": [{"version": "1.0.0", "age_days": 300}], "no_upload_time": True},
         "tl-slow": {"releases": [{"version": "1.0.0", "age_days": 300}], "fault": {"delay": 30}},
         "tl-broken": {"releases": [{"version": "1.0.0", "age_days": 300}], "fault": {"status": 503}},
@@ -101,8 +110,12 @@ CATALOG: dict[str, Any] = {
         "tl-drop": {"releases": [{"version": "1.0.0", "age_days": 300}], "fault": {"drop": True}},
     },
     "npm": {
-        "tl-left": {"releases": [{"version": "1.0.0", "age_days": 400}, {"version": "1.3.0", "age_days": 300}]},
-        "tl-fresh": {"releases": [{"version": "1.0.0", "age_days": 120}, {"version": "1.1.0", "age_days": 1}]},
+        "tl-left": {
+            "releases": [{"version": "1.0.0", "age_days": 400}, {"version": "1.3.0", "age_days": 300}]
+        },
+        "tl-fresh": {
+            "releases": [{"version": "1.0.0", "age_days": 120}, {"version": "1.1.0", "age_days": 1}]
+        },
         "@tl/scoped": {"releases": [{"version": "2.0.0", "age_days": 30}]},
         "tl-tagged": {
             "releases": [{"version": "1.0.0", "age_days": 200}, {"version": "2.0.0-beta.1", "age_days": 1}],

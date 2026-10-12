@@ -32,7 +32,7 @@ def reg(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Standin]:
 
 
 def get(url: str, accept: str = "*/*") -> tuple[int, str, bytes]:
-    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "test"})
+    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "test"})  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 — loopback stand-in
             return r.status, r.headers.get("Content-Type", ""), r.read()
@@ -48,7 +48,16 @@ def test_simple_json_has_pypis_fields_and_formats(reg: Standin) -> None:
     assert doc["meta"]["api-version"] == "1.4" and doc["name"] == "tl-old"
     assert doc["versions"] == ["1.0.0", "1.2.0"]
     f = doc["files"][0]
-    for key in ("core-metadata", "filename", "hashes", "requires-python", "size", "upload-time", "url", "yanked"):
+    for key in (
+        "core-metadata",
+        "filename",
+        "hashes",
+        "requires-python",
+        "size",
+        "upload-time",
+        "url",
+        "yanked",
+    ):
         assert key in f
     assert PYPI_TIME.match(f["upload-time"])
     assert set(f["hashes"]) == {"sha256"}
@@ -72,7 +81,9 @@ def test_npm_document_has_npms_fields_and_formats(reg: Standin) -> None:
     assert {"created", "modified", "1.0.0", "1.3.0"} == set(doc["time"])
     assert all(NPM_TIME.match(v) for v in doc["time"].values())
     dist = doc["versions"]["1.3.0"]["dist"]
-    assert dist["integrity"].startswith("sha512-") and dist["tarball"].endswith("/tl-left/-/tl-left-1.3.0.tgz")
+    assert dist["integrity"].startswith("sha512-") and dist["tarball"].endswith(
+        "/tl-left/-/tl-left-1.3.0.tgz"
+    )
 
 
 def test_npm_scoped_absent_and_faults(reg: Standin) -> None:
@@ -92,7 +103,16 @@ def test_every_request_is_logged(reg: Standin) -> None:
 @pytest.mark.skipif(shutil.which("pip") is None, reason="the host has no pip")
 def test_real_pip_installs_from_it(reg: Standin, tmp_path: Path) -> None:
     p = subprocess.run(
-        ["pip", "install", "--no-cache-dir", "--target", str(tmp_path / "t"), "--index-url", reg.simple, "tl-old"],
+        [
+            "pip",
+            "install",
+            "--no-cache-dir",
+            "--target",
+            str(tmp_path / "t"),
+            "--index-url",
+            reg.simple,
+            "tl-old",
+        ],
         capture_output=True,
         text=True,
         timeout=120,
@@ -121,4 +141,6 @@ def test_real_npm_installs_from_it(reg: Standin, tmp_path: Path) -> None:
     assert p.returncode == 0, p.stderr
     pkg: dict[str, Any] = json.loads((proj / "node_modules" / "@tl" / "scoped" / "package.json").read_text())
     assert pkg["version"] == "2.0.0"
-    assert (proj / "node_modules" / "tl-left" / "index.js").read_text() == 'module.exports = "tl-left@1.3.0";\n'
+    assert (
+        proj / "node_modules" / "tl-left" / "index.js"
+    ).read_text() == 'module.exports = "tl-left@1.3.0";\n'

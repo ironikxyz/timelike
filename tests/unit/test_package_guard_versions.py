@@ -154,8 +154,16 @@ def test_npm_satisfies(version: str, rng: str, want: bool) -> None:
 
 
 def test_npm_version_order() -> None:
-    order = ["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11",
-             "1.0.0-rc.1", "1.0.0"]  # semver.org § 11, ascending
+    order = [
+        "1.0.0-alpha",
+        "1.0.0-alpha.1",
+        "1.0.0-alpha.beta",
+        "1.0.0-beta",
+        "1.0.0-beta.2",
+        "1.0.0-beta.11",
+        "1.0.0-rc.1",
+        "1.0.0",
+    ]  # semver.org § 11, ascending
     keys = [PG.npm_version(v).key() for v in order]
     assert keys == sorted(keys) and len(set(keys)) == len(keys)
 

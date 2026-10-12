@@ -109,12 +109,20 @@ def test_a_hung_registry_is_bounded_by_one_time_limit(reg: Standin, tmp_path: Pa
 def test_html_index_shows_existence_but_not_age(html_reg: Standin, tmp_path: Path) -> None:
     c = by_name(plan(html_reg, ["pip", "install", "tl-old"], tmp_path), "tl-old")
     assert c.result == "age-unknown" and "no upload-time" in c.detail
-    assert by_name(plan(html_reg, ["pip", "install", "tl-old"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0"), "tl-old").result == "ok"
+    assert (
+        by_name(
+            plan(html_reg, ["pip", "install", "tl-old"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0"),
+            "tl-old",
+        ).result
+        == "ok"
+    )
     assert by_name(plan(html_reg, ["pip", "install", "tl-nope"], tmp_path), "tl-nope").result == "absent"
 
 
 def test_no_dates_on_either_registry(reg: Standin, tmp_path: Path) -> None:
-    assert by_name(plan(reg, ["pip", "install", "tl-nodates"], tmp_path), "tl-nodates").result == "age-unknown"
+    assert (
+        by_name(plan(reg, ["pip", "install", "tl-nodates"], tmp_path), "tl-nodates").result == "age-unknown"
+    )
     c = by_name(plan(reg, ["npm", "install", "tl-notime"], tmp_path), "tl-notime")
     assert c.result == "age-unknown" and "no time" in c.detail
 
@@ -131,15 +139,25 @@ def test_the_guards_requests_name_it(reg: Standin, tmp_path: Path) -> None:
 
 
 def test_newest_release_too_new_names_its_date_and_the_release_to_pin(reg: Standin, tmp_path: Path) -> None:
-    for cmd in (["pip", "install", "tl-fresh"], ["npm", "install", "tl-fresh"], ["uv", "pip", "install", "tl-fresh"]):
+    for cmd in (
+        ["pip", "install", "tl-fresh"],
+        ["npm", "install", "tl-fresh"],
+        ["uv", "pip", "install", "tl-fresh"],
+    ):
         c = by_name(plan(reg, cmd, tmp_path), "tl-fresh")
         assert c.result == "too-new", cmd
         assert c.release == "1.1.0" and c.released is not None
         assert (NOW - c.released).days == 1 or (NOW - c.released).total_seconds() < 2 * 86400
         assert c.released.strftime("%Y-%m-%d") in c.detail and "minimum age is 2 days" in c.detail
         assert c.suggestion.startswith("1.0.0, released ")
-    assert "tl-fresh==1.0.0" in by_name(plan(reg, ["pip", "install", "tl-fresh"], tmp_path), "tl-fresh").suggestion
-    assert "tl-fresh@1.0.0" in by_name(plan(reg, ["npm", "install", "tl-fresh"], tmp_path), "tl-fresh").suggestion
+    assert (
+        "tl-fresh==1.0.0"
+        in by_name(plan(reg, ["pip", "install", "tl-fresh"], tmp_path), "tl-fresh").suggestion
+    )
+    assert (
+        "tl-fresh@1.0.0"
+        in by_name(plan(reg, ["npm", "install", "tl-fresh"], tmp_path), "tl-fresh").suggestion
+    )
 
 
 def test_a_named_release_is_checked_for_its_own_age(reg: Standin, tmp_path: Path) -> None:
@@ -151,9 +169,22 @@ def test_a_named_release_is_checked_for_its_own_age(reg: Standin, tmp_path: Path
 
 
 def test_minimum_age_variable(reg: Standin, tmp_path: Path) -> None:
-    assert by_name(plan(reg, ["pip", "install", "tl-fresh"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0"), "tl-fresh").result == "ok"
-    assert by_name(plan(reg, ["pip", "install", "tl-fresh"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0.5"), "tl-fresh").result == "ok"
-    c = by_name(plan(reg, ["pip", "install", "tl-old"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="365"), "tl-old")
+    assert (
+        by_name(
+            plan(reg, ["pip", "install", "tl-fresh"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0"), "tl-fresh"
+        ).result
+        == "ok"
+    )
+    assert (
+        by_name(
+            plan(reg, ["pip", "install", "tl-fresh"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="0.5"),
+            "tl-fresh",
+        ).result
+        == "ok"
+    )
+    c = by_name(
+        plan(reg, ["pip", "install", "tl-old"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="365"), "tl-old"
+    )
     assert c.result == "too-new" and "minimum age is 365 days" in c.detail
     with pytest.raises(PG.agentio.UsageError):
         plan(reg, ["pip", "install", "x"], tmp_path, TIMELIKE_PACKAGE_MIN_AGE_DAYS="soon")
@@ -176,7 +207,11 @@ def test_an_extra_index_is_asked_and_named(reg: Standin, html_reg: Standin, tmp_
     p = plan(reg, ["pip", "install", "--extra-index-url", html_reg.simple, "tl-old"], tmp_path)
     c = by_name(p, "tl-old")
     assert c.result == "ok" and c.also_on == [html_reg.simple]
-    p = plan(reg, ["pip", "install", "-i", f"{reg.url}/simple-none", "--extra-index-url", reg.simple, "tl-old"], tmp_path)
+    p = plan(
+        reg,
+        ["pip", "install", "-i", f"{reg.url}/simple-none", "--extra-index-url", reg.simple, "tl-old"],
+        tmp_path,
+    )
     assert by_name(p, "tl-old").result == "ok"
 
 
@@ -188,9 +223,24 @@ def npm_project(reg: Standin, tmp: Path, *pkgs: str) -> Path:
     proj.mkdir()
     (proj / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
     p = subprocess.run(
-        ["npm", "install", "--registry", reg.npm, "--cache", str(tmp / "cache"), "--no-audit", "--no-fund", *pkgs],
-        cwd=proj, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL, check=False,
-    )  # fmt: skip
+        [
+            "npm",
+            "install",
+            "--registry",
+            reg.npm,
+            "--cache",
+            str(tmp / "cache"),
+            "--no-audit",
+            "--no-fund",
+            *pkgs,
+        ],
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert p.returncode == 0, p.stderr
     return proj
 
@@ -222,9 +272,23 @@ def test_pnpm_lock_written_by_pnpm(reg: Standin, tmp_path: Path) -> None:
     proj.mkdir()
     (proj / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
     r = subprocess.run(
-        ["pnpm", "add", "--registry", reg.npm, "--store-dir", str(tmp_path / "store"), "tl-left@1.0.0", "@tl/scoped"],
-        cwd=proj, capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL, check=False,
-    )  # fmt: skip
+        [
+            "pnpm",
+            "add",
+            "--registry",
+            reg.npm,
+            "--store-dir",
+            str(tmp_path / "store"),
+            "tl-left@1.0.0",
+            "@tl/scoped",
+        ],
+        cwd=proj,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     assert r.returncode == 0, r.stdout + r.stderr
     lock = PG.read_pnpm_lock(proj / "pnpm-lock.yaml")
     assert lock.readable and lock.pins == {"tl-left": {"1.0.0"}, "@tl/scoped": {"2.0.0"}}
@@ -236,10 +300,14 @@ def test_pnpm_lock_written_by_pnpm(reg: Standin, tmp_path: Path) -> None:
 
 
 def test_uv_lock_and_pylock_in_their_documented_formats(reg: Standin, tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "p"\nversion = "0"\ndependencies = ["tl-fresh"]\n')
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "p"\nversion = "0"\ndependencies = ["tl-fresh"]\n'
+    )
     (tmp_path / "uv.lock").write_text(
-        'version = 1\nrequires-python = ">=3.12"\n\n[[package]]\nname = "p"\nversion = "0"\nsource = { virtual = "." }\n\n'
-        '[[package]]\nname = "tl-fresh"\nversion = "1.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'version = 1\nrequires-python = ">=3.12"\n\n'
+        '[[package]]\nname = "p"\nversion = "0"\nsource = { virtual = "." }\n\n'
+        '[[package]]\nname = "tl-fresh"\nversion = "1.0.0"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
     )
     reg.clear()
     p = plan(reg, ["uv", "add", "tl-fresh"], tmp_path)
@@ -247,7 +315,9 @@ def test_uv_lock_and_pylock_in_their_documented_formats(reg: Standin, tmp_path: 
     p = plan(reg, ["uv", "sync"], tmp_path)
     assert results(p) == {"tl-fresh": "pinned"} and reg.guard_requests() == []
     assert results(plan(reg, ["uv", "add", "tl-fresh==1.1.0"], tmp_path)) == {"tl-fresh": "too-new"}
-    (tmp_path / "pylock.toml").write_text('lock-version = "1.0"\n[[packages]]\nname = "tl-old"\nversion = "1.0.0"\n')
+    (tmp_path / "pylock.toml").write_text(
+        'lock-version = "1.0"\n[[packages]]\nname = "tl-old"\nversion = "1.0.0"\n'
+    )
     assert results(plan(reg, ["pip", "install", "tl-old"], tmp_path))["tl-old"] == "pinned"
 
 
@@ -274,13 +344,24 @@ def test_an_unreadable_lockfile_is_not_a_pin(reg: Standin, tmp_path: Path) -> No
 def test_project_root_is_found_upward(reg: Standin, tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text('{"name": "p"}')
     (tmp_path / "package-lock.json").write_text(
-        json.dumps({"lockfileVersion": 3, "packages": {"": {}, "node_modules/tl-left": {"version": "1.3.0"},
-                                                        "node_modules/x/node_modules/tl-fresh": {"version": "1.1.0"}}})
-    )  # fmt: skip
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "": {},
+                    "node_modules/tl-left": {"version": "1.3.0"},
+                    "node_modules/x/node_modules/tl-fresh": {"version": "1.1.0"},
+                },
+            }
+        )
+    )
     sub = tmp_path / "src" / "deep"
     sub.mkdir(parents=True)
     p = plan(reg, ["npm", "install", "tl-left", "tl-fresh"], sub)
-    assert results(p) == {"tl-left": "pinned", "tl-fresh": "too-new"}  # a nested copy is a dependency's, not a pin
+    assert results(p) == {
+        "tl-left": "pinned",
+        "tl-fresh": "too-new",
+    }  # a nested copy is a dependency's, not a pin
     assert p.root == tmp_path
 
 
@@ -288,7 +369,19 @@ def test_project_root_is_found_upward(reg: Standin, tmp_path: Path) -> None:
 
 
 def test_plan_lines_name_every_package_and_its_registry(reg: Standin, tmp_path: Path) -> None:
-    p = plan(reg, ["pip", "install", "tl-old", "tl-surely-absent", "tl-fresh", "./local.whl", "git+https://e.example/r"], tmp_path)
+    p = plan(
+        reg,
+        [
+            "pip",
+            "install",
+            "tl-old",
+            "tl-surely-absent",
+            "tl-fresh",
+            "./local.whl",
+            "git+https://e.example/r",
+        ],
+        tmp_path,
+    )
     lines = [PG.plan_line(c, "pypi") for c in p.checks]
     assert lines[0].startswith("ok: tl-old 1.2.0, released ") and reg.simple in lines[0]
     assert lines[1] == f"refused: tl-surely-absent — not found: not in {reg.simple} (HTTP 404)"
