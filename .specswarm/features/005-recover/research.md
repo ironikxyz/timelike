@@ -122,3 +122,92 @@ changes, `git stash`, a repository hook, a nested repository), plus files the to
 contents themselves (`find`, `sha256sum`, `stat -c %a`, and a listing of `.git` with each file's
 checksum), never the tool's message (P004). A restore that should change nothing, and one that should
 change everything, are both tested.
+
+---
+
+# Cycle 3 — 07 slice 1
+
+## R10 · The state root, and how a tool knows it is persistent
+
+- **Decision:** `TIMELIKE_STATE_ROOT`, default `/var/lib/timelike`, created in the image owned by `agent`,
+  mode 0700; `compose.yaml` mounts the named volume `timelike-state` there. Persistent ⇔ the root's
+  `st_dev` differs from `/`'s.
+- **Rationale:** a fresh named volume copies the ownership and mode of the image's directory at its mount
+  point on first mount (lore `docker-compose` Q003), so the agent can write it with no root step at start.
+  In a container the root filesystem is the overlay; a named volume or a bind mount is another device.
+  `os.path.ismount` would miss a state root set to a subdirectory of a volume, which the e2e tests use.
+- **Alternatives:** `~/.local/state/timelike` (inside the home, where `rm -r ~/…` reaches, and not a mount
+  point the operator would think to persist); a marker file the image writes and a volume hides (works
+  only for the default path).
+
+## R11 · The scheduled snapshot: cost, interval, stat cache
+
+Measured on the host, timelike's interpreter (3.14.8), slice 0's code, unchanged workspaces: 464 files /
+6.7 MB in 270–320 ms; 657 files / 51 MB in 620–700 ms. `snapshot list` alone: 100 ms (interpreter and
+agentio start). Slice 0 re-reads and re-copies every file on every take. **The default interval and the
+measured cost with the stat cache are recorded below after T-implement** (decisions.md).
+
+**Measured in T023–T024** (host, 3.14.8, `bash -c :` from inside a git workspace; averages of 100):
+- no hook 2.8 ms; the hook as it was before this cycle 7.1 ms; the hook now, **not due**, 7.6 ms. The due
+  check adds about **0.5 ms** and no fork (host test K13, with forking made impossible).
+- **due**, an unchanged workspace (the stat cache, FR-35): 120–145 ms for 464 files / 6.7 MB; 270–300 ms
+  for 657 files / 51 MB. The first take into an empty state root: 263 ms and 615 ms. Of what remains,
+  about 100 ms is the interpreter and agentio, and the rest grows with stored content, because
+  verification re-hashes every object (stack note 12; Item 22 asks the mentor about narrowing it).
+- **Decision:** default interval **300 s**. At most one due start per workspace per 5 minutes pays the
+  cost above; every other shell start pays 0.5 ms. A shorter interval narrows what a script deletion can
+  lose, at that cost per interval; `0` is for tests.
+
+## R12 · Keying
+
+The real path, as slice 0 (D-13). A remount elsewhere is named, not hidden (FR-29).
+
+## R13 · Import of slice-0 stores
+
+Scan `<scratch root>/*/snapshots/<key>/` (the same key, the same user). Renumber in old order; mark the
+old store `imported`; verify each record as a take is.
+
+## R14 · Purge
+
+On write, under `TIMELIKE_PURGE_SECONDS`. Age first, then size, oldest first across workspaces by record
+mtime (written once at take time); never the newest per workspace; other stores only with a free lock;
+unreferenced objects deleted by mark and sweep within each purged store.
+
+## R15 · The lock
+
+`flock(2)` per workspace store: the kernel releases it when the holder exits, also across containers that
+share the volume on one host. The holder writes `pid session agent` into the lock file after acquiring it,
+so a timeout names who holds it.
+
+## R16 · The trash
+
+`<state>/trash/items/<id>.json` and `<state>/trash/objects/`; `guard trash-put PATH…` copies before the
+real delete; `undo --trash` lists and restores. What calls it is Item 22's: the guarded `rm` and
+`git clean` (R17).
+
+## R17 · The guards: what they cost, and what the depth bound costs to decide
+
+*(Cycle 3, after FOR-MENTOR Item 22's ruling.)* Measured on the code host, 2026-10-10, with the hook as
+BASH_ENV, the repository's guard under CPython 3.14.8 (the image's version), a 400-file git workspace,
+the state root on the same filesystem; 20 runs each (5 for `rm -r`), three sessions:
+
+| Command | Guarded | `command …` |
+|---|---|---|
+| `rm FILE` (trash, no snapshot) | 74–77 ms | 1 ms |
+| `rm -r DIR` (snapshot of the workspace, then trash) | 115–136 ms | — |
+| `git status --short` (no helper) | 3 ms | 3 ms |
+
+The helper's start (interpreter, `agentio`, `snapshot` loaded) is most of the single-file cost; the
+ruling accepts it for P5, and the depth bound keeps it out of every script's loop. The no-fork property
+of a shell's START is unchanged: the guard block is builtins only, and its ancestor walk reads
+`/proc/<pid>/stat` only in a bash that inherited the marker (tests/host/test_shell_env_hook.sh K13 and
+F still run the whole hook with forking impossible).
+
+One measurement session ran its loops unguarded (1 ms per `rm`, no trash items written) and was
+discarded; three reruns of the same script, one in a fresh directory, were guarded every time. The cause
+was not found. The units cover every path that defines or skips the functions (tests/unit/test_guard.py).
+
+**Exec'd shells.** bash runs the last simple command of a `-c` string by `exec`, so `bash -c 'bash -c …'`
+keeps one pid: the marker alone read it as the same shell sourcing the hook twice (found by the unit
+`test_a_bash_c_started_inside_the_agents_shell_is_not_guarded`). A non-exported `__timelike_guarded`,
+set where the functions are defined, tells the two apart.

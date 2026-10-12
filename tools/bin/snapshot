@@ -2,8 +2,9 @@
 """snapshot — take and list snapshots of the workspace, so a wrong turn can be undone (P5).
 
 `snapshot` copies every file, symlink and directory of the workspace (tracked, untracked or ignored by
-version control) into a content-addressed store in the session scratch directory, and prints the
-snapshot's identifier, file count and size. `snapshot list` lists them. `undo` (a separate command that
+version control) into a content-addressed store in the per-workspace state root (rule 10 at revision 11;
+slice 1, FR-25), shared by every session and agent, and prints the snapshot's identifier, file count and
+size. `snapshot list` lists them. `undo` (a separate command that
 loads this file) restores one.
 
 Scope and limits, stated rather than implied (T2):
@@ -12,7 +13,10 @@ Scope and limits, stated rather than implied (T2):
 - every `.git` is out of scope at any depth: never captured, restored, removed or followed (revision 8);
 - beyond the caps a snapshot is partial and names each excluded file and why, or (entry cap) refused;
   the size cap counts the bytes a snapshot adds to the store, after deduplication (revision 11);
-- "taken" is said only after the record and every object it names are read back and re-hashed.
+- "taken" is said only after the record is read back and every object new to this snapshot is
+  re-hashed; an object the last verified snapshot already proved (an unchanged file) is checked for
+  presence, type and size. A restore re-hashes every object it will write before writing any of it
+  (stack note 12 as the mentor read it for Item 22).
 
 No git is run and nothing is hard-linked. Design: .specswarm/features/005-recover/ (spec, research
 R1–R9, data-model.md, contracts/recover-cli.md).
@@ -27,6 +31,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import shlex
 import stat
 import time
@@ -45,7 +50,13 @@ DEFAULT_CAPS = {
     ENV_MAX_FILE_BYTES: 64 * 1024 * 1024,
     ENV_MAX_ENTRIES: 50_000,
 }
+ENV_MAX_AGE_DAYS = "TIMELIKE_SNAPSHOT_MAX_AGE_DAYS"
+ENV_STATE_MAX_BYTES = "TIMELIKE_STATE_MAX_BYTES"
+ENV_PURGE_SECONDS = "TIMELIKE_PURGE_SECONDS"
+PURGE_DEFAULTS = {ENV_MAX_AGE_DAYS: 30, ENV_STATE_MAX_BYTES: 4 * 1024**3, ENV_PURGE_SECONDS: 2}
 LOCK_WAIT_S = 10.0
+AGENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")  # TIMELIKE_AGENT, as the journal validates it (009)
+NOTES: list[str] = []  # lines every result of this invocation carries (FR-27, FR-30, FR-37), in order
 RECORD_VERSION = 1
 SAFETY_PREFIX = "before undo "  # the reason on the snapshot an undo takes of the state it replaces
 OUT_OF_SCOPE = ".git"  # version control's own state: the project's, never ours (D-4)
@@ -82,6 +93,7 @@ UNDO_TOOL = agentio.Tool(
         "undo ID --yes            # restore snapshot ID (see: snapshot list)",
         "without --yes: exit 4 and the confirmation envelope (its confirm is undo … --yes)",
         "never touches any .git; files left out of the snapshot are left alone",
+        "undo --trash [ID --yes]  # list deleted files kept in the trash, or put item ID back",
     ],
     mutating=True,
     confirm_protocol=True,  # discovery revision 13, case 1: "everything since" is not named exactly
@@ -127,6 +139,23 @@ def caps_from_env() -> dict[str, int]:
                 f"e.g. {var}={default}, or 0 for no cap",
             )
     return caps
+
+
+def purge_limits() -> dict[str, int]:
+    """FR-36's three limits from the environment; 0 = none. A bad value is a usage error naming it."""
+    out = {}
+    for var, default in PURGE_DEFAULTS.items():
+        raw = os.environ.get(var, "").strip()
+        if raw == "":
+            out[var] = default
+        elif raw.isdigit():
+            out[var] = int(raw)
+        else:
+            raise agentio.UsageError(
+                f"{var} must be a non-negative whole number, not {raw!r}",
+                f"e.g. {var}={default}, or 0 for none",
+            )
+    return out
 
 
 class Outcome(Exception):
@@ -189,8 +218,40 @@ def find_workspace() -> str:
     return agentio.workspace()
 
 
-def store_root(ctx: agentio.Context) -> str:
-    return os.path.realpath(os.path.join(str(ctx.scratch_root), ctx.session, "snapshots"))
+def store_root() -> str:
+    """Where every workspace's store lives: <state root>/workspaces (FR-25; data-model § State root)."""
+    return os.path.realpath(os.path.join(str(agentio.state_root()), "workspaces"))
+
+
+def agent_id() -> str | None:
+    raw = os.environ.get("TIMELIKE_AGENT", "")
+    return raw if AGENT_RE.match(raw) else None
+
+
+def note_persistence() -> dict[str, Any]:
+    """FR-27: the not-persistent line when the state root is on the container's own filesystem."""
+    root = agentio.state_root()
+    persistent = agentio.state_persistent(root)
+    if not persistent:
+        add_note(agentio.not_persistent_line(root))
+    return {"root": str(root), "persistent": persistent}
+
+
+def add_note(line: str) -> None:
+    if line not in NOTES:
+        NOTES.append(line)
+
+
+def finish(r: agentio.Result, state: dict[str, Any]) -> agentio.Result:
+    """Every result carries NOTES after its `do instead:` line (contract § Slice 1) and data.state.
+
+    A result that was cut already holds them: cut_or_lines puts NOTES first before it cuts.
+    """
+    if r.cut is None:
+        at = 1 if r.lines and r.lines[0].startswith("do instead: ") else 0
+        r.lines[at:at] = [n for n in NOTES if n not in r.lines]
+    r.data["state"] = state
+    return r
 
 
 def check_workspace(ws: str, ctx: agentio.Context, command: str) -> None:
@@ -204,11 +265,11 @@ def check_workspace(ws: str, ctx: agentio.Context, command: str) -> None:
             raise refuse(f"{ws} is your home directory", remedy)
         if h.startswith(ws.rstrip("/") + "/"):
             raise refuse(f"{ws} is an ancestor of your home directory", remedy)
-    store = store_root(ctx)
+    store = os.path.realpath(str(agentio.state_root()))
     if store == ws or store.startswith(ws.rstrip("/") + "/"):
         raise refuse(
             f"{ws} contains the snapshot store ({store})",
-            "set TIMELIKE_SCRATCH_ROOT outside the workspace",
+            f"set {agentio.STATE_ROOT_ENV} outside the workspace",
         )
 
 
@@ -219,6 +280,10 @@ Entry = dict[str, Any]  # {kind: file|link|dir|other, mode, size, target, what, 
 
 class EntryCapExceeded(Exception):
     pass
+
+
+class LockBusy(agentio.ToolError):
+    """The store's lock stayed held past the wait (FR-24): an error naming the holder (FR-38)."""
 
 
 def _other_kind(mode: int) -> str:
@@ -274,7 +339,12 @@ def walk(ws: str, max_entries: int) -> tuple[dict[str, Entry], list[str]]:
                 entries[rel] = {"kind": "dir", "mode": perm}
                 stack.append(rel)
             elif stat.S_ISREG(st.st_mode):
-                entries[rel] = {"kind": "file", "mode": perm, "size": st.st_size}
+                entries[rel] = {
+                    "kind": "file",
+                    "mode": perm,
+                    "size": st.st_size,
+                    "stat": [st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino],  # FR-35's key
+                }
             else:
                 entries[rel] = {"kind": "other", "what": _other_kind(st.st_mode), "size": 0}
     return entries, git_holders
@@ -297,14 +367,14 @@ class Store:
         self.ws = ws
         self.key = hashlib.sha256(ws.encode()).hexdigest()[:16]
         self.ctx = ctx
-        self.path = Path(store_root(ctx)) / self.key
+        self.path = Path(store_root()) / self.key
 
     def exists(self) -> bool:
         return (self.path / "workspace").is_file()
 
     def create(self) -> None:
+        agentio.ensure_state_root()  # private, versioned (FR-25, FR-28; P003)
         try:
-            self.ctx.scratch()  # agentio's private session directory (rule 10)
             for sub in ("snaps", "objects", "artefacts"):
                 (self.path / sub).mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(self.path.parent, 0o700)
@@ -313,7 +383,7 @@ class Store:
             raise agentio.ToolError(
                 agentio.EXIT_FAILURE,
                 f"cannot create the snapshot store {self.path}: {e.strerror or e}",
-                "check TIMELIKE_SCRATCH_ROOT is writable",
+                f"check {agentio.STATE_ROOT_ENV} is writable",
             ) from None
         marker = self.path / "workspace"
         if marker.exists():
@@ -331,26 +401,46 @@ class Store:
             )
 
     @contextlib.contextmanager
-    def lock(self) -> Iterator[None]:
+    def lock(self, wait_s: float = LOCK_WAIT_S) -> Iterator[None]:
+        """FR-24, FR-38: one lock per workspace store, shared by every session and agent.
+
+        flock(2): the kernel releases it when its holder exits, so a holder that no longer exists holds
+        nothing and there is no stale lock to clear. The holder writes who it is, for the timeout verdict.
+        """
         fd = os.open(self.path / "lock", os.O_RDWR | os.O_CREAT, 0o600)
         try:
-            deadline = time.monotonic() + LOCK_WAIT_S
+            deadline = time.monotonic() + wait_s
             while True:
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise agentio.ToolError(
-                            agentio.EXIT_FAILURE,
-                            "another snapshot or undo is running on this workspace"
-                            f" (lock held for {LOCK_WAIT_S:.0f} s: {self.path / 'lock'})",
-                            "wait for it to finish, then run this again",
-                        ) from None
+                        raise self._busy(fd, wait_s) from None
                     time.sleep(0.05)
-            yield
+            holder = f"{os.getpid()} {self.ctx.session} {agent_id() or '-'}\n".encode()
+            with contextlib.suppress(OSError):
+                os.ftruncate(fd, 0)
+                os.pwrite(fd, holder, 0)
+            try:
+                yield
+            finally:
+                with contextlib.suppress(OSError):
+                    os.ftruncate(fd, 0)  # released: no holder to name (a later wait names none)
         finally:
             os.close(fd)
+
+    def _busy(self, fd: int, wait_s: float) -> LockBusy:
+        who = ""
+        with contextlib.suppress(OSError, ValueError):
+            pid, session, agent = os.pread(fd, 256, 0).decode().split()[:3]
+            who = f"; holder pid {pid}, session {session}, agent {agent}"
+        return LockBusy(
+            agentio.EXIT_FAILURE,
+            "another snapshot or undo is running on this workspace"
+            f" (lock held for {wait_s:.0f} s: {self.path / 'lock'}{who})",
+            "wait for it to finish, then run this again",
+        )
 
     def _write_atomic(self, path: Path, text: str, mode: int) -> None:
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -396,17 +486,32 @@ class Store:
     def has(self, sha: str) -> bool:
         return os.path.lexists(self.object_path(sha))
 
+    def statcache(self) -> dict[str, list[Any]]:
+        """FR-35: path → [size, mtime_ns, ctime_ns, inode, sha256] from the last take; {} if unreadable."""
+        try:
+            doc = json.loads((self.path / "statcache.json").read_text())
+        except (OSError, ValueError):
+            return {}
+        return doc if isinstance(doc, dict) else {}
+
+    def write_statcache(self, cache: dict[str, list[Any]]) -> None:
+        with contextlib.suppress(OSError):
+            self._write_atomic(self.path / "statcache.json", json.dumps(cache, sort_keys=True) + "\n", 0o600)
+
     def record_path(self, ident: int) -> Path:
         return self.path / "snaps" / f"{ident}.json"
 
     def write_record(self, rec: dict[str, Any]) -> None:
         self._write_atomic(self.record_path(rec["id"]), json.dumps(rec, indent=1) + "\n", 0o600)
 
-    def verify(self, rec: dict[str, Any]) -> str | None:
-        """Can `rec` be restored? Read its record back, and re-hash every object it names (stack note 12).
+    def verify(self, rec: dict[str, Any], proven: frozenset[str] = frozenset()) -> str | None:
+        """Can `rec` be restored? Read its record back and check every object it names (stack note 12).
 
-        Returns what is wrong, or None. A damaged object is removed, so the next snapshot stores it again
-        instead of trusting the copy `put` found in place.
+        An object in `proven` (one the last verified snapshot already re-hashed: an unchanged file found
+        through the stat cache) is checked for presence, type and size; every other object is re-hashed.
+        A restore re-hashes what it writes before writing any of it (check_objects), so a proven object
+        that rotted since is caught there (Item 22, note 12). Returns what is wrong, or None. A damaged
+        object is removed, so the next snapshot stores it again instead of trusting the copy in place.
         """
         try:
             back = json.loads(self.record_path(rec["id"]).read_text())
@@ -426,7 +531,8 @@ class Store:
             obj = self.object_path(sha)
             try:
                 st = os.lstat(obj)
-                ok = stat.S_ISREG(st.st_mode) and st.st_size == size and file_sha(str(obj)) == sha
+                ok = stat.S_ISREG(st.st_mode) and st.st_size == size
+                ok = ok and (sha in proven or file_sha(str(obj)) == sha)
             except OSError as err:
                 return f"object {sha[:12]} cannot be read ({err.strerror or err})"
             if not ok:
@@ -455,6 +561,238 @@ class Store:
         return str(path)
 
 
+# ── purge (FR-36, FR-37, D-16) ────────────────────────────────────────────────────────────────
+
+
+def _object_bytes(store_dir: Path) -> int:
+    total = 0
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(store_dir / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                with os.scandir(sub.path) as it:
+                    for f in it:
+                        with contextlib.suppress(OSError):
+                            total += f.stat(follow_symlinks=False).st_size
+    return total
+
+
+def _records_by_age(store_dir: Path) -> list[tuple[float, int]]:
+    """(record mtime, id), oldest first. A record is written once, so its mtime is when it was taken
+    (an imported record's is set to its own taken_at), and no record has to be parsed to age it."""
+    out = []
+    with contextlib.suppress(OSError):
+        for p in (store_dir / "snaps").glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append((p.stat().st_mtime, int(p.stem)))
+    return sorted(out)
+
+
+def _sweep(store_dir: Path) -> None:
+    """Delete every object no remaining record names (mark and sweep, within one locked store)."""
+    keep: set[str] = set()
+    for p in (store_dir / "snaps").glob("*.json"):
+        try:
+            rec = json.loads(p.read_text())
+        except (OSError, ValueError):
+            return  # a record that cannot be read may name anything: delete nothing
+        keep.update(e["sha256"] for e in rec.get("entries", []) if e.get("kind") == "file")
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(store_dir / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                for f in os.scandir(sub.path):
+                    if f.name not in keep and not f.name.startswith("."):
+                        with contextlib.suppress(OSError):
+                            os.unlink(f.path)
+
+
+@contextlib.contextmanager
+def _other_locks(mine: Store) -> Iterator[tuple[dict[Path, str], list[str]]]:
+    """Every other store whose lock is free at this moment, locked; and the busy ones, by workspace."""
+    held: dict[Path, str] = {}
+    busy: list[str] = []
+    fds = []
+    try:
+        with contextlib.suppress(OSError):
+            for d in sorted(Path(store_root()).iterdir()):
+                if d == mine.path:
+                    continue
+                try:
+                    ws = (d / "workspace").read_text().strip()
+                    fd = os.open(d / "lock", os.O_RDWR | os.O_CREAT, 0o600)
+                except OSError:
+                    continue
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(fd)
+                    busy.append(ws)
+                    continue
+                fds.append(fd)
+                held[d] = ws
+        yield held, busy
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
+def purge(store: Store) -> list[dict[str, Any]]:
+    """Purge the state root after a write; the caller holds `store`'s lock (FR-36, FR-37).
+
+    First every snapshot older than the age limit, then the oldest snapshot of any workspace while the
+    snapshot content exceeds the size cap. Never the newest snapshot of a workspace. Other workspaces'
+    stores are purged only when their lock is free now (no wait). Bounded by TIMELIKE_PURGE_SECONDS.
+    Each drop, and each reason it stopped short, is a NOTES line.
+    """
+    limits = purge_limits()
+    age_s = limits[ENV_MAX_AGE_DAYS] * 86400
+    cap, bound = limits[ENV_STATE_MAX_BYTES], limits[ENV_PURGE_SECONDS]
+    if not age_s and not cap:
+        return []
+    deadline = time.monotonic() + bound if bound else None
+    dropped: list[dict[str, Any]] = []
+    with _other_locks(store) as (others, busy):
+        stores = {store.path: store.ws, **others}
+        ages = {d: _records_by_age(d) for d in stores}
+        sizes = {d: _object_bytes(d) for d in stores} if cap else {}
+        now = time.time()
+
+        def drop(d: Path, ident: int, why: str) -> None:
+            with contextlib.suppress(OSError):
+                (d / "snaps" / f"{ident}.json").unlink()
+            ages[d] = [a for a in ages[d] if a[1] != ident]
+            dropped.append({"workspace": stores[d], "id": ident, "why": why})
+            add_note(f"purged: snapshot {ident} of {stores[d]} ({why})")
+
+        def over_time() -> bool:
+            return deadline is not None and time.monotonic() > deadline
+
+        stopped = None
+        if age_s:
+            for d in stores:
+                newest = max((i for _, i in ages[d]), default=None)
+                for mtime, ident in list(ages[d]):
+                    if ident != newest and now - mtime > age_s:
+                        drop(d, ident, f"older than {limits[ENV_MAX_AGE_DAYS]} days")
+        touched = {x_d for x_d in stores if any(x["workspace"] == stores[x_d] for x in dropped)}
+        for d in touched:
+            _sweep(d)
+            if cap:
+                sizes[d] = _object_bytes(d)
+        while cap and sum(sizes.values()) > cap:
+            if over_time():
+                stopped = f"the time bound ({ENV_PURGE_SECONDS}={bound}) was reached"
+                break
+            pick = None
+            for d in stores:
+                newest = max((i for _, i in ages[d]), default=None)
+                for mtime, ident in ages[d]:
+                    if ident != newest and (pick is None or mtime < pick[0]):
+                        pick = (mtime, d, ident)
+                    break  # oldest first: only each store's oldest can be the oldest overall
+            if pick is None:
+                stopped = "only each workspace's newest snapshot is left"
+                break
+            _, d, ident = pick
+            drop(d, ident, f"over {ENV_STATE_MAX_BYTES}")
+            _sweep(d)
+            sizes[d] = _object_bytes(d)
+        if stopped and cap and sum(sizes.values()) > cap:
+            add_note(
+                f"purge stopped: {stopped}; the snapshots are {human(sum(sizes.values()) - cap)}"
+                f" over {ENV_STATE_MAX_BYTES}"
+            )
+        for ws in busy:
+            add_note(f"purge skipped {ws}: another snapshot or undo holds it")
+    return dropped
+
+
+# ── slice 0's stores in the session scratch (FR-30, D-14) ─────────────────────────────────────
+
+
+def slice0_stores(store: Store) -> list[Path]:
+    """Every slice-0 store of this workspace under the scratch root, any session, not yet imported."""
+    found = []
+    with contextlib.suppress(OSError):
+        for sdir in sorted(agentio.scratch_root().iterdir()):
+            old = sdir / "snapshots" / store.key
+            with contextlib.suppress(OSError):
+                if (old / "imported").exists() or (old / "workspace").read_text().strip() != store.ws:
+                    continue
+                found.append(old)
+    return found
+
+
+def _ids(nums: list[int]) -> str:
+    return f"{nums[0]}" if nums[0] == nums[-1] else f"{nums[0]}–{nums[-1]}"
+
+
+def import_slice0(store: Store) -> list[dict[str, Any]]:
+    """Import every slice-0 store of this workspace into its state-root store, once (FR-30).
+
+    Each record keeps its order, reason, label and time, gets the next identifier, and records where it
+    came from; its objects are copied (deduplicated) and it is verified as a take is. The old store is
+    left in place, marked `imported` with the new identifiers, so it is never imported twice. Nothing a
+    user took vanishes silently: each import, and each record that fails verification, is a NOTES line.
+    """
+    olds = slice0_stores(store)
+    if not olds:
+        return []
+    store.create()
+    done = []
+    with store.lock():
+        for old in slice0_stores(store):  # again, under the lock: another process may have done it
+            session = old.parent.parent.name
+            recs = []
+            for p in (old / "snaps").glob("*.json"):
+                with contextlib.suppress(OSError, ValueError):
+                    recs.append(json.loads(p.read_text()))
+            pairs: list[tuple[int, int]] = []
+            for rec in sorted(recs, key=lambda r: int(r["id"])):
+                problem = _import_one(store, old, session, rec, pairs)
+                if problem:
+                    add_note(f"not imported: {session} snapshot {rec['id']}: {problem}")
+            text = "".join(f"{a} {b}\n" for a, b in pairs)
+            with contextlib.suppress(OSError):
+                store._write_atomic(old / "imported", text, 0o600)
+            if pairs:
+                was, now = [a for a, _ in pairs], [b for _, b in pairs]
+                add_note(
+                    f"imported {len(pairs)} snapshots from session {session}"
+                    f" (were {_ids(was)}, now {_ids(now)})"
+                )
+                done.append({"session": session, "was": was, "now": now})
+    return done
+
+
+def _import_one(
+    store: Store, old: Path, session: str, rec: dict[str, Any], pairs: list[tuple[int, int]]
+) -> str | None:
+    for e in rec.get("entries", []):
+        if e.get("kind") == "file" and not store.has(e["sha256"]):
+            src = old / "objects" / e["sha256"][:2] / e["sha256"]
+            try:
+                sha, _, _ = store.put(str(src))
+            except OSError as err:
+                return f"object {e['sha256'][:12]} cannot be read ({err.strerror or err})"
+            if sha != e["sha256"]:
+                return f"object {e['sha256'][:12]} does not match its hash"
+    new = dict(rec)
+    new.update(id=store.next_id(), imported={"session": session, "id": rec["id"]})
+    new.setdefault("session", session)
+    new.setdefault("agent", None)
+    store.write_record(new)
+    with contextlib.suppress(OSError, ValueError, KeyError):  # its age is its own, for the purge (FR-36)
+        t = datetime.fromisoformat(rec["taken_at"]).timestamp()
+        os.utime(store.record_path(new["id"]), (t, t))
+    problem = store.verify(new)
+    if problem is not None:
+        with contextlib.suppress(OSError):
+            store.record_path(new["id"]).unlink()
+        return problem
+    pairs.append((int(rec["id"]), new["id"]))
+    return None
+
+
 # ── taking a snapshot (FR-4 to FR-11) ─────────────────────────────────────────────────────────
 
 
@@ -462,9 +800,12 @@ def _exclusion(rel: str, size: int, reason: str) -> dict[str, Any]:
     return {"path": rel, "size": size, "reason": reason}
 
 
-def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | None) -> dict[str, Any]:
+def take_locked(
+    store: Store, caps: dict[str, int], reason: str, label: str | None, extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Walk, choose, copy, record, verify. The caller holds the store's lock and has created the store.
 
+    `extra` adds fields to the record (a guard's `push`: the remote ref's prior commit, FR-44).
     Raises Outcome when the snapshot cannot be shown restorable: then it is not taken (no record stays).
     """
     try:
@@ -491,16 +832,31 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
                 )
             else:
                 candidates.append((rel, e["size"]))
-    candidates, cut, needed = _fit_size_cap(store, caps[ENV_MAX_BYTES], candidates)
+    # FR-35: a file whose size, mtime, ctime and inode match the last take, and whose object is still in
+    # the store, is recorded without being read. The last take re-hashed that object before it wrote the
+    # cache, so verification (below) checks it for presence, type and size only (note 12, Item 22).
+    old_cache = store.statcache()
+    known: dict[str, str] = {}
+    for rel, e in entries.items():
+        hit = old_cache.get(rel)
+        if e["kind"] == "file" and hit and hit[:4] == e["stat"] and store.has(str(hit[4])):
+            known[rel] = str(hit[4])
+    candidates, cut, needed = _fit_size_cap(store, caps[ENV_MAX_BYTES], candidates, known)
     excluded.extend(cut)
     captured: list[Entry] = []
+    new_cache: dict[str, list[Any]] = {}
     total = stored = 0
     for rel, size in sorted(candidates):
-        try:
-            sha, read, new = store.put(os.path.join(store.ws, rel))
-        except OSError as err:
-            excluded.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
-            continue
+        if rel in known:
+            sha, read, new = known[rel], size, False
+        else:
+            try:
+                sha, read, new = store.put(os.path.join(store.ws, rel))
+            except OSError as err:
+                excluded.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
+                continue
+        if read == entries[rel]["size"]:
+            new_cache[rel] = [*entries[rel]["stat"], sha]  # a file that changed while read is not cached
         total += read
         stored += read if new else 0
         captured.append(
@@ -519,6 +875,8 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
         "reason": reason,
         "label": label,
         "workspace": store.ws,
+        "session": store.ctx.session,
+        "agent": agent_id(),
         "taken_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "entries": captured,
         "excluded": excluded,
@@ -537,8 +895,9 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
     }
     if needed is not None:
         rec["size_cap_needed"] = needed
+    rec.update(extra or {})
     store.write_record(rec)
-    problem = store.verify(rec)
+    problem = store.verify(rec, frozenset(known.values()))
     if problem is not None:
         with contextlib.suppress(OSError):
             store.record_path(rec["id"]).unlink()
@@ -548,11 +907,12 @@ def take_locked(store: Store, caps: dict[str, int], reason: str, label: str | No
             f"run snapshot again; if this repeats, the store {store.path} is damaged:"
             " remove it and take a new snapshot",
         )
+    store.write_statcache(new_cache)  # only a verified take's objects may be trusted by the next one
     return rec
 
 
 def _fit_size_cap(
-    store: Store, cap: int, candidates: list[tuple[str, int]]
+    store: Store, cap: int, candidates: list[tuple[str, int]], known: dict[str, str] | None = None
 ) -> tuple[list[tuple[str, int]], list[dict[str, Any]], int | None]:
     """Apply the size cap to the bytes this snapshot would ADD to the store (revision 11, condition 3).
 
@@ -569,7 +929,7 @@ def _fit_size_cap(
     groups: dict[str, list[tuple[str, int]]] = {}
     for rel, size in candidates:
         try:
-            sha = file_sha(os.path.join(store.ws, rel))
+            sha = (known or {}).get(rel) or file_sha(os.path.join(store.ws, rel))
         except OSError as err:
             cut.append(_exclusion(rel, size, f"unreadable: {err.strerror or err}"))
             continue
@@ -607,7 +967,11 @@ def raise_lines(rec: dict[str, Any], caps: dict[str, int]) -> list[str]:
 def cut_or_lines(
     ctx: agentio.Context, store: Store, name: str, lines: list[str]
 ) -> tuple[list[str], agentio.Cut | None]:
-    """Over the output cap, cut with `more` reading the saved list: a re-run would act again."""
+    """Over the output cap, cut with `more` reading the saved list: a re-run would act again.
+
+    NOTES go first, so a cut result carries them too (finish() only adds them to an uncut one).
+    """
+    lines = [n for n in NOTES if n not in lines] + lines
     if ctx.limit <= 0 or len(lines) <= ctx.limit:
         return lines, None
     head_n = max(1, ctx.limit // 2)
@@ -631,9 +995,11 @@ def cut_or_lines(
 def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result:
     caps = caps_from_env()
     store = Store(ctx, ws)
+    imported = import_slice0(store)
     store.create()
     with store.lock():
         rec = take_locked(store, caps, "on demand", label)
+        purged = purge(store)
     size = human(rec["bytes"])
     if rec["partial"]:
         verdict = (
@@ -665,11 +1031,37 @@ def cmd_take(ctx: agentio.Context, ws: str, label: str | None) -> agentio.Result
     }
     data["verified"] = True
     data["store"] = str(store.path)
+    if imported:
+        data["imported"] = imported
+    data["purged"] = purged
     return agentio.Result(ws, "take", verdict, lines=shown, data=data, cut=cut)
 
 
+def other_workspaces(ws: str) -> list[tuple[str, int]]:
+    """FR-29: every other workspace in the state root with snapshots, by path, and how many."""
+    out = []
+    with contextlib.suppress(OSError):
+        for d in Path(store_root()).iterdir():
+            try:
+                path = (d / "workspace").read_text().strip()
+            except OSError:
+                continue
+            n = sum(1 for _ in (d / "snaps").glob("*.json"))
+            if path != ws and n:
+                out.append((path, n))
+    return sorted(out)
+
+
+def other_lines(ws: str) -> tuple[list[str], list[dict[str, Any]]]:
+    others = other_workspaces(ws)
+    lines = [f"other workspace with snapshots: {path} ({n})" for path, n in others]
+    return lines, [{"workspace": path, "snapshots": n} for path, n in others]
+
+
 def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
-    recs = list(reversed(Store(ctx, ws).records()))
+    store = Store(ctx, ws)
+    imported = import_slice0(store)
+    recs = list(reversed(store.records()))
     lines, items = [], []
     for r in recs:
         whole = "partial" if r["partial"] else "complete"
@@ -677,12 +1069,20 @@ def cmd_list(ctx: agentio.Context, ws: str) -> agentio.Result:
         if r.get("label"):
             line += f'  "{r["label"]}"'
         item = {k: r[k] for k in ("id", "reason", "label", "files", "bytes", "partial")}
+        item["session"], item["agent"] = r.get("session"), r.get("agent")  # FR-31 (slice-0 records: null)
         if ctx.verbose:
-            line += f"  taken {r['taken_at']}"
+            line += (
+                f"  taken {r['taken_at']}  session {r.get('session') or '-'}  agent {r.get('agent') or '-'}"
+            )
             item["taken_at"] = r["taken_at"]
         lines.append(line)
         items.append(item)
-    return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data={"snapshots": items})
+    data: dict[str, Any] = {"snapshots": items}
+    if imported:
+        data["imported"] = imported
+    if not recs:
+        lines, data["other_workspaces"] = other_lines(ws)
+    return agentio.Result(ws, "list", f"{len(recs)} snapshots", lines=lines, data=data)
 
 
 def configure(p: argparse.ArgumentParser) -> None:
@@ -697,13 +1097,16 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         raise agentio.UsageError("-m labels a new snapshot; snapshot list takes none", "run snapshot -m TEXT")
     if args.verb != "list":
         caps_from_env()  # a bad cap value is a usage error before anything is written
+        purge_limits()
     ws = find_workspace()
     scope = "list" if args.verb == "list" else "take"
+    state = note_persistence()
     try:
         check_workspace(ws, ctx, "snapshot")
-        return cmd_list(ctx, ws) if args.verb == "list" else cmd_take(ctx, ws, args.label)
+        r = cmd_list(ctx, ws) if args.verb == "list" else cmd_take(ctx, ws, args.label)
     except Outcome as o:
-        return o.result(ws, scope)
+        r = o.result(ws, scope)
+    return finish(r, state)
 
 
 # ── the plan (data-model § Plan) ──────────────────────────────────────────────────────────────
@@ -841,6 +1244,40 @@ def _restore(store: Store, ws: str, e: Entry) -> None:
     os.replace(tmp, target)  # rename replaces a symlink at the target, never follows it
 
 
+def check_objects(store: Store, files: list[Entry], what: str) -> None:
+    """Re-hash every object a restore will write, before it writes any (note 12's condition, Item 22).
+
+    A mismatch refuses the whole restore, names the object and the path it was for, and removes the
+    object so the next snapshot of that content stores it again. Nothing has been written.
+    """
+    seen: set[str] = set()
+    for e in sorted(files, key=lambda e: e["path"]):
+        sha = e["sha256"]
+        if sha in seen:
+            continue
+        seen.add(sha)
+        obj = store.object_path(sha)
+        try:
+            st = os.lstat(obj)
+            ok = stat.S_ISREG(st.st_mode) and st.st_size == e["size"] and file_sha(str(obj)) == sha
+        except OSError as err:
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"{what} refused: object {sha[:12]} (for {e['path']}) cannot be read"
+                f" ({err.strerror or err}); nothing was changed",
+                "the store has lost that content: take a new snapshot, or restore another one",
+            ) from None
+        if not ok:
+            with contextlib.suppress(OSError):
+                obj.unlink()
+            raise Outcome(
+                agentio.EXIT_FAILURE,
+                f"{what} refused: object {sha[:12]} (for {e['path']}) does not match its hash"
+                " (removed; the next snapshot stores that content again); nothing was changed",
+                "restore another snapshot, or take a new one",
+            )
+
+
 def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -> None:
     snap = {e["path"]: e for e in rec["entries"]}
     removals = [ch for ch in plan if ch["change"] == "remove"]
@@ -859,11 +1296,331 @@ def apply_plan(store: Store, ws: str, rec: dict[str, Any], plan: list[Change]) -
         os.chmod(os.path.join(_parent_checked(ws, e["path"]), e["path"].rsplit("/", 1)[-1]), e["mode"])
 
 
+# ── the trash (FR-39 to FR-41, D-18) ──────────────────────────────────────────────────────────
+# What a delete removes, kept before it happens: <state root>/trash/items/<id>.json and the content,
+# deduplicated, in trash/objects/. Not per workspace: a deleted path anywhere the agent owns is kept.
+# What feeds it: the guards in front of `rm` and `git clean` (FR-42, FR-45), through `guard`.
+
+ENV_TRASH_MAX_AGE_DAYS = "TIMELIKE_TRASH_MAX_AGE_DAYS"
+ENV_TRASH_MAX_BYTES = "TIMELIKE_TRASH_MAX_BYTES"
+TRASH_DEFAULTS = {ENV_TRASH_MAX_AGE_DAYS: 30, ENV_TRASH_MAX_BYTES: 1024**3}
+
+
+def trash_limits() -> dict[str, int]:
+    out = {}
+    for var, default in TRASH_DEFAULTS.items():
+        raw = os.environ.get(var, "").strip()
+        if raw == "":
+            out[var] = default
+        elif raw.isdigit():
+            out[var] = int(raw)
+        else:
+            raise agentio.UsageError(
+                f"{var} must be a non-negative whole number, not {raw!r}",
+                f"e.g. {var}={default}, or 0 for none",
+            )
+    return out
+
+
+class Trash(Store):
+    """The trash shares the store's mechanics (objects, atomic writes, ids, the lock), not its records."""
+
+    def __init__(self, ctx: agentio.Context) -> None:  # no workspace: the trash is global
+        self.ctx = ctx
+        self.ws = "trash"
+        self.key = "trash"
+        self.path = agentio.state_root() / "trash"
+
+    def create(self) -> None:
+        agentio.ensure_state_root()
+        for sub in ("items", "objects"):
+            (self.path / sub).mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.path, 0o700)
+
+    def item_path(self, ident: int) -> Path:
+        return self.path / "items" / f"{ident}.json"
+
+    def items(self) -> list[dict[str, Any]]:
+        out = []
+        for p in (self.path / "items").glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append(json.loads(p.read_text()))
+        return sorted(out, key=lambda r: int(r["id"]))
+
+    def item(self, ident: int) -> dict[str, Any] | None:
+        with contextlib.suppress(OSError, ValueError):
+            return dict(json.loads(self.item_path(ident).read_text()))
+        return None
+
+
+def _trash_walk(top: str) -> list[dict[str, Any]]:
+    """`top` and, for a directory, everything below it; symlinks recorded, never followed."""
+    out = []
+    stack = [top]
+    while stack:
+        path = stack.pop()
+        try:
+            st = os.lstat(path)
+        except OSError as e:
+            out.append({"path": path, "kind": "other", "what": f"unreadable: {e.strerror or e}", "size": 0})
+            continue
+        perm = stat.S_IMODE(st.st_mode)
+        if stat.S_ISLNK(st.st_mode):
+            out.append({"path": path, "kind": "link", "target": os.readlink(path)})
+        elif stat.S_ISDIR(st.st_mode):
+            out.append({"path": path, "kind": "dir", "mode": perm})
+            try:
+                with os.scandir(path) as it:
+                    stack.extend(sorted((e.path for e in it), reverse=True))
+            except OSError as e:
+                out[-1]["error"] = e.strerror or str(e)
+        elif stat.S_ISREG(st.st_mode):
+            out.append({"path": path, "kind": "file", "mode": perm, "size": st.st_size})
+        else:
+            out.append({"path": path, "kind": "other", "what": _other_kind(st.st_mode), "size": 0})
+    return out
+
+
+def trash_put(ctx: agentio.Context, paths: list[str], command: list[str]) -> dict[str, Any] | None:
+    """Keep `paths` (as the deleting command names them) in the trash before they are deleted (FR-39).
+
+    Returns the item, or None when none of the paths exists. A file the trash cannot keep (unreadable,
+    not a file/link/directory, or past TIMELIKE_TRASH_MAX_BYTES on its own) is listed under `not_kept`,
+    so the line naming the item can say what a later restore cannot bring back (T2).
+    """
+    limits = trash_limits()
+    tops = [os.path.abspath(p) for p in paths if os.path.lexists(p)]
+    if not tops:
+        return None
+    trash = Trash(ctx)
+    trash.create()
+    with trash.lock():
+        entries: list[dict[str, Any]] = []
+        not_kept: list[dict[str, Any]] = []
+        total = 0
+        cap = limits[ENV_TRASH_MAX_BYTES]
+        for top in dict.fromkeys(tops):
+            for e in _trash_walk(top):
+                if e["kind"] == "other":
+                    not_kept.append({"path": e["path"], "size": e["size"], "reason": e["what"]})
+                    continue
+                if e["kind"] == "file":
+                    if cap and total + e["size"] > cap:
+                        not_kept.append(
+                            {"path": e["path"], "size": e["size"], "reason": f"over {ENV_TRASH_MAX_BYTES}"}
+                        )
+                        continue
+                    try:
+                        sha, read, _ = trash.put(e["path"])
+                    except OSError as err:
+                        not_kept.append(
+                            {
+                                "path": e["path"],
+                                "size": e["size"],
+                                "reason": f"unreadable: {err.strerror or err}",
+                            }
+                        )
+                        continue
+                    e = {**e, "sha256": sha, "size": read}
+                    total += read
+                entries.append({k: v for k, v in e.items() if k != "error"})
+        ident = trash.next_id()
+        item: dict[str, Any] = {
+            "v": RECORD_VERSION,
+            "id": ident,
+            "deleted_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "session": ctx.session,
+            "agent": agent_id(),
+            "command": command,
+            "roots": list(dict.fromkeys(tops)),
+            "entries": entries,
+            "not_kept": not_kept,
+            "files": sum(1 for e in entries if e["kind"] == "file"),
+            "bytes": total,
+        }
+        trash._write_atomic(trash.item_path(ident), json.dumps(item, indent=1) + "\n", 0o600)
+        purge_trash(trash, limits, keep=ident)
+    return item
+
+
+def purge_trash(trash: Trash, limits: dict[str, int], keep: int) -> None:
+    """FR-41: by age, then oldest first while the trash's content exceeds its cap; never `keep`."""
+    age_s = limits[ENV_TRASH_MAX_AGE_DAYS] * 86400
+    cap = limits[ENV_TRASH_MAX_BYTES]
+    by_age = _records_by_age_in(trash.path / "items")
+    now = time.time()
+    dropped = False
+    for mtime, ident in list(by_age):
+        if ident != keep and age_s and now - mtime > age_s:
+            _drop_trash(trash, ident, f"older than {limits[ENV_TRASH_MAX_AGE_DAYS]} days")
+            by_age.remove((mtime, ident))
+            dropped = True
+    if dropped:
+        _sweep_trash(trash)
+    while cap and _object_bytes(trash.path) > cap:
+        older = [(m, i) for m, i in by_age if i != keep]
+        if not older:
+            break
+        _drop_trash(trash, older[0][1], f"over {ENV_TRASH_MAX_BYTES}")
+        by_age.remove(older[0])
+        _sweep_trash(trash)
+
+
+def _records_by_age_in(d: Path) -> list[tuple[float, int]]:
+    out = []
+    with contextlib.suppress(OSError):
+        for p in d.glob("*.json"):
+            with contextlib.suppress(OSError, ValueError):
+                out.append((p.stat().st_mtime, int(p.stem)))
+    return sorted(out)
+
+
+def _drop_trash(trash: Trash, ident: int, why: str) -> None:
+    with contextlib.suppress(OSError):
+        trash.item_path(ident).unlink()
+    add_note(f"purged: trash item {ident} ({why})")
+
+
+def _sweep_trash(trash: Trash) -> None:
+    keep: set[str] = set()
+    for item in trash.items():
+        keep.update(e["sha256"] for e in item.get("entries", []) if e.get("kind") == "file")
+    with contextlib.suppress(OSError):
+        for sub in os.scandir(trash.path / "objects"):
+            if sub.is_dir(follow_symlinks=False):
+                for f in os.scandir(sub.path):
+                    if f.name not in keep and not f.name.startswith("."):
+                        with contextlib.suppress(OSError):
+                            os.unlink(f.path)
+
+
+def trash_line(item: dict[str, Any]) -> str:
+    first = item["roots"][0]
+    more = len(item["roots"]) - 1
+    return f"{item['id']}  {item['files']} files  {human(item['bytes'])}  {first}" + (
+        f" and {more} more" if more else ""
+    )
+
+
+def _trash_blocked(item: dict[str, Any]) -> list[str]:
+    """Paths a put-back would overwrite, or whose parent is gone: refused, named, nothing written."""
+    out = []
+    for root in item["roots"]:
+        if os.path.lexists(root):
+            out.append(f"refused: {root} exists")
+        elif not os.path.isdir(os.path.dirname(root)) or os.path.islink(os.path.dirname(root)):
+            out.append(f"refused: {os.path.dirname(root)} is not a directory (put back what held it first)")
+    return out
+
+
+def _put_back(trash: Trash, item: dict[str, Any]) -> None:
+    dirs = [e for e in item["entries"] if e["kind"] == "dir"]
+    for e in sorted(dirs, key=lambda e: e["path"].count("/")):
+        os.mkdir(e["path"], 0o700)
+    for e in item["entries"]:
+        if e["kind"] == "link":
+            os.symlink(e["target"], e["path"])
+        elif e["kind"] == "file":
+            fd = os.open(e["path"], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            try:
+                with open(trash.object_path(e["sha256"]), "rb") as fin:
+                    for block in iter(lambda: fin.read(CHUNK), b""):
+                        os.write(fd, block)
+                os.fchmod(fd, e["mode"])
+            finally:
+                os.close(fd)
+    for e in sorted(dirs, key=lambda e: -e["path"].count("/")):
+        os.chmod(e["path"], e["mode"])
+
+
+def _put_back_differences(item: dict[str, Any]) -> list[str]:
+    left = []
+    for e in item["entries"]:
+        try:
+            st = os.lstat(e["path"])
+        except OSError:
+            left.append(f"missing {e['kind']} {e['path']}")
+            continue
+        if e["kind"] == "file":
+            ok = stat.S_ISREG(st.st_mode) and file_sha(e["path"]) == e["sha256"]
+        elif e["kind"] == "link":
+            ok = stat.S_ISLNK(st.st_mode) and os.readlink(e["path"]) == e["target"]
+        else:
+            ok = stat.S_ISDIR(st.st_mode)
+        if not ok:
+            left.append(f"differs {e['kind']} {e['path']}")
+    return left
+
+
+def undo_trash(args: argparse.Namespace, ctx: agentio.Context, target: str) -> agentio.Result:
+    """`undo --trash [ID] [--dry-run] [--yes]` (FR-40): list the trash, or put one item back, verified."""
+    trash = Trash(ctx)
+    if args.id is None:
+        items = list(reversed(trash.items())) if trash.path.is_dir() else []
+        lines = [trash_line(i) for i in items]
+        data = {
+            "items": [{k: i[k] for k in ("id", "files", "bytes", "roots", "session", "agent")} for i in items]
+        }
+        return agentio.Result(target, "trash", f"{len(items)} items in the trash", lines=lines, data=data)
+    item = trash.item(int(args.id)) if trash.path.is_dir() else None
+    scope = f"trash {args.id}"
+    if item is None:
+        ids = ", ".join(str(i["id"]) for i in reversed(trash.items())) if trash.path.is_dir() else ""
+        raise Outcome(
+            agentio.EXIT_NOT_FOUND,
+            f"no trash item {args.id}",
+            f"trash items: {ids}" if ids else "the trash is empty",
+        )
+    plan = [f"put back {e['kind']} {e['path']}" for e in item["entries"]]
+    blocked = _trash_blocked(item)
+    n = len(item["entries"])
+    if args.dry_run:
+        verdict = f"dry run: trash item {item['id']} — {n} to put back; nothing changed"
+        if blocked:
+            verdict += f"; {len(blocked)} blocked"
+        lines = blocked + plan + [f"not kept: {x['path']} ({x['reason']})" for x in item.get("not_kept", [])]
+        return agentio.Result(
+            target, scope, verdict, lines=lines, data={"id": item["id"], "blocked": blocked}
+        )
+    if blocked:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"refused: trash item {item['id']} would overwrite or has no place:"
+            f" {blocked[0].removeprefix('refused: ')}",
+            "move what is there aside, or put back the item that held its directory first",
+            blocked,
+        )
+    if not args.yes:
+        if ctx.limit > 0 and len(plan) > ctx.limit:
+            more = len(plan) - (ctx.limit - 1)
+            plan = [
+                *plan[: ctx.limit - 1],
+                f"… and {more} more: undo --trash {item['id']} --dry-run --limit 0",
+            ]
+        return agentio.confirm_required(ctx, target=target, scope=scope, plan=plan)
+    with trash.lock():
+        check_objects(
+            trash, [e for e in item["entries"] if e["kind"] == "file"], f"put back of trash item {item['id']}"
+        )
+        _put_back(trash, item)
+        left = _put_back_differences(item)
+    if left:
+        raise Outcome(
+            agentio.EXIT_FAILURE,
+            f"put back trash item {item['id']} left {len(left)} differences",
+            f"undo --trash {item['id']} --dry-run shows the item",
+            left,
+        )
+    verdict = f"put back trash item {item['id']}: {n} paths; verified"
+    return agentio.Result(target, scope, verdict, lines=plan, data={"id": item["id"], "verified": True})
+
+
 # ── undo (FR-14 to FR-20) ─────────────────────────────────────────────────────────────────────
 
 
 def undo_configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("id", nargs="?", metavar="ID", help="the snapshot to restore (default: the newest)")
+    p.add_argument("--trash", action="store_true", help="list the trash, or put trash item ID back")
 
 
 def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
@@ -875,6 +1632,7 @@ def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
             agentio.EXIT_NOT_FOUND,
             f"no snapshot {raw or ''} for {ws}".replace("  ", " "),
             "take one with: snapshot",
+            other_lines(ws)[0],  # FR-29: a moved workspace is told where its history is
         )
     if raw is None:
         # The newest snapshot the agent took, not a safety snapshot of an earlier undo: otherwise a
@@ -892,16 +1650,29 @@ def _choose(store: Store, ws: str, raw: str | None) -> dict[str, Any]:
 def undo_main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if args.id is not None and not args.id.isdigit():
         raise agentio.UsageError(f"{args.id!r} is not a snapshot id", "ids are numbers; see: snapshot list")
+    if args.yes and not args.dry_run:
+        caps_from_env()  # bad values are usage errors before a restore starts, not after it ends
+        purge_limits()
     ws = find_workspace()
+    state = note_persistence()
     try:
-        return _undo(args, ctx, ws)
+        r = undo_trash(args, ctx, ws) if args.trash else _undo(args, ctx, ws)
     except Outcome as o:
-        return o.result(ws, f"restore {args.id or 'newest'}")
+        r = o.result(
+            ws,
+            f"trash {args.id}"
+            if args.trash and args.id
+            else "trash"
+            if args.trash
+            else f"restore {args.id or 'newest'}",
+        )
+    return finish(r, state)
 
 
 def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Result:
     check_workspace(ws, ctx, "undo")
     store = Store(ctx, ws)
+    import_slice0(store)
     if store.exists():
         store.check_owner()
     rec = _choose(store, ws, args.id)
@@ -934,6 +1705,12 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
             return agentio.Result(
                 ws, scope, f"nothing to restore: the workspace matches snapshot {ident}", data={"id": ident}
             )
+        snap = {e["path"]: e for e in rec["entries"]}
+        check_objects(
+            store,
+            [snap[ch["path"]] for ch in plan if ch["change"] == "restore" and ch["kind"] == "file"],
+            f"restore of snapshot {ident}",
+        )
         try:
             before = take_locked(store, caps_from_env(), f"{SAFETY_PREFIX}{ident}", None)
         except Outcome as o:
@@ -957,6 +1734,7 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
                 f"the state before is snapshot {before['id']}; undo {before['id']} --yes returns to it",
             ) from None
         left = [ch for ch in make_plan(ws, rec) if ch["change"] != "keep"]
+        purged = purge(store) if not left else []
     if left:
         raise Outcome(
             agentio.EXIT_FAILURE,
@@ -979,6 +1757,7 @@ def _undo(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.Re
         "verified": True,
         "before": before["id"],
         "before_partial": before["partial"],
+        "purged": purged,
     }
     return agentio.Result(ws, scope, verdict, lines=shown, data=data, cut=cut)
 

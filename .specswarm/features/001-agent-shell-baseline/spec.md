@@ -132,6 +132,12 @@ P3 (found where agents look).
   process group. The git command then MUST exit non-zero within the limit plus a few seconds, with a
   verdict naming the hook, the limit and how to raise it. The verdict MUST NOT suggest any way to skip
   the hook.
+- **FR-20a** *(feature 005 slice 1, Cycle 3; declared there as a change to this contract, on FOR-MENTOR
+  Item 22, Q2)* Before a repository's own `pre-push` hook (and when it has none), the dispatcher runs
+  timelike's force-push record, `/opt/timelike/libexec/guard pre-push <remote> <url>`, on git's own input:
+  a snapshot of the worktree and a line naming each forced ref's prior commit and the command that puts
+  it back (005 FR-44). It MUST NOT fail the push or change what the repository's hook receives (FR-19:
+  git's lines are kept and handed on); whatever it cannot do, it says on stderr. No other hook changes.
 
 ### Privilege boundary
 
@@ -236,6 +242,10 @@ The contract (binding on every timelike tool, in every feature):
   scriptable prompt mode.
 - **FR-18** FR-15 and FR-16 MUST hold under non-interactive `bash -c`, login `bash -lc` and interactive
   shells alike, as FR-1 requires of every default.
+- **FR-18a** *(feature 005 slice 1, Cycle 3; declared there)* The same hook file also defines the guard
+  functions `rm` and `git` in the agent's own shell (005 FR-42 to FR-47): in a shell started with `-c` or
+  an interactive one, never in a script it starts. It still costs no fork at a shell's start, and stays
+  silent and non-fatal; the functions and `TIMELIKE_GUARD_SHELL` are what it leaves behind on purpose.
 
 ## Success Criteria
 

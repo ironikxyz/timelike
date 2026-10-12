@@ -188,6 +188,16 @@ def generate() -> tuple[list[str], dict[str, str]]:
         )
     if has("snapshot") and has("undo"):
         lines.append("- Before a risky change: `snapshot`; to go back: `undo`.")
+        # 005 slice 1 (FR-42 to FR-47; Item 22): what the guards do, how to see them, and what they reach
+        lines.append(
+            "- In bash, `rm -r`, `git reset --hard`, `git clean` and a forced push take a snapshot first;"
+            " `rm` and `git clean` keep what they delete (`undo --trash`)."
+        )
+        lines.append(
+            "- `type -a rm git` shows these guards; `command rm` skips them. They guard this shell, not"
+            " the scripts it starts: those are covered by the snapshot a shell's start takes (at most every"
+            " 5 min)."
+        )
     if has("timelike"):
         lines.append(
             "- `timelike tools`: every tool, standard ones too, with the safer command to use instead."

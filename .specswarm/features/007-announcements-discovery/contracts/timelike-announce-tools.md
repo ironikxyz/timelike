@@ -195,3 +195,10 @@ Two rule lines go after the `timelike tools` line, each emitted only when `timel
 - `timelike budget`: this container's memory, CPU, process and disk limits, and what is in use.
 - In bash, a command that is not installed says what to use instead, or who can install it.
 ```
+
+Two rule lines go after the `snapshot`/`undo` line, emitted only when both are installed (feature 005 slice 1,
+FR-47; a change to this contract declared in 005's cycle report, Cycle 3):
+```
+- In bash, `rm -r`, `git reset --hard`, `git clean` and a forced push take a snapshot first; `rm` and `git clean` keep what they delete (`undo --trash`).
+- `type -a rm git` shows these guards; `command rm` skips them. They guard this shell, not the scripts it starts: those are covered by the snapshot a shell's start takes (at most every 5 min).
+```

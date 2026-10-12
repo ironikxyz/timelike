@@ -96,16 +96,25 @@ ms_to_s() {
   printf '%d.%03d' $(($1 / 1000)) $(($1 % 1000))
 }
 
-# exec_in [-e K=V]... STYLE TTY CMD
+# exec_in [-e K=V]... [-w DIR] STYLE TTY CMD
 # Runs CMD in the agent container, bounded by RUN_TIMEOUT on the runner side. No `run` wrapper: the
 # exit status is the command's (or 124 on timeout). Prints the container output unmodified.
+# -w starts the shell in DIR (docker exec -w), as a harness starts the agent's shell in its workspace;
+# without it the shell starts in the image's WORKDIR, /home/agent.
 # Sets EXEC_ELAPSED_MS.
 exec_in() {
   local -a envs=()
-  while [[ "${1:-}" == -e ]]; do
-    envs+=(-e "$2")
+  local sched=default
+  while [[ "${1:-}" == -e || "${1:-}" == -w ]]; do
+    envs+=("$1" "$2")
+    if [[ "$1" == -e && "$2" == TIMELIKE_SNAPSHOT_INTERVAL=* ]]; then sched=given; fi
     shift 2
   done
+  # Feature 005 slice 1: a bash started inside a workspace takes a scheduled snapshot when one is due
+  # (/etc/timelike/shell-env.bash, FR-32). Cells of other features measure their own behaviour, so the
+  # harness turns it off unless a cell sets TIMELIKE_SNAPSHOT_INTERVAL itself; the scheduled snapshot's
+  # own cells set it, the default interval included (a-directory-removed-by-a-script-*.bats).
+  [[ "$sched" == given ]] || envs=(-e TIMELIKE_SNAPSHOT_INTERVAL=off "${envs[@]}")
   local style="$1" tty="$2" cmd="$3"
   local -a shell docker_args
   mapfile -t shell < <(_shell_argv "$style") || return 2
@@ -139,7 +148,7 @@ exec_in() {
   return "$rc"
 }
 
-# run_in [-e K=V]... STYLE TTY CMD — the entry point tests use.
+# run_in [-e K=V]... [-w DIR] STYLE TTY CMD — the entry point tests use.
 # bats `run` around exec_in. Sets $status, $output (CRs stripped), ${lines[@]}, and:
 #   ELAPSED_MS  wall time of the whole docker exec, measured on the runner side, in ms
 #   ELAPSED_S   the same, as seconds with 3 decimals
@@ -160,6 +169,24 @@ run_in() {
   else
     lines=()
   fi
+}
+
+# drop_ic_notty_lines — after a `bash -ic` run with no terminal, remove the two lines bash itself prints
+# before anything else (job control has no terminal), and only those: each in its exact text (the
+# process group is the one field allowed to vary: `-1` in docker exec, a pid elsewhere), at most once,
+# in bash's order, and only at the very start. Rebuilds $output and ${lines[@]} from what is left, so a
+# cell's positional reads mean what they mean in the -c and -lc styles. Lane 005s1-c: three ic cells
+# read the restore's verdict and `type -a`'s first line two lines late.
+IC_NOTTY_LINES=(
+  '^bash: cannot set terminal process group \((-1|[0-9]+)\): Inappropriate ioctl for device$'
+  '^bash: no job control in this shell$'
+)
+drop_ic_notty_lines() {
+  local known
+  for known in "${IC_NOTTY_LINES[@]}"; do
+    if ((${#lines[@]} > 0)) && [[ "${lines[0]}" =~ $known ]]; then lines=("${lines[@]:1}"); fi
+  done
+  if ((${#lines[@]} > 0)); then output="$(printf '%s\n' "${lines[@]}")"; else output=""; fi
 }
 
 # exec_plain CMD... — `docker exec` (no shell, no tty) for setup, teardown and control reads.
@@ -256,6 +283,26 @@ container_tmpdir() {
   d="${d//$'\r'/}"
   [[ "$d" == /tmp/"$1".* ]] || { echo "mktemp in container returned '$d'" >&2; return 1; }
   printf '%s' "$d"
+}
+
+# state_root_dir NAME — a per-test state root on the agent's state volume (feature 005 slice 1, FR-25):
+# the test's own snapshot stores, isolated from every other test's, on the volume's filesystem, so a
+# result carries no not-persistent line (FR-27), as in the configuration compose.yaml gives the agent.
+state_root_dir() {
+  local d
+  d="$(exec_plain mktemp -d "/var/lib/timelike/e2e-$1.XXXXXX")" || return 1
+  d="${d//$'\r'/}"
+  [[ "$d" == /var/lib/timelike/e2e-"$1".* ]] || { echo "mktemp on the state volume returned '$d'" >&2; return 1; }
+  printf '%s' "$d"
+}
+
+# state_root_rm PATH... — remove per-test state roots (only /var/lib/timelike/e2e-*).
+state_root_rm() {
+  local p
+  for p in "$@"; do
+    [[ -n "$p" && "$p" == /var/lib/timelike/e2e-?* ]] || continue
+    exec_plain rm -rf -- "$p" >/dev/null 2>&1 || true
+  done
 }
 
 # container_rm PATH... — remove paths created by a test (only under /tmp).

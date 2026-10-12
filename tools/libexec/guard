@@ -1,0 +1,664 @@
+#!/opt/timelike/python/bin/python3 -I
+"""guard — what timelike's guards run before a destructive command (feature 005 slice 1; spec FR-39,
+FR-42 to FR-47, D-18, D-19; FOR-MENTOR Item 22, answered in
+bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md).
+
+Not a tool: never on PATH, no manifest, no session event. Run by its absolute path (P002):
+
+    guard rm -- ARG...          by the `rm` function in /etc/timelike/shell-env.bash, before `rm ARG...`
+    guard git -- ARG...         by the `git` function, before `git ARG...` (reset --hard, clean, and a
+                                forced push given --no-verify, which skips the pre-push hook below)
+    guard pre-push REMOTE URL   by the git hook dispatcher (/opt/timelike/git-hooks/dispatch), before
+                                the repository's own pre-push hook; git's update lines on stdin
+    guard trash-put --command 'CMD' -- PATH...    keep PATH... in the trash (what `guard rm` does)
+
+It takes the snapshot, keeps deleted files in the trash, and prints one stderr line for each, naming the
+snapshot or trash item and the command that puts things back. It NEVER runs, blocks or changes the
+command it guards: the caller runs the real command afterwards, whatever this helper did, and its output
+and exit code are the command's own (seam 4). What it cannot do (a refused workspace, a busy store, a
+file the trash cannot keep) it says, in a line, and the command still runs (P3: the guard records; it
+does not block). Exit 0, or 2 for a call it does not understand.
+
+A command line it cannot read is treated as destructive: the snapshot is taken anyway ("when in doubt").
+
+`snapshot`, beside timelike's other tools, holds the implementation; it is loaded from this file's own
+location (bin/ beside libexec/), never from PATH. `git` is run as the agent's own `command git` would be.
+"""
+
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+import re
+import shlex
+import subprocess
+import sys
+from types import ModuleType
+from typing import Any
+
+import agentio
+
+SHOWN = 60  # characters of a command shown in a line or a snapshot's reason
+NOT_KEPT_SHOWN = 5  # not-kept paths named one by one; the rest are counted (undo --trash ID lists them)
+GIT_TIMEOUT_S = 10
+
+# git's own options before the subcommand (git(1)): those taking a separate value, and plain flags.
+GIT_VALUE_OPTS = {
+    "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix",
+    "--list-cmds", "--attr-source",
+}  # fmt: skip
+GIT_FLAG_OPTS = {
+    "-p", "--paginate", "-P", "--no-pager", "--bare", "--no-replace-objects", "--no-lazy-fetch",
+    "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs",
+    "--no-optional-locks", "--no-advice", "--exec-path", "--html-path", "--man-path", "--info-path",
+    "-v", "--version", "-h", "--help",
+}  # fmt: skip
+# git push options that take a separate value (git-push(1)).
+PUSH_VALUE_OPTS = {"--repo", "-o", "--push-option", "--receive-pack", "--exec"}
+RM_LONG = {
+    "--force", "--interactive", "--one-file-system", "--no-preserve-root", "--preserve-root",
+    "--verbose", "--help", "--version",
+}  # fmt: skip
+
+
+def load_snapshot() -> ModuleType:
+    here = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(os.path.dirname(here), "bin", "snapshot")
+    loader = importlib.machinery.SourceFileLoader("timelike_snapshot", path)
+    spec = importlib.util.spec_from_loader("timelike_snapshot", loader)
+    if spec is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["timelike_snapshot"] = module
+    loader.exec_module(module)
+    return module
+
+
+def say(line: str) -> None:
+    print(f"timelike: {line}", file=sys.stderr)
+
+
+def usage() -> int:
+    say("usage: guard rm -- ARG... | guard git -- ARG... | guard pre-push REMOTE URL"
+        " | guard trash-put --command 'CMD' -- PATH...")  # fmt: skip
+    return 2
+
+
+def shown(argv: list[str]) -> str:
+    text = shlex.join(argv)
+    return text if len(text) <= SHOWN else text[: SHOWN - 1] + "…"
+
+
+def redact(remote: str) -> str:
+    """A remote given as a URL may carry credentials (user:token@host); never write or print them (P4)."""
+    return re.sub(r"(://)[^/@\s]*@", r"\1", remote)
+
+
+class Guard:
+    def __init__(self) -> None:
+        self.snap = load_snapshot()
+        try:
+            session = agentio.session_id()
+        except agentio.ToolError:
+            session = "default"  # an invalid TIMELIKE_SESSION must not cost the agent its snapshot
+        self.ctx = agentio.Context(self.snap.TOOL, [], session, agentio.scratch_root(), "text", 0, False)
+        self.state: dict[str, Any] | None = None
+
+    # ── what every guard does ──
+
+    def persistence(self) -> None:
+        if self.state is None:
+            self.state = self.snap.note_persistence()  # FR-27: the not-persistent line, once
+
+    def snapshot(self, ws: str, command: str, extra: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Take a snapshot of `ws` with reason `before COMMAND`; print the line naming it, or why not."""
+        snap = self.snap
+        self.persistence()
+        try:
+            snap.check_workspace(ws, self.ctx, "snapshot")
+            caps = snap.caps_from_env()
+            snap.purge_limits()
+            store = snap.Store(self.ctx, ws)
+            snap.import_slice0(store)
+            store.create()
+            with store.lock():
+                rec: dict[str, Any] = snap.take_locked(store, caps, f"before {command}", None, extra)
+                snap.purge(store)
+        except snap.Outcome as o:
+            say(f"no snapshot of {ws} before {command}: {o.verdict}")
+            return None
+        except agentio.ToolError as e:
+            say(f"no snapshot of {ws} before {command}: {e.what}")
+            return None
+        except OSError as e:
+            say(f"no snapshot of {ws} before {command}: {e.strerror or e}")
+            return None
+        part = f" (partial: excluded {len(rec['excluded'])} files)" if rec["partial"] else ""
+        say(
+            f"snapshot {rec['id']} of {ws} taken before {command}{part}:"
+            f" undo {rec['id']} --yes puts the workspace back"
+        )
+        return rec
+
+    def trash(self, paths: list[str], command: list[str]) -> dict[str, Any] | None:
+        """Keep `paths` in the trash; print the line naming the item and what was not kept, or why not."""
+        self.persistence()
+        try:
+            item: dict[str, Any] | None = self.snap.trash_put(self.ctx, paths, command)
+        except (agentio.ToolError, OSError) as e:
+            say(f"the trash could not keep {shlex.join(paths)}: {getattr(e, 'what', None) or e}")
+            return None
+        if item is None:
+            return None
+        say(
+            f"trash item {item['id']} keeps {item['files']} files ({self.snap.human(item['bytes'])}):"
+            f" undo --trash {item['id']} --yes puts them back"
+        )
+        nk = item["not_kept"]
+        for x in nk[:NOT_KEPT_SHOWN]:
+            say(f"not kept: {x['path']} ({x['reason']})")
+        if len(nk) > NOT_KEPT_SHOWN:
+            say(f"not kept: {len(nk) - NOT_KEPT_SHOWN} more (undo --trash {item['id']} --dry-run lists them)")
+        return item
+
+    def notes(self) -> None:
+        for line in self.snap.NOTES:
+            say(line)  # the not-persistent line (FR-27) and every purge (FR-37, FR-41): never silent
+        self.snap.NOTES.clear()
+
+    # ── rm (FR-42, FR-45) ──
+
+    def rm(self, args: list[str]) -> int:
+        recursive, dir_ok, doubt, operands = parse_rm(args)
+        command = shown(["rm", *args])
+        present = [p for p in operands if os.path.lexists(p)]
+        if not present:
+            return 0  # nothing there to keep; rm says so itself
+        if recursive or doubt:
+            done: set[str] = set()
+            for p in present:
+                ws = workspace_for(p)
+                if ws is None:
+                    where = os.path.abspath(p)
+                    say(f"no snapshot before {command}: {where} is in no workspace (the trash keeps it)")
+                elif ws not in done:
+                    done.add(ws)
+                    self.snapshot(ws, command)
+        keep, refused = trash_candidates(present, recursive or doubt, dir_ok)
+        for path, why in refused:
+            say(f"not kept: {path} ({why})")
+        if keep:
+            self.trash(keep, ["rm", *args])
+        self.notes()
+        return 0
+
+    # ── git (FR-43, FR-44, FR-45) ──
+
+    def git(self, argv: list[str]) -> int:
+        globals_, sub, rest, doubt = split_git(argv)
+        command = shown(["git", *argv])
+        if doubt:
+            self.snapshot(agentio.workspace(), f"{command} (a git command line the guard cannot read)")
+        elif sub == "reset" and "--hard" in rest:
+            self.git_reset(globals_, command)
+        elif sub == "clean":
+            self.git_clean(globals_, rest, argv, command)
+        elif sub == "push":
+            self.git_push_no_verify(globals_, rest, command)
+        self.notes()
+        return 0
+
+    def git_reset(self, globals_: list[str], command: str) -> None:
+        top = toplevel(globals_)
+        if top is None:
+            return  # not in a worktree: git refuses on its own, and there is nothing to snapshot
+        st = run_git(globals_, ["status", "--porcelain", "--untracked-files=no"])
+        if st is not None and st.returncode == 0 and not st.stdout.strip():
+            return  # no uncommitted change for a hard reset to discard: nothing to keep
+        self.snapshot(top, command)  # changes, or a status git could not give: in doubt, take it
+
+    def git_clean(self, globals_: list[str], rest: list[str], argv: list[str], command: str) -> None:
+        flags = clean_flags(rest)
+        if "n" in flags:
+            return  # a dry run deletes nothing
+        if not flags & {"f", "i"}:
+            rf = run_git(globals_, ["config", "--type=bool", "--get", "clean.requireForce"])
+            if rf is None or rf.stdout.strip() != "false":
+                return  # git refuses to clean without -f: it deletes nothing
+        listing = run_git(globals_, ["clean", "-n", *clean_dry_args(rest)])
+        if listing is None or listing.returncode != 0:
+            self.snapshot(agentio.workspace(), f"{command} (what it would remove could not be listed)")
+            return
+        base = effective_dir(globals_)
+        paths = [os.path.join(base, p) for p in would_remove(listing.stdout)]
+        if not paths:
+            return
+        top = toplevel(globals_)
+        if top is not None:
+            self.snapshot(top, command)
+        self.trash(paths, ["git", *argv])
+
+    def git_push_no_verify(self, globals_: list[str], rest: list[str], command: str) -> None:
+        """--no-verify skips the pre-push hook, so the record is made here, from the remote-tracking ref."""
+        p = parse_push(rest)
+        if not (p["no_verify"] and (p["force"] or p["delete"])):
+            return  # an ordinary push, or a forced one the pre-push hook records (exactly one snapshot)
+        remote = p["remote"] or default_remote(globals_)
+        refs = p["refspecs"] or default_refspecs(globals_, remote)
+        records = []
+        for dst in refs:
+            tracking = tracking_ref(remote, dst)
+            prior = rev(globals_, tracking) if tracking else None
+            records.append(
+                {
+                    "remote": redact(remote),
+                    "ref": dst,
+                    "prior": prior,
+                    "source": f"{tracking}, read before the push (it may be stale: it is the last fetch)"
+                    if tracking
+                    else "none: no remote-tracking ref for it",
+                }
+            )
+        self.record_push(globals_, command, records)
+
+    def record_push(self, globals_: list[str], command: str, records: list[dict[str, Any]]) -> None:
+        top = toplevel(globals_)
+        if top is not None:
+            self.snapshot(top, command, {"push": records})
+        else:
+            say(f"no snapshot before {command}: no worktree here (a bare repository)")
+        for r in records:
+            if r["prior"]:
+                stale = (
+                    " (from the remote-tracking ref, which may be stale)" if "stale" in r["source"] else ""
+                )
+                say(
+                    f"forced push: {r['remote']} {r['ref']} was {r['prior']}{stale};"
+                    f" put it back with: git push --force {r['remote']} {r['prior']}:{r['ref']}"
+                )
+            else:
+                say(f"forced push: {r['remote']} {r['ref']}: its prior commit is not known here")
+
+    # ── the pre-push step (FR-44; 001's dispatcher, declared) ──
+
+    def pre_push(self, remote: str, lines: list[str]) -> int:
+        records: list[dict[str, Any]] = []
+        for line in lines:
+            parts = line.split()
+            if len(parts) != 4:
+                say(f"pre-push: a line git gave that the guard cannot read: {line[:SHOWN]!r}")
+                continue
+            local_ref, local_sha, remote_ref, remote_sha = parts
+            if set(remote_sha) == {"0"}:
+                continue  # a new ref on the remote: nothing there to lose
+            if set(local_sha) != {"0"}:
+                r = run_git([], ["merge-base", "--is-ancestor", remote_sha, local_sha])
+                if r is not None and r.returncode == 0:
+                    continue  # a fast-forward: the prior commit stays in the new one's history
+            records.append(
+                {
+                    "remote": redact(remote),
+                    "ref": remote_ref,
+                    "prior": remote_sha,
+                    "source": "the remote, as git read it for this push",
+                    "deleted": set(local_sha) == {"0"},
+                    "local_ref": local_ref,
+                }
+            )
+        if records:
+            refs = [str(r["ref"]) for r in records]
+            self.record_push([], shown(["git", "push", "--force", redact(remote), *refs]), records)
+        self.notes()
+        return 0
+
+
+# ── parsing, with no git process ──────────────────────────────────────────────────────────────
+
+
+def parse_rm(args: list[str]) -> tuple[bool, bool, bool, list[str]]:
+    """GNU rm's options, anywhere before `--` (it permutes them): (recursive, -d, in doubt, operands)."""
+    recursive = dir_ok = doubt = False
+    operands: list[str] = []
+    done = False
+    for a in args:
+        if done or a == "-" or not a.startswith("-"):
+            operands.append(a)
+        elif a == "--":
+            done = True
+        elif a.startswith("--"):
+            name = a.split("=", 1)[0]
+            if name == "--recursive":
+                recursive = True
+            elif name == "--dir":
+                dir_ok = True
+            elif name not in RM_LONG:
+                doubt = True  # an abbreviation (--rec) or an option this guard does not know
+        else:
+            for ch in a[1:]:
+                if ch in "rR":
+                    recursive = True
+                elif ch == "d":
+                    dir_ok = True
+                elif ch not in "fiIv":
+                    doubt = True
+    return recursive, dir_ok, doubt, operands
+
+
+def split_git(argv: list[str]) -> tuple[list[str], str | None, list[str], bool]:
+    """(git's own options, the subcommand, its arguments, in doubt) — git(1)'s options before it."""
+    globals_: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in GIT_VALUE_OPTS:
+            globals_ += argv[i : i + 2]
+            i += 2
+        elif a in GIT_FLAG_OPTS or (
+            a.startswith("--") and a.split("=", 1)[0] in GIT_VALUE_OPTS | GIT_FLAG_OPTS
+        ):
+            globals_.append(a)
+            i += 1
+        elif a.startswith("-"):
+            return globals_, None, argv[i:], True
+        else:
+            return globals_, a, argv[i + 1 :], False
+    return globals_, None, [], False
+
+
+def clean_flags(rest: list[str]) -> set[str]:
+    """The letters of git clean's short flags in force, long ones mapped to theirs (-e's value skipped)."""
+    out: set[str] = set()
+    long_map = {"--dry-run": "n", "--force": "f", "--interactive": "i"}
+    skip = False
+    for a in rest:
+        if skip:
+            skip = False
+        elif a == "--":
+            break
+        elif a in long_map:
+            out.add(long_map[a])
+        elif a in ("-e", "--exclude"):
+            skip = True
+        elif a.startswith("-") and not a.startswith("--"):
+            letters = a[1:]
+            if "e" in letters:
+                letters = letters[: letters.index("e")]  # -xe PATTERN: the rest is -e's value
+                skip = a.endswith("e")
+            out.update(letters)
+    return out
+
+
+def clean_dry_args(rest: list[str]) -> list[str]:
+    """git clean's arguments for a listing: -f, -i and -q dropped (the listing adds -n)."""
+    out: list[str] = []
+    skip = False
+    for a in rest:
+        if skip or a == "--":
+            out.append(a)
+            skip = False
+            continue
+        if a in ("--force", "--interactive", "--quiet"):
+            continue
+        if a in ("-e", "--exclude"):
+            skip = True
+            out.append(a)
+            continue
+        if a.startswith("-") and not a.startswith("--"):
+            head, sep, tail = a[1:].partition("e")
+            letters = "".join(c for c in head if c not in "fiq")
+            if sep:
+                out.append(f"-{letters}e{tail}")
+                skip = not tail
+            elif letters:
+                out.append(f"-{letters}")
+            continue
+        out.append(a)
+    return out
+
+
+def would_remove(listing: str) -> list[str]:
+    out = []
+    for line in listing.splitlines():
+        if line.startswith("Would remove "):
+            p = line[len("Would remove ") :]
+            if p.startswith('"') and p.endswith('"'):
+                p = unquote_c(p[1:-1])
+            out.append(p.rstrip("/"))
+    return out
+
+
+def unquote_c(s: str) -> str:
+    """git's C-style path quoting (core.quotePath): backslash escapes and octal bytes."""
+    raw = bytearray()
+    i = 0
+    simple = {"n": 10, "t": 9, '"': 34, "\\": 92, "a": 7, "b": 8, "f": 12, "r": 13, "v": 11}
+    b = s.encode("utf-8", "surrogateescape")
+    while i < len(b):
+        c = b[i]
+        if c == 92 and i + 1 < len(b):
+            nxt = chr(b[i + 1])
+            if nxt in simple:
+                raw.append(simple[nxt])
+                i += 2
+                continue
+            if nxt.isdigit() and i + 3 < len(b) + 1:
+                raw.append(int(b[i + 1 : i + 4], 8))
+                i += 4
+                continue
+        raw.append(c)
+        i += 1
+    return raw.decode("utf-8", "surrogateescape")
+
+
+def parse_push(rest: list[str]) -> dict[str, Any]:
+    force = delete = no_verify = mirror = False
+    positional: list[str] = []
+    skip = False
+    done = False
+    for a in rest:
+        if skip:
+            skip = False
+        elif done or not a.startswith("-") or a == "-":
+            positional.append(a)
+        elif a == "--":
+            done = True
+        elif a in PUSH_VALUE_OPTS:
+            skip = True
+        elif a == "--no-verify":
+            no_verify = True
+        elif a == "--verify":
+            no_verify = False
+        elif a in ("--force", "--force-with-lease") or a.startswith("--force-with-lease="):
+            force = True
+        elif a == "--delete":
+            delete = True
+        elif a in ("--mirror", "--all", "--branches", "--prune"):
+            mirror = mirror or a in ("--mirror", "--prune")
+        elif a.startswith("--"):
+            pass
+        else:
+            letters = a[1:]
+            force = force or "f" in letters
+            delete = delete or "d" in letters
+            if letters.endswith("o"):
+                skip = True
+    refspecs = positional[1:]
+    force = force or mirror or any(r.startswith("+") for r in refspecs)
+    delete = delete or any(r.startswith(":") for r in refspecs)
+    dsts = []
+    for r in refspecs:
+        r = r.lstrip("+")
+        src, _, dst = r.partition(":") if ":" in r else (r, "", r)
+        dst = dst or src
+        if delete and ":" not in r:
+            dst = src  # --delete NAME
+        dsts.append(dst if dst.startswith("refs/") else f"refs/heads/{dst}")
+    return {
+        "force": force,
+        "delete": delete,
+        "no_verify": no_verify,
+        "remote": positional[0] if positional else None,
+        "refspecs": dsts,
+    }
+
+
+def tracking_ref(remote: str, dst: str) -> str | None:
+    if dst.startswith("refs/heads/") and re.match(r"^[A-Za-z0-9._-]+$", remote):
+        return f"refs/remotes/{remote}/{dst.removeprefix('refs/heads/')}"
+    return None
+
+
+# ── paths ─────────────────────────────────────────────────────────────────────────────────────
+
+
+def workspace_for(path: str) -> str | None:
+    """The workspace a deleted path belongs to, as `snapshot` would choose it from there (FR-1): the
+    path itself when it holds `.git`, else the nearest ancestor holding one, else the shell's own
+    workspace when the path is inside it; None when the path is in no workspace (the trash keeps it)."""
+    p = os.path.abspath(path)
+    if os.path.isdir(p) and not os.path.islink(p) and os.path.lexists(os.path.join(p, ".git")):
+        return os.path.realpath(p)
+    d = os.path.realpath(os.path.dirname(p))
+    cur = d
+    while True:
+        if os.path.lexists(os.path.join(cur, ".git")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    here = agentio.workspace()
+    real = os.path.join(d, os.path.basename(p))
+    if real == here or real.startswith(here.rstrip("/") + "/"):
+        return here
+    return None
+
+
+def trash_candidates(
+    present: list[str], recursive: bool, dir_ok: bool
+) -> tuple[list[str], list[tuple[str, str]]]:
+    """What rm will delete, so what the trash keeps: never the root, home or their ancestors, nor the
+    state root (the trash lives there); a directory only when rm will remove it (-r, or -d and empty)."""
+    homes = [os.path.realpath(h) for h in filter(None, [os.environ.get("HOME", "")])]
+    state = os.path.realpath(str(agentio.state_root()))
+    keep, refused = [], []
+    for p in present:
+        real = os.path.join(os.path.realpath(os.path.dirname(os.path.abspath(p))), os.path.basename(p))
+        is_dir = os.path.isdir(p) and not os.path.islink(p)
+        if real == "/" or any(real == h or h.startswith(real.rstrip("/") + "/") for h in homes):
+            refused.append((real, "the filesystem root, your home directory or an ancestor of it"))
+        elif real == state or real.startswith(state + "/") or state.startswith(real.rstrip("/") + "/"):
+            refused.append((real, f"holds or is inside the state root {state}"))
+        elif is_dir and not recursive and not (dir_ok and not os.listdir(p)):
+            continue  # rm without -r leaves a directory: nothing deleted, nothing to keep
+        else:
+            keep.append(p)
+    return keep, refused
+
+
+# ── git, run as the agent's `command git` would be ────────────────────────────────────────────
+
+
+def run_git(globals_: list[str], args: list[str]) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(
+            ["git", *globals_, *args],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="surrogateescape",
+            timeout=GIT_TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def toplevel(globals_: list[str]) -> str | None:
+    r = run_git(globals_, ["rev-parse", "--show-toplevel"])
+    top = r.stdout.strip() if r is not None and r.returncode == 0 else ""
+    return os.path.realpath(top) if top else None
+
+
+def effective_dir(globals_: list[str]) -> str:
+    d = os.getcwd()
+    for i, a in enumerate(globals_):
+        if a == "-C" and i + 1 < len(globals_):
+            d = os.path.join(d, globals_[i + 1])
+    return d
+
+
+def rev(globals_: list[str], ref: str) -> str | None:
+    r = run_git(globals_, ["rev-parse", "--verify", "-q", f"{ref}^{{commit}}"])
+    return r.stdout.strip() if r is not None and r.returncode == 0 and r.stdout.strip() else None
+
+
+def config(globals_: list[str], key: str) -> str | None:
+    r = run_git(globals_, ["config", "--get", key])
+    return r.stdout.strip() if r is not None and r.returncode == 0 and r.stdout.strip() else None
+
+
+def current_branch(globals_: list[str]) -> str | None:
+    r = run_git(globals_, ["symbolic-ref", "-q", "--short", "HEAD"])
+    return r.stdout.strip() if r is not None and r.returncode == 0 and r.stdout.strip() else None
+
+
+def default_remote(globals_: list[str]) -> str:
+    """git push's own choice (git-push(1)): branch.<b>.pushRemote, remote.pushDefault, branch.<b>.remote."""
+    b = current_branch(globals_)
+    for key in (
+        ([f"branch.{b}.pushRemote"] if b else [])
+        + ["remote.pushDefault"]
+        + ([f"branch.{b}.remote"] if b else [])
+    ):
+        v = config(globals_, key)
+        if v:
+            return v
+    return "origin"
+
+
+def default_refspecs(globals_: list[str], remote: str) -> list[str]:
+    b = current_branch(globals_)
+    if b is None:
+        return []
+    merge = config(globals_, f"branch.{b}.merge")
+    if merge and config(globals_, f"branch.{b}.remote") == remote:
+        return [merge]
+    return [f"refs/heads/{b}"]
+
+
+# ── entry ─────────────────────────────────────────────────────────────────────────────────────
+
+
+def trash_put(argv: list[str]) -> int:
+    if len(argv) < 3 or argv[0] != "--command" or "--" not in argv:
+        return usage()
+    paths = argv[argv.index("--") + 1 :]
+    g = Guard()
+    g.trash(paths, argv[1].split())
+    for line in g.snap.NOTES:
+        if line.startswith("purged: "):
+            say(line)
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        return usage()
+    verb, rest = argv[1], argv[2:]
+    try:
+        if verb == "trash-put":
+            return trash_put(rest)
+        if verb in ("rm", "git") and rest[:1] == ["--"]:
+            g = Guard()
+            return g.rm(rest[1:]) if verb == "rm" else g.git(rest[1:])
+        if verb == "pre-push" and len(rest) >= 1:
+            return Guard().pre_push(rest[0], sys.stdin.read().splitlines())
+    except Exception as e:  # never a traceback in front of the agent's command, and never a block
+        say(f"the guard failed ({type(e).__name__}: {e}); the command runs without its record")
+        return 0
+    return usage()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

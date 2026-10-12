@@ -746,3 +746,542 @@ this section):
   Under this project's recorded choice the merge is not blocked. No number was produced, and none was
   filled in by hand.
 - Not exercised: Step 5's `ship-summary-state` line (Step 4 was not run here).
+
+## Cycle 3 — bridge/sends/07-rev11-20261010-050829.md
+
+**Written:** 2026-10-10T06:09:00Z (read from the clock). Not in dispatch mode. **specswarm 4.0.1-botbaubble.2.44.0**:
+the expanded `modify`, `plan`, `tasks` and `implement` commands name the cache path
+`…/specswarm/4.0.1-botbaubble.2.44.0` (lore `specswarm` Q002; the operator ran `/plugin` in this session after
+the install). The sequence was `/specswarm:modify 005 --from-send bridge/sends/07-rev11-20261010-050829.md` on
+`modify/005-slice-1` (from `master` `97641da`), then `/specswarm:plan`, `/specswarm:tasks` and
+`/specswarm:implement` (Phase 7, T020–T031; T032 held). **Nothing was pushed or merged.**
+
+This path is the send's, `code/.specswarm/features/005-recover/cycle-report.md`; CLAUDE.md names the same file.
+
+**Status in one line:** the state root, its volume, the scheduled snapshot, purge, the lock, import, the trash's
+store and restore, and the two revision-11 criteria are built and pass on the host. **The guards (`rm`,
+`git reset --hard`, `git push --force`, `git clean`) and what feeds the trash are not built: FOR-MENTOR Item 22
+(`e488657`) asks how they reach `rm` and `git`, and is unanswered.** So two of slice 1's five Automated criteria
+cannot be met yet, and the README status block is not applied. Nothing has run in the image.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/07-rev11-20261010-050829.md |
+| source_prompt | plan/.discover/prompts/07-recover.md |
+| prompt_revision | 11 |
+| discovery_revision | 15 |
+| slice | 1 |
+
+The spec's frontmatter is unchanged (`prompt_revision: 1`, `discovery_revision: 10`,
+`audited_against: [1, …, 11]`).
+
+### Provenance (modify Step 2 and Step 9)
+
+Row 4: the same prompt, `N = 11`, already in `audited_against`. Step 9 did not run and nothing was appended, as
+the send said. No `audit-log.md` row: no mode was recorded or corrected.
+
+### What was built (Phase 7)
+
+| Task | Commit | What |
+|---|---|---|
+| — | `e488657` | FOR-MENTOR Item 22, raised before any guard was built |
+| — | `19f151f`, `36a03de` | modify, impact analysis, spec slice 1, plan, research R10–R16, data model, contract, tasks |
+| T020 | `fd3c423` | agentio: `TIMELIKE_STATE_ROOT` (default `/var/lib/timelike`), `VERSION` (P003), persistence by `st_dev` |
+| T021 | `4c97c1c` | the store in `<state>/workspaces/<key>/`; the not-persistent line (FR-27); `session`/`agent` (FR-31); other workspaces named (FR-29); the lock names its holder (FR-38) |
+| T022 | `294ffbd` | slice-0 stores imported once, in order, verified (FR-30) |
+| T023 | `c01767b` | the stat cache (FR-35) |
+| T024 | `d888a46` | the scheduled snapshot: the builtins-only due check in `shell-env.bash`, `libexec/scheduled-snapshot`, default interval 300 s (FR-32–FR-34) |
+| T025 | `d54925f` | purge on write: age, then size, never a workspace's newest, time-bounded, named (FR-36, FR-37) |
+| T026 | `18eec08` | the trash: `libexec/guard trash-put`, `undo --trash`, its purge (FR-39–FR-41) |
+| T027 | `5d8857b` | `/var/lib/timelike` in the image (agent, 0700), the ENV, compose's named volume `timelike-state` |
+| T028 | `519385f` | e2e cells (below) |
+| T029 | `2811c2b` | carried: `symbols`' index in the state root (Item 20, closed); rule 10's contract text |
+| T030 | `bddd93a` | README: the generated command reference only |
+| T031 | this commit | the host lane, lint fixes, this report |
+
+### The seams, as decided (spec § Slice 1, D-11 to D-18; research R10 to R16)
+
+1. **State root:** `/var/lib/timelike`, outside every workspace and the home; `TIMELIKE_STATE_ROOT`, read by
+   timelike (P002); created in the image owned by `agent`, 0700, so a fresh named volume takes it (Q003).
+   **Without a volume, every `snapshot` and `undo` result carries one line** (FR-27):
+   `not persistent: /var/lib/timelike is not a mounted volume, so this recovery state dies with the container;
+   mount one at /var/lib/timelike (compose.yaml: timelike-state)`. Every result, not the first per session: a
+   "first per session" needs a record kept where the line says nothing persists. Vanilla gets nothing.
+2. **Keying:** by real path (as slice 0). A workspace moved elsewhere sees `0 snapshots`, and `snapshot list`
+   and `undo` name every other workspace in the state root with snapshots, with its path and count.
+3. **Slice 0's stores:** imported on first use, in order, verified, marked `imported` in place, each import
+   and each failure named.
+4. **Guards:** Item 22 (Q1, Q2). Not built.
+5. **Force push:** Item 22 Q2 (git's own `pre-push` input, through 001's dispatcher). Not built.
+6. **Scripts:** a scheduled snapshot at the shell's start when the last one is older than
+   `TIMELIKE_SNAPSHOT_INTERVAL` (default 300 s; `0`, `off`). Measured (R11): **not due, +0.5 ms per shell
+   start and no fork; due, 120–145 ms (464 files, 6.7 MB) and 270–300 ms (657 files, 51 MB) on an unchanged
+   workspace**. Not taken when the command starts with `snapshot` or `undo`.
+7. **Trash:** the store, `undo --trash [ID] [--dry-run] [--yes]`, purge by `TIMELIKE_TRASH_MAX_AGE_DAYS` (30)
+   and `TIMELIKE_TRASH_MAX_BYTES` (1 GiB). What feeds it: Item 22 Q3.
+8. **Purge:** on write (after a take and after a verified restore), `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` (30),
+   `TIMELIKE_STATE_MAX_BYTES` (4 GiB) over every workspace's content, `TIMELIKE_PURGE_SECONDS` (2); never a
+   workspace's newest; a busy workspace skipped and named.
+9. **Concurrency:** one `flock` per workspace store, shared by every session and agent; the kernel releases a
+   dead holder's lock, so there is no stale-lock state; a live holder is named.
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No sibling feature was used and no subagent ran.
+
+**criteria_reestablished** (each citation matches exactly one line of the send, `grep -cF` = 1 for all eleven).
+Nothing has run in the image, so every mode is `unconfirmed`; host evidence is listed and changes no mode.
+
+- `07 · "records tracked, untracked and ignored-but-not-excluded files of the workspace and prints its identifier, file count and size _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `snapshot-records-tracked-untracked-and-ignored-files.bats`, now on a per-test state
+  root; host: test_snapshot.py).
+- `07 · "removes files created after it, and a dry run lists exactly those changes first _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `restore-returns-captured-content-and-removes-files-created-after.bats`).
+- `07 · "history, index and stash are unchanged by taking or restoring a snapshot _(traces to: P5)_"` —
+  **unconfirmed** (slice 0; `version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats`).
+- `07 · "would exceed the size cap is refused or partial, and the verdict names what was excluded and why _(traces to: P2)_"` —
+  **unconfirmed** (slice 0; `snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats`).
+- `07 · "a force push, and a clean of untracked files each take an automatic snapshot before running, and the verdict names it _(traces to: P5)_"` —
+  **unconfirmed: not built.** Held for FOR-MENTOR Item 22; no e2e file yet.
+- `07 · "is restorable from the most recent automatic or scheduled snapshot _(traces to: P5)_"` — **unconfirmed**
+  (`a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats`, 4 cells;
+  host: test_scheduled_snapshot.py restores a directory a Python script removed).
+- `07 · "is listed and restorable from a new session, and after the agent's container is recreated _(traces to: P5)_"` —
+  **unconfirmed** (`a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats`,
+  4 cells: two new-session cells, the recreate on fresh named volumes, and the no-volume line; host: the
+  new-session half in test_snapshot_slice1.py).
+- `07 · "so the restore itself can be undone, and its verdict names that snapshot _(traces to: P5)_"` —
+  **unconfirmed** (`a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats`, 2 cells; host:
+  test_snapshot_slice1.py). FR-19 already did this; nothing in it had to change against the new store.
+- `07 · "Deleted files are moved to a restorable trash that is purged by age and size limits _(traces to: P5)_"` —
+  **unconfirmed: partly built.** The trash's store, put-back and purge are built and have cells
+  (`deleted-files-trash-restorable-and-purged-by-age-and-size.bats`, 4 cells, fed through `guard trash-put`);
+  what moves the agent's deletes into it is held for Item 22. The file's header says it is partial.
+- `07 · "deletes the wrong directory and restores it with one undo command _(traces to: D7)_"` — **unconfirmed**
+  in this cycle (Manual; observed by the operator in Cycle 2, transcript `bridge/.d7-demo-20261004T044030Z.txt`;
+  nobody has looked again on this cycle's code).
+- `07 · "a snapshot is taken automatically, and the Agent restores from it _(traces to: D16)_"` — **unconfirmed**
+  (Manual; the mentor captures it after the lane; it needs a guarded destructive command, so Item 22 first).
+
+**reconcile_mode:** `scoped`. Slice 0's four criteria and four of slice 1's five Automated ones have cells on
+this cycle's code; the guards criterion is not built. If Item 22's ruling lets the guards be built in this
+cycle, an addendum says so and corrects the mode.
+
+**not_verified**
+- **Everything in the image:** every e2e cell above; the hook in the image's three bash styles; the helpers'
+  shebang interpreter; the named volume's first-mount ownership (the recreate cell checks it).
+- **The scheduled snapshot under other features' cells:** the e2e harness turns it off unless a cell sets
+  `TIMELIKE_SNAPSHOT_INTERVAL` (`helpers.bash` `exec_in`), so no other feature's cell runs with it on. Its own
+  cells run it at `0` and at the default.
+- **Latency in the image:** R11's figures are the host's (3.14.8 venv), not the container's.
+- **Note 12's cost on a large store:** verification re-hashes every object a snapshot names, so a scheduled
+  snapshot of a workspace with much stored content costs more than R11 shows. Item 22 asks the mentor whether
+  to narrow it.
+- **Two containers on one volume** (two agents in two containers): `flock` works across containers on one
+  host, but no cell runs two containers at once.
+- **The purge's time bound** has no test of its own (R14; decisions.md T025).
+- **D7 and D16.**
+
+**changed_other_features**
+- **001:** `image/rootfs/etc/timelike/shell-env.bash` gains the scheduled-snapshot block (builtins only; forks
+  once only when due; never re-entered); `image/Dockerfile` creates `/var/lib/timelike` and sets
+  `TIMELIKE_STATE_ROOT`; `compose.yaml` mounts `timelike-state` on the agent, and its "Deliberately no volumes"
+  comment now names the one volume; `contracts/output-contract.md` § Session event gains the State root (rule
+  10, declared, the send's carried item); `tests/e2e/helpers.bash` gains `state_root_dir`/`state_root_rm` and
+  turns scheduled snapshots off by default in `exec_in`.
+- **004 (Adele, feature 12's cells):** `adele-isolation-grant-file-and-extend-unreachable-from-agent.bats`'s first
+  cell read "no mounts at all"; it now requires exactly one mount, `timelike-state` at `/var/lib/timelike`, and
+  still that nothing of Adele's is mounted.
+- **011 (`symbols`):** the index moves to `<state root>/workspaces/<key>/symbols.json` (Item 20); its usage line,
+  its manifest's `index` and `contracts/symbols-cli.md`'s `index` line change with it, declared.
+- **README:** only the generated command reference (`undo --trash`; `symbols`' index line). The prose that says
+  snapshots and the index live in the session scratch is now false and is corrected with the README status
+  block, after Item 22.
+- `pyproject.toml`: the two new helpers are linted and type-checked.
+
+**process_failures_recorded**
+- The first run of the hook's K cases used a bash fake helper, which inherited `BASH_ENV`, re-entered the hook
+  and recursed until it was killed; the hook now has a re-entry guard and K1 counts exactly one call.
+- Cleaning up after it, `pkill -f` on a pattern matched my own command line and killed that shell (against my
+  own standing notes).
+- An edit to undo's verification dropped its `if left:` guard; 16 units caught it before the commit.
+- Three task start times were written composed, not read (T021, T022, T028); each is corrected in
+  `decisions.md` from git's commit times, with the correction stated.
+- The tasks commit `36a03de` was made before the deny-list ran; it passed when run straight after.
+- The not-persistent line was first 217 characters, over rule 13's 200, and was cut; shortened, with the spec
+  and contract, before any commit of the tool.
+
+**retired_prompts_seen:** none.
+
+### Host lane
+
+Advisory: files, units and the hooks' logic on the host, never the image. Python 3.14.8 (a scratch venv).
+- `make test-host`: **1987 passed, 13 skipped** (pytest tests/unit, 364 s); `test_env_layer.sh` 60 of 60;
+  `test_shell_env_hook.sh` **57 of 57** (K1–K13 new: the due check, the re-entry guard, and K13, the no-fork
+  probe from inside a workspace with a fresh stamp, which ran rather than skipped); `test_command_not_found.sh`
+  33 of 33. Exit 0.
+- New units: test_agentio_state.py 6, test_snapshot_slice1.py 15, test_scheduled_snapshot.py 5,
+  test_trash.py 5, test_state_root_image.py 6, test_symbols.py +1 (and one moved).
+- ruff 0.16.9 (`check` and `format --check`, the Makefile's paths): clean. mypy 2.3.1 `--strict` (pyproject's
+  files, the two helpers added): no issues in 30 files.
+- shellcheck (scratch shellcheck-py 0.11.0.1) over every changed shell file and the four new e2e files: clean;
+  the new files are in Makefile's `SHELLCHECK_FILES`.
+- bats 1.14.0 `--count` parses every new and changed e2e file; the slice-0 files' counts are unchanged.
+- BuildKit's Dockerfile parser (PyPI `dockerfile` 3.4.0): 58 instructions, 0 unknown.
+- Deny-list: PASS before every commit of this cycle (7 entries, P1–P7 0/0), except the tasks commit `36a03de`,
+  checked straight after (above).
+
+### Implement step 10 — quality validation (specswarm 2.44.0), as the installed blocks reported it
+
+Run from a scratch script executing the installed blocks (detector, `run_tests`, `run_coverage`, `quality-components`, `quality-scale` with its 2.44.0 rubric-coverage fields, `unmeasured-explains-itself`). Verbatim from the components on:
+
+```
+- components:
+unit-tests|25|-|unavailable:pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3)
+coverage|25|-|unavailable:pytest could not be run on this machine, so run_coverage printed unknown (rc 1)
+integration-tests|15|-|not-applicable:no integration suite is detected by the plugin; the bats e2e run only in the Docker lane
+browser-tests|15|-|not-applicable:no web project detected, so there is nothing to drive a browser over
+bundle-size|20|-|unavailable:lib/bundle-size-monitor.sh is not present in this install
+visual-alignment|15|-|unavailable:screenshot analysis is not implemented
+QS_POINTS_TOTAL=115.0000 QS_COVERAGE=0
+
+Quality Score: unknown — no component could be measured, so there is no score to compare
+
+ℹ️  Why there is no score, and whose gap it is
+   Every component was excluded. Each line below says which:
+     - unit-tests — unavailable: pytest could not be run on this machine (run_tests returned 2: declared by this project, not installed for /usr/bin/python3) (25 points not counted either way)
+     - coverage — unavailable: pytest could not be run on this machine, so run_coverage printed unknown (rc 1) (25 points not counted either way)
+     - integration-tests — not-applicable: no integration suite is detected by the plugin; the bats e2e run only in the Docker lane (15 points not counted either way)
+     - browser-tests — not-applicable: no web project detected, so there is nothing to drive a browser over (15 points not counted either way)
+     - bundle-size — unavailable: lib/bundle-size-monitor.sh is not present in this install (20 points not counted either way)
+     - visual-alignment — unavailable: screenshot analysis is not implemented (15 points not counted either way)
+
+   2 component(s) could not be measured because something this plugin ships is
+   absent from this install — that is SpecSwarm's gap, not this project's.
+   2 component(s) could not be measured because something this project
+   declares could not be run on this machine — that is neither a defect in SpecSwarm
+   nor in the project: install it here, or run where it is installed.
+   2 component(s) do not apply to a project of this kind, which is not a defect.
+block_merge_on_failure=false
+```
+
+The score is `unknown`, not a number: the merge bar is the mentor's Docker lane, as the send says.
+
+### Then
+
+Done for what Item 22 does not block. **No commit until the mentor says the lane has ended.** After Item 22 is
+answered: T032 (the guards, the force-push record, the trash's feed, SC-6's cells), the README status block,
+and an addendum here.
+
+### Addendum 1 — after lane 005s1-a and FOR-MENTOR Item 22's ruling
+
+**Written:** 2026-10-10T09:34:47Z (read from the clock), on `modify/005-slice-1`. Same send, same cycle: lane 005s1-a's
+fixes, the guards on Item 22's ruling, and the README status block. Instructed by the operator, relaying
+`../bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md` (the lane) and
+`../bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md` (Item 22), in that file's order.
+**Nothing was pushed or merged.** Nothing has run in the image since lane 005s1-a.
+
+**Status in one line:** every slice-1 criterion is now built and has cells; the README block is applied.
+None of this addendum's work has run in the image: lane 005s1-b decides it.
+
+| Task | Commit | What |
+|---|---|---|
+| T033 | `6e9c60b` | lane item 1: SC-7's `scheduled_ids` returned its loop's last match status; SC-7's shells now start in the repository (`exec_in -w`) |
+| T034 | `93725e5` | lane item 3: eight `git`-layer entries in both baselines; `DOCKER_CLI_IMAGE` to `docker:29.9.0-cli` (Go 1.26.9) |
+| T032 | `c2da532` | the guards, the pre-push record, the trash's feed, note 12, SC-6's cells; FOR-MENTOR Item 22 closed |
+| T035 | this commit | the README status block; this addendum |
+
+#### Lane 005s1-a, item 1 (SC-7)
+
+- **The defect the lane found:** `scheduled_ids` ended in `for … do [[ … ]] && …; done`, so it returned the last
+  line's non-match. It now matches with `if` and ends `return 0`. No assertion changed.
+- **The same shape elsewhere in this cycle's e2e files:** SC-8's two loops (`… && found=yes`, `… && n=…`) were
+  not a function's last statement, so they could not fail a cell; they are `if` now too. `helpers.bash`'s new
+  loops end in `|| true`. Nothing else matched.
+- **A second defect behind it, which the lane could not reach:** SC-7's `in_repo` started the shell in
+  `/home/agent` (the image's WORKDIR) and `cd`'d in the command, after the hook had run. The hook snapshots the
+  workspace a shell **starts** in, and skips `$HOME`, so the count after line 81 would have been 0. The cells
+  now start the shell in the repository (`exec_in -w DIR`, `docker exec -w`), as a harness starts the agent's
+  shell in its workspace. This is a test-setup fix, not a change to the feature. **None of SC-7's assertions
+  after the helper has run in the image yet.**
+
+#### Lane 005s1-a, item 3 (the scan)
+
+- **(a) Baselined** in `timelike-agent` and `timelike-vanilla`, origin `git`, the files' `review_by`
+  (2026-12-27) unchanged:
+  - CVE-2026-107778 in `libgssapi-krb5-2`, `libk5crypto3`, `libkrb5-3` and `libkrb5support0`;
+  - CVE-2026-67693, CVE-2026-95184 and CVE-2026-95209 (High), and CVE-2026-95210 (Critical, its own reason), in
+    `libgnutls30t64`.
+
+  The layer was checked: the pinned base's dpkg status (78 packages) holds none of them, and Debian trixie's
+  Depends lead `git` → `libcurl3t64-gnutls` → `libgnutls30t64` and `libgssapi-krb5-2` → the krb5 libraries.
+  `evaluate.py report` over the lane's own grype output with the new files gives grype PASS and 0 blocking in
+  both images. **A person re-reviews both files, as the scan asks.**
+- **(b) The Docker CLI:** `DOCKER_CLI_IMAGE=docker:29.9.0-cli@sha256:1a4c7cb6…` (29.9.0, 2026-10-09, the newest
+  release), confirmed by the registry's `Docker-Content-Digest`. The Go build info of its linux/amd64
+  `/usr/local/bin/docker` reads `go1.26.9`; 29.8.2 and 29.8.1 read `go1.26.8`. The bench driver and the e2e
+  runner both build from this one pin. **Neither was rebuilt here** (no Docker): lane 005s1-b rebuilds both, and
+  `docker version --format '{{.Client.GoVersion}}'` is the mentor's check.
+
+#### Item 22's ruling, built (T032; spec FR-35a, FR-42 to FR-47, D-19; research R17)
+
+- **The guards:** functions `rm` and `git` in `shell-env.bash`. They call `/opt/timelike/libexec/guard` by its
+  absolute path, then run the real command last, so its output and exit code are its own. The caller's
+  `set -e` can't stop the real command, and nothing is blocked. Any command line that isn't guarded runs with
+  no fork.
+- **The depth bound:** the guards are defined only in a `-c` or interactive shell, never in a script run from a
+  file.
+  - A guarded `-c` shell exports `TIMELIKE_GUARD_SHELL=$$`. A bash that inherits it walks its ancestors
+    through `/proc/<pid>/stat`, with builtin reads, and defines nothing when that shell is one of them.
+  - A stale marker doesn't disarm a new top-level `bash -c`.
+  - An interactive shell sets no marker, so a harness a person starts from one gets guarded shells.
+  - A bash the guarded shell exec'd in its own place (bash execs a `-c` string's last simple command) is told
+    from the `bash -lc` double source by a non-exported variable. A unit found this case.
+- **What is snapshotted:**
+  - `rm -r`, or an `rm` whose options the guard can't read: the workspace of each operand, once each.
+  - `git reset --hard`: only with uncommitted tracked changes, or when `git status` can't say.
+  - `git clean`: unless `-n`, and unless `clean.requireForce` makes git refuse.
+  - A git option before the subcommand that the guard can't read: the shell's workspace.
+- **The trash's feed:** every file a guarded `rm` deletes, recursive or not, and every path `git clean -n` lists,
+  copied before the real command runs.
+  - Never kept, and named: `/`, `$HOME` and its ancestors, and the state root.
+  - A file the trash can't take is still deleted and named: up to 5 lines, then a count.
+- **The force push:** the `pre-push` step in 001's dispatcher (declared).
+  - It buffers git's lines, records each non-fast-forward or deleted ref, then hands the same lines to the
+    repository's own hook. It never fails the push.
+  - `--no-verify` with a force is caught by the `git` function instead, from the remote-tracking ref, and its
+    line says that ref may be stale.
+  - A remote given as a URL is recorded without a user or password.
+  - A forced push without `--no-verify` makes exactly one snapshot (a unit and an e2e cell check this).
+- **Note 12, as ruled:**
+  - `taken` re-hashes the objects new to the snapshot, and checks presence, type and size for objects the last
+    verified take proved. The stat cache is now written only after a take verifies.
+  - A restore (`undo ID --yes`, `undo --trash ID --yes`) re-hashes every object it will write before writing
+    any. A mismatch refuses, names the object and path, removes the object, and writes nothing.
+  - Slice 0's condition-4 unit was rewritten to the ruling (a damaged object new to a snapshot is still caught
+    at take). A new unit covers a rotted proven object caught by the restore.
+- **The measured cost on the host (R17):**
+  - a guarded single-file `rm`: 74–77 ms, against 1 ms for `command rm`;
+  - a guarded `rm -r` in a 400-file workspace (snapshot and trash): 115–136 ms;
+  - `git status` through the function: 3 ms, the same as `command git`.
+
+#### The README (T035)
+
+The send's `## README status` block is applied, because every slice-1 Automated criterion is now built:
+- row 07 reads `slices 0, 1 of 0–2`, with its new "What it does";
+- the Status paragraph is verbatim (18 of 38; Next: 15 slice 1, 02 slice 1);
+- the `snapshot`/`undo` section now covers the state root, the named volume, what a plain `docker run` means,
+  purge, the guards, the trash, and the scheduled snapshot for scripts;
+- its "Taken" sentence follows note 12's ruling;
+- the `symbols` line names the state root;
+- the command reference is current (`readme_reference --check`, 13 tools).
+
+No value claims (P6).
+
+**Held, for the mentor:** README § "The session scratch" still says snapshots and the `symbols` index live in
+the session scratch, and that "a persistent state root is 07 slice 1, not yet built". Both are now false. The
+block says "Nothing else in the README changes", so it is untouched. Correcting it is one paragraph, and needs
+your word.
+
+#### Group C, as it now stands (supersedes § Cycle 3's where it differs)
+
+**delegations:** `[]`.
+
+**criteria_reestablished.** The citations are § Cycle 3's eleven. Nothing in this addendum has run in the image,
+so every mode is still `unconfirmed`. Only these change:
+- `07 · "a force push, and a clean of untracked files each take an automatic snapshot before running, and the verdict names it _(traces to: P5)_"` —
+  **unconfirmed: built.**
+  - Cells: `a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats`, 12 of them:
+    - `rm -rf` in three styles;
+    - a hard reset, a clean, and forced pushes with and without `--no-verify`, against a bare remote;
+    - a script that isn't guarded, keeps its exit code and is restored from the scheduled snapshot;
+    - a decoy on PATH;
+    - `type -a` in three styles.
+  - Host: test_guard.py, 26 units, on the real chain.
+- `07 · "is restorable from the most recent automatic or scheduled snapshot _(traces to: P5)_"` —
+  **unconfirmed.** Lane 005s1-a failed all 4 cells on the test's defect. Its fix (T033) has not run in the
+  image.
+- `07 · "Deleted files are moved to a restorable trash that is purged by age and size limits _(traces to: P5)_"` —
+  **unconfirmed: built.** The cells now feed the trash through the agent's own `rm`; they no longer call
+  `guard trash-put`.
+- `07 · "a snapshot is taken automatically, and the Agent restores from it _(traces to: D16)_"` — **unconfirmed**
+  (Manual). It can now be captured after lane 005s1-b.
+
+**reconcile_mode:** `full` (corrected from `scoped`). Every criterion of the send is built and has cells on
+this cycle's code. Slice 0's four keep theirs, on per-test state roots.
+
+**not_verified**
+- **Everything in the image:** every cell, the guards in the three styles, the pre-push step under the image's
+  `GIT_CONFIG_*`, the new Docker CLI pin's Go version, and the scan with the new baselines.
+- **Other features' cells with the guards on:** the harness leaves the guards on, and no switch exists.
+  - Six other e2e files `rm` a temp file inside their container scripts (`a-bare-python-package-install-…`,
+    `command-not-installed-…`, `announcement-generated-…`, `announcement-at-most-60-lines-…`,
+    `one-command-prints-the-agents-resource-budget`, `timelike-tools-manifest-json-…`). Each reads its output
+    by key, and a `timelike:` trash line doesn't match a key, so I expect no change. Not run.
+  - SC-8's recreate cell uses `command rm`.
+  - The bench's catalog runs no `rm`, `git reset`, `git clean` or `git push`.
+- **git aliases** (`git rh` for `reset --hard`) are not resolved. That would cost a fork per git command.
+- **A harness started from inside a guarded `-c` shell** gives its own shells no guards (the marker's
+  ancestor). A person's interactive shell sets no marker, so the common case is guarded.
+- **One measurement session ran its loops unguarded.** It was discarded and the cause was not found (R17);
+  three reruns, one in a fresh directory, were guarded. The units cover every path that defines or skips the
+  functions.
+- **The arm64 Docker CLI's Go version** (amd64 read only). Two containers on one volume. The purge's time bound
+  has no test of its own. D7 and D16.
+
+**changed_other_features** (in addition to § Cycle 3's)
+- **001:**
+  - `shell-env.bash` defines the guards. The spec gains FR-18a, declared.
+  - The hook dispatcher gains the `pre-push` step. The spec gains FR-20a, declared.
+  - `tests/host/test_shell_env_hook.sh`'s Q2 (the functions kept on purpose) and Q4 (the marker's pid) are
+    updated, with nothing loosened.
+  - `tests/e2e/helpers.bash`: `exec_in -w DIR`.
+  - `Makefile`: the dispatcher and the new bats file are in `SHELLCHECK_FILES`.
+- **007:** the announcement gains two lines after `snapshot`/`undo` (what is guarded, `type -a`,
+  `command rm`, scripts), in `tools/bin/timelike` and `contracts/timelike-announce-tools.md`, declared.
+- **002 and the e2e runner:** `DOCKER_CLI_IMAGE` (`pins.env`).
+- **The scan baselines** of `timelike-agent` and `timelike-vanilla`.
+- **README:** the status block, as instructed.
+
+**process_failures_recorded**
+- **SC-7's cells went to the lane with two defects:** the helper's return status, and a shell started outside
+  the workspace. The first was mine, and it was reachable by running the helper's loop under `set -e` on the
+  host, which I did not do before the lane. The second was found only by reading on past line 81.
+- **T034's start time was not read** (`decisions.md` says so); T033 and T034 were edited before either was
+  committed.
+- **The unexplained unguarded measurement session above.** It was caught because its numbers were implausible,
+  and was not used.
+
+**retired_prompts_seen:** none.
+
+#### Host lane (this addendum's tree)
+
+- `make test-host` (Python 3.14.8, scratch venv): **2014 passed, 13 skipped** (pytest tests/unit, 450 s); `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57 (Q2 and Q4 updated for the guards); `test_command_not_found.sh` 33 of 33. Exit 0.
+- New: test_guard.py 26 units (real bash with the hook, the real rm and git, a bare remote, the dispatcher); test_snapshot.py +1 (a rotted proven object caught by the restore), its condition-4 test rewritten to the ruling.
+- ruff (check, format --check) clean; mypy --strict: no issues in 30 files; shellcheck 0.11.0 over the Makefile's 84 `SHELLCHECK_FILES` (the dispatcher and the SC-6 file added): clean; bats --count: SC-6 12, SC-7 4, SC-8 4, SC-10 4.
+- Deny-list: PASS before every commit of this addendum (7 entries, P1–P7 0/0).
+
+Implement step 10 was not rerun. The installed blocks can't run pytest here, so the score is `unknown`, as in
+§ Cycle 3.
+
+#### Then
+
+Done. **No commit until lane 005s1-b has ended.** Lane 005s1-b is the full lane (`test`, `bench-images`,
+`scan`, `lint`): T032 reaches the image, and the pins moved. D16 is the mentor's, after the lane.
+
+### Addendum 2 — README § "The session scratch" corrected, on the operator's word
+
+**Written:** 2026-10-10T13:58:04Z (read from the clock), on `modify/005-slice-1`, after `0be6679`. **Not yet
+committed:** no commit until lane 005s1-b has ended.
+
+- **Addendum 1's held item is resolved.** The operator said to correct the paragraph, and to keep the README
+  current with each build from now on. § "The session scratch" no longer lists snapshots or the `symbols` index
+  in the scratch, and no longer says the state root is not yet built. A new paragraph names what lives in the
+  state root (`/var/lib/timelike`, `TIMELIKE_STATE_ROOT`): snapshots, the trash and the `symbols` index, on the
+  `timelike-state` volume. The intro's What and Status are untouched.
+- **changed_other_features** gains: README § "The session scratch" (001's scratch description).
+- **The findings reported to the operator at addendum 1's close are all in addendum 1:** the guards on in
+  other features' e2e cells with no switch (`not_verified`); git aliases and a harness under a guarded `-c`
+  shell (`not_verified`); the unexplained unguarded measurement session (`not_verified`,
+  `process_failures_recorded`); SC-7's two defects and my missed `set -e` check (`process_failures_recorded`);
+  the Docker CLI not rebuilt here and the baselines awaiting a person's review (lane item 3). Nothing else
+  was found after it.
+
+### Addendum 3 — lane 005s1-c: the `bash -ic` cells read output by line position
+
+**Written:** 2026-10-11T07:29:16Z (read from the clock), on `modify/005-slice-1`. Committed with T036.
+
+- **Addendum 2's "Not yet committed" line is stale:** it went in as it stood in `7306473`, on the operator's
+  instruction, after lane 005s1-b was void (the stamp-check refused the dirty tree).
+- **Lane 005s1-c** (`7306473`; rerun c2): unit 2024 passed, 3 skipped; e2e 646 of 649; bench-images, scan and
+  lint pass. The Docker CLI reports `29.9.0 go1.26.9`. Lane 005s1-a's items are fixed in the image.
+- **The three failures were this cycle's test defect,** not the feature's: SC-7 `[bash -ic]`, and SC-6
+  `[bash -ic]`'s recursive delete and `type -a`. An interactive bash with no terminal prints two job-control lines
+  first, and the cells read by position.
+- **T036:** `drop_ic_notty_lines` (`tests/e2e/helpers.bash`) drops exactly those two lines in the ic style.
+  - Each line is matched whole, at most once, in bash's order, and only at the start. Only the process group may
+    vary: `-1` here, a pid on a host.
+  - Both files' `in_repo` call it, so every positional assertion stays as written, unloosened.
+  - `:191`'s id read (a `bash -c` cell the ic lines can't reach) now finds the newest row by its form and
+    requires it to be `scheduled`.
+  - No other file of this cycle has an ic cell.
+- **criteria_reestablished:** unchanged from addendum 1. Every mode stays `unconfirmed` until lane 005s1-d runs
+  SC-6 and SC-7 in the image.
+- **not_verified:** the cells in the image. On the host, the helper was exercised under a real `bash -ic` with no
+  terminal. shellcheck is clean over the 84 files.
+- **changed_other_features:** `tests/e2e/helpers.bash` gains the helper. It is called only from this cycle's two
+  files.
+- **process_failures_recorded:** the ic cells went to the lane unrun. T036's start time was not read.
+- **Then:** lane 005s1-d is `test` only. Bench-images, scan and lint at `7306473` stand. D16 is captured, and
+  the mentor holds it for the operator's interview.
+
+### Addendum 4 — signed off at `d65cdee`: the lanes, the criteria, the demos
+
+**Written:** 2026-10-12T00:00:49Z (read from the clock), on `modify/005-slice-1`, before the merge into
+`master`. The mentor signed off 07 slice 1 at `d65cdee`. Between `d65cdee` and the merge, only this file,
+`decisions.md`, `tasks.md`, `reboot.md` and `FOR-MENTOR.md` change.
+
+#### The lanes
+
+| Target | Run | At | Result | Log |
+|---|---|---|---|---|
+| test | 005s1-d | `d65cdee` | PASSED: every step passed (preflight, build, up, runner, benchimg, e2e, unit, gounit); e2e **649 of 649 ok**, 0 not ok (`tests/out/e2e.tap`) | `../bridge/.make-test-005s1-d.log` (`EXIT_test=0`, ended 2026-10-11T08:23:43Z) |
+| bench-images | 005s1-c | `7306473` | pass | `../bridge/.make-bench-images-005s1-c.log` (`EXIT_bench-images=0`) |
+| scan | 005s1-c2 | `7306473` | all four images PASS; deny-list PASS, 484 files | `../bridge/.make-scan-005s1-c2.log` (`EXIT_scan=0`) |
+| lint | 005s1-c | `7306473` | pass | `../bridge/.make-lint-005s1-c.log` (`EXIT_lint=0`) |
+
+`d65cdee` changed only test files and records after `7306473`, so the image those three targets checked is
+the one shipped. Lane 005s1-c2's `test` (646 of 649) is superseded by 005s1-d.
+
+#### criteria_reestablished (supersedes every earlier mode in this cycle)
+
+The cell counts are each file's cells found `ok` in lane 005s1-d's `tests/out/e2e.tap`.
+
+- `07 · "records tracked, untracked and ignored-but-not-excluded files of the workspace and prints its identifier, file count and size _(traces to: P5)_"` —
+  **executed** `tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats` (4 of 4).
+- `07 · "removes files created after it, and a dry run lists exactly those changes first _(traces to: P5)_"` —
+  **executed** `tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats` (10 of 10).
+- `07 · "history, index and stash are unchanged by taking or restoring a snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats` (4 of 4).
+- `07 · "would exceed the size cap is refused or partial, and the verdict names what was excluded and why _(traces to: P2)_"` —
+  **executed** `tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats` (10 of 10).
+- `07 · "a force push, and a clean of untracked files each take an automatic snapshot before running, and the verdict names it _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats` (12 of 12).
+- `07 · "is restorable from the most recent automatic or scheduled snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats` (4 of 4).
+- `07 · "is listed and restorable from a new session, and after the agent's container is recreated _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats` (4 of 4).
+- `07 · "so the restore itself can be undone, and its verdict names that snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats` (2 of 2).
+- `07 · "Deleted files are moved to a restorable trash that is purged by age and size limits _(traces to: P5)_"` —
+  **executed** `tests/e2e/deleted-files-trash-restorable-and-purged-by-age-and-size.bats` (4 of 4).
+- `07 · "a snapshot is taken automatically, and the Agent restores from it _(traces to: D16)_"` —
+  **observed by the operator.** The mentor captured it at 2026-10-11T05:50:53Z on lane 005s1-c2's image
+  (`sha256:16863abd9ffe…`, rev `7306473`), with a named volume at `/var/lib/timelike`. Transcript:
+  `../bridge/.d16-demo-20261011T055053Z.txt`. In it, a guarded `git reset --hard` names snapshot 4, and `undo 4 --yes`
+  restores the uncommitted edit, with the workspace hash back to its value before. The operator judged it met.
+- `07 · "deletes the wrong directory and restores it with one undo command _(traces to: D7)_"` — **unconfirmed**
+  in this cycle. It was observed by the operator in Cycle 2 (`bridge/.d7-demo-20261004T044030Z.txt`), and nobody
+  has looked again on this cycle's code.
+
+**reconcile_mode:** `full` (unchanged since addendum 1).
+
+**not_verified** (what addendum 1 lists, less what lane 005s1-d ran):
+- git aliases;
+- a harness started from inside a guarded `-c` shell;
+- the arm64 Docker CLI's Go version;
+- two containers on one volume;
+- the purge's time bound;
+- D7 on this cycle's code;
+- the baseline files' review by a person.
+
+**The feedback items:** `07-20261010-064701` (Item 22), `07-20261010-081905` (lane 005s1-a) and
+`07-20261011-055059` (lane 005s1-c) are closed in `FOR-MENTOR.md`.
+
+**Then:** the deny-list, then `git merge --no-ff modify/005-slice-1` into `master`. Nothing is pushed.

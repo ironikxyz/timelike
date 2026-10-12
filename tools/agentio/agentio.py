@@ -540,6 +540,70 @@ def scratch_root() -> Path:
     return Path(os.environ.get("TIMELIKE_SCRATCH_ROOT") or DEFAULT_SCRATCH_ROOT)
 
 
+# ── the state root (rule 10 at revision 11; feature 005 slice 1, FR-25 to FR-28) ─────────────────
+# Recovery state and caches, per workspace, outside every workspace. Read from the environment by
+# timelike's own code, never from PATH or a workspace file (P002). The layout carries a version (P003).
+
+STATE_ROOT_ENV = "TIMELIKE_STATE_ROOT"
+DEFAULT_STATE_ROOT = "/var/lib/timelike"
+STATE_LAYOUT = "timelike-state 1"
+
+
+def state_root() -> Path:
+    return Path(os.environ.get(STATE_ROOT_ENV) or DEFAULT_STATE_ROOT)
+
+
+def state_persistent(root: Path) -> bool:
+    """Persistent ⇔ the state root is on another filesystem than `/` (a volume or a bind mount).
+
+    In a container `/` is the container's own layer, which dies with it. A root that cannot be read is
+    not shown persistent: unknown is never reported as the good answer.
+    """
+    try:
+        return os.stat(root).st_dev != os.stat("/").st_dev
+    except OSError:
+        return False
+
+
+def not_persistent_line(root: Path) -> str:
+    # Within rule 13's 200 columns at the default root (it was 217 as first written, and was cut).
+    return (
+        f"not persistent: {root} is not a mounted volume, so this recovery state dies with the container;"
+        f" mount one at {root} (compose.yaml: timelike-state)"
+    )
+
+
+def ensure_state_root(root: Path | None = None) -> Path:
+    """The state root, created private (0700) and stamped with its layout version on first use.
+
+    Raises ToolError (exit 1) naming the path and the variable when it cannot be created or written,
+    or when it carries a different layout version.
+    """
+    root = root or state_root()
+    remedy = f"set {STATE_ROOT_ENV} to a directory you can write, outside every workspace"
+    try:
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        version = root / "VERSION"
+        if not version.exists():
+            tmp = root / f".VERSION.{os.getpid()}.tmp"
+            tmp.write_text(STATE_LAYOUT + "\n")
+            os.replace(tmp, version)
+        found = version.read_text().strip()
+        if not os.access(root, os.W_OK | os.X_OK):
+            raise PermissionError(13, "not writable")  # EACCES
+    except OSError as e:
+        raise ToolError(
+            EXIT_FAILURE, f"cannot use the state root {root} ({STATE_ROOT_ENV}): {e.strerror or e}", remedy
+        ) from None
+    if found != STATE_LAYOUT:
+        raise ToolError(
+            EXIT_FAILURE,
+            f"the state root {root} holds layout {found!r}, not {STATE_LAYOUT!r}",
+            f"use a timelike that reads {found!r}, or set {STATE_ROOT_ENV} to another directory",
+        )
+    return root
+
+
 # ── shared readers: the container's limits and the workspace (feature 007 slice 1, FR-21) ──────
 # One reader each, used by `run` (003), `snapshot` (005) and `timelike budget` (007). The CPU rule is
 # also computed in bash by /etc/timelike/shell-env.bash (no fork at shell start), so the two are kept

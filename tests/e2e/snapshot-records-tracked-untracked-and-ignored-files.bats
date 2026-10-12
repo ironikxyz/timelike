@@ -26,12 +26,14 @@ setup() {
   WORK="$(container_tmpdir sc1snap)"
   REPO="${WORK}/repo"
   SCRATCH="${WORK}/scratch"
+  STATE="$(state_root_dir sc1snap)"  # slice 1: the store is in the state root (FR-23 as amended)
   exec_plain sh "$FIXTURE" "$REPO" >/dev/null
   REPO_REAL="$(exec_plain realpath "$REPO")"
 }
 
 teardown() {
   container_rm "$WORK"
+  state_root_rm "$STATE"
 }
 
 # ── helpers (this file's own; the five 005 files repeat them so each reads alone) ────────────────
@@ -41,7 +43,7 @@ teardown() {
 in_repo() {
   local style="$1" cmd="$2" kv
   shift 2
-  local -a envs=(-e "TIMELIKE_SCRATCH_ROOT=${SCRATCH}" -e "TIMELIKE_SESSION=recover")
+  local -a envs=(-e "TIMELIKE_SCRATCH_ROOT=${SCRATCH}" -e "TIMELIKE_STATE_ROOT=${STATE}" -e "TIMELIKE_SESSION=recover")
   for kv in "$@"; do envs+=(-e "$kv"); done
   run_in "${envs[@]}" "$style" notty "cd '${REPO}' && ${cmd} 2>'${WORK}/stderr'"
   assert_within 20

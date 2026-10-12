@@ -151,3 +151,67 @@ report, not as tasks here.
   and the cycle report § Cycle 2 (the send's block). Implement step 10 as the plugin reports it.
 
 **Order:** T016 → T017 → T018 → T019.
+
+## Phase 7: Cycle 3 — 07 slice 1 (send `bridge/sends/07-rev11-20261010-050829.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 3): PASSED — plan.md § Tech Stack Compliance Report (Cycle 3): Python
+stdlib, Bash, Docker Compose, bats-core, pytest, all approved; no conflict or prohibition -->
+
+Stories (spec § Slice 1): **US5** persistent state root (FR-25–FR-31; SC-8, SC-9), **US6** scheduled
+snapshot (FR-32–FR-35; SC-7), **US7** purge and lock (FR-36–FR-38), **US8** the trash (FR-39–FR-41;
+SC-10), **US9** guards (SC-6) — **held for FOR-MENTOR Item 22**.
+
+- [X] T020 [US5] `tools/agentio/agentio.py`: `state_root()` (`TIMELIKE_STATE_ROOT`, default
+  `/var/lib/timelike`), `state_info()` (persistent ⇔ `st_dev` differs from `/`'s), `VERSION` written on
+  first use. Units in `tests/unit/test_agentio*.py`.
+- [X] T021 [US5] `tools/bin/snapshot`: the store in `<state>/workspaces/<key>/` (FR-23 as amended, FR-25,
+  FR-28), the not-persistent line and `data.state` (FR-27), `session`/`agent` (FR-31), other workspaces
+  named when none here (FR-29), the lock holder (FR-38), the FR-3 remedy. Slice-0 units moved to the state
+  root (`tests/unit/test_snapshot.py`, `test_undo.py`, `conftest.py`).
+- [X] T022 [US5] Import of slice-0 stores (FR-30), units.
+- [X] T023 [US6] Stat cache (FR-35) in `snapshot`; units (an unchanged file not re-read; a changed one is).
+- [X] T024 [US6] `tools/libexec/scheduled-snapshot` (FR-33, FR-34) and the due check in
+  `image/rootfs/etc/timelike/shell-env.bash` (FR-32); `tests/host/test_shell_env_hook.sh` (no fork when not
+  due, PATH empty) and units; measure (R11) and set the default interval.
+- [X] T025 [US7] Purge (FR-36, FR-37), units (never the newest; age; size; busy store skipped; names).
+- [X] T026 [US8] The trash: `tools/libexec/guard trash-put`, `undo --trash` (FR-39–FR-41), units.
+- [X] T027 [US5] `image/Dockerfile` (`/var/lib/timelike` owned by agent, 0700; ENV), `compose.yaml` (named
+  volume `timelike-state` on the agent service; the H1 comment kept true), `tests/unit/test_agent_runtimes.py`
+  or the image units as they test the Dockerfile; vanilla untouched.
+- [X] T028 [P] e2e: SC-7 (`a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats`),
+  SC-8 (`a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats`),
+  SC-9 (`a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats`), SC-10's restore
+  (`deleted-files-trash-restorable-and-purged-by-age-and-size.bats`, via the helper), the not-persistent line;
+  slice-0's five e2e files given a per-test state root on the volume; Makefile `SHELLCHECK_FILES`.
+- [X] T029 [P] Carried: `tools/bin/symbols` index → `<state>/workspaces/<key>/symbols.json` (Item 20), a
+  unit that a second session finds it warm, its manifest; 001 `contracts/output-contract.md` rule 10, declared.
+- [X] T030 Announcement/README: the command reference regenerated; the `snapshot`/`undo` section says where
+  recovery state lives and what a plain `docker run` means; the `symbols` line corrected. The `## README
+  status` block **only if all five Automated criteria are met** (not while Item 22 holds two).
+- [X] T031 Host lane (ruff, mypy, shellcheck, `make test-host`), the cycle report § Cycle 3.
+- [X] T032 [US9] The guards, the force-push record, what feeds the trash, SC-6's e2e — on Item 22's ruling
+  (`bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md`): bash functions `rm` and `git` in
+  `image/rootfs/etc/timelike/shell-env.bash`, defined in the agent's own shell only (a marker each bash they start
+  inherits); `/opt/timelike/libexec/guard` does the work (a guarded snapshot before `rm -r`, `git reset --hard`,
+  `git clean`; the trash for every file a guarded `rm` or `git clean` deletes; `--no-verify` force pushes); a
+  `pre-push` step in `/opt/timelike/git-hooks/dispatch` (001's contract, declared) that records and never fails
+  the push; Note 12: `taken` re-hashes only objects new to the snapshot, a restore re-hashes every object before
+  writing any. Units, host tests, e2e SC-6 and SC-10's feed; spec, contract, data-model and the announcement.
+
+### Lane 005s1-a (`bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md`)
+
+- [X] T033 SC-7's `scheduled_ids` returned its loop's last `[[ … ]] && …` status: an explicit `if`, `return 0`;
+  the same shape in this cycle's other e2e files (SC-8's two loops). SC-7's shells start in the repository
+  (`exec_in -w`), since the hook snapshots the workspace a shell starts in and `/home/agent` is skipped.
+- [X] T034 Scan: CVE-2026-107778 (krb5, four packages) and CVE-2026-67693, -95184, -95209, -95210 (gnutls)
+  baselined in `timelike-agent` and `timelike-vanilla`, origin `git`, until 2026-12-27; `DOCKER_CLI_IMAGE` to
+  `docker:29.9.0-cli` (Go 1.26.9) by digest.
+- [X] T035 README status block (if every slice-1 criterion is built), Cycle 3 addendum.
+- [X] T036 Lane 005s1-c: the three `bash -ic` cells read output by line position, and bash's two no-terminal
+  job-control lines came first. `drop_ic_notty_lines` (`tests/e2e/helpers.bash`) drops exactly those lines in the
+  ic style; SC-6's no-guard cell finds the newest snapshot's id by the row's form, not `lines[2]`.
+- [X] T037 Signed off at `d65cdee` (lane 005s1-d 649 of 649; D16 observed by the operator): Cycle 3 addendum 4,
+  the three feedback items closed in `FOR-MENTOR.md` (Items 22, 23), then the merge into `master`.
+
+**Order:** T020 → T021 → T022 → T023 → T024 → T025 → T026 → T027 → (T028, T029 in parallel) → T030 → T031;
+then the lane; T033, T034 → T032 → T035; lane 005s1-c → T036 → T037.

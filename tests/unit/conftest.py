@@ -38,6 +38,9 @@ def base_env(scratch: Path, session: str = "test", **extra: str) -> dict[str, st
         "HOME": str(scratch.parent),
         "PYTHONPATH": str(AGENTIO_DIR),
         "TIMELIKE_SCRATCH_ROOT": str(scratch),
+        # The state root (005 slice 1, FR-25): a sibling of the scratch root, so no test writes the
+        # image's /var/lib/timelike and no workspace contains it.
+        "TIMELIKE_STATE_ROOT": str(scratch.with_name(scratch.name + "-state")),
         "TIMELIKE_SESSION": session,
         "LC_ALL": "C.UTF-8",
         # run (003 slice 1) withholds its output when the redaction rules are unavailable (FR-39). The

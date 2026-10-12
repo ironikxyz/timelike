@@ -137,3 +137,111 @@ nothing (rule 7). `undo <S> --yes` restores a safety snapshot, which undoes an u
 ## Session events
 
 One per invocation, written by agentio (`events.jsonl`), as for every tool.
+
+---
+
+## Slice 1 (Cycle 3)
+
+### Environment (added)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TIMELIKE_STATE_ROOT` | `/var/lib/timelike` | where every workspace's store, the stamps and the trash live (replaces the scratch root for the store) |
+| `TIMELIKE_SNAPSHOT_INTERVAL` | `300` (research R11) | seconds between scheduled snapshots of a workspace; `0` every shell start; `off` never |
+| `TIMELIKE_SNAPSHOT_MAX_AGE_DAYS` | `30` | purge snapshots older than this; `0` = none |
+| `TIMELIKE_STATE_MAX_BYTES` | `4294967296` | purge oldest snapshots while the snapshot content stored in the state root (every workspace's objects; the trash has its own cap) exceeds this; `0` = none |
+| `TIMELIKE_PURGE_SECONDS` | `2` | time bound on one purge |
+| `TIMELIKE_TRASH_MAX_AGE_DAYS` | `30` | purge trash items older than this; `0` = none |
+| `TIMELIKE_TRASH_MAX_BYTES` | `1073741824` | purge oldest trash items while the trash exceeds this; `0` = none |
+
+A value that is not a non-negative integer (or `off` for the interval) is a usage error (exit 2) naming it.
+
+### Lines every result may carry, in this order, after any `do instead:` line
+
+1. `not persistent: <root> is not a mounted volume, so this recovery state dies with the container; mount
+   one at <root> (compose.yaml: timelike-state)` — when
+   the state root is not on its own filesystem (FR-27). JSON `data.state = {root, persistent}` always.
+2. `imported <n> snapshots from session <s> (were <a>–<b>, now <c>–<d>)` (a single id where the range is one) — once, on first use (FR-30); JSON `data.imported`: list of `{session, was, now}`;
+   `not imported: <session> snapshot <id>: <why>` for one that fails verification.
+3. `purged: snapshot <id> of <ws> (<older than N days | over TIMELIKE_STATE_MAX_BYTES>)`, and
+   `purge stopped: <why>; the state root is <size> over TIMELIKE_STATE_MAX_BYTES` (FR-36, FR-37).
+   JSON `data.purged`: list of `{workspace, id, why}`.
+
+Then the result's own lines (exclusions, plan). The verdict line is unchanged.
+
+### `snapshot list` (added)
+
+- With no snapshots for this workspace, one line per other workspace in the state root that has some:
+  `other workspace with snapshots: <path> (<n>)` (FR-29).
+- `--verbose` adds `session <s>` and `agent <a>` to each line; JSON carries `session` and `agent` always.
+
+### Refusals (changed)
+
+- `… contains the snapshot store (<store>)` has the remedy `set TIMELIKE_STATE_ROOT outside the workspace`.
+- A state root that cannot be created or written: error, exit 1, naming the path and `TIMELIKE_STATE_ROOT`.
+
+### Lock timeout (changed)
+
+`another snapshot or undo is running on this workspace (lock held for 10 s: <lock path>; holder pid <p>,
+session <s>, agent <a>)` — the holder part when the lock file names one.
+
+### `undo --trash` (FR-40)
+
+```
+undo --trash                       list the trash, newest first
+undo --trash ID --dry-run          list what would be put back
+undo --trash ID --yes              put item ID back where it was, verified
+```
+
+Scope `trash` (list) or `trash <id>`. Target: the workspace as for `undo`, though the trash is not
+per workspace.
+- List verdict `<N> items in the trash`; lines `<id>  <n> files  <size>  <first path>[ and <k> more]`.
+- Dry run verdict `dry run: trash item <id> — <n> to put back; nothing changed`; lines `put back <kind>
+  <abs path>`; a path that exists now: `refused: <abs path> exists` lines, verdict `… <m> blocked`.
+- `--yes`: verdict `put back trash item <id>: <n> paths; verified`; any occupied path: exit 1,
+  `refused: trash item <id> would overwrite <path>`, nothing written. Without `--yes`: exit 4, the
+  confirmation envelope.
+- Unknown ID: exit 3, `no trash item <id>`.
+
+### The scheduled snapshot (FR-32–FR-35; not a command)
+
+Taken by `/opt/timelike/libexec/scheduled-snapshot <workspace>` from the shell-start check. Silent when
+complete; one stderr line when partial or refused (FR-33). Its record has reason `scheduled`.
+
+### What "taken" and a restore verify (FR-35a; Item 22's ruling on stack note 12)
+
+`taken` (and `verified` in the data) means: the record read back, every object new to this snapshot
+re-hashed, and every object the last verified take proved (an unchanged file, through the stat cache)
+present as a regular file of its size. A restore (`undo ID --yes`, `undo --trash ID --yes`) re-hashes
+every object it will write before it writes any: a mismatch is exit 1,
+`restore of snapshot <id> refused: object <sha12> (for <path>) does not match its hash (removed; the next
+snapshot stores that content again); nothing was changed` (for the trash: `put back of trash item <id>
+refused: …`), with nothing written and no safety snapshot taken.
+
+### The guards (FR-42 to FR-47; not commands)
+
+Bash functions `rm` and `git` in the agent's own shell (`type -a rm git`; `command rm` skips them). Each
+prints on stderr, before the real command runs and with the real command's output and exit code
+unchanged:
+```
+timelike: snapshot <id> of <ws> taken before <command>: undo <id> --yes puts the workspace back
+timelike: no snapshot of <ws> before <command>: <why>
+timelike: no snapshot before <command>: <path> is in no workspace (the trash keeps it)
+timelike: trash item <id> keeps <n> files (<size>): undo --trash <id> --yes puts them back
+timelike: not kept: <path> (<why>)                      (up to 5, then: not kept: <k> more (undo --trash <id> --dry-run lists them))
+timelike: forced push: <remote> <ref> was <sha>[ (from the remote-tracking ref, which may be stale)]; put it back with: git push --force <remote> <sha>:<ref>
+timelike: not guarded: <helper> is missing: no snapshot[, no trash]
+```
+plus the not-persistent line (FR-27) and any `purged:` line (FR-37, FR-41). `<command>` is the command
+as typed, cut at 60 characters with `…`; the snapshot's reason is `before <command>`.
+
+| Command | Snapshot | Trash |
+|---|---|---|
+| `rm` with `-r`/`-R`/`--recursive`, or an option the guard cannot read | each operand's workspace, once | everything it deletes |
+| `rm` otherwise | none | the files and links it deletes (an empty dir with `-d`) |
+| `git reset --hard` | the worktree, when tracked changes are uncommitted (or status fails) | none |
+| `git clean` (not `-n`; `-f`, `-i`, or `clean.requireForce=false`) | the worktree | every path its `-n` lists |
+| `git push` forcing a ref (pre-push step; `--no-verify`: the function) | the worktree, once per push | none |
+| a git option before the subcommand the guard cannot read | the shell's workspace | none |
+| anything else | none, and no fork | none |
+

@@ -206,3 +206,231 @@ FLAGGED: none
 ABSENT: no Docker lane (R10); no ship or merge; no demo_points_reached; no Group A (no marker on this path); audited_against unchanged (T018)
 Verification: make test-host 895 passed, 60/60, 29/29; coverage 92% for the two tools; ruff, mypy, shellcheck clean; stand-in 40/44; implement step 10 from the installed 2.32.0 blocks (unknown, warned); all five criterion citations match one send line each (grep -cF)
 SCOPE: out — .specswarm/metrics.json (1 of 1 changed files) (task has FLAGGED: no)
+
+---
+
+## Cycle 3 — 07 slice 1 (send `bridge/sends/07-rev11-20261010-050829.md`), specswarm 2.44.0
+
+Guards and the trash's feed are held for FOR-MENTOR Item 22 (`e488657`, raised 2026-10-10T05:15:03Z).
+
+### T020: agentio's state root
+**Started:** 2026-10-10T05:21:06Z | **Completed:** 2026-10-10T05:22:15Z
+
+INHERITED: (none — first task of the cycle); spec FR-25–FR-28, research R10
+FLAGGED: persistence decided by `st_dev` differing from `/`'s, chose it over `os.path.ismount` because the e2e cells use a subdirectory of the volume as their state root, which ismount calls not mounted though it persists (confidence: high)
+ASSUMED: an unreadable root is "not persistent" — unknown is never reported as the good answer (confidence: high)
+ASSUMED: unit tests get a state root beside the scratch root (`<scratch>-state`) in conftest's base_env, so no test writes /var/lib/timelike (confidence: high)
+ABSENT: any caller yet — snapshot moves in T021; no cache-wide layout migration (VERSION 1 is the first layout)
+Verification: test_agentio_state.py 6 passed; test_agentio.py and test_agentio_startup.py unchanged (83 passed with them, 3.14.8 venv)
+SCOPE: out — tests/unit/test_agentio_state.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T021: snapshot's store in the state root; persistence line; attribution; other workspaces; lock holder
+**Started:** 2026-10-10T05:22:21Z (T020's commit time, from git; a composed time was written here first and corrected) | **Completed:** 2026-10-10T05:34:08Z
+
+INHERITED: agentio.state_root / ensure_state_root / state_persistent / not_persistent_line — from T020 (confidence: high)
+FLAGGED: the not-persistent line is set aside by slice 0's unit helpers (text_of, doc_of) and asserted by test_snapshot_slice1.py on raw stdout, chose that over pointing unit state roots at a device unlike `/`, because the image's unit lane has no such device and the line's presence must follow the filesystem, not the test (confidence: high)
+FLAGGED: the line was shortened to fit rule 13's 200 columns (it was 217 at the default root and was cut); spec FR-27 and the contract changed with it, declared (confidence: high)
+FLAGGED: the lock file is emptied on release, so a later wait never names a holder that has gone; a holder only ever names itself while it holds the flock (confidence: high)
+ASSUMED: slice-0 records lack session/agent; JSON shows them as null (confidence: high)
+ASSUMED: one slice-0 unit relied on "another session = an empty store"; since slice 1 sessions share a store (FR-23 as amended), it now uses another state root (confidence: high)
+ABSENT: import (T022), stat cache (T023), purge (T025); e2e not run (no Docker here)
+Verification: test_snapshot.py, test_undo.py, test_snapshot_slice1.py — 84 passed (3.14.8 venv); the lock unit names its holder
+SCOPE: out — tests/unit/test_agentio_state.py, tests/unit/test_snapshot_slice1.py (2 of 5 changed files) (task has FLAGGED: yes)
+
+### T022: import of slice-0 stores (FR-30)
+**Started:** 2026-10-10T05:34:14Z (T021's commit time, from git; a composed time was written here first and corrected) | **Completed:** 2026-10-10T05:35:12Z
+
+INHERITED: Store in the state root, NOTES/finish — from T021 (confidence: high)
+FLAGGED: import runs on any use (take, list, undo) and under the store's lock, re-scanning under the lock so two processes never import twice; chose import over leaving or ignoring (D-14) (confidence: high)
+ASSUMED: every session directory under the scratch root this user can read is in scope; another user's are unreadable and skipped (confidence: high)
+ASSUMED: a record that fails verification is named once and not retried: the old store is marked imported either way, and stays in place for a person to read (confidence: medium)
+ABSENT: deleting the old stores (the scratch is disposable, and nothing a user took is removed by timelike)
+Verification: 3 new units (in order and restorable; ids after an import; a damaged record named, not imported)
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T023: the stat cache (FR-35)
+**Started:** 2026-10-10T05:35:48Z | **Completed:** 2026-10-10T05:36:32Z
+
+INHERITED: the store and record layout — from T021 (confidence: high)
+FLAGGED: a file is trusted unchanged when size, mtime_ns, ctime_ns and inode all match the last take and its object is still stored, chose that over content hashing every file (slice 0) because P2 bounds the scheduled snapshot; ctime cannot be set back by an unprivileged writer, so a rewrite always misses the cache (confidence: high)
+ASSUMED: a write landing in the same nanosecond as the cached stat is not a case to design for (git's "racily clean" case is about second-granular mtimes) (confidence: medium)
+ASSUMED: verification still re-hashes every object the record names (stack note 12 as written; Item 22 asks the mentor whether to narrow it) (confidence: high)
+ABSENT: caching directories or links (they are read from the walk, never from content)
+Measured (host, 3.14.8, take of an unchanged workspace, ms; first figure = first take into an empty state root):
+- this repository's tree (464 files, 6.7 MB): 545, then 164, 167, 176, 152 (slice 0: 270–320)
+- synthetic (657 files, 51 MB): 1543, then 298, 318, 295, 328 (slice 0: 620–700)
+- what remains is the interpreter and agentio (about 100 ms, `snapshot list` alone), the walk, and verification re-reading every stored object (the larger share at 51 MB)
+Verification: 2 units (an unchanged file is not opened, per an audit hook; a changed one is, and is what a restore brings back; a cached file whose object is gone is read again)
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T024: the scheduled snapshot — helper and the shell-start due check (FR-32–FR-34)
+**Started:** 2026-10-10T05:37:19Z | **Completed:** 2026-10-10T05:43:10Z
+
+INHERITED: Store, import, LockBusy, take_locked — from T021–T023 (confidence: high)
+FLAGGED: the due check lives in 001's /etc/timelike/shell-env.bash, builtins only, forking once only when due; chose that file (already reached by bash -c, -lc and interactive shells) over a new sourced file, which would cost a file read on every shell start for nothing (confidence: high)
+FLAGGED: the helper's stderr line reaches the shell's stderr through fd 3 (the block's original stderr), while everything else stays silent; chose that over a line on every snapshot because a scheduled one that is complete says nothing (FR-33) (confidence: high)
+FLAGGED: default interval 300 s, from the measurements in research R11 (confidence: medium — the mentor may prefer another figure)
+FLAGGED: not taken when the command line starts with `snapshot` or `undo`: a scheduled snapshot of the damaged state would become the newest and hide the one the agent needs (confidence: high)
+ASSUMED: a bash the helper starts must never re-enter the hook: the helper runs with TIMELIKE_SNAPSHOT_SCHEDULING=1, and the block skips under it (confidence: high)
+ABSENT: a stamp for a workspace path whose encoded name passes 255 bytes (no scheduled snapshot there; spec FR-32 says so); purge after a scheduled take (T025)
+Measured: research R11 — not due +0.5 ms per shell start, no fork; due 120–300 ms on the two workspaces above
+Verification: host test K1–K13 (57 of 57); test_scheduled_snapshot.py 5 passed (complete is silent and restores a directory a script removed; partial and refused say so in one line; a busy workspace is skipped; a bad interval is named)
+**Process failures recorded:**
+- The first run of the K cases used a bash fake helper, which inherited BASH_ENV, re-entered the hook and recursed until it was killed (about 3 minutes, a few hundred processes, in a temporary directory). That's why the re-entry guard exists, and K1 now counts exactly one call.
+- Cleaning up after it, `pkill -f` on a pattern matched my own command line and killed that shell, which my own notes say never to do. Nothing else was affected; the test's trap removed its directory.
+SCOPE: out — tests/unit/test_scheduled_snapshot.py (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T025: purge on write, by age then size (FR-36, FR-37)
+**Started:** 2026-10-10T05:44:04Z | **Completed:** 2026-10-10T05:49:11Z
+
+INHERITED: the store layout, NOTES, the lock — from T021–T024 (confidence: high)
+FLAGGED: a snapshot's age is its record file's mtime (written once at take time; an imported record's is set to its own taken_at), chose that over parsing every record, whose entries can be tens of thousands of lines (confidence: high)
+FLAGGED: TIMELIKE_STATE_MAX_BYTES counts the snapshot content of every workspace (their objects), not the trash, which has its own cap (FR-41); spec FR-36 and the contract say so, declared (confidence: high)
+FLAGGED: the purge runs after a take (on demand, scheduled) and after a verified restore, never between undo's safety snapshot and its apply, so it can never remove the snapshot being restored (confidence: high)
+ASSUMED: another workspace's store is purged only while its lock is free at that moment; a busy one is named and skipped (no wait, P2) (confidence: high)
+ASSUMED: a store whose records cannot all be read is not swept (a record that cannot be read may name anything) (confidence: high)
+ABSENT: a test of the time bound itself (TIMELIKE_PURGE_SECONDS is whole seconds and the host purges in milliseconds); the bound is in the loop, and the line it prints shares the "stopped" path the newest-only case exercises
+Verification: 4 units (age; size with the newest kept and the stop named; another workspace purged when free, skipped and named when busy; a bad limit is a usage error before anything is written); all recover units 104 passed
+**Process failure recorded:** an edit to undo's verification dropped its `if left:` guard, so every restore reported a failure; 16 units caught it before the commit.
+SCOPE: out — tests/unit/test_snapshot_slice1.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T026: the trash — store, purge, `undo --trash`, and `guard trash-put` (FR-39–FR-41)
+**Started:** 2026-10-10T05:49:39Z | **Completed:** 2026-10-10T05:51:47Z
+
+INHERITED: Store's mechanics (objects, ids, atomic writes, the lock), NOTES, the record-mtime age rule — from T021–T025 (confidence: high)
+FLAGGED: "moved to a trash" is met by copy-then-delete: the guard keeps the content, then the real command deletes, so its behaviour, output and exit code are unchanged (seam 4); a hard link would be instant but the state root is a volume, another filesystem, so it cannot (confidence: high)
+FLAGGED: the trash is not per workspace — any path the agent deletes is kept, the criterion says "deleted files" (Item 22 Q3 asks the mentor to confirm) (confidence: medium)
+FLAGGED: a put-back never overwrites: an existing path, or a missing parent, refuses the whole item, named (confidence: high)
+ASSUMED: a file that would take the trash past its cap is named "not kept" by the guard's line, not silently dropped (T2) (confidence: high)
+DEFERRED: what calls `guard trash-put` in the agent's shell — FOR-MENTOR Item 22 (Q1, Q3)
+ABSENT: an e2e cell (T028); a restored item stays in the trash, so a second put-back is refused as "exists" (not removed on restore)
+Verification: test_trash.py 5 passed (kept and put back verified by the test's walk, modes and links included; never overwrites; unknown id exit 3; purge by size and age, named; over the cap named); undo units unchanged (help within 40 lines)
+SCOPE: out — tests/unit/test_trash.py (1 of 3 changed files) (task has FLAGGED: yes)
+
+### T027: the image's state root and compose's named volume (FR-25, FR-26)
+**Started:** 2026-10-10T05:51:57Z | **Completed:** 2026-10-10T05:53:16Z
+
+INHERITED: TIMELIKE_STATE_ROOT and its default — from T020 (confidence: high)
+FLAGGED: 004's e2e cell "nothing of Adele's is mounted into the agent: no mounts at all" now requires exactly one mount, the volume timelike-state at /var/lib/timelike; chose to change its assertion, declared in the cell and here, over leaving it to fail, because revision 11 asks for the volume and the send says it does not cross H1; the cell's intent (nothing of Adele's) is kept and still checked (confidence: high) — another feature's test, so it goes in changed_other_features
+ASSUMED: the build's root-run steps must leave /var/lib/timelike empty (a root-owned VERSION would lock the agent out); checked in the announce RUN, as /tmp/timelike already is (confidence: high)
+ABSENT: any change to the vanilla image (P6); a build (no Docker here: the Dockerfile parses, 58 instructions, 0 unknown, by BuildKit's parser through the PyPI dockerfile package)
+Verification: test_state_root_image.py 6 passed; test_agent_runtimes.py unchanged (97 with it); the cell's regex checked in bash: matches the one volume, rejects a second mount
+SCOPE: out — tests/e2e/adele-isolation-grant-file-and-extend-unreachable-from-agent.bats, tests/unit/test_state_root_image.py (2 of 4 changed files) (task has FLAGGED: yes)
+
+### T028: e2e — SC-7, SC-8 (new session; recreate; persistence), SC-9, SC-10's restore and purge; slice 0's cells on per-test state roots
+**Started:** 2026-10-10T05:53:22Z (T027's commit time, from git; 06:53:16Z was written here first, composed, and corrected) | **Completed:** 2026-10-10T05:57:59Z
+
+INHERITED: the state root, the hook, the trash helper, the volume — from T020–T027 (confidence: high)
+FLAGGED: the e2e harness (exec_in) runs every cell with TIMELIKE_SNAPSHOT_INTERVAL=off unless the cell sets it; chose that over leaving scheduled snapshots on in every feature's cells, because they shift snapshot ids in slice 0's cells and add up to 300 ms, and possibly a stderr line, to timed cells of features that don't test recovery. The scheduled snapshot's own cells set it, the default interval included. Stated in the cycle report as a gap: other features' cells don't run with it on (confidence: medium)
+FLAGGED: per-test state roots live on the agent's state volume (/var/lib/timelike/e2e-*), so slice 0's cells see the configuration compose gives the agent (no not-persistent line) and are isolated from each other; the slice-0 files change only their setup, env and teardown (and the refusal file's "nothing stored" check also reads the state root) (confidence: high)
+FLAGGED: SC-8's recreate is a throwaway container from the verified image on two FRESH named volumes (state root and /home/agent), removed and started again, never a simulation inside one container; the fresh state volume also shows the image's ownership reaching it (lore Q003) (confidence: high)
+ASSUMED: python3 is on the agent's PATH (007 Cycle 4, D-12) for SC-7's script (confidence: high)
+DEFERRED: SC-6 (the guards) and SC-10's feed — Item 22. The SC-10 file says in its header that it is partial
+ABSENT: running any cell (no Docker here); a "command starting with undo takes none" cell (it could not set the shell's working directory without a leading cd, so it would have passed vacuously; host test K6/K7 covers the rule)
+Verification: bats 1.14.0 --count parses all (new: 4, 4, 2, 4; slice 0's and the adele file unchanged: 10, 4, 16, 10, 4, 5); shellcheck clean over every changed shell file, the new ones added to Makefile's SHELLCHECK_FILES; host hook test 57 of 57
+SCOPE: out — tests/e2e/helpers.bash (1 of 12 changed files) (task has FLAGGED: yes)
+
+### T029: carried — symbols' index to the state root (Item 20); 001's rule 10 text
+**Started:** 2026-10-10T05:58:20Z | **Completed:** 2026-10-10T05:59:59Z
+
+INHERITED: agentio.state_root / ensure_state_root, the workspace key — from T020, T021 (confidence: high)
+FLAGGED: the index moves to `<state root>/workspaces/<key>/symbols.json`, keyed with snapshot's 16 hex (was 12, in the session scratch), so one workspace has one directory in the state root; chose sharing the directory over a separate `cache/` tree (confidence: high)
+FLAGGED: a state root that cannot be used leaves the answer standing and says "cache not saved (…)", as a save failure always did; chose that over failing `symbols` (confidence: high)
+ASSUMED: 011's contract line `index` changes with it — another feature's contract, declared in its file and in changed_other_features (confidence: high)
+ASSUMED: 001's output-contract § Session event gains a State root bullet (the send's carried item), declared in place (confidence: high)
+ABSENT: the README's prose about the index and the scratch (T030); the symbols e2e cells need no change (each cell has its own workspace, so its own key)
+Verification: test_symbols.py 56 passed (a second session finds the index warm; the index in the state root, rebuilt when removed); test_conform.py and test_announce.py unchanged (128 with symbols)
+FOR-MENTOR Item 20 closed in the register.
+SCOPE: out — .specswarm/features/011-code-intelligence/contracts/symbols-cli.md, FOR-MENTOR.md, tests/unit/test_symbols.py (3 of 5 changed files) (task has FLAGGED: yes)
+
+### T030: README — the generated command reference only; prose and Status held (Item 22)
+**Started:** 2026-10-10T06:00:11Z | **Completed:** 2026-10-10T06:00:53Z
+
+INHERITED: the help of `undo` (--trash) and `symbols` (the index line) — from T026, T029 (confidence: high)
+FLAGGED: regenerated ONLY the generated command reference (scripts/readme_reference.py --write: undo's --trash line and option, symbols' index line), and left every prose line and the Status untouched; chose that because the send says "If an Item 22 leaves a criterion unbuilt, leave README.md untouched and say why" while CLAUDE.md's standing README rule says the reference is regenerated in the same cycle as any help change, and test_readme_reference.py fails the lane otherwise. The generated block is the script's output, not a reading. **For the mentor:** if "untouched" includes the generated block, revert this one commit's README hunk and the unit fails until T032 (confidence: medium)
+ABSENT, held for T032 after Item 22: the README status block (row 07, 18 of 38, the Status paragraph), and the snapshot/undo and scratch prose. That prose now says the store is in the session scratch, which this cycle made false; it is corrected with the block
+Verification: readme_reference --check current, 13 tools; test_readme_reference.py 21 passed
+SCOPE: in (2 changed files)
+
+### T031: host lane, lint, the cycle report § Cycle 3
+**Started:** 2026-10-10T06:01:04Z | **Completed:** 2026-10-10T06:09:00Z
+
+INHERITED: everything from T020–T030 (confidence: high)
+ASSUMED: ruff format's rewrites are layout only; the units ran after them (confidence: high)
+FLAGGED: reconcile_mode `scoped`, not `full`: the guards criterion is not built (Item 22); an addendum corrects it if the ruling lets this cycle build them (confidence: high)
+ABSENT: the Docker lane (the mentor's); the README status block and prose (Item 22); T032
+Verification: make test-host exit 0 (1987 passed, 13 skipped; hook 57/57); ruff, mypy --strict, shellcheck clean; step 10 as the installed 2.44.0 blocks report it (unknown)
+SCOPE: out — tests/unit/test_scheduled_snapshot.py, tests/unit/test_snapshot_slice1.py, tests/unit/test_state_root_image.py, tests/unit/test_symbols.py, tests/unit/test_trash.py (5 of 8 changed files) (task has FLAGGED: yes)
+
+## Lane 005s1-a fixes (`bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md`)
+
+### T033: SC-7's scheduled_ids returned its loop's status; SC-7's shells start in the repository
+**Started:** 2026-10-10T08:45:23Z | **Completed:** 2026-10-10T08:52:48Z (T033 and T034 were edited before either was committed; one completion time read for both)
+
+INHERITED: the SC-7 file and exec_in — from T028 (confidence: high)
+FLAGGED: `scheduled_ids` now matches with `if` and ends `return 0`, so it never returns a match's status; the callers' assertions are unchanged (count == 1, the undo's verdict, the manifest) (confidence: high)
+FLAGGED: the same shape elsewhere in this cycle's e2e files: SC-8's two loops (`[[ … ]] && found=yes`, `[[ … ]] && n=…`) were not a function's last statement, so they could not fail a cell, but become `if` too. helpers.bash's new loops (state_root_rm) end in `|| true`. Nothing else matched (confidence: high)
+FLAGGED: a second defect behind the first, found by reading what would run next: SC-7's `in_repo` started the shell in /home/agent (the image's WORKDIR) and `cd`ed in the command, after the hook had run. The hook snapshots the workspace of the directory a shell STARTS in, and skips $HOME, so no scheduled snapshot of the repository was ever taken and the count would have failed. Chose to start the shell in the repository (`exec_in -w DIR`, docker exec -w), as a harness starts the agent's shell in its workspace, over changing the hook to look at a later `cd`; it is the test's setup that was wrong, not the feature. No assertion was widened (confidence: high)
+ABSENT: running the cells (no Docker here); the lane reruns them. The SC-7 cells now reach the count, the undo and the manifest for the first time in the image
+Verification: shellcheck clean; bats --count 8 (4, 4); the fixed loop under `set -e` on a fake list returns 0 and finds the scheduled id
+SCOPE: in (3 changed files)
+
+### T034: the scan — eight git-layer entries in two baselines; the Docker CLI to 29.9.0
+**Started:** not read (begun right after T033's edits) | **Completed:** 2026-10-10T08:52:48Z
+
+INHERITED: the lane's proposed entries (scan/out/baseline.proposed.json, scan/out/timelike-vanilla/baseline.proposed.json) and grype.json's descriptions (confidence: high)
+FLAGGED: origin `git`, checked rather than assumed: the pinned trixie-slim base's dpkg status (78 packages, the layer of base digest a99cfc51…) lists no gnutls or krb5 package, and Debian trixie's Depends lead git → libcurl3t64-gnutls → libgnutls30t64 and libgssapi-krb5-2 → libkrb5-3, libk5crypto3, libkrb5support0 (librtmp1 and libngtcp2-crypto-gnutls8 → libgnutls30t64). From the base layer and the package index, not dpkg in a built image (confidence: high)
+FLAGGED: each entry has its own reason from the advisory's text, and the Critical (CVE-2026-95210) says what is still exposed (a peer holding a CA-issued certificate for the host, on the network path, could serve forged content to a fetch): accepted as bounded, not as nothing. reviewed and review_by unchanged (2026-12-27), a review_notes line per file (confidence: medium — the advisories' texts are short and name no affected code path)
+FLAGGED: DOCKER_CLI_IMAGE → docker:29.9.0-cli by its index digest (1a4c7cb6…, confirmed by the registry's Docker-Content-Digest), the newest docker CLI release (2026-10-09). Its /usr/local/bin/docker carries Go build info go1.26.9 (29.8.2 and 29.8.1: go1.26.8), read from the linux/amd64 layer pulled from the registry; the e2e runner and the bench driver both build from this one pin (tests/runner/Dockerfile, bench/driver/Dockerfile) (confidence: high)
+ABSENT: rebuilding either image or running `docker version` (no Docker here; the lane rebuilds both from the pin and the mentor's check reads Client.GoVersion); the arm64 layer's Go version (not read)
+Verification: evaluate.py report over the lane's own grype output with the new baselines: grype PASS, 0 blocking, in both images (the sbom line failed only on the placeholder image id I passed); test_agent_runtimes.py and test_scan*.py 349 passed
+SCOPE: out — pins.env, scan/baseline/timelike-agent.json, scan/baseline/timelike-vanilla.json (3 of 4 changed files) (task has FLAGGED: yes)
+
+### T032: the guards, the force-push record, the trash's feed, note 12 (Item 22's ruling)
+**Started:** 2026-10-10T08:53:06Z (T034's commit time; work began right after it) | **Completed:** 2026-10-10T09:24:12Z
+
+INHERITED: the store, lock, purge and trash from T021–T026; the hook's rules (builtins only, silent, never fatal) from 001; the ruling in bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md (confidence: high)
+FLAGGED: functions `rm` and `git` in shell-env.bash call /opt/timelike/libexec/guard by absolute path, then the REAL command runs last (`command rm "$@"`), so output and exit code are its own; `local -` with `set +e +x` inside each function so a caller's `set -e` cannot stop the real command when the helper fails, and the guard's own steps stay out of a caller's xtrace. Chose that over running the real command from the helper (it would lose the shell's terminal and job control) (confidence: high)
+FLAGGED: the depth bound's marker. Guards are defined only in a -c or interactive shell (never a script run from a file); a guarded -c shell exports TIMELIKE_GUARD_SHELL=$$; a bash inheriting it skips the guards when that pid is among its ancestors (builtin reads of /proc/<pid>/stat, at most 64 levels), so a stale marker never disarms a new top-level `bash -c`; an interactive shell sets no marker, so a harness a person starts from one still gets guarded shells. Chose the ancestor walk over "marker set → skip" because a harness launched from a guarded shell would otherwise lose its guards, which the ruling forbids (confidence: medium — an agent that starts a second harness from its own `bash -c` gives that harness unguarded shells; recorded in not_verified)
+FLAGGED: a bash the guarded shell exec'd in its own place (bash runs the last simple command of a -c string by exec, keeping the pid) is told from the bash -lc double source by a non-exported `__timelike_guarded`. Found by a unit, not assumed (research R17) (confidence: high)
+FLAGGED: which workspace a guarded `rm -r` snapshots: the operand itself when it holds .git, else its nearest .git ancestor, else the shell's workspace when the operand is inside it; else none, and the line says so while the trash keeps it. Chose per-operand over always the shell's workspace, so `rm -rf ../other/build` snapshots the repository it deletes from (confidence: medium)
+FLAGGED: `git reset --hard` snapshots only when `git status --porcelain --untracked-files=no` shows changes (the criterion's "with uncommitted changes"), or when status fails (in doubt); `git clean` lists what it would remove with its own `-n` (minus -f/-i/-q), snapshots the worktree, and trashes exactly those paths; not when -n, or when clean.requireForce would make git refuse. A git option before the subcommand the guard cannot read snapshots the shell's workspace (in doubt). git aliases are not resolved (that would cost a fork per git command): `git rh` aliased to reset --hard is unguarded, recorded (confidence: medium)
+FLAGGED: the pre-push step buffers git's lines to a mktemp file, runs the guard on it, then hands the same file to the repository's hook as stdin; it never fails the push (`|| :`; missing helper or unreadable input is one line). A ref is "forced" when the remote's prior sha is not an ancestor of the new one (merge-base --is-ancestor), or the ref is deleted, or git cannot place the prior commit (in doubt) — git itself only passes forced non-fast-forwards to pre-push. The --no-verify path in the function reads the prior commit from refs/remotes/<remote>/<branch> and says it may be stale. Remote URLs are recorded with any user:password removed (P4) (confidence: high)
+FLAGGED: what the trash never keeps: /, $HOME or an ancestor, anything holding or inside the state root (the trash lives there); a directory rm will not remove (no -r; -d only when empty). Not-kept lines cut at 5 plus a count, so `rm -rf node_modules` over the trash cap does not print thousands of lines (confidence: high)
+FLAGGED: note 12 per the ruling: verify(rec, proven) re-hashes objects new to the snapshot and checks presence, type and size for the stat cache's hits; the stat cache is now written only after a take verifies (it was written before verify, which would have let the next take trust an unverified object); check_objects re-hashes every object a restore (undo ID --yes, undo --trash ID --yes) will write before writing any, refuses naming object and path, removes the object, writes nothing and takes no safety snapshot. Slice 0's condition-4 test rewritten to the ruling (a damaged object new to the snapshot is still caught at take; a proven one that rotted is caught by the restore, a new unit) (confidence: high)
+ASSUMED: the announcement gains two lines after snapshot/undo (007's generator and contract, declared); 001's spec gains FR-18a (the hook defines the guards) and FR-20a (the pre-push step), declared (confidence: high)
+ASSUMED: the e2e harness leaves the guards on in every cell (no switch exists, and none was added: an off switch for the agent would be a way round P5 beyond the visible `command rm`). Other features' cells that rm a temp file now also print a trash line; each reads its output by key (assert_value / value_of), which a `timelike:` line does not match. SC-8's recreate cell uses `command rm`, being about the recreate. The bench's catalog runs no rm, reset, clean or push (confidence: medium)
+DEFERRED: the README block and the Cycle 3 addendum (T035)
+ABSENT: running any cell in the image (no Docker here); SC-11 (D16), Manual; git aliases; an off switch; the arm64 Docker CLI's Go version (T034)
+ABSENT: the session-scratch paragraph of README.md (§ The session scratch) still says snapshots live there; the send's block says "Nothing else in the README changes", so it is held and flagged for the mentor in T035
+Verification: tests/unit/test_guard.py 26 passed (real bash with the hook, the real rm and git, a bare remote, the dispatcher through GIT_CONFIG_*); test_snapshot, test_trash, test_announce, test_git_hook_dispatch pass; host hook test 57/57 (Q2, Q4 updated for the functions and the pid marker); shellcheck clean over the 84 SHELLCHECK_FILES (the dispatcher and the new bats file added); ruff, mypy --strict clean; measured costs in research R17
+SCOPE: out — .specswarm/features/007-announcements-discovery/contracts/timelike-announce-tools.md, FOR-MENTOR.md, tests/e2e/a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats, tests/unit/test_guard.py, tests/unit/test_trash.py (5 of 16 changed files) (task has FLAGGED: yes)
+
+### T035: the README status block; Cycle 3 addendum 1
+**Started:** 2026-10-10T09:25:09Z (T032's commit time) | **Completed:** 2026-10-10T09:34:47Z
+
+INHERITED: every slice-1 Automated criterion built (T020–T032); the send's `## README status` block (confidence: high)
+FLAGGED: applied the block now that every slice-1 criterion is built, as the operator's instruction 4 reads ("if every slice-1 criterion is built"), though none of T032 has run in the image; chose that over waiting for lane 005s1-b because the instruction names "built", and the lane judges it either way (confidence: medium)
+FLAGGED: the `snapshot`/`undo` section's "Taken" sentence follows note 12's ruling (it said every stored file is re-hashed, which is no longer true); inside the block's section, so in scope (confidence: high)
+FLAGGED: README § "The session scratch" (outside the block's sections) still says snapshots and the symbols index live in the scratch and that the state root is "not yet built", now false; the block says "Nothing else in the README changes", so it is untouched and raised in the addendum for the mentor (confidence: high)
+ASSUMED: reconcile_mode corrected to `full` in the addendum: every criterion of the send is built and has cells on this cycle's code (confidence: high)
+ABSENT: the README's session-scratch paragraph; running the host lane's e2e or any image step; implement step 10 rerun (unchanged: unknown)
+Verification: readme_reference --check current (13 tools), test_readme_reference.py 21 passed; no "faster", "fewer turns" or "more reliable" in README.md; host lane on this tree: make test-host exit 0, 2014 passed, 13 skipped; hook 57/57
+SCOPE: out — reboot.md (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T036: lane 005s1-c — the `bash -ic` cells read output by line position
+**Started:** 2026-10-11T07:29:16Z (read from the clock, after the change was made: the start was not read) | **Completed:** 2026-10-11T07:29:16Z
+
+INHERITED: SC-6's and SC-7's cells (T032, T033); lane 005s1-c's feedback `bridge/feedback/07-20261011-055059-…` (confidence: high)
+FLAGGED: dropped exactly bash's two no-terminal lines in one helper (`drop_ic_notty_lines`, helpers.bash), each matched whole, at most once, in bash's order, only at the start, and only in the ic style (both files' `in_repo`), over finding lines by prefix. Every positional assertion stays as written, so `type -a`'s first line must still be `rm is a function` and the restore's verdict must still be line 1. The process group is the one field allowed to vary: the lane printed `-1`, and a host bash prints a pid (confidence: high)
+FLAGGED: SC-6's no-guard cell (`bash -c`, which the ic lines can't reach) took `lines[2]` as the newest snapshot's id. It now takes the first row of the form `<id>  <reason>  `, and requires that row to be `scheduled`, which the cell's earlier assertion (every snapshot is scheduled) already implies. Not looser (confidence: high)
+ABSENT: running the cells in the image (no Docker here); a change to `run_in` itself (other features' ic cells read by key or never met these lines, and this cycle's other files have no ic cell); any assertion text
+Verification: the helper exercised under a real `bash -ic` with no terminal on the host (the two lines dropped, the rest unchanged) and on non-matching, out-of-order and trailing-text cases (left alone); the id read exercised on a scheduled and a non-scheduled newest row; shellcheck 0.11.0 clean over the Makefile's 84 files; bats --count: SC-6 12, SC-7 4
+
+### T037: sign-off at `d65cdee` — Cycle 3 addendum 4, the feedback items closed, the merge
+**Started:** 2026-10-12T00:00:49Z | **Completed:** see the merge commit's time
+
+INHERITED: lane 005s1-d (649 of 649), D16 observed by the operator, the mentor's sign-off at `d65cdee` (confidence: high)
+ASSUMED: the "9 Automated criteria" are slice 0's four and slice 1's five; each is marked `executed` with its file, and the cell counts come from lane 005s1-d's `tests/out/e2e.tap` (every cell of each file `ok`) (confidence: high)
+FLAGGED: the two lane feedback items were never raised in my register (the mentor raised them), so they are closed under a new Item 23 beside Item 22, rather than by editing anything in `../bridge/` (confidence: high)
+ABSENT: any change outside cycle-report.md, decisions.md, tasks.md, reboot.md and FOR-MENTOR.md before the merge; a push; the status tag (that waits for the operator's OK)

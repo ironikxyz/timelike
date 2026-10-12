@@ -4,10 +4,12 @@
 # Isolation (feature 004) — spec FR-4, FR-7, FR-20; stack rule 1: "Nothing in the agent image may read
 # Adele's volume, config or credentials — test it (feature 12)"; tasks.md T020.
 #
-#   - Nothing of Adele's is mounted into the agent: its container has no mounts at all, read from
-#     outside (the authoritative view — a path the agent cannot stat proves nothing about whether it
-#     exists). So the grant file, the ledger and the canary have no path in the agent's filesystem, and
-#     nothing the agent does can change a grant.
+#   - Nothing of Adele's is mounted into the agent: its container's one mount is its own state root
+#     (the named volume timelike-state at /var/lib/timelike; feature 005 slice 1, FR-26, declared there
+#     as a change to this cell, which read "no mounts at all"), read from outside (the authoritative
+#     view — a path the agent cannot stat proves nothing about whether it exists). So the grant file,
+#     the ledger and the canary have no path in the agent's filesystem, and nothing the agent does can
+#     change a grant.
 #   - Adele's own files are hers: her state, her grant file (read-only) and the canary volume are mounted
 #     into her container only.
 #   - The stand-in refuses a request that does not carry the canary — tested directly against it, from
@@ -21,10 +23,11 @@ setup_file() {
   stamp_check_adele
 }
 
-@test "004 nothing of Adele's is mounted into the agent: no mounts at all" {
+@test "004 nothing of Adele's is mounted into the agent: its one mount is its own state volume" {
   local mounts
-  mounts="$(docker inspect --format '{{len .Mounts}}' "$AGENT_CONTAINER")"
-  [[ "$mounts" == 0 ]] || { docker inspect --format '{{json .Mounts}}' "$AGENT_CONTAINER" >&2; return 1; }
+  mounts="$(docker inspect --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Destination}};{{end}}' "$AGENT_CONTAINER")"
+  [[ "$mounts" =~ ^volume\ [A-Za-z0-9_.-]*timelike-state\ /var/lib/timelike\;$ ]] ||
+    { docker inspect --format '{{json .Mounts}}' "$AGENT_CONTAINER" >&2; return 1; }
 }
 
 check_no_adele_paths() {

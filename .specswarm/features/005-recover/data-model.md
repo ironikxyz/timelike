@@ -33,7 +33,7 @@ except by a confirmed restore.
 |---|---|---|
 | `v` | int | record format, `1` |
 | `id` | int | the identifier |
-| `reason` | string | `on demand`, or `before undo <id>` (slice 1 adds more) |
+| `reason` | string | `on demand`, `before undo <id>`, `scheduled` *(Cycle 3)*, or `before <command>` from a guard *(Cycle 3, FR-43)* |
 | `label` | string or null | `-m TEXT` |
 | `workspace` | string | the workspace's real path |
 | `taken_at` | string | ISO 8601 UTC; shown only with `--verbose` (rule 11) |
@@ -46,6 +46,8 @@ except by a confirmed restore.
 | `excluded_bytes` | int | total size of excluded files |
 | `partial` | bool | `excluded` is not empty |
 | `caps` | object | `{max_bytes, max_file_bytes, max_entries}` in force when taken |
+| `session`, `agent` | string, string or null | who took it *(Cycle 3, FR-31)* |
+| `push` | list | only on a snapshot taken before a forced push *(Cycle 3, FR-44)*: `{remote, ref, prior, source}` per ref, plus `deleted` and `local_ref` from the pre-push step; `prior` is the remote's commit before the push (null when not known); `remote` never carries a user or password |
 
 **Entry:** `{path, kind}` plus, by kind:
 - `file`: `sha256`, `size`, `mode`;
@@ -102,3 +104,29 @@ The workspace walked now (`current`) against a record (`snap`):
 `flock(LOCK_EX)` on `lock`, tried every 50 ms for up to 10 s. Holding it covers the walk, the store
 writes, the record write, and (for `undo --yes`) the safety snapshot, the apply and the verify. On
 timeout: exit 1, `another snapshot or undo is running on this workspace (lock held for 10 s)`.
+
+---
+
+## State root (Cycle 3, slice 1; supersedes § Store's location)
+
+```
+<state root>/                         TIMELIKE_STATE_ROOT, default /var/lib/timelike; mode 0700
+  VERSION                             "timelike-state 1" (P003: a later slice can tell an old layout)
+  workspaces/<key>/                   one store per workspace, the § Store layout, plus:
+    statcache.json                    path → [size, mtime_ns, ctime_ns, ino, sha256] of the last take
+    symbols.json                      `symbols`' index for this workspace (011; Item 20)
+  stamps/<encoded workspace path>     epoch seconds of the last scheduled attempt; '%' → %25, '/' → %2F
+  trash/
+    lock, next
+    items/<id>.json                   one deletion
+    objects/<aa>/<sha256>             its content, deduplicated
+```
+
+- `<key>` as before (16 hex of sha256 of the real path). The `lock` file's content after acquiring:
+  `<pid> <session> <agent or ->`.
+- **Record additions:** `session` (string), `agent` (string or null), and, for an imported record,
+  `imported: {"session": s, "id": n}`. `reason` gains `scheduled`. `v` stays 1.
+- **Trash item:** `v`, `id`, `deleted_at`, `session`, `agent`, `command` (argv of the deleting command,
+  redacted as an event's), `entries` (sorted: `{path (absolute), kind, mode, sha256|target, size}`),
+  `bytes`.
+- **Slice-0 store after import:** gains `imported` (`<old id> <new id>` per line); otherwise untouched.
