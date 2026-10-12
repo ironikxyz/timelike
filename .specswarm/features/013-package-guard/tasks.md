@@ -113,7 +113,7 @@ the image, and the event's `override` field. Those tasks are written once the ru
   - the measurement (R8 Measurements: one and five passing packages; a hung registry);
   - ruff, mypy `--strict`, shellcheck;
   - the host lane.
-- [ ] T018 The cycle report (`.specswarm/features/013-package-guard/cycle-report.md`, Cycle 1) and `reboot.md`;
+- [X] T018 The cycle report (`.specswarm/features/013-package-guard/cycle-report.md`, Cycle 1) and `reboot.md`;
   the README status block only if all four Automated criteria are met (they are not, until Item 24: say
   why); commit everything.
 

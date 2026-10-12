@@ -5,11 +5,23 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z. **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
 
+- **`013-package-guard`** (from `master` `50dd84d` = `public/main`, **`v0.18.0` pushed 2026-10-12**: `main` and the
+  tag, object `6dc8ca9`): **013 Cycle 1 = 15 slice 1 (first build)**, send `bridge/sends/15-rev2-20261012-001145.md`,
+  specswarm 2.44.0. **FOR-MENTOR Item 24 raised first** (`5740354`): how the bare `pip`/`npm`/`uv`/`npx`/`pnpm` reach the
+  guard (recommended (b′): wrappers in a new `/opt/timelike/shims` first on PATH), the confirm's form (keep
+  `package-guard --yes -- CMD`), pnpm in the image (no), the override's place (built: a record the event's
+  `ref.log` points at). Built T001–T017 (`1fa2714`…`71a1454`): `tools/bin/package-guard` (exists / minimum age
+  `TIMELIKE_PACKAGE_MIN_AGE_DAYS` 2 / pinned; refusal = 001's confirmation envelope with `--yes` in the tool's
+  position; runs CMD through `run`), `tests/fixtures/registry-standin.py` (in the e2e it runs INSIDE the agent
+  container on loopback; stop it by its pid file), 17 e2e cells through `package-guard`, ~215 units. pnpm 11
+  ignores `npm_config_*`: the guard asks `pnpm config get`. README: the command reference only; the status block
+  waits for Item 24. **No commit until the mentor's lane has ended.** README updates from now on mark changed
+  hand-written passages with `<mark>` (the operator, 2026-10-12; memory).
 - **Pushed 2026-10-09** (operator OK, mentor discharge 04:10Z): `public/main` = `ec71f3d`, tag **`v0.16.0`** (object
   `5f3b94f`). Deny-list over the tag message and every object pushed: 0 on P1–P7, control positive.
 - **Plugins:** specswarm **2.40.0** and ccmentor 1.50.2, installed during the operator's pause (04:21Z). This session

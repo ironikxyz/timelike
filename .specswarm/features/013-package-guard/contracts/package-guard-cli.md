@@ -32,8 +32,8 @@ package-guard --help | --agent-info
   "scope": "install pypi",
   "status": "confirmation_required",
   "plan": [
-    "refused: tl-absent-pkg — not in http://127.0.0.1:41733/simple (HTTP 404)",
-    "ok: six 1.17.0, released 2024-12-04 (676 days) — http://127.0.0.1:41733/simple",
+    "refused: tl-absent-pkg — not found: not in http://127.0.0.1:41733/simple (HTTP 404)",
+    "ok: six 1.17.0, released 2024-12-04 17:35 UTC — http://127.0.0.1:41733/simple",
     "nothing was downloaded: pip install tl-absent-pkg six was not run",
     "proceeding runs: pip install tl-absent-pkg six; the override is recorded in this session"
   ],
@@ -41,17 +41,20 @@ package-guard --help | --agent-info
 }
 ```
 
-**One plan line per package.** Each begins with its result word:
-- `ok`;
-- `pinned` (and in which lockfile);
-- `refused`, followed by:
-  - `not in REGISTRY (HTTP 404)`;
-  - `newest release V was released DATE (N days ago); the minimum age is M days (TIMELIKE_PACKAGE_MIN_AGE_DAYS); the newest release old enough is V2: pip install 'NAME==V2'`;
-  - `REGISTRY unreachable from this container: timed out after 10 s (TIMELIKE_PACKAGE_TIMEOUT)`;
-  - `REGISTRY gives no release dates (no upload-time): age unknown`;
+**One plan line per package, in the command's order.** Each begins with its result word:
+- `ok: NAME VERSION, released DATE — REGISTRY` (plus `(also on …)` when another index has it);
+- `pinned: NAME — pinned in LOCKFILE; no registry was asked`;
+- `unchecked: NAME — …`, for a local path, `--no-index`, or a project bin already installed;
+- `refused: NAME — WORD: DETAIL`, where WORD and DETAIL are one of:
+  - `not found: not in REGISTRY (HTTP 404)`;
+  - `too new: newest release V was released DATE (N days ago); the minimum age is M days
+    (TIMELIKE_PACKAGE_MIN_AGE_DAYS); the newest release old enough is V2, released DATE2: pin it as NAME==V2`;
+  - `registry unreachable: REGISTRY unreachable from this container: timed out after 10 s
+    (TIMELIKE_PACKAGE_TIMEOUT)` (or `HTTP 503`, `connection refused`, `denied: HTTP 403 …`, …);
+  - `age unknown: REGISTRY gives no release date for V (no upload-time): age unknown`;
+  - `no matching release: no release matches SPEC in REGISTRY`;
   - `unchecked source: a URL or VCS reference, which no registry vouches for`;
-  - `could not read: …`;
-- `unchecked`, for a local path.
+  - `unreadable: …` (the command, a requirements file, a manifest, or a version that does not parse).
 
 **Then two closing lines:** what was not run, and what proceeding runs.
 
@@ -59,7 +62,7 @@ package-guard --help | --agent-info
 
 | Case | Verdict |
 |---|---|
-| Passed | `N packages checked (P pinned, no lookup) against REGISTRY…; CMD exited E` (and run's own parts: duration, lines, log) |
+| Passed | `N packages checked (P pinned, no lookup) against REGISTRY…; CMD exited E`; when `run` ended CMD (a timeout, memory, disk), `— run: <run's own verdict>` follows |
 | Installs nothing | `not an install: ran CMD unchecked; CMD exited E` |
 | Proceeded with `--yes` over a refusal | `proceeded over K refusals (recorded: PATH); CMD exited E` |
 | `--dry-run`, would pass | `would proceed: N packages checked` |

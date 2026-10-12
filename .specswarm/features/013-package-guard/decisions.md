@@ -85,3 +85,12 @@ ASSUMED: the README's generated command reference is rewritten in this cycle (sc
 FLAGGED: the tool's summary names the minimum age and its variable, so the announcement (generated from manifests) shows them with no change to 007's generator. The announcement's rule lines for package installs wait for Item 24: they would describe the bare-command route (confidence: medium)
 ABSENT: running any cell in the image (no Docker here); uv on the host (its cells meet uv only in the lane); a bash -ic cell (the job-control lines are handled by drop_ic_notty_lines, and these criteria are not about the shell style); pnpm in the image (Item 24 Q3)
 Verification: each cell's command and asserted string rehearsed on the host with bash -c against the stand-in (pip and npm; all matched, including running the npm refusal's confirm and reading the override back from events.jsonl); the in-container python snippets run on the host; shellcheck 0.11.0 clean over the Makefile's 88 files (four added); bats --count 5, 5, 4, 3 (17 cells); readme_reference --check current (14 tools); 215 units pass (the guard's, the stand-in's and the README reference's); ruff clean; mypy --strict clean (31 files). Measured: the guard adds about 300 to 350 ms to a passing pip or npm install of 1 or 5 packages on the host (research Measurements)
+
+### T018: the cycle report, reboot.md, the contract's wording
+**Started:** 2026-10-12T01:00:31Z (not read at the start: 71a1454's commit time, the previous commit; a composed time first written here was replaced before the report) | **Completed:** 2026-10-12T01:10:19Z
+
+INHERITED: everything above (confidence: high)
+ASSUMED: the README status block is not applied: its condition (all four Automated criteria met) waits for Item 24's route; only the generated command reference changed, which carries no <mark> (the operator's rule is for hand-written passages) (confidence: high)
+ASSUMED: the contract's example envelope and plan words were brought in line with what the tool prints (they predated the final wording) (confidence: high)
+ABSENT: implement step 10's score (unknown here); any cell run in the image
+Verification: make test-host exit 0 (2208 passed, 13 skipped; 60/60, 57/57, 33/33)
