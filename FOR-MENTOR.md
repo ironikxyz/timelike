@@ -1128,7 +1128,12 @@ records their closing beside Item 22.
 
 ## Item 24 — Feature 15 slice 1 (`013-package-guard`): how the bare installs reach the guard, pnpm, and the override's place (blocks the bare-command route only)
 
-**Status:** open. Raised 2026-10-12T00:25:56Z (read from the clock) on `013-package-guard`, from send
+**Status:** closed 2026-10-12, answered by the mentor in
+`../bridge/feedback/15-20261012-015246-item-24-bare-installs-reach-the-guard.md` (2026-10-12T01:52:46Z) and built in
+013's Cycle 1 addendum (`cycle-report.md`). The answer: Q1 (b′), the shims in `/opt/timelike/shims` first on
+PATH, with seven conditions; Q2 the confirm stays `package-guard --yes -- <the original command>`; Q3 no pnpm in
+the image; Q4 the override goes in the event line itself, as an optional `override` field in 001's schema. Raised
+2026-10-12T00:25:56Z (read from the clock) on `013-package-guard`, from send
 `bridge/sends/15-rev2-20261012-001145.md`, seams 1, 2 and 7, before any of the parts below is built.
 
 **Built meanwhile, not blocked:** `package-guard [--yes] [--dry-run] -- CMD…`, one timelike tool on the agent's PATH

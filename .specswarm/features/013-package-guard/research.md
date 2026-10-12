@@ -220,3 +220,30 @@ Each figure is the median of 5 runs. "Added" is through the guard minus direct.
 - **A hung registry** is bounded by `TIMELIKE_PACKAGE_TIMEOUT`: with a 30 s stall and a 1 s limit, the whole check
   ended in under 4 s with the other name still checked (`test_a_hung_registry_is_bounded_by_one_time_limit`).
 - **Not measured in the image.** No claim about the agent's speed is made from these (P6).
+
+## R11 · The shims, as built on Item 24's ruling (Cycle 1 addendum)
+
+- **sh, not bash.** A bash script reads `BASH_ENV` (`/etc/timelike/shell-env.bash`), whose secret strip would
+  unset, for example, an exported `NPM_TOKEN` the installer was meant to read: the real command's environment
+  would change, against Item 24's condition 2. dash reads no startup file in a non-interactive script. Measured
+  on the host: a `BASH_ENV` that unsets `FOO` leaves `FOO` set for the real command (unit
+  `test_the_real_command_keeps_its_environment_stdin_and_exit`).
+- **Finding the real command with builtins only.** PATH is walked with parameter expansion; an entry that is the
+  shims directory, or a file that is the shim itself (`test -ef`, which follows links), is skipped. That covers a
+  second path to the same directory and a link to a shim placed elsewhere.
+- **Which calls ask the guard.** Any argument equal to one of the installer's install words (the guard's own
+  sets: `NPM_INSTALL`, `NPM_CI`, `NPM_EXEC`, `NPM_INIT` and their aliases; pip's `install`; uv's `install`,
+  `sync`, `add`, `tool`, `--with*`; pnpm's `add`, `install`, `i`, `dlx`, `create`, `init`); for npx, any word
+  that is not an option. This is a superset: a word in another position (`npm run install`) costs one guard call,
+  which answers "not an install" and the shim execs. A unit reads the guard's sets and checks every word is in
+  the shim, so the two cannot drift.
+- **The gate's output is captured**, so a pass shows the caller nothing of the guard's. The shim passes `--text`
+  when its own stdout is a terminal and `--json` otherwise, which decides how an error reads; the exit-4 envelope
+  is JSON in every mode (rule 9).
+- **Not found.** With no real installer (pnpm, until the agent installs it), the shim execs bash with the
+  command-not-found handler (007), which prints its line and the data file's install hint, exit 127.
+- **Measured** (host, Linux 6.8, dash; 2026-10-12, medians):
+  - a call that is not an install (`pip --version`, `npm run test`, the real command being `/bin/true`):
+    **about 0.9 to 1.05 ms added** (300 runs each, two runs);
+  - an install that passes (`pip install tl-old`, against the stand-in, the real command being `/bin/true`):
+    **about 233 ms added** for the guard's check (30 runs). The image's figures are the lane's.

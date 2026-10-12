@@ -407,7 +407,8 @@ Each Automated criterion is one e2e file in the image, named after its distingui
 
 ## Decisions
 
-- **D-1 · One tool, reached explicitly until Item 24.** `package-guard -- CMD` is buildable, testable and
+- **D-1 · One tool, reached explicitly until Item 24** *(Item 24 answered: the bare commands reach it
+  through the shims, FR-37 to FR-40 below).* `package-guard -- CMD` is buildable, testable and
   announceable now. It changes no standard command and no other feature's contract. Whatever Item 24 rules
   will route the bare commands into it, so nothing built here is thrown away.
 - **D-2 · The confirm goes through the tool, not a flag on the installer.**
@@ -436,7 +437,8 @@ Each Automated criterion is one e2e file in the image, named after its distingui
     pinned. The plan names the old-enough release to pin, so the way through costs one command (FR-22).
   - `0` turns the check off.
 - **D-8 · A different version is not pinned.** The lockfile vouches for the release it holds, not for the name.
-- **D-9 · The override record is a file the event points at.** 001's event schema is closed
+- **D-9 · The override record is a file the event points at** *(Item 24 Q4: the override is now also in the
+  event line itself, FR-41; the file stays, pointed at by `ref`).* 001's event schema is closed
   (`additionalProperties: false`), and `ref.log` is its existing pointer. Fields inside the event would change
   001's contract, which the send says to raise. Item 24 offers it.
 - **D-10 · The stand-in runs inside the agent container, started by the cell.**
@@ -463,3 +465,33 @@ Each Automated criterion is one e2e file in the image, named after its distingui
   common private registries do.
 - The host has pip and npm, and pnpm, for host tests. The image has pip, uv and npm, and no pnpm (007 D-12).
 - The session scratch and `events.jsonl` are 001's, and `agentio` writes the event (rule 16).
+
+## Item 24's ruling, built (Cycle 1 addendum, 2026-10-12)
+
+The ruling is `bridge/feedback/15-20261012-015246-item-24-bare-installs-reach-the-guard.md` (2026-10-12T01:52:46Z).
+These requirements are added by it; nothing above is withdrawn except where D-1 and D-9 say so.
+
+- **FR-37 · The shims (Q1 (b′)).** `/opt/timelike/shims` holds `pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm`, each a
+  link to one POSIX sh wrapper, `/opt/timelike/libexec/install-shim`. The directory is first on PATH in the image's
+  `ENV` and in `/etc/profile.d/00-timelike-path.sh` (001's files, declared). The vanilla image gets nothing (P6).
+- **FR-38 · Pass-through is free (condition 1).** A command with no install word for its installer is `exec`'d at
+  once: no fork, no Python. Its added time is measured and reported.
+- **FR-39 · The real command is untouched (condition 2).** The real installer is the first of its name on PATH
+  that is not the shim (P002; tested with a decoy alias of the shims directory and a second link). For anything
+  that passes, the shim `exec`s it, so its output, stdin, environment and exit are its own. The shim is sh, not
+  bash, so `BASH_ENV`'s secret strip never changes the installer's environment. No installer found: bash's
+  command-not-found handler answers, exit 127, as without the shim.
+- **FR-40 · `--gate`.** An install asks `package-guard --gate -- NAME ARG…` (stdin closed). The gate checks and
+  runs nothing: exit 0 lets the shim exec the installer; a refusal is the envelope, exit 4, printed by the shim,
+  whose `confirm` is the tool form exactly (Q2). The gaps are named in the announcement, in `--agent-info`
+  (`shims.not_reached`) and in `not_verified` (condition 3): `python -m pip`, an activated venv's own `pip`, and
+  an installer by its full path such as `/usr/local/bin/pip`. Slice 2's proxy closes them.
+- **FR-41 · The override in the event line (Q4).** 001's `event.schema.json` gains an optional `override` object
+  (ecosystem; packages, each with name, the version named, registry, reason, release date and detail; the
+  command), set through `agentio`'s `Context.event_override`. Every existing event stays valid.
+- **FR-42 · The criteria's cells run the installers by their bare names (condition 7)**, in `bash -c`, `bash -lc`,
+  `bash -ic` and a bash script. pip makes the user install the image's `pip.conf` asks for, into the cell's own
+  `HOME`; no cell passes `--target` or `--prefix` to pip (lane 013s1-a2, item 1). pnpm is installed in its cell
+  into `~/.local/bin` from the stand-in, as the agent would; the package is the stand-in's `pnpm`, a script, so
+  pnpm's own forms stay the host's units (Q3).
+

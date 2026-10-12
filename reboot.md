@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z. **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -20,8 +20,14 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   position; runs CMD through `run`), `tests/fixtures/registry-standin.py` (in the e2e it runs INSIDE the agent
   container on loopback; stop it by its pid file), 17 e2e cells through `package-guard`, ~215 units. pnpm 11
   ignores `npm_config_*`: the guard asks `pnpm config get`. README: the command reference only; the status block
-  waits for Item 24. **No commit until the mentor's lane has ended.** README updates from now on mark changed
-  hand-written passages with `<mark>` (the operator, 2026-10-12; memory).
+  waits for Item 24. README updates from now on mark changed hand-written passages with `<mark>` (the operator,
+  2026-10-12; memory). **Lane 013s1-a2** (on `353b9ed`): 4 cells failed, pip refusing `--target` with the image's
+  `pip.conf` `user = true`, and a new gnutls Critical. **Item 24 answered** (`bridge/feedback/15-20261012-015246-…`)
+  and built in Cycle 1's **Addendum 1** (T019–T026): `/opt/timelike/shims` (six links to the POSIX sh
+  `libexec/install-shim`) first on PATH; `package-guard --gate`; the event line's optional `override` (001's
+  schema); the four criterion files on bare names (28 cells, pip as a user install into the cell's own HOME);
+  CVE-2026-88647 baselined on the operator's "accept it"; the README status block applied (19 of 38), marked.
+  Item 24 closed. **No commit until the mentor says lane 013s1-b has ended.**
 - **Pushed 2026-10-09** (operator OK, mentor discharge 04:10Z): `public/main` = `ec71f3d`, tag **`v0.16.0`** (object
   `5f3b94f`). Deny-list over the tag message and every object pushed: 0 on P1–P7, control positive.
 - **Plugins:** specswarm **2.40.0** and ccmentor 1.50.2, installed during the operator's pause (04:21Z). This session

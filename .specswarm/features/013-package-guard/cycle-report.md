@@ -175,3 +175,185 @@ Commit everything, and report done. No commit after that until the mentor says t
 - **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
 - **After it:** the mentor's D24 capture, which also needs Item 24's ruling, then sign-off.
 - **Merge:** `--no-ff`, after sign-off.
+
+### Addendum 1 — Item 24's ruling built; lane 013s1-a2's items 1 and 2
+
+**Written:** 2026-10-12T18:01:36Z (read from the clock), on `013-package-guard`. Same send, same cycle. Instructed by the
+operator, relaying `../bridge/feedback/15-20261012-034908-lane-013s1-a2-target-cells-and-a-gnutls-critical.md`
+(the lane's findings) and `../bridge/feedback/15-20261012-015246-item-24-bare-installs-reach-the-guard.md` (the
+ruling). Lane 013s1-a2 had ended; nothing was edited while it ran. **Nothing was pushed or merged.** None of this
+addendum's work has run in the image: lane 013s1-b decides it.
+
+**Status in one line:** the bare `pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` now reach the guard through
+`/opt/timelike/shims`, the override is in the event line itself, and every criterion's cells run the installer by
+its bare name. The README status block is applied.
+
+| Task | Commit | What |
+|---|---|---|
+| T019 to T022 | `3542eb3` | the event's `override` (001's schema and contract, agentio); `package-guard --gate` and the shims' directory skipped; the shim, the image's § 5a, the PATH (`ENV`, profile.d); the announcement's lines; their units; 007's PATH-order units |
+| T023 to T025 | `f1814fa` | the four criterion files on bare names (28 cells), `run_bare`; the stand-in's `bin` and its `pnpm`; 007's SC-6 runtimes cell; the agent-cannot-alter list; CVE-2026-88647 in both baselines; the shellcheck list |
+| T026 | this commit | the README; the spec (FR-37 to FR-42), research R11, the contract, the data model; this addendum; FOR-MENTOR Item 24 closed; `reboot.md` |
+
+#### Item 24's ruling, as built
+
+- **Q1 (b′), the shims.** `/opt/timelike/shims/{pip,pip3,uv,npm,npx,pnpm}` are links to one wrapper,
+  `/opt/timelike/libexec/install-shim`, first on PATH in the image's `ENV` and in `00-timelike-path.sh`.
+  - **It is POSIX sh, not bash** (Item 24 proposed bash). A bash script reads `BASH_ENV`, and the hook's secret
+    strip would unset an exported `NPM_TOKEN` before npm ran: the real command's environment would change.
+    dash reads no startup file. Builtins only before the exec, as proposed.
+  - **Condition 1, pass-through is free:** a call with none of its installer's install words is `exec`'d at once.
+    **Measured on the host** (research R11; medians; the real command `/bin/true`, so only the shim is timed):
+    **about 0.9 to 1.05 ms added** to `pip --version` and `npm run test` (300 runs each, run twice). An install
+    that passes adds **about 233 ms** (30 runs, `pip install tl-old` against the stand-in), the guard's check.
+    The image's figures are the lane's to take.
+  - **Condition 2, the real command untouched:** it is the first of its name on PATH that is not the shim (a
+    decoy alias of the shims directory and a second link are skipped; units). On a pass the shim `exec`s it, so
+    output, stdin, environment and exit are its own: units read them from a decoy installer, and one runs the
+    host's real pip through the shim (`Successfully installed …`, nothing of the guard's). The guard is asked
+    with stdin closed, so a piped install keeps its input.
+  - **Condition 3, the gaps named:** in the announcement (one line), in `package-guard --agent-info`
+    (`shims.not_reached`) and in `not_verified` below. Slice 2's proxy, (c), is carried as the slice 2 seam.
+  - **Condition 4, `type -a`:** `type -a pip` shows `/opt/timelike/shims/pip` first; the announcement says so.
+    The pnpm cell reads `type -a -P pnpm`.
+  - **Condition 6:** the vanilla image is untouched (`bench/vanilla/Dockerfile` has no change).
+  - **Condition 7:** see the criteria below.
+  - **With no real installer** (pnpm before the agent installs it), the shim hands the name to 007's
+    command-not-found handler, exit 127, with the data file's `npm install -g pnpm`. Its first line names the shim
+    and line 1, where bash would name the caller.
+- **`--gate`.** The shim asks `package-guard --gate -- NAME ARG…`, which checks and runs nothing. Exit 0: the
+  shim drops the guard's output and execs the installer. Otherwise it prints the output (exit 4: the envelope)
+  and exits with the guard's code. A missing guard fails closed and says so. `--gate` takes neither `--yes` nor
+  `--dry-run`. The gate prints a verdict like any call (rule: every call ends with one), and the shim keeps it
+  to itself; no quiet mode was added to agentio.
+- **Q2:** the envelope's `confirm` is `package-guard --yes -- <the original command>`, without the shim's own
+  `--gate` and format option (unit and cells).
+- **Q3:** no pnpm in the image. The pnpm cell installs, with a bare `npm install -g pnpm` through its own shim,
+  the stand-in's `pnpm` package into `~/.local/bin`, as the agent would. It is a script that says it ran, **not
+  pnpm**: the stand-in has no pnpm, and the cell may not reach the public registry. It shows the shim in front of
+  a pnpm the agent installed, `pnpm --version` reaching it, and `pnpm add <absent>` refused with pnpm never
+  running. **pnpm's own install forms remain host evidence** (pnpm 11.5.1, `test_package_guard_real.py`).
+- **Q4:** 001's `event.schema.json` gains an optional `override` object, declared in 001's `output-contract.md`
+  as 009's fields were: `ecosystem`, `packages` (each `name`, the `version` named if any, `registry`, `reason`,
+  `released` for a dated release, `detail`) and `command`. agentio writes it from `Context.event_override`; the
+  guard sets it only when `--yes` proceeds over a refusal. Every existing event stays valid (the field is
+  optional; every tool's schema units pass). The record file stays, pointed at by `ref`.
+
+#### Lane 013s1-a2, item 1: the `--target` cells
+
+- **The four failing cells** (334, 335, 377, 379) and every other pip invocation in 013's files now install as the
+  agent installs: a bare `pip install`, which the image's `pip.conf` makes a user install, with `HOME` set to the
+  cell's own directory. The cells read the package from `$HOME/.local/lib/python3.*/site-packages`, and check that
+  nothing landed in `/home/agent/.local` or the agent interpreter's own site-packages. **`pip.conf` and the
+  guard's handling of `--user` are unchanged.**
+- **Checked:** no file of 013's passes `--target` or `--prefix` to pip now. The two `uv pip install --target`
+  cells (which passed in the lane, because the guard refused before uv ran, or uv took `--target`) install into a
+  project venv instead (`uv venv`, then `uv pip install`), as the agent would. The pnpm cell alone uses the real
+  home, because `~/.local/bin` is on PATH by its literal path; its teardown uninstalls it.
+- **Rehearsed on the host** with a copy of a CPython 3.14.8 whose `pip.conf` says `user = true` and whose
+  EXTERNALLY-MANAGED marker is removed, as the image does: the refusal, `Successfully installed tl-fresh-1.0.0`
+  into `$HOME/.local`, the confirm, and the event readers' exact strings. uv was not rehearsed (no uv on the host).
+
+#### Lane 013s1-a2, item 2: CVE-2026-88647
+
+Added to `scan/baseline/timelike-agent.json` and `timelike-vanilla.json`, in the shape of the 2026-10-10 gnutls
+entries: origin `git`, `review_by` unchanged (2026-12-27), severity critical. Its reason says plainly that it
+bypasses host-name verification on the Common Name path, and states both bounds: the agent holds no credentials in
+its fetches (P4); a forged peer on the path could still serve forged content to a git fetch over https, or read
+what the agent fetches. The operator's words, `"accept it"` (2026-10-12T16:44:10Z), are in each file's review
+note beside the entry's source. The scan's units pass (192); the lane's own grype run decides the gate.
+
+### Group C — Addendum 1
+
+**delegations:** `[]`.
+
+**criteria_reestablished** (the same five citations as Cycle 1, each still a single `grep -cF` match; nothing has
+run in the image, so every mode is `unconfirmed`):
+
+- `15 · "before anything is downloaded, naming the package and the registry checked _(traces to: P4)_"` —
+  **unconfirmed.** 9 cells: bare `pip install` in `bash -c`, `-lc`, `-ic` and a bash script; bare
+  `uv pip install` into a venv; bare `npm install`; bare `npx` from a script; pnpm in `~/.local/bin`; a 503
+  registry called unreachable.
+- `15 · "is refused with exit 4, naming the release date _(traces to: P4)_"` — **unconfirmed.** 7 cells: bare pip
+  in the four styles, bare npm; the named older release installing as the agent installs; a minimum age of 0.
+- `15 · "already pinned in the project's lockfile proceeds without registry checks _(traces to: P2)_"` —
+  **unconfirmed.** 6 cells: bare `npm install` of a pinned name in the four styles; bare `npm ci`; bare
+  `uv sync --locked` and `uv pip install`. Each reads no guard request in the stand-in's log **and** a passing
+  gate event in the session, so the guard was asked and asked nothing.
+- `15 · "with the confirm flag proceeds and records the override in the session event log _(traces to: P4)_"` —
+  **unconfirmed.** 6 cells: the bare pip refusal in the four styles and the bare npm refusal, each then running
+  its own `confirm`; the event line's `override` read back (package, reason, the stand-in's release date,
+  registry, ecosystem, command, exit) with the record's session; `--yes` over nothing writes neither.
+- `15 · "is refused with an explanation before any install runs _(traces to: D24)_"` — **unconfirmed** (Manual).
+  The route it needed is built: the agent's own `pip install` now reaches the guard.
+
+**reconcile_mode:** `full`.
+
+**not_verified**
+- **Everything in the image:** the shims and their links, the PATH in a built container, the 28 cells, the pnpm
+  cell, the agent-cannot-alter checks over the new files, the added time in the image.
+- **Not reached by the guard (named gaps, slice 2's proxy):** `python -m pip` and `python3 -m pip`; an
+  activated venv's own `pip`, `uv` or `npm`; `/usr/local/bin/pip`, `/bin/uv` or any installer called by its full
+  path (the visible escape). Also not shimmed: `uvx` (not in the image).
+- **pnpm's own install forms in the image:** a stand-in script stands for pnpm there; the forms are host evidence.
+- **`pip install -r /dev/stdin`** (or `-r -`): the installer reads the input, the guard does not (its stdin is
+  closed), so those names are not checked.
+- Carried from Cycle 1: uv's index order (documentation, not measurement); dependency confusion named, not
+  refused (D-6); environment markers and dependencies of named packages; `uv run` without `--with`,
+  `pip download`, `npm update`; a registry document over 64 MiB and a slowly dripping registry.
+
+**changed_other_features** (each declared by the ruling or found by this build)
+- **001:** `event.schema.json` (optional `override`), `output-contract.md` (its paragraph), agentio
+  (`Context.event_override`, `_write_event`); the image `ENV` PATH and `00-timelike-path.sh` (the shims first;
+  `/opt/timelike/bin` is now added when absent anywhere, so a second sourcing changes nothing);
+  `tests/host/test_env_layer.sh` (the first three PATH entries); the Dockerfile's § 5a (new) and its comment on
+  007's links.
+- **007:** `tests/unit/test_agent_runtimes.py` (the ENV and login PATH orders); the SC-6 runtimes cell (the shim
+  first for pip, pip3, npm and npx, then the `/usr/local/bin` link, which is still what they resolve to past the
+  shim); the announcement (`tools/bin/timelike`: three lines when package-guard is installed, the minimum age read
+  from its manifest) and `tests/unit/test_announce.py`.
+- **001's SC-4 cell (agent-cannot-alter):** the shim, `package-guard` and `/opt/timelike/shims` added to what the
+  agent must not change.
+- **The scan baselines:** CVE-2026-88647 (item 2).
+- **README.md:** the send's status block (row 15, the Status paragraph), the guard's section under "The tools",
+  and the sentence in "The container and the `agent` user" that said `/opt/timelike/bin` was ahead of everything
+  (now false). Each changed passage is in `<mark>`; there were no earlier marks to clear. The generated command
+  reference changed for `package-guard` (`--gate`, the shims' lines). Noticed and **not** changed: "One gap to
+  know: `python3` is not on the agent's PATH" (false since 007 slice 1, not this build's), and `view --help`'s
+  "(/opt/timelike/bin is first on PATH)" (now true only against vim's `view`); both are another feature's.
+
+**process_failures_recorded**
+1. **My first shim test file was named `tty.py`** and shadowed the stdlib module it imported; renamed, and run
+   with `-I`. Before any commit.
+2. **One unit asserted the refusal in text on a terminal.** The envelope is JSON in every mode (rule 9); the test's
+   premise was wrong, not the shim. Corrected before any commit.
+3. **A smoke test reached the public registry:** with `/usr/bin` on PATH, a not-found check found the host's
+   corepack `pnpm`, which downloaded pnpm 12.11.2 from registry.npmjs.org into the test's own HOME. No project
+   file changed; the not-found units now run with a PATH that holds no host pnpm.
+4. **I wrote a composed time into `reboot.md`** (the addendum's snapshot time, 17:53:00Z). Replaced at once with
+   a time read from the clock, before any commit.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host`, timelike's 3.14.8 in a scratch venv, on the tree of `f1814fa` plus this commit's records (no
+code changed after the run):
+- pytest tests/unit: **2239 passed, 13 skipped** (408 s);
+- `test_env_layer.sh` 60 of 60 (the first three PATH entries now asserted);
+- `test_shell_env_hook.sh` 57 of 57;
+- `test_command_not_found.sh` 33 of 33.
+
+Exit 0. An earlier run in this addendum failed 2 units, both 007's PATH-order units the ruling's PATH change moved;
+they were updated (declared above) and the full run repeated. The guard's units: 24 for the shim, 7 more in the
+tool's file (the gate, the event's `override`, the shims' directory skipped), 1 in the announcement's. Other checks:
+- ruff check and format: clean (266 files);
+- mypy `--strict`: clean over 31 files;
+- shellcheck 0.11.0: clean over the Makefile's 89 files (the shim added);
+- `scripts/readme_reference.py --check`: current, 14 tools;
+- the deny-list: PASS before each of this addendum's three commits (512 files, P1–P7 0/0).
+
+#### Then
+
+Commit everything, and report done. No commit after that until the mentor says lane 013s1-b has ended.
+- **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
+- **After it:** the mentor's D24 capture (the agent's own install), then sign-off; merge `--no-ff` after it.

@@ -121,3 +121,33 @@ the image, and the event's `override` field. Those tasks are written once the ru
 T001 → (T002, T003) → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → (T013 to T016) → T017 → T018.
 
 **MVP:** T001 to T008 plus T009: the tool refuses an absent name before the installer starts (SC-1).
+
+## Cycle 1 addendum: Item 24's ruling and lane 013s1-a2's findings (2026-10-12)
+
+From `bridge/feedback/15-20261012-015246-item-24-bare-installs-reach-the-guard.md` (the ruling) and
+`bridge/feedback/15-20261012-034908-lane-013s1-a2-target-cells-and-a-gnutls-critical.md` (items 1 and 2).
+
+- [X] T019 Q4: 001's `event.schema.json` gains an optional `override` object; `agentio`'s
+  `Context.event_override` writes it; 001's `output-contract.md` says so; the guard sets it when `--yes`
+  proceeds over a refusal (`tools/agentio/agentio.py`, `tools/bin/package-guard`).
+- [X] T020 Q1 (b′): `package-guard --gate`; `TIMELIKE_SHIMS` removed from PATH when CMD is resolved; the
+  manifest's `shims` block naming the gaps; the usage lines.
+- [X] T021 Q1 (b′): `image/rootfs/opt/timelike/libexec/install-shim` (POSIX sh); the Dockerfile's § 5a links
+  six names in `/opt/timelike/shims`; the image `ENV` PATH and `00-timelike-path.sh` put it first;
+  `tests/host/test_env_layer.sh` reads the new head of PATH.
+- [X] T022 The announcement's rule lines for the guard (`tools/bin/timelike`), with the minimum age read from the
+  guard's manifest; a unit for them.
+- [X] T023 Condition 7 and item 1: the four criterion files run the installers by their bare names (`bash -c`,
+  `-lc`, `-ic`, a bash script); pip makes its user install into the cell's own `HOME` (no `--target` or
+  `--prefix` to pip anywhere in 013's files); `run_bare` in `tests/e2e/helpers.bash`; Q3: a cell installs the
+  stand-in's `pnpm` into `~/.local/bin` (the stand-in's npm packages may now carry a `bin`).
+- [X] T024 Declared changes to other features' cells: 007's SC-6 runtimes cell (the shim first, then the
+  `/usr/local/bin` link); the agent-cannot-alter list (the shim, the guard, `/opt/timelike/shims`).
+- [X] T025 Item 2: CVE-2026-88647 in both baselines (`scan/baseline/timelike-agent.json`,
+  `timelike-vanilla.json`), origin `git`, `review_by` unchanged, with the operator's words in the review note.
+- [X] T026 Units (`test_package_guard_shim.py`; the tool's gate, override and shim-skip units); the measurement
+  (R11); the contract; the README (status block, the guard's section, the PATH sentence, each marked); the
+  command reference; shellcheck, ruff, mypy; the host lane; the cycle report's addendum; FOR-MENTOR Item 24
+  closed; `reboot.md`; commit everything.
+
+**Order:** T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026.
