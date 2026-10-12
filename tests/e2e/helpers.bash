@@ -635,3 +635,26 @@ else:
 pyj() {
   printf '%s' "$output" | timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" "$STANDIN_PY" -I -c "$1"
 }
+
+# ── The agent's own install (feature 013 slice 1; FOR-MENTOR Item 24, condition 7) ──────────────────────
+# run_bare STYLE DIR CMD [-e K=V ...] — CMD as the agent runs it, by the installer's bare name, so it reaches
+# the guard through /opt/timelike/shims as the image wires it (nothing names package-guard). The cell's ENVS
+# array and any -e words given after CMD are passed; DIR is the working directory.
+#   c, lc, ic  bash -c / bash -lc / bash -ic CMD (ic: bash's two no-terminal lines dropped, so $output and
+#              ${lines[@]} mean what they mean in the other styles)
+#   script     CMD as the body of an executable bash script, DIR/.tl-install-<n>.sh, run by its path from
+#              bash -c: a script the agent runs, where shell functions would not reach (Item 22's bound)
+run_bare() {
+  local style="$1" dir="$2" cmd="$3" file
+  shift 3
+  if [[ "$style" == script ]]; then
+    file="${dir}/.tl-install-${RANDOM}.sh"
+    # shellcheck disable=SC2016 # expanded in the container
+    exec_plain sh -c 'printf "#!/bin/bash\n%s\n" "$2" >"$1" && chmod 0755 "$1"' s "$file" "$cmd" || return 1
+    # shellcheck disable=SC2153 # ENVS is the calling cell file's own array
+    run_in "${ENVS[@]}" "$@" -w "$dir" c notty "$file"
+  else
+    run_in "${ENVS[@]}" "$@" -w "$dir" "$style" notty "$cmd"
+    [[ "$style" != ic ]] || drop_ic_notty_lines
+  fi
+}

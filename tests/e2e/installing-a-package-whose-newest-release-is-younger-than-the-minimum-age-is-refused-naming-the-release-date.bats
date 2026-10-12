@@ -8,7 +8,14 @@
 # upload-time, npm's time[1.1.0]), never from the guard (lore P004). The named older release installs, and is
 # read back from disk: what was installed, not what was said.
 #
-# Cells: bash -c and bash -lc, `notty`.
+# The installers run by their BARE names (FOR-MENTOR Item 24, condition 7), through /opt/timelike/shims. pip
+# makes the user install the image's pip.conf asks for (007 FR-26), into the cell's own HOME: lane 013s1-a2
+# showed that pip will not combine that setting with --target, so no cell passes --target or --prefix to pip
+# (its item 1). A passing install's output is pip's or npm's own: the shim drops the guard's verdict and
+# execs the installer (Item 24, condition 2).
+#
+# Cells: pip refused in bash -c, bash -lc, bash -ic and a bash script; npm refused; the named older release
+# installs (pip and npm); TIMELIKE_PACKAGE_MIN_AGE_DAYS=0 installs the newest. `notty`.
 
 load helpers
 
@@ -19,11 +26,12 @@ setup_file() {
 setup() {
   WORK="$(container_tmpdir pg-sc2)"
   standin_start "$WORK"
-  exec_plain sh -c 'mkdir -p "$1/np" && printf "{\"name\": \"p\", \"version\": \"1.0.0\"}\n" >"$1/np/package.json" &&
-    printf "registry=%s\nupdate-notifier=false\naudit=false\nfund=false\ncache=%s/npm-cache\n" "$2" "$1" >"$1/np/.npmrc"' \
-    s "$WORK" "$STANDIN_NPM"
-  ENVS=(-e "PIP_INDEX_URL=${STANDIN_SIMPLE}" -e PIP_NO_CACHE_DIR=1 -e PIP_DISABLE_PIP_VERSION_CHECK=1
-    -e "TIMELIKE_SCRATCH_ROOT=${WORK}/scratch" -e TIMELIKE_SESSION=pg-sc2)
+  exec_plain sh -c 'mkdir -p "$1/np" "$1/home" && printf "{\"name\": \"p\", \"version\": \"1.0.0\"}\n" >"$1/np/package.json" &&
+    printf "registry=%s\nupdate-notifier=false\naudit=false\nfund=false\ncache=%s/npm-cache\n" "$2" "$1" >"$1/np/.npmrc" &&
+    touch "$1/marker"' s "$WORK" "$STANDIN_NPM"
+  # shellcheck disable=SC2034 # read by run_bare (helpers.bash)
+  ENVS=(-e "HOME=${WORK}/home" -e "PIP_INDEX_URL=${STANDIN_SIMPLE}" -e PIP_NO_CACHE_DIR=1
+    -e PIP_DISABLE_PIP_VERSION_CHECK=1 -e "TIMELIKE_SCRATCH_ROOT=${WORK}/scratch" -e TIMELIKE_SESSION=pg-sc2)
 }
 
 teardown() {
@@ -36,11 +44,27 @@ flunk() {
   return 1
 }
 
+# user_site_version MODULE — the VERSION of MODULE in the cell's own user site, $WORK/home/.local, or "none"
+user_site_version() {
+  exec_plain sh -c 'for f in "$1"/home/.local/lib/python3.*/site-packages/"$2"/__init__.py; do
+    [ -f "$f" ] && sed -n "s/^VERSION = \"\(.*\)\"$/\1/p" "$f" && exit 0; done; echo none' s "$WORK" "$1"
+}
+
+# landed_only_in_cell MODULE — MODULE is in no site the agent's python reads outside the cell's HOME, and
+# nothing under the agent's own ~/.local changed
+landed_only_in_cell() {
+  local elsewhere
+  elsewhere="$(exec_plain sh -c 'ls -d /home/agent/.local/lib/python3.*/site-packages/"$2" \
+    /opt/agent/python/lib/python3.*/site-packages/"$2" 2>/dev/null; find /home/agent/.local -newer "$1/marker" -print 2>/dev/null' \
+    s "$WORK" "$1")"
+  [[ -z "$elsewhere" ]] || flunk "the install landed outside the cell's HOME: $elsewhere"
+}
+
 check_pip_too_new() {
   local style="$1" date
   date="$(standin_released pypi tl-fresh 1.1.0)"
   [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || flunk "the stand-in's date: $date"
-  run_in "${ENVS[@]}" "$style" notty "package-guard -- pip install --target '${WORK}/t' tl-fresh"
+  run_bare "$style" "$WORK" "pip install tl-fresh"
   assert_within 60
   [[ "$status" == 4 ]] || flunk "want exit 4"
   [[ "$output" == *"refused: tl-fresh — too new: newest release 1.1.0 was released ${date} "* ]] ||
@@ -48,43 +72,56 @@ check_pip_too_new() {
   [[ "$output" == *"the minimum age is 2 days (TIMELIKE_PACKAGE_MIN_AGE_DAYS)"* ]] || flunk "the minimum age and its variable"
   [[ "$output" == *"pin it as tl-fresh==1.0.0"* ]] || flunk "the release old enough to pin"
   [[ "$(standin_count files)" == 0 ]] || flunk "a file was downloaded"
-  exec_plain test ! -e "${WORK}/t" || flunk "the target was written"
+  [[ "$(user_site_version tl_fresh)" == none ]] || flunk "something was installed"
 }
 
-@test "SC-2 [bash -c, notty] pip: the newest release one day old is refused with exit 4, naming its release date" {
+@test "SC-2 [bash -c, notty] bare pip install: the newest release one day old is refused with exit 4, naming its release date" {
   check_pip_too_new c
 }
 
-@test "SC-2 [bash -lc, notty] pip: the newest release one day old is refused with exit 4, naming its release date" {
+@test "SC-2 [bash -lc, notty] bare pip install: the newest release one day old is refused with exit 4, naming its release date" {
   check_pip_too_new lc
 }
 
-@test "SC-2 [bash -c, notty] npm: the newest release one day old is refused with exit 4, naming its release date" {
+@test "SC-2 [bash -ic, notty] bare pip install: the newest release one day old is refused with exit 4, naming its release date" {
+  check_pip_too_new ic
+}
+
+@test "SC-2 [a bash script, notty] bare pip install: the newest release one day old is refused with exit 4, naming its release date" {
+  check_pip_too_new script
+}
+
+@test "SC-2 [bash -c, notty] bare npm install: the newest release one day old is refused with exit 4, naming its release date" {
   local date
   date="$(standin_released npm tl-fresh 1.1.0)"
-  run_in "${ENVS[@]}" -w "${WORK}/np" c notty "package-guard -- npm install tl-fresh"
+  run_bare c "${WORK}/np" "npm install tl-fresh"
   assert_within 60
   [[ "$status" == 4 ]] || flunk "want exit 4"
   [[ "$output" == *"refused: tl-fresh — too new: newest release 1.1.0 was released ${date} "* ]] ||
     flunk "the refusal does not name ${date}"
+  [[ "$output" == *"pin it as tl-fresh@1.0.0"* ]] || flunk "the release old enough to pin"
   exec_plain test ! -e "${WORK}/np/node_modules" || flunk "node_modules was written"
 }
 
-@test "SC-2 [bash -c, notty] the named older release passes and installs (its own age is checked)" {
-  run_in "${ENVS[@]}" c notty "package-guard -- pip install --target '${WORK}/t' tl-fresh==1.0.0"
+@test "SC-2 [bash -c, notty] the named older release passes and installs as the agent installs (its own age is checked; the output is the installer's own)" {
+  run_bare c "$WORK" "pip install tl-fresh==1.0.0"
   assert_within 120
   [[ "$status" == 0 ]] || flunk "want pip's exit 0"
-  [[ "$(exec_plain cat "${WORK}/t/tl_fresh/__init__.py")" == *'VERSION = "1.0.0"'* ]] || flunk "1.0.0 is not what was installed"
-  run_in "${ENVS[@]}" -w "${WORK}/np" c notty "package-guard -- npm install tl-fresh@1.0.0"
+  [[ "$output" == *"Successfully installed tl-fresh-1.0.0"* ]] || flunk "pip's own output"
+  [[ "$output" != *'"tool": "package-guard"'* && "$output" != *"gate passed"* ]] || flunk "the guard's output reached the caller"
+  [[ "$(user_site_version tl_fresh)" == 1.0.0 ]] || flunk "1.0.0 is not what pip installed into the user site"
+  landed_only_in_cell tl_fresh
+  run_bare c "${WORK}/np" "npm install tl-fresh@1.0.0"
   assert_within 120
   [[ "$status" == 0 ]] || flunk "want npm's exit 0"
+  [[ "$output" != *'"tool": "package-guard"'* ]] || flunk "the guard's output reached the caller"
   [[ "$(exec_plain cat "${WORK}/np/node_modules/tl-fresh/index.js")" == *'tl-fresh@1.0.0'* ]] || flunk "npm installed another"
 }
 
-@test "SC-2 [bash -c, notty] TIMELIKE_PACKAGE_MIN_AGE_DAYS=0 turns the age check off" {
-  run_in "${ENVS[@]}" -e TIMELIKE_PACKAGE_MIN_AGE_DAYS=0 c notty \
-    "package-guard -- pip install --target '${WORK}/t' tl-fresh"
+@test "SC-2 [bash -c, notty] TIMELIKE_PACKAGE_MIN_AGE_DAYS=0 turns the age check off: the newest installs as the agent installs" {
+  run_bare c "$WORK" "pip install tl-fresh" -e TIMELIKE_PACKAGE_MIN_AGE_DAYS=0
   assert_within 120
   [[ "$status" == 0 ]] || flunk "want pip's exit 0"
-  [[ "$(exec_plain cat "${WORK}/t/tl_fresh/__init__.py")" == *'VERSION = "1.1.0"'* ]] || flunk "1.1.0 is not installed"
+  [[ "$(user_site_version tl_fresh)" == 1.1.0 ]] || flunk "1.1.0 is not what pip installed into the user site"
+  landed_only_in_cell tl_fresh
 }

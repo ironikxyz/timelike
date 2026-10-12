@@ -38,6 +38,9 @@
 #            npmrc. Both of those must exist, so the search is not vacuous.
 #   Runtimes python3, python, pip, pip3, node, npm, npx resolve to /usr/local/bin/<name> (D-12), whose
 #            real path is inside the real path of /opt/agent/python or /opt/agent/node, under /opt/agent/,
+#            (since feature 013 slice 1, FOR-MENTOR Item 24: pip, pip3, npm and npx have the install shim
+#            /opt/timelike/shims/<name>, a link to /opt/timelike/libexec/install-shim, first in `type -a -P`,
+#            and the /usr/local/bin link right after it; python3, python and node have no shim)
 #            and never under /opt/timelike or the real path of /opt/timelike/python (itself a link to a uv
 #            directory). python3's sys.prefix is the agent prefix. No lib/python3.*/EXTERNALLY-MANAGED in
 #            the agent prefix. Versions are pins.env's PYTHON_VERSION and NODE_VERSION, read on the runner
@@ -386,7 +389,12 @@ printf "agent_python=%s\n" "$(readlink -f /opt/agent/python)"
 printf "agent_node=%s\n" "$(readlink -f /opt/agent/node)"
 printf "timelike_python=%s\n" "$(readlink -f /opt/timelike/python)"
 for n in python3 python pip pip3 node npm npx; do
-  p="$(command -v "$n")"
+  all="$(type -a -P "$n" | tr "\n" " ")"
+  printf "all.%s=%s\n" "$n" "${all% }"
+  case "$all" in
+    /opt/timelike/shims/*) p="${all#* }"; p="${p%% *}"; printf "shim.%s=%s\n" "$n" "$(readlink -f "${all%% *}")" ;;
+    *) p="${all%% *}"; printf "shim.%s=none\n" "$n" ;;
+  esac
   printf "path.%s=%s\n" "$n" "$p"
   if [ -L "$p" ]; then printf "link.%s=yes\n" "$n"; else printf "link.%s=no\n" "$n"; fi
   printf "real.%s=%s\n" "$n" "$(readlink -f "$p")"
@@ -421,6 +429,11 @@ check_runtimes() {
     return 1
   }
   for n in python3 python pip pip3 node npm npx; do
+    case "$n" in
+      pip | pip3 | npm | npx) assert_matches "all.${n}" "^/opt/timelike/shims/${n} /usr/local/bin/${n}( |\$)"
+        assert_value "shim.${n}" /opt/timelike/libexec/install-shim ;;
+      *) assert_value "shim.${n}" none ;;
+    esac
     assert_value "path.${n}" "/usr/local/bin/${n}"
     assert_value "link.${n}" yes
     real="$(value_of "real.${n}")"
@@ -442,5 +455,5 @@ check_runtimes() {
   assert_no_line_matching '^marker='
 }
 
-@test "SC-6 [bash -c, notty] A bare Python package install and a global Node package install each succeed as the agent's user without privilege and persist across new shells — the runtimes: python3, python, pip, pip3, node, npm and npx are /usr/local/bin links into /opt/agent at the pinned versions, never /opt/timelike; no EXTERNALLY-MANAGED marker" { check_runtimes c; }
-@test "SC-6 [bash -lc, notty] A bare Python package install and a global Node package install each succeed as the agent's user without privilege and persist across new shells — the runtimes: python3, python, pip, pip3, node, npm and npx are /usr/local/bin links into /opt/agent at the pinned versions, never /opt/timelike; no EXTERNALLY-MANAGED marker" { check_runtimes lc; }
+@test "SC-6 [bash -c, notty] A bare Python package install and a global Node package install each succeed as the agent's user without privilege and persist across new shells — the runtimes: python3, python, pip, pip3, node, npm and npx are /usr/local/bin links into /opt/agent at the pinned versions, never /opt/timelike, with the install shim first for pip, pip3, npm and npx; no EXTERNALLY-MANAGED marker" { check_runtimes c; }
+@test "SC-6 [bash -lc, notty] A bare Python package install and a global Node package install each succeed as the agent's user without privilege and persist across new shells — the runtimes: python3, python, pip, pip3, node, npm and npx are /usr/local/bin links into /opt/agent at the pinned versions, never /opt/timelike, with the install shim first for pip, pip3, npm and npx; no EXTERNALLY-MANAGED marker" { check_runtimes lc; }

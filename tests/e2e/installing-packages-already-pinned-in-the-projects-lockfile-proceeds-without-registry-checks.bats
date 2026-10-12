@@ -8,7 +8,13 @@
 # request with the guard's user agent (timelike-package-guard/…), read after the install; the installer's own
 # requests are its business. The install completes, read back from node_modules and the project's venv.
 #
-# Cells: bash -c and bash -lc, `notty`.
+# The installers run by their BARE names (FOR-MENTOR Item 24, condition 7), through /opt/timelike/shims as the
+# image wires them; nothing here names package-guard. The setup installs that write the lockfiles go through
+# the shims too (they pass: tl-left 1.3.0 and tl-old are old enough), and the stand-in's log is cleared after
+# them, so only the install under test is read.
+#
+# Cells: npm install of a pinned name in bash -c, bash -lc, bash -ic and a bash script; npm ci; uv sync
+# --locked and uv pip install of a name uv.lock pins. `notty`.
 
 load helpers
 
@@ -24,8 +30,9 @@ setup() {
     printf "registry=%s\nupdate-notifier=false\naudit=false\nfund=false\ncache=%s/npm-cache\n" "$2" "$1" >"$1/np/.npmrc" &&
     printf "[project]\nname = \"up\"\nversion = \"0.1.0\"\nrequires-python = \">=3.12\"\ndependencies = [\"tl-old\"]\n" \
       >"$1/up/pyproject.toml"' s "$WORK" "$STANDIN_NPM"
+  # shellcheck disable=SC2034 # read by run_bare (helpers.bash)
   ENVS=(-e "UV_DEFAULT_INDEX=${STANDIN_SIMPLE}" -e "UV_CACHE_DIR=${WORK}/uv-cache" -e UV_NO_PROGRESS=1
-    -e "TIMELIKE_SCRATCH_ROOT=${WORK}/scratch" -e TIMELIKE_SESSION=pg-sc3)
+    -e UV_PYTHON_DOWNLOADS=never -e "TIMELIKE_SCRATCH_ROOT=${WORK}/scratch" -e TIMELIKE_SESSION=pg-sc3)
 }
 
 teardown() {
@@ -41,54 +48,76 @@ flunk() {
 
 check_npm_pinned() {
   local style="$1"
-  # setup: the image's npm writes package-lock.json, pinning tl-left at 1.3.0 (not through the guard)
-  run_in "${ENVS[@]}" -w "${WORK}/np" c notty "npm install tl-left@1.3.0"
+  # setup: the image's npm writes package-lock.json, pinning tl-left at 1.3.0
+  run_bare c "${WORK}/np" "npm install tl-left@1.3.0"
   [[ "$status" == 0 ]] || flunk "setup: npm install"
   exec_plain grep -q '"node_modules/tl-left"' "${WORK}/np/package-lock.json" || flunk "setup: no lock entry"
-  exec_plain rm -rf "${WORK}/np/node_modules"
+  exec_plain rm -rf "${WORK}/np/node_modules" "${WORK}/scratch/pg-sc3/events.jsonl"
   standin_clear
-  run_in "${ENVS[@]}" -w "${WORK}/np" "$style" notty "package-guard -- npm install tl-left"
+  run_bare "$style" "${WORK}/np" "npm install tl-left"
   assert_within 120
   [[ "$status" == 0 ]] || flunk "want npm's exit 0"
   [[ "$(standin_count guard)" == 0 ]] || flunk "the guard asked the registry about a pinned package"
-  [[ "$output" == *"pinned: tl-left — pinned in ${WORK}/np/package-lock.json; no registry was asked"* ]] || flunk "plan"
+  [[ "$output" != *'"tool": "package-guard"'* ]] || flunk "the guard's output reached the caller"
+  # the guard's own record of what it decided: its session event (exit 0, --gate) and no lookup
+  [[ "$(gate_events 0)" == 1 ]] || flunk "the session has no passing gate event for this install"
   [[ "$(exec_plain cat "${WORK}/np/node_modules/tl-left/index.js")" == *'tl-left@1.3.0'* ]] || flunk "not installed"
 }
 
-@test "SC-3 [bash -c, notty] npm: a name pinned in package-lock.json installs with no request from the guard" {
+# gate_events EXIT — how many package-guard --gate events in the cell's session ended with EXIT
+gate_events() {
+  exec_plain "$STANDIN_PY" -I -c '
+import json, sys
+try:
+    rows = [json.loads(x) for x in open(sys.argv[1], encoding="utf-8") if x.strip()]
+except FileNotFoundError:
+    rows = []
+print(sum(1 for r in rows if r["tool"] == "package-guard" and "--gate" in r["args"] and r["exit"] == int(sys.argv[2])))' \
+    "${WORK}/scratch/pg-sc3/events.jsonl" "$1"
+}
+
+@test "SC-3 [bash -c, notty] bare npm install: a name pinned in package-lock.json installs with no request from the guard" {
   check_npm_pinned c
 }
 
-@test "SC-3 [bash -lc, notty] npm: a name pinned in package-lock.json installs with no request from the guard" {
+@test "SC-3 [bash -lc, notty] bare npm install: a name pinned in package-lock.json installs with no request from the guard" {
   check_npm_pinned lc
 }
 
-@test "SC-3 [bash -c, notty] npm ci installs exactly the lockfile with no request from the guard" {
-  run_in "${ENVS[@]}" -w "${WORK}/np" c notty "npm install tl-left@1.3.0"
+@test "SC-3 [bash -ic, notty] bare npm install: a name pinned in package-lock.json installs with no request from the guard" {
+  check_npm_pinned ic
+}
+
+@test "SC-3 [a bash script, notty] bare npm install: a name pinned in package-lock.json installs with no request from the guard" {
+  check_npm_pinned script
+}
+
+@test "SC-3 [bash -c, notty] bare npm ci installs exactly the lockfile with no request from the guard" {
+  run_bare c "${WORK}/np" "npm install tl-left@1.3.0"
   [[ "$status" == 0 ]] || flunk "setup: npm install"
   exec_plain rm -rf "${WORK}/np/node_modules"
   standin_clear
-  run_in "${ENVS[@]}" -w "${WORK}/np" c notty "package-guard -- npm ci"
+  run_bare c "${WORK}/np" "npm ci"
   assert_within 120
   [[ "$status" == 0 ]] || flunk "want npm's exit 0"
   [[ "$(standin_count guard)" == 0 ]] || flunk "the guard asked the registry for npm ci"
   [[ "$(exec_plain cat "${WORK}/np/node_modules/tl-left/index.js")" == *'tl-left@1.3.0'* ]] || flunk "not installed"
 }
 
-@test "SC-3 [bash -c, notty] uv: uv.lock written by uv pins its packages; uv sync --locked and an install of a pinned name ask nothing" {
-  run_in "${ENVS[@]}" -w "${WORK}/up" c notty "uv lock"
+@test "SC-3 [bash -lc, notty] bare uv: uv.lock written by uv pins its packages; uv sync --locked and an install of a pinned name ask nothing" {
+  run_bare lc "${WORK}/up" "uv lock"
   [[ "$status" == 0 ]] || flunk "setup: uv lock"
   exec_plain grep -q 'name = "tl-old"' "${WORK}/up/uv.lock" || flunk "setup: uv.lock has no tl-old"
   standin_clear
-  run_in "${ENVS[@]}" -w "${WORK}/up" c notty "package-guard -- uv sync --locked"
+  run_bare lc "${WORK}/up" "uv sync --locked"
   assert_within 180
   [[ "$status" == 0 ]] || flunk "want uv's exit 0"
   [[ "$(standin_count guard)" == 0 ]] || flunk "the guard asked the registry for uv sync --locked"
   exec_plain sh -c 'ls -d "$1"/up/.venv/lib/python*/site-packages/tl_old' s "$WORK" >/dev/null || flunk "not installed"
   standin_clear
-  run_in "${ENVS[@]}" -w "${WORK}/up" c notty "package-guard -- uv pip install --target '${WORK}/t' tl-old"
+  run_bare lc "${WORK}/up" "uv pip install tl-old"
   assert_within 180
   [[ "$status" == 0 ]] || flunk "want uv's exit 0"
   [[ "$(standin_count guard)" == 0 ]] || flunk "the guard asked the registry about a name uv.lock pins"
-  [[ "$output" == *"pinned: tl-old — pinned in ${WORK}/up/uv.lock"* ]] || flunk "plan"
+  [[ "$(gate_events 0)" == 2 ]] || flunk "want two passing gate events (uv sync, uv pip install)"
 }

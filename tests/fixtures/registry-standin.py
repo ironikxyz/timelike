@@ -104,20 +104,30 @@ def build_wheel(name: str, version: str) -> tuple[str, bytes]:
     return f"{dist}-{version}-py3-none-any.whl", buf.getvalue()
 
 
-def build_tarball(name: str, version: str) -> bytes:
-    """A real npm tarball: package/package.json and package/index.js, which prints its name and version."""
-    pkg = {"name": name, "version": version, "main": "index.js", "description": "registry stand-in package"}
+def build_tarball(name: str, version: str, bins: dict[str, str] | None = None) -> bytes:
+    """A real npm tarball: package/package.json and package/index.js, which prints its name and version, plus
+    package/bin/NAME for each command the catalog gives the package (`"bin": {NAME: SOURCE}`)."""
+    pkg: dict[str, Any] = {
+        "name": name,
+        "version": version,
+        "main": "index.js",
+        "description": "registry stand-in package",
+    }
+    if bins:
+        pkg["bin"] = {b: f"bin/{b}" for b in bins}
     members = {
         "package/package.json": (json.dumps(pkg, indent=2) + "\n").encode(),
         "package/index.js": f"module.exports = {json.dumps(name + '@' + version)};\n".encode(),
     }
+    for b, source in (bins or {}).items():
+        members[f"package/bin/{b}"] = source.encode()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.PAX_FORMAT) as t:
         for path, data in members.items():
             ti = tarfile.TarInfo(path)
             ti.size = len(data)
             ti.mtime = 1577836800
-            ti.mode = 0o644
+            ti.mode = 0o755 if path.startswith("package/bin/") else 0o644
             t.addfile(ti, io.BytesIO(data))
     return buf.getvalue()
 
@@ -174,7 +184,7 @@ class Registry:
         base = name.split("/")[-1]
         for rel in releases:
             v = rel["version"]
-            data = build_tarball(name, v)
+            data = build_tarball(name, v, entry.get("bin"))
             path = f"/npm/{name}/-/{base}-{v}.tgz"
             self.files[path] = data
             versions[v] = {
@@ -182,11 +192,12 @@ class Registry:
                 "version": v,
                 "_id": f"{name}@{v}",
                 "main": "index.js",
+                **({"bin": {b: f"bin/{b}" for b in entry["bin"]}} if entry.get("bin") else {}),
                 "dist": {
                     "integrity": "sha512-" + base64.b64encode(hashlib.sha512(data).digest()).decode(),
                     "shasum": hashlib.sha1(data).hexdigest(),  # noqa: S324 — npm's own field, not a security use
                     "tarball": self.base + path,
-                    "fileCount": 2,
+                    "fileCount": 2 + len(entry.get("bin") or {}),
                 },
             }
             times[v] = npm_time(released_at(rel))
