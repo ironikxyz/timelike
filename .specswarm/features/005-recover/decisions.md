@@ -426,3 +426,11 @@ FLAGGED: dropped exactly bash's two no-terminal lines in one helper (`drop_ic_no
 FLAGGED: SC-6's no-guard cell (`bash -c`, which the ic lines can't reach) took `lines[2]` as the newest snapshot's id. It now takes the first row of the form `<id>  <reason>  `, and requires that row to be `scheduled`, which the cell's earlier assertion (every snapshot is scheduled) already implies. Not looser (confidence: high)
 ABSENT: running the cells in the image (no Docker here); a change to `run_in` itself (other features' ic cells read by key or never met these lines, and this cycle's other files have no ic cell); any assertion text
 Verification: the helper exercised under a real `bash -ic` with no terminal on the host (the two lines dropped, the rest unchanged) and on non-matching, out-of-order and trailing-text cases (left alone); the id read exercised on a scheduled and a non-scheduled newest row; shellcheck 0.11.0 clean over the Makefile's 84 files; bats --count: SC-6 12, SC-7 4
+
+### T037: sign-off at `d65cdee` — Cycle 3 addendum 4, the feedback items closed, the merge
+**Started:** 2026-10-12T00:00:49Z | **Completed:** see the merge commit's time
+
+INHERITED: lane 005s1-d (649 of 649), D16 observed by the operator, the mentor's sign-off at `d65cdee` (confidence: high)
+ASSUMED: the "9 Automated criteria" are slice 0's four and slice 1's five; each is marked `executed` with its file, and the cell counts come from lane 005s1-d's `tests/out/e2e.tap` (every cell of each file `ok`) (confidence: high)
+FLAGGED: the two lane feedback items were never raised in my register (the mentor raised them), so they are closed under a new Item 23 beside Item 22, rather than by editing anything in `../bridge/` (confidence: high)
+ABSENT: any change outside cycle-report.md, decisions.md, tasks.md, reboot.md and FOR-MENTOR.md before the merge; a push; the status tag (that waits for the operator's OK)

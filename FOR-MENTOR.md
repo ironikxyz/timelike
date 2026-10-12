@@ -979,7 +979,9 @@ image.
 `../bridge/feedback/07-20261010-064701-item-22-guards-reach-rm-and-git.md` § Resolution: Q1 (a), bash functions,
 bounded to the agent's own shell (not the scripts it starts); Q2 yes, a `pre-push` step in 001's dispatcher, declared,
 plus `--no-verify` caught by the `git` function; Q3 as proposed; note 12 as read here, with a restore re-hashing what it
-writes. Built in T032 on `modify/005-slice-1` (005 spec FR-35a, FR-42 to FR-47, D-19). The text below is kept as raised.
+writes. Built in T032 on `modify/005-slice-1` (005 spec FR-35a, FR-42 to FR-47, D-19). Its two criteria passed in the
+image in lane 005s1-d at `d65cdee` (12 of 12 and 4 of 4), and the feedback file is closed here 2026-10-12T00:00:49Z,
+with 07 slice 1's sign-off. The text below is kept as raised.
 
 **Raised:** 2026-10-10T05:15:03Z (read from the clock) on `modify/005-slice-1`, from send
 `bridge/sends/07-rev11-20261010-050829.md`, seams 4, 5 and 7. The send asks for this item before the guards are
@@ -1106,3 +1108,20 @@ the workspace's size, and I'll report it measured.
 
 **For the mentor (route: code):** Q1 (a), (b) or (c); Q2, whether 001's dispatcher may carry the `pre-push` step;
 Q3, as proposed or narrowed. Note 12's reading too.
+
+## Item 23 — Feature 07 slice 1 (`005-recover`, Cycle 3): the mentor's two lane findings, closed
+
+**Status:** closed 2026-10-12T00:00:49Z (read from the clock), with 07 slice 1's sign-off at `d65cdee`. Both were
+raised by the mentor in `../bridge/feedback/` (route: code), not by code/. They are listed here so the register
+records their closing beside Item 22.
+
+- `../bridge/feedback/07-20261010-081905-lane-005s1-a-sc7-loop-status-and-new-cves.md` (lane 005s1-a):
+  - SC-7's helper returned its loop's status: fixed in T033 `6e9c60b`, with SC-7's shells now started in the
+    repository.
+  - The krb5 and gnutls CVEs were baselined, origin `git`, until 2026-12-27, and `DOCKER_CLI_IMAGE` moved to
+    29.9.0 (Go 1.26.9): T034 `93725e5`.
+  - Confirmed in the image by lane 005s1-c2 (scan PASS; the CLI reports `29.9.0 go1.26.9`) and by lane
+    005s1-d (SC-7 4 of 4).
+- `../bridge/feedback/07-20261011-055059-lane-005s1-c-ic-cells-read-by-position.md` (lane 005s1-c): the three
+  `bash -ic` cells read output by line position. Fixed in T036 `d65cdee` (`drop_ic_notty_lines`; no assertion
+  changed). Confirmed by lane 005s1-d, 649 of 649.

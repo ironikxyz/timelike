@@ -210,6 +210,8 @@ SC-10), **US9** guards (SC-6) — **held for FOR-MENTOR Item 22**.
 - [X] T036 Lane 005s1-c: the three `bash -ic` cells read output by line position, and bash's two no-terminal
   job-control lines came first. `drop_ic_notty_lines` (`tests/e2e/helpers.bash`) drops exactly those lines in the
   ic style; SC-6's no-guard cell finds the newest snapshot's id by the row's form, not `lines[2]`.
+- [X] T037 Signed off at `d65cdee` (lane 005s1-d 649 of 649; D16 observed by the operator): Cycle 3 addendum 4,
+  the three feedback items closed in `FOR-MENTOR.md` (Items 22, 23), then the merge into `master`.
 
 **Order:** T020 → T021 → T022 → T023 → T024 → T025 → T026 → T027 → (T028, T029 in parallel) → T030 → T031;
-then the lane; T033, T034 → T032 → T035; lane 005s1-c → T036.
+then the lane; T033, T034 → T032 → T035; lane 005s1-c → T036 → T037.

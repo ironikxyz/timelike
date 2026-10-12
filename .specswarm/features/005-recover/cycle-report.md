@@ -1220,3 +1220,68 @@ committed:** no commit until lane 005s1-b has ended.
 - **process_failures_recorded:** the ic cells went to the lane unrun. T036's start time was not read.
 - **Then:** lane 005s1-d is `test` only. Bench-images, scan and lint at `7306473` stand. D16 is captured, and
   the mentor holds it for the operator's interview.
+
+### Addendum 4 — signed off at `d65cdee`: the lanes, the criteria, the demos
+
+**Written:** 2026-10-12T00:00:49Z (read from the clock), on `modify/005-slice-1`, before the merge into
+`master`. The mentor signed off 07 slice 1 at `d65cdee`. Between `d65cdee` and the merge, only this file,
+`decisions.md`, `tasks.md`, `reboot.md` and `FOR-MENTOR.md` change.
+
+#### The lanes
+
+| Target | Run | At | Result | Log |
+|---|---|---|---|---|
+| test | 005s1-d | `d65cdee` | PASSED: every step passed (preflight, build, up, runner, benchimg, e2e, unit, gounit); e2e **649 of 649 ok**, 0 not ok (`tests/out/e2e.tap`) | `../bridge/.make-test-005s1-d.log` (`EXIT_test=0`, ended 2026-10-11T08:23:43Z) |
+| bench-images | 005s1-c | `7306473` | pass | `../bridge/.make-bench-images-005s1-c.log` (`EXIT_bench-images=0`) |
+| scan | 005s1-c2 | `7306473` | all four images PASS; deny-list PASS, 484 files | `../bridge/.make-scan-005s1-c2.log` (`EXIT_scan=0`) |
+| lint | 005s1-c | `7306473` | pass | `../bridge/.make-lint-005s1-c.log` (`EXIT_lint=0`) |
+
+`d65cdee` changed only test files and records after `7306473`, so the image those three targets checked is
+the one shipped. Lane 005s1-c2's `test` (646 of 649) is superseded by 005s1-d.
+
+#### criteria_reestablished (supersedes every earlier mode in this cycle)
+
+The cell counts are each file's cells found `ok` in lane 005s1-d's `tests/out/e2e.tap`.
+
+- `07 · "records tracked, untracked and ignored-but-not-excluded files of the workspace and prints its identifier, file count and size _(traces to: P5)_"` —
+  **executed** `tests/e2e/snapshot-records-tracked-untracked-and-ignored-files.bats` (4 of 4).
+- `07 · "removes files created after it, and a dry run lists exactly those changes first _(traces to: P5)_"` —
+  **executed** `tests/e2e/restore-returns-captured-content-and-removes-files-created-after.bats` (10 of 10).
+- `07 · "history, index and stash are unchanged by taking or restoring a snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats` (4 of 4).
+- `07 · "would exceed the size cap is refused or partial, and the verdict names what was excluded and why _(traces to: P2)_"` —
+  **executed** `tests/e2e/snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats` (10 of 10).
+- `07 · "a force push, and a clean of untracked files each take an automatic snapshot before running, and the verdict names it _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats` (12 of 12).
+- `07 · "is restorable from the most recent automatic or scheduled snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats` (4 of 4).
+- `07 · "is listed and restorable from a new session, and after the agent's container is recreated _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats` (4 of 4).
+- `07 · "so the restore itself can be undone, and its verdict names that snapshot _(traces to: P5)_"` —
+  **executed** `tests/e2e/a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats` (2 of 2).
+- `07 · "Deleted files are moved to a restorable trash that is purged by age and size limits _(traces to: P5)_"` —
+  **executed** `tests/e2e/deleted-files-trash-restorable-and-purged-by-age-and-size.bats` (4 of 4).
+- `07 · "a snapshot is taken automatically, and the Agent restores from it _(traces to: D16)_"` —
+  **observed by the operator.** The mentor captured it at 2026-10-11T05:50:53Z on lane 005s1-c2's image
+  (`sha256:16863abd9ffe…`, rev `7306473`), with a named volume at `/var/lib/timelike`. Transcript:
+  `../bridge/.d16-demo-20261011T055053Z.txt`. In it, a guarded `git reset --hard` names snapshot 4, and `undo 4 --yes`
+  restores the uncommitted edit, with the workspace hash back to its value before. The operator judged it met.
+- `07 · "deletes the wrong directory and restores it with one undo command _(traces to: D7)_"` — **unconfirmed**
+  in this cycle. It was observed by the operator in Cycle 2 (`bridge/.d7-demo-20261004T044030Z.txt`), and nobody
+  has looked again on this cycle's code.
+
+**reconcile_mode:** `full` (unchanged since addendum 1).
+
+**not_verified** (what addendum 1 lists, less what lane 005s1-d ran):
+- git aliases;
+- a harness started from inside a guarded `-c` shell;
+- the arm64 Docker CLI's Go version;
+- two containers on one volume;
+- the purge's time bound;
+- D7 on this cycle's code;
+- the baseline files' review by a person.
+
+**The feedback items:** `07-20261010-064701` (Item 22), `07-20261010-081905` (lane 005s1-a) and
+`07-20261011-055059` (lane 005s1-c) are closed in `FOR-MENTOR.md`.
+
+**Then:** the deny-list, then `git merge --no-ff modify/005-slice-1` into `master`. Nothing is pushed.
