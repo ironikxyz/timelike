@@ -32,6 +32,7 @@ RUNTIME_NAMES = ("python3", "python", "pip", "pip3", "node", "npm", "npx")
 NOT_LINKED = ("corepack", "idle3", "pydoc3", "python3-config")
 AGENT_LOCAL_BIN = "/home/agent/.local/bin"
 TIMELIKE_BIN = "/opt/timelike/bin"
+TIMELIKE_SHIMS = "/opt/timelike/shims"  # feature 013 slice 1: the install shims, first on PATH
 NODE_URL = "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
 NPM_URL = "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz"
 # PIP_BREAK_SYSTEM_PACKAGES and the pip.conf / command-line spelling, in any case (FR-28).
@@ -510,9 +511,12 @@ def test_env_path_order() -> None:
     env = env_block(AGENT_DOCKERFILE)
     assert "PATH" in env, "the ENV block sets no PATH"
     parts = env["PATH"].split(":")
-    assert parts[0] == TIMELIKE_BIN, f"PATH must start with {TIMELIKE_BIN}: {env['PATH']}"
-    assert len(parts) > 1 and parts[1] == AGENT_LOCAL_BIN, (
-        f"PATH's second entry must be {AGENT_LOCAL_BIN} (FR-28): {env['PATH']}"
+    # feature 013 slice 1 (FOR-MENTOR Item 24, Q1 (b')): the install shims first, then timelike's tools
+    assert parts[:2] == [TIMELIKE_SHIMS, TIMELIKE_BIN], (
+        f"PATH must start with {TIMELIKE_SHIMS}, then {TIMELIKE_BIN}: {env['PATH']}"
+    )
+    assert len(parts) > 2 and parts[2] == AGENT_LOCAL_BIN, (
+        f"PATH's third entry must be {AGENT_LOCAL_BIN} (FR-28): {env['PATH']}"
     )
     assert "/usr/local/bin" in parts, f"PATH lost /usr/local/bin: {env['PATH']}"
     assert parts.index(AGENT_LOCAL_BIN) < parts.index("/usr/local/bin"), (
@@ -542,10 +546,10 @@ def source_profile(path_value: str) -> str:
 
 
 def test_profile_d_restores_the_env_order_after_debians_reset() -> None:
-    """After /etc/profile's reset, login shells get /opt/timelike/bin then ~/.local/bin, both before
-    /usr/local/bin (FR-28)."""
+    """After /etc/profile's reset, login shells get /opt/timelike/shims (013), /opt/timelike/bin, then
+    ~/.local/bin, all before /usr/local/bin (FR-28)."""
     parts = source_profile(TRIXIE_PROFILE_PATH).split(":")
-    assert parts[:2] == [TIMELIKE_BIN, AGENT_LOCAL_BIN], f"login-shell PATH order: {parts}"
+    assert parts[:3] == [TIMELIKE_SHIMS, TIMELIKE_BIN, AGENT_LOCAL_BIN], f"login-shell PATH order: {parts}"
     assert parts.index(AGENT_LOCAL_BIN) < parts.index("/usr/local/bin"), parts
 
 

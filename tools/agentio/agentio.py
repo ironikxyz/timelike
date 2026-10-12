@@ -252,7 +252,8 @@ class Result:
 
 class Context:
     __slots__ = (
-        "argv", "columns", "event_args", "limit", "mode", "scratch_root", "session", "tool", "verbose",
+        "argv", "columns", "event_args", "event_override", "limit", "mode", "scratch_root", "session", "tool",
+        "verbose",
     )  # fmt: skip
 
     def __init__(
@@ -277,6 +278,9 @@ class Context:
         # The session event's args when a tool sets them: a tool whose argv may hold a secret records
         # them redacted (feature 003 slice 1, rule 15). None records argv, as before.
         self.event_args: list[str] | None = None
+        # The session event's `override` when a tool proceeded over its own refusal (feature 013, Item 24
+        # Q4): what was overridden, in the event line itself. None writes no field.
+        self.event_override: dict[str, Any] | None = None
 
     def scratch(self) -> Path:
         """This session's private scratch directory, created on first use (rule 10)."""
@@ -781,7 +785,8 @@ def run(
         )
     if session is not None:
         recorded = ctx.event_args if ctx is not None and ctx.event_args is not None else raw
-        _write_event(root, session, tool, recorded, code, started, verbose, ref)
+        override = ctx.event_override if ctx is not None else None
+        _write_event(root, session, tool, recorded, code, started, verbose, ref, override)
     with contextlib.suppress(Exception):
         sys.stdout.flush()
     sys.exit(code)
@@ -1162,11 +1167,13 @@ def _write_event(
     started: float,
     verbose: bool,
     ref: dict[str, Any] | None = None,
+    override: dict[str, Any] | None = None,
 ) -> None:
     """Rule 16: one line per invocation. FR-11: a failure here never changes the tool's result.
 
     Feature 009 adds optional fields the session journal reads: `t_ms` (the end, epoch ms), `ppid` (to
     link a tool to the shell command that ran it), `agent` (TIMELIKE_AGENT, when valid) and `ref`.
+    Feature 013 adds `override`: what a tool proceeded over when told to (`Context.event_override`).
     """
     try:
         now = time.time()
@@ -1188,6 +1195,8 @@ def _write_event(
             event["agent"] = agent
         if ref:
             event["ref"] = ref
+        if override:
+            event["override"] = override
         line = (json.dumps(event, ensure_ascii=False) + "\n").encode()
         path = _session_dir(root, session) / "events.jsonl"
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC, 0o600)

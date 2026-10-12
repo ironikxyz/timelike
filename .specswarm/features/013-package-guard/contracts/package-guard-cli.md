@@ -3,8 +3,30 @@
 ```
 package-guard [--yes] [--dry-run] [--timeout S] [--json|--text] [--limit N] -- CMD [ARG…]
 package-guard CMD [ARG…]          the same (CMD's own options never reach the guard)
+package-guard --gate [--json|--text] -- CMD [ARG…]   the shims' question: check only, run nothing
 package-guard --help | --agent-info
 ```
+
+## How the bare commands reach it (FOR-MENTOR Item 24, Q1 (b′); built in Cycle 1's addendum)
+
+`/opt/timelike/shims` is first on PATH (the image's `ENV` and `/etc/profile.d/00-timelike-path.sh`). In it,
+`pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` are links to one POSIX sh wrapper,
+`/opt/timelike/libexec/install-shim`:
+1. it finds the real command: the first of its name on PATH that is not the shim itself (no recursion, P002);
+   none → bash's command-not-found handler answers, exit 127, as without the shim;
+2. a command that cannot be an install (no install word: `pip --version`, `npm run x`, `uv lock`) is `exec`'d at
+   once — no fork, no Python;
+3. one that may be an install asks `package-guard --gate -- NAME ARG…` with stdin closed. Exit 0: the guard's
+   output is dropped and the real command is `exec`'d, so its output, stdin, environment and exit are its own.
+   Anything else: the guard's output (exit 4: the envelope) is printed and its exit is the shim's.
+
+`--gate` takes neither `--yes` nor `--dry-run` (exit 2). A refusal's `confirm` is the tool form exactly,
+`package-guard --yes -- <the original command>` (Q2), without the shim's own `--gate` and format option.
+
+**Not reached** (named in the announcement, `--agent-info`'s `shims.not_reached`, and the cycle report):
+`python -m pip`; an activated venv's own `pip`, `uv` or `npm` (its `bin` is ahead of the shims);
+`/usr/local/bin/pip` or any installer called by its full path (the visible escape). Slice 2's checking proxy
+closes them. `type -a pip` shows `/opt/timelike/shims/pip` first.
 
 001's output contract, rules 1–16. Manifest:
 - `mutating: true`, `confirm_protocol: true`, `passes_exit: true`;
@@ -67,6 +89,8 @@ package-guard --help | --agent-info
 | Proceeded with `--yes` over a refusal | `proceeded over K refusals (recorded: PATH); CMD exited E` |
 | `--dry-run`, would pass | `would proceed: N packages checked` |
 | `--dry-run`, would refuse | `would be refused: K of N packages` |
+| `--gate`, passes | `gate passed: N packages checked …; NAME runs next` (exit 0; the shim drops it) |
+| `--gate`, installs nothing | `gate passed: NAME runs unchecked` (exit 0) |
 
 ## Data (`--json`)
 
@@ -83,6 +107,7 @@ package-guard --help | --agent-info
 | `TIMELIKE_PACKAGE_MIN_AGE_DAYS` | `2` | Minimum age of the release checked; decimals allowed; `0` is off |
 | `TIMELIKE_PACKAGE_TIMEOUT` | `10` | Seconds per lookup, and for the whole check |
 | `TIMELIKE_BIN_DIRS` | `/opt/timelike/bin` | Removed from PATH when CMD is resolved (no recursion) |
+| `TIMELIKE_SHIMS` | `/opt/timelike/shims` | The shims' directory, also removed from PATH when CMD is resolved |
 
 ## The override record (`<session scratch>/package-guard/override-<UTC>-<pid>.json`)
 
@@ -94,3 +119,18 @@ package-guard --help | --agent-info
 
 Written before CMD runs (`command_exit: null`), then rewritten with the exit. The tool's event has
 `ref: {"log": <this path>}`.
+
+## The override in the session event line (Item 24 Q4; 001's `event.schema.json`, optional `override`)
+
+```json
+{"v": 1, "tool": "package-guard", "args": ["--yes", "--", "pip", "install", "x"], "exit": 0, …,
+ "ref": {"log": "<the record above>"},
+ "override": {"ecosystem": "pypi", "command": ["pip", "install", "x"],
+              "packages": [{"name": "x", "registry": "https://pypi.org/simple", "reason": "too-new",
+                            "released": "2026-10-11T09:12:00Z", "detail": "newest release 1.1.0 was released …"}]}}
+```
+
+`packages[].version` is the version or range the command named, when it named one. `reason` is the refusal's word
+(`absent`, `too-new`, `unreachable`, `age-unknown`, `no-match`, `unchecked-source`, `unreadable`); `released` is
+present for a dated release. Credentials in a URL are redacted. Only a call that proceeded over a refusal carries
+it.

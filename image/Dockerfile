@@ -178,8 +178,9 @@ RUN for pin in "tree-sitter:${TREE_SITTER_VERSION:-}:${TREE_SITTER_SHA256:-}" \
 #   - its own pip.conf (pip's site configuration for that prefix) makes a bare `pip install` a user install
 #   - Node's own npmrc (the global config npm finds from node's real path) puts `npm install -g` under
 #     ~/.local; npm expands ${HOME} itself
-#   - seven links on PATH, to the runtimes' own executables: no wrapper (feature 15 sits in front later).
-#     corepack, idle3, pydoc3 and python3-config are not linked (D-12)
+#   - seven links on PATH, to the runtimes' own executables (D-12). corepack, idle3, pydoc3 and python3-config
+#     are not linked. Feature 013's install shims sit in front of pip, pip3, npm and npx on PATH (§ 5a);
+#     these links stay the real commands
 # Never PIP_BREAK_SYSTEM_PACKAGES. ~/.local/bin is on PATH through § 7 and profile.d (FR-28).
 COPY --from=runtimes /opt/agent /opt/agent
 RUN marker="$(find /opt/agent/python/lib -maxdepth 2 -name EXTERNALLY-MANAGED -print -quit)" \
@@ -258,6 +259,20 @@ COPY --chmod=0644 image/rootfs/etc/timelike/standard-tools.json /etc/timelike/st
 # hook's command_not_found_handle, with builtins only.
 COPY --chmod=0644 image/rootfs/etc/timelike/missing-commands.tsv /etc/timelike/missing-commands.tsv
 COPY --chmod=0755 image/rootfs/opt/timelike/libexec/entrypoint /opt/timelike/libexec/entrypoint
+# --- 5a. The install shims (feature 013 slice 1; FOR-MENTOR Item 24, Q1 (b')) -------------------------
+# /opt/timelike/shims is first on PATH (§ 7, profile.d): pip, pip3, uv, npm, npx and pnpm there are links to
+# one POSIX sh wrapper, which execs the real command at once unless it may be an install, and then asks
+# package-guard first. Not /opt/timelike/bin: conform checks every executable there as a timelike tool, and
+# these are the standard commands. The real ones stay where they were (/usr/local/bin, /bin/uv); pnpm is
+# not in the image (Q3), and its shim finds it wherever the agent installs it (~/.local/bin).
+COPY --chmod=0755 image/rootfs/opt/timelike/libexec/install-shim /opt/timelike/libexec/install-shim
+RUN install -d -o root -g root -m 0755 /opt/timelike/shims \
+ && for n in pip pip3 uv npm npx pnpm; do ln -s ../libexec/install-shim "/opt/timelike/shims/${n}"; done \
+ && chown -h root:root /opt/timelike/shims/* /opt/timelike/libexec/install-shim \
+ && test "$(find /opt/timelike/shims -mindepth 1 | wc -l)" -eq 6 \
+ && test "$(find /opt/timelike/shims -type l -lname ../libexec/install-shim | wc -l)" -eq 6 \
+ && test -x /opt/timelike/bin/package-guard \
+ && test "$(PATH=/opt/timelike/shims:/usr/local/bin:/usr/bin:/bin /opt/timelike/shims/pip --version | cut -d' ' -f1)" = pip
 RUN test -f /etc/bash.bashrc \
       || { echo "error: /etc/bash.bashrc is missing — interactive bash would not reach the timelike hook" >&2; exit 1; } \
  && printf '\n# timelike: container-derived defaults for interactive bash (modify.md F004)\n%s\n' \
@@ -278,14 +293,15 @@ RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} + \
 # double quotes (no $, backslash or single quote in values). PATH is also restored for login shells by
 # /etc/profile.d/00-timelike-path.sh, because Debian's /etc/profile resets it (R1). /home/agent/.local/bin
 # (007 FR-28, discovery revision 14) is where bare pip and npm -g installs put commands: after timelike's
-# tools, so an install never shadows one, and before /usr/local/bin.
+# tools, so an install never shadows one, and before /usr/local/bin. /opt/timelike/shims (feature 013, § 5a)
+# is first of all, so a pip or pnpm the agent installs into ~/.local/bin is still behind the package guard.
 # Slice 1: BASH_ENV points non-interactive bash at the container-derived hook (§ 5; F004). TZ and
 # PYTHON_BASIC_REPL are static, so they live here and reach sh -c and direct execs as well (F003,
 # SC-10): TZ="UTC" needs no zoneinfo file (glibc reads it as a POSIX TZ string, offset 0), and
 # PYTHON_BASIC_REPL keeps Python >= 3.13 out of PyREPL (colour, line editing, escape sequences).
 # From here on the build's own RUN shells (bash) read BASH_ENV too; the hook only adds job counts and
 # strips secret-shaped names, and § 8's GIT_SHA is not one.
-ENV PATH="/opt/timelike/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+ENV PATH="/opt/timelike/shims:/opt/timelike/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     TIMELIKE_BIN_DIRS="/opt/timelike/bin" \
     GIT_EDITOR="true" \
     GIT_SEQUENCE_EDITOR="true" \

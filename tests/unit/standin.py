@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -59,6 +60,15 @@ class Standin:
     def file_requests(self) -> list[dict[str, Any]]:
         """Requests for a wheel or a tarball: anything downloaded."""
         return [r for r in self.requests() if r["path"].startswith("/files/") or "/-/" in r["path"]]
+
+    def pypi_doc(self, name: str) -> dict[str, Any]:
+        """The stand-in's own PEP 691 answer for NAME, as an installer reads it (logged like any request)."""
+        req = urllib.request.Request(  # noqa: S310 — the loopback stand-in
+            f"{self.simple}/{name}/", headers={"Accept": "application/vnd.pypi.simple.v1+json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 — the loopback stand-in
+            doc: dict[str, Any] = json.load(r)
+        return doc
 
     def clear(self) -> None:
         log = self.dir / "run" / "requests.jsonl"

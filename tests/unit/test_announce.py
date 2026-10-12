@@ -296,6 +296,26 @@ def test_announce_rules_name_run_and_timelike_tools_only_when_installed(rig: Rig
     assert "timelike tools" in with_both, "FR-2: timelike tools prints the full manifest"
 
 
+def test_announce_names_what_reaches_the_package_guard_only_when_installed(rig: Rig) -> None:
+    """013 slice 1 (FOR-MENTOR Item 24, conditions 3 and 4): with package-guard installed, the rules say which
+    installers are checked, how to see it (`type -a pip`), to pin rather than override, and what is not
+    reached; the minimum age is the guard's own manifest's value."""
+
+    def rules(bin_dirs: list[Path]) -> str:
+        lines = announce_lines(rig, bin_dirs)
+        return "\n".join(lines[lines.index("## How to work here") + 1 :])
+
+    assert "package-guard" not in rules([rig.fakebin])
+    guarddir = rig.tmp / "guarddir"
+    install(TOOLS_DIR / "package-guard", guarddir)
+    text = rules([rig.fakebin, guarddir])
+    assert "`pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` installs are checked first (`package-guard`)" in text
+    assert "released under 2 days ago, is refused with exit 4" in text
+    assert "pin it rather than override" in text and "`type -a pip` shows the check first" in text
+    assert "Not checked: `python -m pip`, a venv's own `pip`, and `/usr/local/bin/pip`" in text
+    assert "…[cut" not in text
+
+
 def test_announce_ignores_non_executables_and_directories(rig: Rig) -> None:
     body = "\n".join(announce_lines(rig))
     assert "zz-notes" not in body

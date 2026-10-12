@@ -115,7 +115,8 @@ echo "# parsed ${#env_vars[@]} variables from the ENV instruction"
 # --- The probe: prints one key=value per asserted fact --------------------------------------------
 # shellcheck disable=SC2016  # expanded by the shell under test, not here
 probe='
-printf "path_first=%s\n" "${PATH%%:*}"
+p="${PATH}:"
+printf "path_head=%s\n" "${p%%:*}:$(p="${p#*:}"; printf "%s" "${p%%:*}"):$(p="${p#*:}"; p="${p#*:}"; printf "%s" "${p%%:*}")"
 printf "git_var_editor=%s\n" "$(git var GIT_EDITOR 2>/dev/null)"
 printf "git_var_pager=%s\n" "$(git var GIT_PAGER 2>/dev/null)"
 printf "pager=%s\n" "${PAGER-<unset>}"
@@ -133,7 +134,7 @@ if [ -n "${ALLOWED_TOKEN+x}" ]; then echo allowed=present; else echo allowed=abs
 '
 
 expected=(
-  "path_first=/opt/timelike/bin"
+  "path_head=/opt/timelike/shims:/opt/timelike/bin:/home/agent/.local/bin"
   "git_var_editor=true"
   "git_var_pager=cat"
   "pager=cat"
@@ -270,11 +271,11 @@ done
 
 # --- N2: the stand-in profile really resets PATH, so profile.d is what restores it ----------------
 out="$(run_style "bash -lc" 1 "${gitconfig}" "${tmp}/profile-no-d")"
-got="$(value_of path_first "${out}")"
-if [[ "${got}" != "/opt/timelike/bin" && "${got}" != "<missing>" ]]; then
-  tap 0 "self-check N2 bash -lc: without profile.d the PATH reset drops /opt/timelike/bin (first entry '${got}')"
+got="$(value_of path_head "${out}")"
+if [[ "${got}" != /opt/timelike/* && "${got}" != "<missing>" ]]; then
+  tap 0 "self-check N2 bash -lc: without profile.d the PATH reset drops /opt/timelike/shims and bin (head '${got}')"
 else
-  tap 1 "self-check N2 bash -lc: PATH kept /opt/timelike/bin without profile.d — the stand-in reset is not real"
+  tap 1 "self-check N2 bash -lc: PATH kept /opt/timelike/ without profile.d — the stand-in reset is not real"
 fi
 
 # --- N3: NO_COLOR alone does not turn git colour off; gitconfig is load-bearing (R4) --------------

@@ -150,6 +150,86 @@ def test_running_the_confirm_proceeds_and_records_the_override(lab: Lab) -> None
     assert evs[1]["ref"] == {"log": record_path}
     assert evs[1]["args"][:3] == ["--json", "--yes", "--"]
     assert all(errors(e, load("event.schema.json")) == [] for e in evs)
+    # Item 24 Q4: the override is in the event line itself, the refusal never carries one
+    assert "override" not in evs[0]
+    o = evs[1]["override"]
+    assert o["ecosystem"] == "pypi" and o["command"] == ["pip", "install", "--target", "t", "tl-fresh"]
+    (pkg,) = o["packages"]
+    assert (pkg["name"], pkg["registry"], pkg["reason"]) == ("tl-fresh", lab.reg.simple, "too-new")
+    assert "version" not in pkg  # none was named
+    assert pkg["released"] == rec_released(lab, "tl-fresh", "1.1.0")
+    assert "minimum age is 2 days" in pkg["detail"]
+
+
+def rec_released(lab: Lab, name: str, version: str) -> str:
+    """The upload time the stand-in serves for NAME VERSION (its earliest file), as the event writes it."""
+    times = [f["upload-time"] for f in lab.reg.pypi_doc(name)["files"] if f"-{version}-" in f["filename"]]
+    return min(times)[:19] + "Z"
+
+
+def test_the_override_names_the_version_asked_for_and_redacts_a_credential(lab: Lab) -> None:
+    url = lab.reg.simple.replace("http://", "http://user:hunter2@")
+    r = lab.run(
+        "--json", "--yes", "--", "pip", "install", "--target", "t", "--index-url", url, "tl-fresh==1.1.0"
+    )
+    assert r.returncode == 0, said(r)
+    (ev,) = lab.events()
+    assert errors(ev, load("event.schema.json")) == []
+    (pkg,) = ev["override"]["packages"]
+    assert pkg["version"] == "==1.1.0" and pkg["reason"] == "too-new"
+    assert "hunter2" not in json.dumps(ev["override"])
+
+
+def test_gate_passes_and_runs_nothing(lab: Lab) -> None:
+    """--gate (the shims' question): exit 0 and nothing run, so the shim can exec the installer itself."""
+    r = lab.run("--json", "--gate", "--", "pip", "install", "--target", "t", "tl-old")
+    assert r.returncode == 0, said(r)
+    doc = json.loads(r.stdout)
+    assert doc["verdict"].startswith("gate passed: 1 package checked") and doc["verdict"].endswith(
+        "pip runs next"
+    )
+    assert not (lab.ws / "t").exists() and lab.reg.file_requests() == []
+    (ev,) = lab.events()
+    assert ev["exit"] == 0 and ev["args"][:2] == ["--json", "--gate"] and "override" not in ev
+
+
+def test_gate_refusal_is_the_envelope_with_the_tool_form_confirm(lab: Lab) -> None:
+    r = lab.run("--gate", "--json", "--", "pip", "install", "--target", "t", "tl-fresh")
+    assert r.returncode == 4, said(r)
+    env = json.loads(r.stdout)
+    assert errors(env, load("confirm-envelope.schema.json")) == []
+    assert (
+        env["confirm"] == "package-guard --yes -- pip install --target t tl-fresh"
+    )  # Q2: no --gate, no --json
+
+
+def test_gate_over_a_command_that_installs_nothing_runs_nothing(lab: Lab) -> None:
+    r = lab.run("--json", "--gate", "--", "sh", "-c", "touch ran; exit 3")
+    assert r.returncode == 0, said(r)
+    assert json.loads(r.stdout)["verdict"] == "gate passed: sh runs unchecked"
+    assert not (lab.ws / "ran").exists()
+
+
+def test_gate_takes_neither_yes_nor_dry_run(lab: Lab) -> None:
+    for flag in ("--yes", "--dry-run"):
+        r = lab.run("--gate", flag, "--", "pip", "install", "tl-old")
+        assert r.returncode == 2, said(r)
+
+
+def test_the_shims_directory_is_never_searched_for_the_installer(lab: Lab, tmp_path: Path) -> None:
+    """P002: the installer the guard runs is never the shim that asked it (TIMELIKE_SHIMS, by real path)."""
+    shims = tmp_path / "shims"
+    shims.mkdir()
+    (shims / "pip").write_text("#!/bin/sh\necho RECURSION >&2\nexit 98\n")
+    (shims / "pip").chmod(0o755)
+    alias = tmp_path / "alias"
+    alias.symlink_to(shims)
+    path = f"{alias}:{shims}:{lab.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}"
+    r = lab.run(
+        "--json", "--", "pip", "install", "--target", "t", "tl-old", PATH=path, TIMELIKE_SHIMS=str(shims)
+    )
+    assert r.returncode == 0, said(r)
+    assert "RECURSION" not in r.stdout + r.stderr and (lab.ws / "t" / "tl_old").is_dir()
 
 
 def test_a_passing_install_runs_and_records_nothing(lab: Lab) -> None:
@@ -222,6 +302,18 @@ def test_agent_info_names_the_settings(lab: Lab) -> None:
     assert m["lookup_timeout_s"]["env"] == "TIMELIKE_PACKAGE_TIMEOUT"
     assert "uv.lock" in m["lockfiles"] and "pnpm-lock.yaml" in m["lockfiles"]
     assert "not yet a grant under Adele" in m["adele"]
+    shims = m["shims"]  # Item 24, condition 3: the gaps are named in --agent-info
+    assert shims["dir"] == "/opt/timelike/shims" and shims["commands"] == [
+        "pip",
+        "pip3",
+        "uv",
+        "npm",
+        "npx",
+        "pnpm",
+    ]
+    gaps = " ".join(shims["not_reached"])
+    assert "python -m pip" in gaps and "venv" in gaps and "/usr/local/bin/pip" in gaps
+    assert "--gate" in m["flags"]
 
 
 def test_help_fits_the_contract(lab: Lab) -> None:
@@ -243,5 +335,10 @@ def test_conform_passes_over_the_tool(lab: Lab) -> None:
 
 def test_contract_file_names_the_same_variables() -> None:
     text = (REPO / ".specswarm/features/013-package-guard/contracts/package-guard-cli.md").read_text()
-    for var in ("TIMELIKE_PACKAGE_MIN_AGE_DAYS", "TIMELIKE_PACKAGE_TIMEOUT", "TIMELIKE_BIN_DIRS"):
+    for var in (
+        "TIMELIKE_PACKAGE_MIN_AGE_DAYS",
+        "TIMELIKE_PACKAGE_TIMEOUT",
+        "TIMELIKE_BIN_DIRS",
+        "TIMELIKE_SHIMS",
+    ):
         assert var in text

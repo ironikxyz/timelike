@@ -11,12 +11,19 @@ npx, pnpm) and checks every package it names, in the registry the installer itse
 
 A refusal is the output contract's exit-4 `confirmation_required` envelope, and CMD never starts, so nothing
 is downloaded. Its `confirm` is `package-guard --yes -- CMD`, which proceeds and records the override in the
-session (the tool's event points at the record). A registry that does not answer is never called absent: the
-refusal says it was unreachable from here, and how. When every check passes, CMD runs through `run` (every
-call concludes) and its exit is the tool's. A command that installs nothing runs unchanged, unchecked.
+session: the event line carries an `override` field, and its `ref` points at the record. A registry that
+does not answer is never called absent: the refusal says it was unreachable from here, and how. When every
+check passes, CMD runs through `run` (every call concludes) and its exit is the tool's. A command that
+installs nothing runs unchanged, unchecked.
 
-Design: .specswarm/features/013-package-guard/ (spec, research R1-R10, data-model.md,
-contracts/package-guard-cli.md). The bare `pip install` reaching this tool is FOR-MENTOR Item 24's.
+The bare commands reach it through /opt/timelike/shims (FOR-MENTOR Item 24, Q1 (b')): a wrapper named pip,
+pip3, uv, npm, npx or pnpm, first on PATH, calls `package-guard --gate -- NAME ARG...` for anything that may
+be an install. `--gate` checks and runs nothing: on a pass (exit 0) the wrapper drops the guard's output and
+execs the real command itself, so its output and exit are the installer's own; a refusal is the envelope.
+`python -m pip`, a venv's own pip and /usr/local/bin/pip are not reached (slice 2's proxy closes them).
+
+Design: .specswarm/features/013-package-guard/ (spec, research R1-R11, data-model.md,
+contracts/package-guard-cli.md).
 """
 
 from __future__ import annotations
@@ -61,6 +68,8 @@ PEP691 = "application/vnd.pypi.simple.v1+json"
 SIMPLE_ACCEPT = f"{PEP691}, application/vnd.pypi.simple.v1+html;q=0.2, text/html;q=0.01"
 REVISION_FILE = "/opt/timelike/REVISION"
 RECORD_DIR = "package-guard"
+SHIMS_ENV = "TIMELIKE_SHIMS"  # the wrappers' directory, never searched for CMD (no recursion, P002)
+DEFAULT_SHIMS = "/opt/timelike/shims"
 
 PY_LOCKS = ("uv.lock", "pylock.toml")
 NODE_LOCKS = ("package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml")
@@ -2293,12 +2302,14 @@ def plan_data(plan: Plan) -> dict[str, Any]:
 
 def _guard_dirs(env: dict[str, str]) -> set[str]:
     dirs = {os.path.realpath(d) for d in (env.get("TIMELIKE_BIN_DIRS") or "").split(":") if d}
+    dirs |= {os.path.realpath(d) for d in (env.get(SHIMS_ENV) or DEFAULT_SHIMS).split(":") if d}
     dirs.add(os.path.realpath(os.path.dirname(os.path.realpath(__file__))))
     return dirs
 
 
 def resolver(env: dict[str, str]) -> Callable[[str], str | None]:
-    """Find a command on PATH without timelike's own directories, so the guard never runs itself (P002)."""
+    """Find a command on PATH without timelike's own directories or the shims, so the guard never runs
+    itself (P002)."""
     skip = _guard_dirs(env)
     path = ":".join(d for d in (env.get("PATH") or "").split(":") if d and os.path.realpath(d) not in skip)
 
@@ -2442,6 +2453,19 @@ def _manifest() -> dict[str, Any]:
         "lockfiles": [*PY_LOCKS, "requirements files with == and --hash", *NODE_LOCKS],
         "unreachable": "refused, never called absent; --yes proceeds",
         "adele": "registry lookups are not yet a grant under Adele (feature 12 slice 2)",
+        "shims": {
+            "dir": os.environ.get(SHIMS_ENV) or DEFAULT_SHIMS,
+            "commands": list(SHIMMED),
+            "how": "first on PATH; anything that may be an install asks `package-guard --gate`, then the"
+            " wrapper execs the real command (found on PATH without the shims); the rest is exec'd at once",
+            "type_a": "`type -a pip` shows /opt/timelike/shims/pip first, then the real pip",
+            "not_reached": [
+                "python -m pip (and python3 -m pip): no PATH lookup of pip",
+                "an activated venv's own pip, uv or npm: the venv's bin is ahead of the shims",
+                "/usr/local/bin/pip or any other installer by its full path (the visible escape)",
+            ],
+            "closed_by": "slice 2's checking proxy (the runtimes' own index configuration)",
+        },
     }
 
 
@@ -2454,6 +2478,8 @@ def _env_float(name: str, default: float) -> float | str:
     except ValueError:
         return f"unreadable: {raw!r}"
 
+
+SHIMMED = ("pip", "pip3", "uv", "npm", "npx", "pnpm")
 
 TOOL = agentio.Tool(
     name="package-guard",
@@ -2471,6 +2497,8 @@ TOOL = agentio.Tool(
         "pinned in the project's lockfile: passes with no registry request",
         "a refusal's confirm, package-guard --yes -- CMD, proceeds and records the override",
         f"lookups: {TIMEOUT_ENV} seconds (default {DEFAULT_TIMEOUT_S:g}); global flags go before --",
+        "bare pip, pip3, uv, npm, npx, pnpm reach it via /opt/timelike/shims (--gate); not reached:",
+        "  python -m pip, a venv's own pip, /usr/local/bin/pip (`type -a pip` shows the shim first)",
     ],
     mutating=True,
     confirm_protocol=True,
@@ -2501,6 +2529,11 @@ def positive_seconds(text: str) -> float:
 def configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("--dry-run", action="store_true", help="check and report; run nothing")
     p.add_argument("--timeout", type=positive_seconds, default=None, help="run's limit for CMD, in seconds")
+    p.add_argument(
+        "--gate",
+        action="store_true",
+        help="for the shims: check only, run nothing; exit 0 when CMD may run",
+    )
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
@@ -2514,6 +2547,10 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     own = list(ctx.argv[: len(ctx.argv) - len(cmd)])
     if own and own[-1] == "--":
         own = own[:-1]
+    if args.gate and (args.yes or args.dry_run):
+        raise agentio.UsageError(
+            "--gate checks only: it takes neither --yes nor --dry-run", "package-guard --yes -- CMD [ARG...]"
+        )
     env = dict(os.environ)
     cwd = Path.cwd()
     resolve = resolver(env)
@@ -2521,6 +2558,8 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     try:
         inst = classify(cmd, cwd, env, resolve)
     except NotInstall:
+        if args.gate:
+            return gate_pass("not an install", f"{os.path.basename(cmd[0])} runs unchecked")
         return run_unchecked(ctx, args, cmd, resolved)
     now = dt.datetime.now(dt.UTC)
     plan = build_plan(inst, cwd, env, resolve, now)
@@ -2538,16 +2577,51 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         )
         return agentio.Result(target, scope, verdict, lines=lines, data=data)
     if plan.refused and not args.yes:
-        return envelope(ctx, plan, cmd, own)
+        # the shim's own --gate and output format are not the agent's: the confirm is the tool form, exactly
+        return envelope(ctx, plan, cmd, [] if args.gate else own)
+    if args.gate:
+        return gate_pass(scope, f"{summary(plan)}; {os.path.basename(cmd[0])} runs next")
     record: Path | None = None
     if plan.refused:
         record = record_override(ctx, plan, cmd, None, None)
         data["override_record"] = str(record)
+        ctx.event_override = event_override(plan, cmd)
     doc = run_installer(cmd, resolved or cmd[0], ctx, args.timeout)
     command_exit = doc.get("command_exit")
     if record is not None:
         record_override(ctx, plan, cmd, command_exit if isinstance(command_exit, int) else None, record)
     return installer_result(doc, target, scope, lines, data, plan, cmd, record)
+
+
+def gate_pass(scope: str, verdict: str) -> agentio.Result:
+    """--gate's pass, exit 0. The shim keeps this result to itself and execs the real command, so what the
+    caller sees is the installer's own; the session event records the pass."""
+    return agentio.Result(str(Path.cwd()), scope, f"gate passed: {verdict}", data={"gate": "pass"})
+
+
+def event_override(plan: Plan, cmd: list[str]) -> dict[str, Any]:
+    """Item 24 Q4: the override in the session event line itself, per refused package."""
+    packages: list[dict[str, Any]] = []
+    for c in plan.refused:
+        p: dict[str, Any] = {
+            "name": c.req.name,
+            "registry": c.registry,
+            "reason": c.result,
+            "detail": c.detail,
+        }
+        if c.req.spec:
+            p["version"] = c.req.spec
+        if c.released is not None:
+            p["released"] = c.released.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        packages.append(p)
+    return {
+        "ecosystem": plan.inst.ecosystem,
+        "packages": packages,
+        "command": [
+            agentio.redact(a, "secret") if _secretish(a) else display_url(a) if URL_RE.match(a) else a
+            for a in cmd
+        ],
+    }
 
 
 def installer_result(
