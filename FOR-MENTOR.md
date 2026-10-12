@@ -1125,3 +1125,119 @@ records their closing beside Item 22.
 - `../bridge/feedback/07-20261011-055059-lane-005s1-c-ic-cells-read-by-position.md` (lane 005s1-c): the three
   `bash -ic` cells read output by line position. Fixed in T036 `d65cdee` (`drop_ic_notty_lines`; no assertion
   changed). Confirmed by lane 005s1-d, 649 of 649.
+
+## Item 24 — Feature 15 slice 1 (`013-package-guard`): how the bare installs reach the guard, pnpm, and the override's place (blocks the bare-command route only)
+
+**Status:** open. Raised 2026-10-12T00:25:56Z (read from the clock) on `013-package-guard`, from send
+`bridge/sends/15-rev2-20261012-001145.md`, seams 1, 2 and 7, before any of the parts below is built.
+
+**Built meanwhile, not blocked:** `package-guard [--yes] [--dry-run] -- CMD…`, one timelike tool on the agent's PATH
+(spec FR-1 to FR-36, D-1). It holds:
+- the checker, the registry lookups and the lockfile reading;
+- the verdict, and 001's `confirmation_required` envelope;
+- `--yes` and the override record;
+- the registry stand-in, and the tests.
+
+It changes no standard command and no other feature's contract. Whatever is ruled below routes the bare commands
+into it.
+
+**Blocked until this is answered:**
+- the bare `pip install …` / `npm install …` reaching the guard;
+- with that, the e2e cells that run the installer by its bare name;
+- D24, which is the agent's own install, not one routed through `package-guard` because it was told to;
+- the README status block, if the criteria's "installing a package" is read as the bare command.
+
+### Q1 · What puts the guard in front of `pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm`
+
+These facts hold in every option:
+- **The PATH** in the image's `ENV` (and `00-timelike-path.sh`) is
+  `/opt/timelike/bin:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:…`.
+  `~/.local/bin` is ahead of `/usr/local/bin`.
+- **That's where the agent's own installs land:** `pip install --user pip`, `npm i -g npm`, and `npm i -g pnpm`
+  (how pnpm arrives).
+- **An activated venv puts its own `bin` first.**
+- **`python -m pip` never looks `pip` up on PATH.**
+
+**The options:**
+- **(a) Functions in `shell-env.bash`** (Item 22's precedent): `pip`, `pip3`, `uv`, `npm`, `npx`, `pnpm`.
+- **(b) Wrappers at `/usr/local/bin`** in place of 007's seven links. This is the send's option.
+- **(b′) Wrappers in a new directory, `/opt/timelike/shims`, first on PATH.** It is not
+  `/opt/timelike/bin`, because `timelike-conform` checks every executable there.
+- **(c) The runtimes' own configuration** (`/etc/pip.conf`, the global npmrc, `/etc/uv/uv.toml`), pointed at a
+  local checking index. That is slice 2's proxy, early.
+
+| Invocation | (a) | (b) | (b′) | (c) |
+|---|---|---|---|---|
+| `bash -c`, `bash -lc`, interactive | yes | yes | yes | yes |
+| a bash script the agent runs | **no** (Item 22's depth bound) | yes | yes | yes |
+| a Makefile, `sh -c`, `subprocess` | **no** | yes | yes | yes |
+| `python -m pip` | **no** | **no** | **no** | yes |
+| `pip` of an activated venv | yes | **no** | **no** | partly (global config only) |
+| a `pip`/`npm`/`pnpm` the agent installed into `~/.local/bin` | yes | **no** (shadowed) | yes | yes |
+| an exit-4 envelope naming the package and registry | yes | yes | yes | **no**: the installer's own "not found" |
+| `type -a pip` shows | `pip is a function`, its body, then the paths | `/usr/local/bin/pip` (the wrapper) first | `/opt/timelike/shims/pip` first | only the real pip |
+
+(`type -a` was measured with bash 5.2 on the host, research R10.)
+
+**My recommendation: (b′).**
+- It reaches what the send stresses: a script's install, which has nothing behind it.
+- It reaches pnpm wherever the agent puts it. `type -a` shows the wrapper plainly.
+- Each wrapper is bash, using builtins only:
+  - anything not an install `exec`s the real command at once, with no fork added;
+  - an install asks `package-guard` (by absolute path) whether it passes, and then `exec`s the real installer, so
+    output, behaviour and exit are untouched;
+  - a refusal is the envelope and exit 4.
+- The real installer is resolved on PATH with the shim directory removed, so the guard never recurses (P002).
+- `command pip` does not escape a PATH wrapper, so the visible escape is `/usr/local/bin/pip`.
+- `python -m pip` and an activated venv's `pip` stay unguarded. I'd name both in the announcement and in
+  `not_verified`, and close them with slice 2's proxy, (c).
+
+**What (b′) changes in other features (each declared):**
+- **001:** the `ENV` PATH and `00-timelike-path.sh` gain `/opt/timelike/shims` first;
+  `tests/host/test_env_layer.sh` reads both.
+- **007:** D-12's SC-6 cell asserts that `pip`, `pip3`, `npm` and `npx` resolve to `/usr/local/bin/<name>`. It
+  would assert the shim first and the link after. The announcement gains a line on what is guarded and on
+  the escape.
+
+### Q2 · The confirm, once the bare command is guarded
+
+**Recommended:** the envelope's `confirm` stays `package-guard --yes -- pip install x` (rule 9 exactly, D-2).
+
+**The alternative** is a flag on the installer's line (`pip install x --timelike-yes`), which the wrapper strips.
+- `--yes` itself can't be that flag: `npx --yes PKG` is a common non-interactive habit, and the guard would read
+  it as an override.
+- Any other name changes 001's rule 9 text ("the original command plus `--yes`").
+
+### Q3 · pnpm in the image
+
+**Recommended: no.**
+- The guard covers pnpm when the agent installs it (Q1 (b′) reaches `~/.local/bin`).
+- Its forms are tested with the host's real pnpm 11.5.1 against the stand-in.
+- Adding it is another runtime in both bench images and the scan's surface, for no criterion.
+
+### Q4 · Where the override lives in the session event log
+
+- **Built:** the override is a record file in the session scratch, and the tool's own event points at it:
+  `ref: {"log": <path>}`, as `run`'s does at its log. 001's event schema is unchanged.
+- **The alternative:** an optional `override` object inside the event (package, ecosystem, registry, reason).
+  The schema has `additionalProperties: false`, so this changes 001's contract, as 009's fields did. Your call
+  whether the criterion's "records the override in the session event log" needs the fields inside the line.
+
+### Decided in the spec, for the mentor's eye (not blocking)
+
+- **The minimum age is 2 days** (`TIMELIKE_PACKAGE_MIN_AGE_DAYS`). It is checked against the newest release, as the
+  criterion says, so an often-released package is refused until pinned. The refusal names the newest release
+  old enough to pin (D-7).
+- **An unreachable registry fails closed** (exit 4, confirm proceeds), naming what failed and that it was checked
+  from this container (D-5).
+- **Extra indexes:** every index is asked. A name present on two is named, but not refused in slice 1 (D-6);
+  this is in `not_verified`.
+- **The registry stand-in** runs inside the agent container on loopback, started by each cell from the tests'
+  files. There is no compose service and no third-party image (D-10).
+- **A requirements file pins only with `==` and `--hash`** (FR-23).
+
+**For the mentor (route: code):**
+- Q1: (a), (b), (b′) or (c);
+- Q2: the confirm's form;
+- Q3: pnpm;
+- Q4: the record's place.
