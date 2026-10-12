@@ -37,3 +37,13 @@ ASSUMED: a bare npm/pnpm install reads dependencies, optionalDependencies, peerD
 ASSUMED: pip's "directory named like the package" case: a word is a local project only when it looks like a path, is an archive, or names a directory holding pyproject.toml or setup.py; npm reads a bare word as a registry name always, as npm-package-arg does (confidence: high)
 ABSENT: environment markers; pip's --group with a path prefix is read but untested; yarn and bun (out of scope)
 Verification: test_package_guard_versions.py 74 passed (PEP 440's ordering list and specifier examples; node-semver README's desugarings and pre-release rule, verbatim); test_package_guard_parse.py 62 passed. Two defects the units found: a direct reference ending in .whl read as a local archive (fixed: direct references first), and a test assuming no package.json above /tmp (a stray /tmp/package.json on this host, not mine; the test asks from / instead)
+
+### T004: which registry the installer would use
+**Started:** 2026-10-12T00:46:00Z (approximate: not read at the start; the previous commit's time) | **Completed:** 2026-10-12T00:43:16Z
+
+INHERITED: Install from T003 (index flags, interpreter, scoped registries) (confidence: high)
+ASSUMED: pip's order as read from pip 24.0's own configuration.py (global, user unless PIP_CONFIG_FILE exists, site, PIP_CONFIG_FILE, PIP_* env, CLI; [install] over [global]) (confidence: high)
+ASSUMED: uv's order — --index, UV_INDEX, extra index URLs, the project's and uv.toml's [[index]] entries, then the default (--default-index, UV_DEFAULT_INDEX, UV_INDEX_URL, a default=true index, PyPI) — is read from uv's documentation, not measured: there is no uv on this host. The image's uv meets the stand-in in the e2e cells, which use one index (confidence: medium)
+ASSUMED: npm's global npmrc is <realpath(node)>/../../etc/npmrc unless PREFIX or npm_config_globalconfig says otherwise (007 D-12's measurement); the builtin npmrc sits in npm's own package directory; pnpm also reads $XDG_CONFIG_HOME/pnpm/rc (confidence: medium)
+ABSENT: npm workspaces' per-workspace .npmrc; a pip.conf [download] or [wheel] section (not an install); uv's index-strategy unsafe-best-match (the guard keeps first-index's order)
+Verification: test_package_guard_registry.py 10 passed: pip user < site < PIP_CONFIG_FILE < env < CLI with a real venv layout and a plain prefix; uv's order and a user uv.toml; npm builtin < global < user < project (with ${VAR}) < env (any case) < CLI, and a scope's registry over --registry; credentials redacted for display and dropped from the request
