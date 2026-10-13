@@ -156,12 +156,12 @@ echo "find-done=1"'
 
 # GUARDS — files the agent's defaults and tools come from, including slice 1's hook that strips
 # secret-shaped variables (modify.md F002, F004), and since cycle 5 the git-hook dispatcher that
-# enforces the hook limit (research R11), and since feature 003 run (the concluding run). Checksummed
-# before and after.
+# enforces the hook limit (research R11), and since feature 003 run (the concluding run), and since feature
+# 013 the install shim and the package guard it asks (FOR-MENTOR Item 24). Checksummed before and after.
 GUARDS=(/etc/gitconfig /etc/bash.bashrc /etc/profile /etc/profile.d/00-timelike-path.sh
   /etc/profile.d/10-timelike-shell-env.sh /etc/timelike/shell-env.bash
   /opt/timelike/bin/timelike /opt/timelike/bin/timelike-conform /opt/timelike/bin/run /opt/timelike/REVISION
-  /opt/timelike/git-hooks/dispatch)
+  /opt/timelike/git-hooks/dispatch /opt/timelike/libexec/install-shim /opt/timelike/bin/package-guard)
 
 check_cannot_alter_guards() {
   local before after
@@ -170,7 +170,7 @@ check_cannot_alter_guards() {
   run_in "$1" notty "for f in ${GUARDS[*]}; do"'
   if (printf "# agent was here\n" >>"$f") 2>/dev/null; then echo "appended=$f"; fi
 done
-for d in /etc /etc/profile.d /etc/timelike /opt/timelike /opt/timelike/bin /opt/timelike/git-hooks; do
+for d in /etc /etc/profile.d /etc/timelike /opt/timelike /opt/timelike/bin /opt/timelike/git-hooks /opt/timelike/shims; do
   if (: >"$d/agent-planted") 2>/dev/null; then echo "created=$d/agent-planted"; fi
 done
 git config --system core.hooksPath .git/hooks

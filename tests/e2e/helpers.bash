@@ -552,3 +552,129 @@ exec /bin/uv --quiet tool run --python ${AGENT_PY} '${name}@${ver}' \"\$@\""
   out="$(exec_plain sh -c 'cd "$1" && printf "x: int = 1\n" >warm.py && ./mypy warm.py' warm "$dir" 2>&1)" ||
     { printf 'install_uv_tool_wrappers: mypy warm-up failed:\n%s\n' "$out" >&2; return 1; }
 }
+
+# ── A real installer, past the shims (feature 013; lane 013s1-b) ────────────────────────────────────
+# /opt/timelike/shims is first on PATH and holds pip, pip3, uv, npm, npx and pnpm whether or not the
+# installer is installed, so `command -v pnpm` finds the shim in an image with no pnpm. A cell asking "is NAME
+# installed?" prepends REAL_ON_PATH_SH to its in-container script and calls `real_on_path NAME`, which asks
+# what the shim asks (image/rootfs/opt/timelike/libexec/install-shim): the first NAME on PATH outside the
+# shims directory. It prints that path, or nothing and exit 1. POSIX sh, so any cell's shell can run it.
+# shellcheck disable=SC2016,SC2034 # expanded in the container; read by the cells that load helpers
+REAL_ON_PATH_SH='real_on_path() {
+  _rop_shims=${TIMELIKE_SHIMS:-/opt/timelike/shims}
+  _rop_rest=${PATH-}:
+  while [ -n "$_rop_rest" ]; do
+    _rop_d=${_rop_rest%%:*}
+    _rop_rest=${_rop_rest#*:}
+    [ -n "$_rop_d" ] || _rop_d=.
+    [ "$_rop_d" -ef "$_rop_shims" ] && continue
+    if [ -f "$_rop_d/$1" ] && [ -x "$_rop_d/$1" ]; then printf "%s\n" "$_rop_d/$1"; return 0; fi
+  done
+  return 1
+}'
+
+# ── The registry stand-in (feature 013, the package guard; spec D-10, FR-33) ────────────────────────
+# tests/fixtures/registry-standin.py, run INSIDE the agent container on its loopback with timelike's own
+# interpreter, so no cell reaches a public registry (lore P005) and nothing is added to compose. It logs every
+# request; a cell reads that log, never the guard's message, to see what was fetched (lore P004).
+STANDIN_PY=/opt/timelike/python/bin/python3
+GUARD_AGENT=timelike-package-guard/
+
+# standin_start DIR [CATALOG] — copy the stand-in and a catalog (default tests/fixtures/registry-catalog.json)
+# into DIR in the container and start it. Sets STANDIN_DIR, STANDIN_URL, STANDIN_SIMPLE (PyPI's Simple API
+# root) and STANDIN_NPM (the npm registry root, with its trailing slash).
+standin_start() {
+  local dir="$1" catalog="${2:-${BATS_TEST_DIRNAME}/../fixtures/registry-catalog.json}" port="" i
+  copy_into_container "${BATS_TEST_DIRNAME}/../fixtures/registry-standin.py" "${dir}/registry-standin.py" || return 1
+  copy_into_container "$catalog" "${dir}/catalog.json" || return 1
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c '"$1" -I "$2/registry-standin.py" --catalog "$2/catalog.json" --dir "$2/run" \
+    </dev/null >"$2/standin.err" 2>&1 &' s "$STANDIN_PY" "$dir" || return 1
+  for i in $(seq 100); do
+    port="$(exec_plain cat "${dir}/run/port" 2>/dev/null)" && port="${port//[^0-9]/}" && [[ -n "$port" ]] && break
+    sleep 0.1
+  done
+  if [[ -z "$port" ]]; then
+    echo "standin_start: the stand-in did not start ($i tries): $(exec_plain cat "${dir}/standin.err" 2>&1)" >&2
+    return 1
+  fi
+  STANDIN_DIR="$dir"
+  STANDIN_URL="http://127.0.0.1:${port}"
+  # shellcheck disable=SC2034 # read by the package guard's .bats files
+  STANDIN_SIMPLE="${STANDIN_URL}/simple"
+  # shellcheck disable=SC2034 # read by the package guard's .bats files
+  STANDIN_NPM="${STANDIN_URL}/npm/"
+}
+
+# standin_stop — stop the stand-in by the pid it wrote (never by a name match).
+standin_stop() {
+  [[ -n "${STANDIN_DIR:-}" ]] || return 0
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c 'p="$(cat "$1/run/pid" 2>/dev/null)" && kill "$p" 2>/dev/null; true' s "$STANDIN_DIR" || true
+}
+
+# standin_count WHAT — how many logged requests match: guard (the guard's user agent), files (a wheel or a
+# tarball: anything downloaded), all. Read in the container from the stand-in's own log.
+standin_count() {
+  # shellcheck disable=SC2016 # python source, expanded by python
+  exec_plain "$STANDIN_PY" -I -c '
+import json, sys
+what, agent = sys.argv[2], sys.argv[3]
+rows = [json.loads(x) for x in open(sys.argv[1], encoding="utf-8") if x.strip()]
+if what == "guard":
+    rows = [r for r in rows if r["user_agent"].startswith(agent)]
+elif what == "files":
+    rows = [r for r in rows if r["path"].startswith("/files/") or "/-/" in r["path"]]
+print(len(rows))' "${STANDIN_DIR}/run/requests.jsonl" "$1" "$GUARD_AGENT"
+}
+
+# standin_clear — empty the stand-in's log (between a cell's setup and what it measures).
+standin_clear() {
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c ': > "$1/run/requests.jsonl"' s "$STANDIN_DIR"
+}
+
+# standin_released ECOSYSTEM NAME VERSION — the release date the stand-in itself serves (PyPI's earliest
+# upload-time, npm's time[VERSION]), as YYYY-MM-DD: what a refusal must name, read from the registry's data.
+standin_released() {
+  # shellcheck disable=SC2016 # python source, expanded by python
+  exec_plain "$STANDIN_PY" -I -c '
+import json, sys, urllib.request
+eco, base, name, ver = sys.argv[1:5]
+if eco == "pypi":
+    req = urllib.request.Request(f"{base}/simple/{name}/", headers={"Accept": "application/vnd.pypi.simple.v1+json"})
+    doc = json.load(urllib.request.urlopen(req, timeout=10))
+    times = [f["upload-time"] for f in doc["files"] if f"-{ver}-" in f["filename"]]
+    print(min(times)[:10])
+else:
+    doc = json.load(urllib.request.urlopen(f"{base}/npm/{name}", timeout=10))
+    print(doc["time"][ver][:10])' "$1" "$STANDIN_URL" "$2" "$3"
+}
+
+# pyj CODE — run CODE with timelike's interpreter in the agent container, the last run's $output on stdin.
+pyj() {
+  printf '%s' "$output" | timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" "$STANDIN_PY" -I -c "$1"
+}
+
+# ── The agent's own install (feature 013 slice 1; FOR-MENTOR Item 24, condition 7) ──────────────────────
+# run_bare STYLE DIR CMD [-e K=V ...] — CMD as the agent runs it, by the installer's bare name, so it reaches
+# the guard through /opt/timelike/shims as the image wires it (nothing names package-guard). The cell's ENVS
+# array and any -e words given after CMD are passed; DIR is the working directory.
+#   c, lc, ic  bash -c / bash -lc / bash -ic CMD (ic: bash's two no-terminal lines dropped, so $output and
+#              ${lines[@]} mean what they mean in the other styles)
+#   script     CMD as the body of an executable bash script, DIR/.tl-install-<n>.sh, run by its path from
+#              bash -c: a script the agent runs, where shell functions would not reach (Item 22's bound)
+run_bare() {
+  local style="$1" dir="$2" cmd="$3" file
+  shift 3
+  if [[ "$style" == script ]]; then
+    file="${dir}/.tl-install-${RANDOM}.sh"
+    # shellcheck disable=SC2016 # expanded in the container
+    exec_plain sh -c 'printf "#!/bin/bash\n%s\n" "$2" >"$1" && chmod 0755 "$1"' s "$file" "$cmd" || return 1
+    # shellcheck disable=SC2153 # ENVS is the calling cell file's own array
+    run_in "${ENVS[@]}" "$@" -w "$dir" c notty "$file"
+  else
+    run_in "${ENVS[@]}" "$@" -w "$dir" "$style" notty "$cmd"
+    [[ "$style" != ic ]] || drop_ic_notty_lines
+  fi
+}

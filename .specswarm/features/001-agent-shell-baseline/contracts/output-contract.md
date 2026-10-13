@@ -194,6 +194,12 @@ event's arguments redacted (`Context.event_args`).
   data (`Tool(event_ref=(kind, key))`: `run` → `{"log": path}`, `snapshot` and `undo` →
   `{"snapshot": id}`). A line without them is valid. The journal reads this file and the session's
   `shell.jsonl` (feature 009's own record of `bash -c` / `bash -lc` commands); it writes neither.
+- **Optional field `override` (feature 013, the package guard; changed in feature 013 by FOR-MENTOR Item 24
+  Q4):** when a tool proceeds over its own refusal because it was told to (`--yes`), the event line itself
+  says what was overridden: `ecosystem`, `packages` (each `name`, the `version` named if any, `registry`,
+  `reason` — `absent`, `too-new` with its `released` date, `unreachable`, … — and `detail`) and `command`.
+  Set through `Context.event_override`. A line without it is valid, and every line written before it
+  still is.
 
 ## Never (rule 4)
 

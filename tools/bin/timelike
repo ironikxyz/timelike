@@ -164,7 +164,8 @@ def generate() -> tuple[list[str], dict[str, str]]:
     """The announcement's lines and the tools in it (name → summary)."""
     rev = revision()
     paths = tool_paths()
-    summaries = {name: " ".join(manifest_of(name, path)["summary"].split()) for name, path in paths.items()}
+    manifests = {name: manifest_of(name, path) for name, path in paths.items()}
+    summaries = {name: " ".join(m["summary"].split()) for name, m in manifests.items()}
     has = summaries.__contains__
     lines = [
         f"{MARKER}{rev}; generated from the tools' manifests; do not edit -->",
@@ -197,6 +198,29 @@ def generate() -> tuple[list[str], dict[str, str]]:
             "- `type -a rm git` shows these guards; `command rm` skips them. They guard this shell, not"
             " the scripts it starts: those are covered by the snapshot a shell's start takes (at most every"
             " 5 min)."
+        )
+    if has("package-guard"):
+        # 013 slice 1 (FOR-MENTOR Item 24): what reaches the guard, how to see it, what it does not reach,
+        # and that a refused fresh release is pinned rather than overridden (the ruling's one line)
+        age = (manifests["package-guard"].get("min_age_days") or {}).get("value")
+        days = f"{age:g} days" if isinstance(age, int | float) else "the minimum age"
+        lines.append(
+            "- `pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` installs are checked first (`package-guard`): a"
+            f" package not in its registry, or released under {days} ago, is refused with exit 4."
+        )
+        lines.append(
+            "- A refusal names the release to pin (`pkg==VERSION`, `pkg@VERSION`): pin it rather than"
+            " override. `type -a pip` shows the check first."
+        )
+        lines.append(
+            "- Not checked: `python -m pip`, a venv's own `pip`, and `/usr/local/bin/pip` or any installer"
+            " called by its full path."
+        )
+        # lane 013s1-b: the shims exist whether or not their installer does, so a lookup alone proves nothing
+        lines.append(
+            "- These six names always resolve: `command -v pnpm` succeeding does not mean pnpm is installed."
+            " `type -a pnpm` lists a real one after the check; an absent one exits 127 and says how to"
+            " install it."
         )
     if has("timelike"):
         lines.append(

@@ -1,0 +1,89 @@
+#!/bin/sh
+# shellcheck shell=sh
+# /opt/timelike/shims/{pip,pip3,uv,npm,npx,pnpm} are links to this file (feature 013 slice 1; FOR-MENTOR
+# Item 24, Q1 (b')). The shims directory is first on PATH, so the bare installers reach the package guard
+# from every shell, script, Makefile and subprocess that looks them up on PATH.
+#
+# What it does, in order:
+#   1. finds the real command: the first NAME on PATH that is not this file (and not in its directory), so
+#      it never calls itself (P002). None: bash's command-not-found handler answers, as without the shim.
+#   2. anything that cannot be an install is exec'd at once: no fork, no Python (Item 24 condition 1).
+#   3. anything that may be one asks `package-guard --gate -- NAME ARG...` (stdin closed: the guard never
+#      takes the installer's input). Exit 0: the guard's own output is dropped and the real command is
+#      exec'd, so what the caller sees, and the exit, are the installer's own (condition 2). Otherwise the
+#      guard's output is printed (the exit-4 envelope, whose confirm is `package-guard --yes -- NAME ARG...`)
+#      and its exit is this one's: the installer never starts.
+#
+# POSIX sh (dash), not bash, on purpose: a bash script reads BASH_ENV, whose secret strip would change the
+# real installer's environment, and a shell start that reads nothing is the cheaper one. Builtins only
+# before the exec: parameter expansion, case, test, printf.
+#
+# Not reached (named in the announcement and in package-guard --agent-info): `python -m pip`, an activated
+# venv's own pip/uv/npm (its bin is ahead of this directory), and any installer called by its full path,
+# such as /usr/local/bin/pip. Slice 2's checking proxy closes them.
+
+name=${0##*/}
+self=$0
+here=${0%/*}
+[ "$here" != "$0" ] || here=.
+
+real=
+rest=${PATH-}:
+while [ -n "$rest" ]; do
+  d=${rest%%:*}
+  rest=${rest#*:}
+  [ -n "$d" ] || d=.
+  [ "$d" -ef "$here" ] && continue
+  c=$d/$name
+  if [ -f "$c" ] && [ -x "$c" ] && ! [ "$c" -ef "$self" ]; then
+    real=$c
+    break
+  fi
+done
+
+if [ -z "$real" ]; then
+  # As if the shim were not there: bash's handler (007) prints its line and what to install, exit 127.
+  # shellcheck disable=SC2016 # expanded by that bash
+  exec /bin/bash -c 'if declare -F command_not_found_handle >/dev/null; then command_not_found_handle "$@"
+else printf "%s: command not found\n" "$1" >&2; exit 127; fi' "$self" "$name" "$@"
+fi
+
+gate=no
+case $name in
+  npx)
+    # any word that is not an option names a package or a command npx may fetch
+    for a do
+      case $a in -*) ;; *) gate=yes; break ;; esac
+    done
+    ;;
+  *)
+    for a do
+      case $name:$a in
+        pip:install | pip3:install) gate=yes ;;
+        uv:install | uv:sync | uv:add | uv:tool | uv:--with | uv:--with=* | uv:--with-editable | \
+          uv:--with-editable=* | uv:--with-requirements | uv:--with-requirements=*) gate=yes ;;
+        npm:install | npm:i | npm:in | npm:ins | npm:inst | npm:insta | npm:instal | npm:isnt | npm:isnta | \
+          npm:isntal | npm:isntall | npm:add | npm:install-test | npm:it | npm:ci | npm:clean-install | npm:ic | \
+          npm:install-clean | npm:isntall-clean | npm:install-ci-test | npm:cit | npm:clean-install-test | \
+          npm:sit | npm:exec | npm:x | npm:init | npm:create | npm:innit) gate=yes ;;
+        pnpm:add | pnpm:install | pnpm:i | pnpm:dlx | pnpm:create | pnpm:init | pnpm:innit) gate=yes ;;
+      esac
+      [ "$gate" = no ] || break
+    done
+    ;;
+esac
+
+if [ "$gate" = yes ]; then
+  guard=$here/../bin/package-guard
+  if [ -t 1 ]; then fmt=--text; else fmt=--json; fi
+  out=$("$guard" --gate "$fmt" -- "$name" "$@" </dev/null)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    [ -z "$out" ] || printf '%s\n' "$out"
+    if [ "$rc" -ge 126 ] && ! [ -x "$guard" ]; then
+      printf '%s: the package guard is missing (%s); nothing was run\n' "$name" "$guard" >&2
+    fi
+    exit "$rc"
+  fi
+fi
+exec "$real" "$@"
