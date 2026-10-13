@@ -78,10 +78,11 @@ _SECTIONS: tuple[tuple[str, tuple[Verdict, ...]], ...] = (
 )
 _GAP = 3  # spaces between table columns
 # Row label -> Totals field ("wall_clock" is rendered from wall_clock_ms, in seconds).
+# In the verdict's order (revision 8): turns, hangs, then failed commands; then what never decides.
 _METRICS = (
     ("turns", "turns"),
-    ("failed commands (hung included)", "nonzero_exits"),
     ("hangs", "hangs"),
+    ("failed commands (hung included)", "nonzero_exits"),
     ("tool calls", "tool_calls"),
     ("wall-clock", "wall_clock"),
 )
@@ -109,14 +110,17 @@ def _sign(a: int, b: int) -> int:
 
 
 def verdict(vanilla: Trace | None, timelike: Trace | None) -> Verdict:
-    """From timelike's side: ending rank, then fewer turns, then fewer failures. Wall-clock never decides."""
+    """From timelike's side, revision 8's order: ending rank, then fewer turns, then fewer hangs, then fewer
+    failed commands. Each call counts once per figure: a hung call is one hang and one failed command (it
+    is a non-zero exit), never two failures. Wall-clock and tool calls never decide."""
     if vanilla is None or timelike is None:
         return "incomplete"
     v, t = vanilla.totals, timelike.totals
     for decided in (
         _sign(_ENDING_RANK[vanilla.ending.kind], _ENDING_RANK[timelike.ending.kind]),
         _sign(v.turns, t.turns),
-        _sign(v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs),
+        _sign(v.hangs, t.hangs),
+        _sign(v.nonzero_exits, t.nonzero_exits),
     ):
         if decided:
             return "wins" if decided > 0 else "loses"
@@ -224,15 +228,21 @@ def _verdict_line(vanilla: Trace | None, timelike: Trace | None) -> str:
             f"Verdict: {who[decided]} — both {_outcome(vanilla)}; timelike took "
             f"{_plural(t.turns, 'turn')} to vanilla's {v.turns}."
         )
-    vf, tf = v.nonzero_exits + v.hangs, t.nonzero_exits + t.hangs
-    if vf != tf:
+    # Only counts that are rows of the table are quoted (revision 8): "hangs", "failed commands".
+    if v.hangs != t.hangs:
         return (
             f"Verdict: {who[decided]} — both {_outcome(vanilla)} in {_plural(t.turns, 'turn')}; timelike "
-            f"had {tf} failed or hung commands to vanilla's {vf}."
+            f"had {_plural(t.hangs, 'hang')} to vanilla's {v.hangs}."
+        )
+    if v.nonzero_exits != t.nonzero_exits:
+        return (
+            f"Verdict: {who[decided]} — both {_outcome(vanilla)} in {_plural(t.turns, 'turn')} with "
+            f"{_plural(t.hangs, 'hang')}; timelike had {_plural(t.nonzero_exits, 'failed command')} to "
+            f"vanilla's {v.nonzero_exits}."
         )
     return (
         f"Verdict: Tie — both {_outcome(vanilla)}, in {_plural(t.turns, 'turn')}, "
-        f"with {_plural(t.nonzero_exits, 'failed command')} and {_plural(t.hangs, 'hang')}."
+        f"with {_plural(t.hangs, 'hang')} and {_plural(t.nonzero_exits, 'failed command')}."
     )
 
 

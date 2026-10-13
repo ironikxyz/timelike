@@ -305,8 +305,8 @@ def test_metric_table_is_aligned() -> None:
         "metric                            vanilla     timelike",
         "ending                            completed   failed",
         "turns                             3           1",
-        "failed commands (hung included)   1           0",
         "hangs                             0           0",
+        "failed commands (hung included)   1           0",
         "tool calls                        3           1",
         "wall-clock                        1.9 s       0.4 s",
     ]
@@ -484,11 +484,84 @@ def test_verdict_words_for_turns_failures_and_tie() -> None:
         "Timelike loses",
     )
     assert by_fail[1] == (
-        "Verdict: Timelike loses — both completed in 2 turns; "
-        "timelike had 1 failed or hung commands to vanilla's 0."
+        "Verdict: Timelike loses — both completed in 2 turns with 0 hangs; "
+        "timelike had 1 failed command to vanilla's 0."
+    )
+    by_hang = explained(
+        [run("h", "vanilla", exits=(124, 0), hung=(0,), turns=(1, 2)), run("h", "timelike", exits=(1, 0))],
+        r.TaskText("g"),
+        "Timelike wins",
+    )
+    assert by_hang[1] == (
+        "Verdict: Timelike wins — both completed in 2 turns; timelike had 0 hangs to vanilla's 1."
     )
     tie = explained([run("h", "vanilla"), run("h", "timelike")], r.TaskText("g"), "Ties")
-    assert tie[1] == "Verdict: Tie — both completed, in 1 turn, with 0 failed commands and 0 hangs."
+    assert tie[1] == "Verdict: Tie — both completed, in 1 turn, with 0 hangs and 0 failed commands."
+
+
+# --- revision 8: rows that differ in exactly one column at a time ---------------------------------
+
+
+def _same_turns(exits: tuple[int, ...], hung: tuple[int, ...] = ()) -> dict[str, Any]:
+    return {"exits": exits, "hung": hung, "turns": tuple(1 for _ in exits)}
+
+
+@pytest.mark.parametrize(
+    ("column", "worse", "better"),
+    [
+        ("ending", {"kind": "failed", "reason": "check failed: x"}, {}),
+        ("turns", {"exits": (0, 0)}, {"exits": (0,)}),
+        ("hangs", _same_turns((124,), (0,)), _same_turns((1,))),
+        ("failed commands", _same_turns((1, 1)), _same_turns((1, 0))),
+    ],
+)
+def test_rows_differing_in_one_column_are_decided_by_that_column(
+    column: str, worse: dict[str, Any], better: dict[str, Any]
+) -> None:
+    bad, good = run("x", "vanilla", **worse), run("x", "timelike", **better)
+    # Every other column is equal: the one named is the only difference the verdict can see.
+    others = {"turns", "hangs", "nonzero_exits"} - {
+        {"turns": "turns", "hangs": "hangs", "failed commands": "nonzero_exits"}.get(column, "")
+    }
+    if column == "hangs":
+        others.discard("nonzero_exits")  # a hung call is also a failed command, so both rows hold one each
+    for name in others:
+        assert getattr(bad.totals, name) == getattr(good.totals, name), name
+    assert r.verdict(bad, good) == "wins", column
+    assert r.verdict(good, bad) == "loses", column
+
+
+def test_hangs_are_compared_before_failed_commands_and_counted_once() -> None:
+    """The summed tiebreak (slice 0's) and revision 8's order disagree on this pair.
+
+    Vanilla: one hung call, nothing else failed (1 hang, 1 failed command; the sum was 2).
+    Timelike: no hang, three failed commands (the sum was 3). Slice 0 said timelike loses; revision 8
+    compares hangs first, so timelike wins.
+    """
+    vanilla = run("x", "vanilla", **_same_turns((124, 0, 0), (0,)))
+    timelike = run("x", "timelike", **_same_turns((1, 1, 1)))
+    assert (vanilla.totals.hangs, vanilla.totals.nonzero_exits) == (1, 1)
+    assert (timelike.totals.hangs, timelike.totals.nonzero_exits) == (0, 3)
+    assert r.verdict(vanilla, timelike) == "wins"
+
+
+def test_the_verdict_sentence_quotes_only_counts_in_the_table() -> None:
+    import re
+
+    traces = [
+        run("h", "vanilla", **_same_turns((124, 1), (0,))),
+        run("h", "timelike", **_same_turns((1, 1, 1))),
+    ]
+    block = explained(traces, r.TaskText("g"), "Timelike wins")
+    table = {row.split("   ")[0].strip(): row for row in block[2:8]}
+    failed = "failed commands (hung included)"
+    assert list(table) == ["metric", "ending", "turns", "hangs", failed, "tool calls"]
+    sentence = block[1]
+    assert "failed or hung" not in sentence
+    quoted = [int(n) for n in re.findall(r"\b(\d+) (?:hangs?|failed commands?|turns?)\b", sentence)]
+    quoted += [int(n) for n in re.findall(r"vanilla's (\d+)", sentence)]
+    cells = {int(c) for row in table.values() for c in row.split() if c.isdigit()}
+    assert quoted and set(quoted) <= cells
 
 
 def test_an_arm_with_no_calls_says_so() -> None:

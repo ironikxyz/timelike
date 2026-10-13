@@ -141,6 +141,7 @@ ASSUMED: with no traces, line 1 is "NO TRACES — nothing was measured"; neither
 ASSUMED: one fake-agent trace anywhere makes line 1 the fake-agent line (FR-9 "any fake-agent run") — (confidence: high)
 ASSUMED: nonzero_exits + hangs as the failure tiebreak counts a hung call twice (it is also non-zero), as data-model reads literally — (confidence: medium)
   ↳ *Superseded by discovery revision 8 (ruling (b), `bridge/feedback/02-20260930-060406-hang-counted-twice.md`): hangs are compared on their own after turns and before failed commands, each call counted once. Code change carried to 02 s1; slice 0's `report.py:119`, `:227` and `data-model.md` step 3 are unchanged. Annotated 2026-10-08 by modify Cycle 2 (T029); the line above is kept as written.*
+  ↳ *Done in 02 slice 1 (Cycle 4, T034, 2026-10-13): `report.verdict` compares ending, turns, hangs, failed commands; the sentence quotes only table counts; `data-model.md` step 3 corrected at plan. Both lines above are kept as written.*
 FLAGGED: catalog.NOT_BENCHABLE said "token-shaped", which put "token" before the appendix against FR-9; the delegate reported it rather than rewriting text in render; the coordinator changed it to "key-shaped" (FR-12's term) in catalog.py — (confidence: high)
 FLAGGED: the appendix lists one line per trace, not the contract sample's single collapsed line — chose per-trace so a mixed live/fake set can't hide a recorded count (confidence: medium)
 FLAGGED: pair() raises on two traces for one task and environment, rather than letting file order decide a verdict; slice 2's repetitions will change this — (confidence: medium)
@@ -374,3 +375,16 @@ FLAGGED: the Automated criteria cite lane 007s1-c at 3eba335, not re-run — cho
 ASSUMED: D2's mode stays "observed by the operator", as Cycle 2 recorded and the send says — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no .specswarm/metrics.json entry (outside the feature directory, as in Cycle 2); no host or Docker lane
 SCOPE: in (1 changed files)
+
+---
+
+## Cycle 4 — 02 slice 1 (send `bridge/sends/02-rev8-20261013-064725.md`), attended, specswarm 4.0.1-botbaubble.2.44.0
+
+### T034: revision 8's verdict order in report.py (SC-6)
+**Started:** 2026-10-13T07:18:36Z | **Completed:** 2026-10-13T07:20:44Z
+
+INHERITED: (none — first task of the cycle; the order is the spec's FR-48 and data-model step 3 as corrected at plan) — (confidence: high)
+FLAGGED: the order goes into slice 0's renderer now, in its own commit, before T046 rewrites the renderer for schema 2 — chose a separate revision-8 commit over folding it into the rewrite, so the carried fix is reviewable on its own (confidence: high)
+ASSUMED: "failed commands" in the sentence and the table means non-zero exits, a hung call included (the table's label says so), so a hung call is one hang and one failed command, never two of either — (confidence: high)
+ABSENT: the arms, harness sections and `stopped` rows (T046); the contract's slice-0 sample table keeps the old row order, under its slice-0 heading, and the slice-1 section shows the new one
+Verification: tests/unit/test_bench_report.py 52 passed (rows differing in one column at a time, the pair on which the summed tiebreak and the new order disagree, the sentence quoting only table counts); ruff clean
