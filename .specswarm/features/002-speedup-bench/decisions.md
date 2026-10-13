@@ -388,3 +388,14 @@ FLAGGED: the order goes into slice 0's renderer now, in its own commit, before T
 ASSUMED: "failed commands" in the sentence and the table means non-zero exits, a hung call included (the table's label says so), so a hung call is one hang and one failed command, never two of either — (confidence: high)
 ABSENT: the arms, harness sections and `stopped` rows (T046); the contract's slice-0 sample table keeps the old row order, under its slice-0 heading, and the slice-1 section shows the new one
 Verification: tests/unit/test_bench_report.py 52 passed (rows differing in one column at a time, the pair on which the summed tiebreak and the new order disagree, the sentence quoting only table counts); ruff clean
+SCOPE: in (2 changed files)
+
+### T035: benchlib/categories.py — one category per failed call (SC-7, FR-40)
+**Started:** 2026-10-13T07:20:44Z | **Completed:** 2026-10-13T07:22:21Z
+
+INHERITED: research RB16's texts and order; the trace's exit code, hang flag and output head as the inputs — from plan (confidence: high)
+FLAGGED: Adele's denial is matched by agentio's grant-envelope verdict ("nothing performed; the operator extends it"), not a word from adele's own file — chose the text the agent actually sees (the envelope agentio prints for every grant refusal) over adele's malformed-reply message, which only appears when her answer is broken (confidence: medium: this envelope is shared with any future grant-checked tool, which would also be read as network denial)
+ASSUMED: exit 124 is a timeout even when it ran quickly — GNU timeout and 003's run both use 124 for their own limit, and a command exiting 124 by itself is rare — (confidence: medium)
+ASSUMED: a 137 without OOM evidence is "other", not "timeout": the bench's hang flag already covers its own kill, so a bare 137 is someone else's kill -9 — (confidence: high)
+ABSENT: no live-harness wording for a harness's own call timeout yet (OpenCode, Codex): added when T041's recordings show it, so the pattern is the harness's real text, not a guess
+Verification: tests/unit/test_bench_categories.py 21 passed — command not found, module not found (python3, node), timeout (GNU timeout), refused and DNS failure (bash /dev/tcp, git on .invalid), a kill -9, an ls error, all produced on this host; 003's, 007's, 013's and agentio's texts read from their files; ruff clean
