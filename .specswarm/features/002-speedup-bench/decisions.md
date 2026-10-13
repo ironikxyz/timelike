@@ -444,7 +444,7 @@ ASSUMED: the runner's fake path writes arm "not-told" for the timelike environme
 DEFERRED: the e2e validator's file naming (<task>--<harness>--<arm>.json) and its three-arm count — moved with the runner's naming in T044, so the validator never expects files the runner does not yet write
 ABSENT: the report does not yet show categories, arms or spend (T046); the runner's live path is T044
 Verification: tests/unit -k bench 550 passed (trace 135: every schema-2 rule one violation at a time, spend recorded or absent, the gate on write; the validator's new mutations: schema 1, arm vs environment, a category on a success, a stopped ending without a cause); ruff clean; mypy --strict clean (35 files)
-SCOPE: in (7 changed files)
+SCOPE: in (6 changed files)
 
 ### T039: benchlib/standin.py — the model stand-in (FR-47); fakeagent.happy_path; categories.PROBES
 **Started:** 2026-10-13T07:33:06Z | **Completed:** 2026-10-13T07:35:26Z
@@ -456,3 +456,16 @@ ASSUMED: every answer reports usage.cost, as OpenRouter's always does (its usage
 ABSENT: no Anthropic messages route: no harness the bench runs speaks it (Claude Code is excluded, FR-21)
 ABSENT: the probe commands (categories.PROBES) are data here; they run in T045's `categories --probe` and in e2e
 Verification: tests/unit/test_bench_standin.py 8 passed (each protocol, streamed and not, over real HTTP on loopback; faults; the happy path of every catalog task); fakeagent and categories units still pass (59 with the stand-in's); ruff clean; mypy --strict clean (36 files)
+SCOPE: out — bench/benchlib/fakeagent.py (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T040: benchlib/relay.py — forwarding, streaming, accounting, caps (FR-25, FR-26, FR-33, FR-36)
+**Started:** 2026-10-13T07:35:26Z | **Completed:** 2026-10-13T07:37:47Z
+
+INHERITED: the stand-in (T039) as the upstream in every unit; OpenRouter's usage shape (always present, cost in it) from research RB15 — (confidence: high)
+FLAGGED: Authorization is forwarded unchanged and never recorded (the send's route); the alternative, the relay adding it, is FOR-MENTOR Item 25 and not built — (confidence: high)
+FLAGGED: a cap answers 400 and keeps answering 400 for the rest of the run without reaching upstream — chose a hard stop over relying on how each harness reacts to the 400, which is not yet verified against the real binaries (recorded as T041's check) (confidence: medium)
+ASSUMED: a cost that is missing, negative or not a number is named as unknown (cost_unknown) and never counted as 0 or estimated — (confidence: high)
+ASSUMED: one run at a time per relay (runs are sequential, FR-1's order); accounting for a request still in flight when a run ends stays with that run's object — (confidence: high)
+ABSENT: the generation-stats lookup is a function (generation_cost) the driver calls after a run; its live behaviour is not testable without a key (not_verified)
+ABSENT: no TLS between harness and relay: the internal network has no other member (FR-25)
+Verification: tests/unit/test_bench_relay.py 15 passed (stream and plain, chat and Responses; turns only for requests offering tools; the turn cap and the spend cap across runs; 429/500/401 passed through and counted; an unreachable upstream as 502 'unreachable'; a missing cost named; the key's header reaches upstream and appears in no accounting); ruff clean; mypy --strict clean (37 files)
