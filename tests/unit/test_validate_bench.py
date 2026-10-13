@@ -34,12 +34,33 @@ vb = _load()
 
 def good_trace(env: str) -> trace.Trace:
     ident = trace.Identity(
-        SHA, env, "sha256:" + "1" * 64, SHA, "debian:trixie-slim@sha256:" + "2" * 64, "timelike-fake-agent",
-        "1", "none (deterministic fake agent)", "bash -c", TASK, 1, 30, 300, "make bench",
-    )  # fmt: skip
-    call = trace.ToolCall(1, 1, "git log", 0, 10, False, 5, 0, 5, False, "")
+        bench_revision=SHA,
+        environment=env,
+        arm="vanilla" if env == "vanilla" else "not-told",
+        image_id="sha256:" + "1" * 64,
+        image_revision=SHA,
+        base_digest="debian:trixie-slim@sha256:" + "2" * 64,
+        harness_name="timelike-fake-agent",
+        harness_version="1",
+        harness_reported_version="1",
+        model_id="none (deterministic fake agent)",
+        models_answered=(),
+        invocation="bash -c",
+        output_streams="separate",
+        placement="",
+        task_id=TASK,
+        task_version=1,
+        call_limit_s=30,
+        run_limit_s=300,
+        turn_cap=0,
+        timelike_tools=(),
+        reproduce="make bench",
+    )
+    call = trace.ToolCall(1, 1, "git log", 0, 10, False, 5, 0, 5, False, "", "")
     ending = trace.Ending("completed", "check passed")
-    return trace.Trace(ident, (call,), trace.derive_totals([call], 10), ending, runner.NO_TOKENS)
+    return trace.Trace(
+        ident, (call,), trace.derive_totals([call], 10), ending, runner.NO_TOKENS, trace.NO_SPEND
+    )
 
 
 @pytest.fixture
@@ -76,7 +97,10 @@ def test_accepts_what_benchlib_writes(out: Path) -> None:
         (lambda d: d["totals"].pop("wall_clock_ms"), "wall_clock_ms missing"),
         (lambda d: d.update(ending={"kind": "done", "reason": "x"}), "not a known kind"),
         (lambda d: d.update(tokens={"recorded": False, "reason": "r", "input": 0}), "counts present"),
-        (lambda d: d.update(schema_version=2), "schema_version"),
+        (lambda d: d.update(schema_version=1), "schema_version"),
+        (lambda d: d["identity"].update(arm="told"), "does not match environment"),
+        (lambda d: d["calls"][0].update(category="other"), "has category 'other' (failed: False)"),
+        (lambda d: d.update(ending={"kind": "stopped", "reason": "429", "cause": ""}), "a cause exactly"),
         (lambda d: d.update(calls={}), "calls is not a list"),
     ],
 )

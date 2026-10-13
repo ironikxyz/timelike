@@ -431,3 +431,16 @@ FLAGGED: the estimate uses the base price, not the cheaper listed UTC hours — 
 ASSUMED: a dated id ends in 4 or 8 digits after its last '-'; OpenRouter's own ids use both (`-0813`, the canonical `-20260813`) — (confidence: medium)
 ABSENT: no live price lookup — the plan needs neither the network nor a key (--dry-run), so the price comes from pins.env
 Verification: tests/unit/test_bench_plan.py 11 passed; ruff clean; mypy --strict clean (35 files)
+SCOPE: in (2 changed files)
+
+### T038: trace schema 2 (contracts/trace-schema.md) and the validators
+**Started:** 2026-10-13T07:25:18Z | **Completed:** 2026-10-13T07:33:06Z
+
+INHERITED: categories (T035) and the gate (T037) are used by the trace module itself: category values are checked against categories.CATEGORIES, and write_trace writes through a Gate — (confidence: high)
+FLAGGED: schema 1 is refused, not read — chose a refusal naming the revision that re-reports it over a v1 reader, because a v1 trace has no arm and no categories and a report that guessed them would present a guess as measured (confidence: medium: an operator with an old bench/out run must check out slice 0 to re-report it)
+FLAGGED: field kinds are explicit tables per object, replacing slice 0's derivation from dataclass annotations — that derivation knew str/int/bool only, and lists, a float and an int map would each have needed a special case in it (confidence: high)
+ASSUMED: models_answered may be empty (a run that ended before any answer, and every fake run) while every other identity string stays non-empty — (confidence: high)
+ASSUMED: the runner's fake path writes arm "not-told" for the timelike environment until T044 adds the told arm; nothing has been placed for it, so "not told" is the truth of those runs — (confidence: high)
+DEFERRED: the e2e validator's file naming (<task>--<harness>--<arm>.json) and its three-arm count — moved with the runner's naming in T044, so the validator never expects files the runner does not yet write
+ABSENT: the report does not yet show categories, arms or spend (T046); the runner's live path is T044
+Verification: tests/unit -k bench 550 passed (trace 135: every schema-2 rule one violation at a time, spend recorded or absent, the gate on write; the validator's new mutations: schema 1, arm vs environment, a category on a success, a stopped ending without a cause); ruff clean; mypy --strict clean (35 files)

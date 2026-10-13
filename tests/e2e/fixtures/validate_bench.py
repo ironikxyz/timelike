@@ -22,11 +22,11 @@ from pathlib import Path
 from typing import Any
 
 IDENTITY_KEYS = (
-    "bench_revision", "environment", "image_id", "image_revision", "base_digest", "harness_name",
-    "harness_version", "model_id", "invocation", "task_id", "task_version", "call_limit_s", "run_limit_s",
-    "reproduce",
+    "bench_revision", "environment", "arm", "image_id", "image_revision", "base_digest", "harness_name",
+    "harness_version", "harness_reported_version", "model_id", "invocation", "output_streams", "task_id",
+    "task_version", "call_limit_s", "run_limit_s", "reproduce",
 )  # fmt: skip
-ENDINGS = {"completed", "escalated", "failed", "hung"}
+ENDINGS = {"completed", "escalated", "failed", "hung", "stopped"}  # schema 2 adds stopped, with a cause
 # The operator's text, verbatim (send …-080659). Compared whole: a reworded first line is a failure.
 FAKE_FIRST = (
     "FAKE-AGENT BENCH PIPELINE DEMO RUN -- This is not a test of timelike, rather a test of the bench test "
@@ -56,8 +56,8 @@ def check_trace(doc: Any, sha: str, task: str, env: str) -> list[str]:
     if not isinstance(doc, dict):
         return [f"{where}: not a JSON object"]
     out: list[str] = []
-    if doc.get("schema_version") != 1:
-        out.append(f"{where}: schema_version is {doc.get('schema_version')!r}, not 1")
+    if doc.get("schema_version") != 2:
+        out.append(f"{where}: schema_version is {doc.get('schema_version')!r}, not 2")
     ident = doc.get("identity") or {}
     for key in IDENTITY_KEYS:
         value = ident.get(key)
@@ -69,6 +69,10 @@ def check_trace(doc: Any, sha: str, task: str, env: str) -> list[str]:
         )
     if (ident.get("task_id"), ident.get("environment")) != (task, env):
         out.append(f"{where}: identity names {ident.get('task_id')}/{ident.get('environment')}")
+    if (ident.get("arm") == "vanilla") != (ident.get("environment") == "vanilla"):
+        out.append(
+            f"{where}: arm {ident.get('arm')!r} does not match environment {ident.get('environment')!r}"
+        )
     if "@sha256:" not in str(ident.get("base_digest", "")):
         out.append(f"{where}: base_digest has no @sha256:")
     calls = doc.get("calls")
@@ -81,6 +85,10 @@ def check_trace(doc: Any, sha: str, task: str, env: str) -> list[str]:
         "hangs": sum(1 for c in calls if c.get("hung") is True),
         "turns": max((c.get("turn", 0) for c in calls), default=0),
     }
+    for c in calls:
+        failed = c.get("exit_code") != 0 or c.get("hung") is True
+        if failed != bool(c.get("category")):
+            out.append(f"{where}: call {c.get('seq')} has category {c.get('category')!r} (failed: {failed})")
     for key, value in recount.items():
         if totals.get(key) != value:
             out.append(f"{where}: totals.{key} is {totals.get(key)!r}, recounted {value}")
@@ -89,6 +97,8 @@ def check_trace(doc: Any, sha: str, task: str, env: str) -> list[str]:
     ending = doc.get("ending") or {}
     if ending.get("kind") not in ENDINGS or not str(ending.get("reason", "")).strip():
         out.append(f"{where}: ending {ending!r} is not a known kind with a reason")
+    if (ending.get("kind") == "stopped") != bool(ending.get("cause")):
+        out.append(f"{where}: ending {ending!r}: a cause exactly when stopped")
     tokens = doc.get("tokens") or {}
     if tokens.get("recorded") is False and ({"input", "output"} & set(tokens)):
         out.append(f"{where}: tokens not recorded but counts present")

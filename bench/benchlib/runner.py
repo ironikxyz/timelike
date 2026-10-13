@@ -31,8 +31,9 @@ from typing import Protocol
 
 from benchlib import fakeagent as fa
 from benchlib.catalog import Task
+from benchlib.categories import categorize
 from benchlib.executor import CallResult, Executor
-from benchlib.trace import Ending, Identity, Tokens, ToolCall, Trace, derive_totals, write_trace
+from benchlib.trace import NO_SPEND, Ending, Identity, Tokens, ToolCall, Trace, derive_totals, write_trace
 
 HARNESS_PASS_BYTES = 30000  # per stream
 STDERR_HEAD_KEEP = 2048
@@ -85,6 +86,7 @@ def _passed(r: CallResult) -> int:
 
 def _call(seq: int, command: str, r: CallResult) -> ToolCall:
     passed = _passed(r)
+    output = (r.stdout_head + b"\n" + r.stderr_head).decode("utf-8", "replace")
     return ToolCall(
         seq=seq,
         turn=seq,  # the fake agent takes one tool call per turn (data-model)
@@ -97,6 +99,7 @@ def _call(seq: int, command: str, r: CallResult) -> ToolCall:
         passed_bytes=passed,
         harness_cut=passed < r.stdout_bytes + r.stderr_bytes,
         stderr_head=r.stderr_head[:STDERR_HEAD_KEEP].decode("utf-8", "replace"),
+        category=categorize(r.exit_code, r.hung, output),
     )
 
 
@@ -104,17 +107,24 @@ def identity_for(task: Task, env: Environment, ctx: RunContext) -> Identity:
     return Identity(
         bench_revision=ctx.bench_revision,
         environment=env.name,
+        arm="vanilla" if env.name == "vanilla" else "not-told",
         image_id=env.image_id,
         image_revision=env.image_revision,
         base_digest=ctx.base_digest,
         harness_name=fa.FAKE_AGENT_NAME,
         harness_version=fa.FAKE_AGENT_VERSION,
+        harness_reported_version=fa.FAKE_AGENT_VERSION,
         model_id=fa.MODEL_ID,
+        models_answered=(),
         invocation=INVOCATION,
+        output_streams="separate",
+        placement="",
         task_id=task.id,
         task_version=task.version,
         call_limit_s=ctx.limits.call_s,
         run_limit_s=ctx.limits.run_s,
+        turn_cap=0,
+        timelike_tools=(),
         reproduce=ctx.reproduce,
     )
 
@@ -184,6 +194,7 @@ def _trace(ident: Identity, calls: Sequence[ToolCall], ending: Ending, wall_ms: 
         totals=derive_totals(calls, wall_ms),
         ending=ending,
         tokens=NO_TOKENS,
+        spend=NO_SPEND,
     )
 
 

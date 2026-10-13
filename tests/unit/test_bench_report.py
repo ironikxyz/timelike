@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from benchlib import report as r
 from benchlib import trace as t
+from benchlib.categories import categorize
 
 SHA = "a" * 40
 FAKE = "timelike-fake-agent"
@@ -58,23 +59,31 @@ def run(
             passed_bytes=0,
             harness_cut=False,
             stderr_head="",
+            category=categorize(code, i in hung, ""),
         )
         for i, code in enumerate(exits)
     )
     fields: dict[str, Any] = {
         "bench_revision": SHA,
         "environment": environment,
+        "arm": "vanilla" if environment == "vanilla" else "not-told",
         "image_id": f"sha256:{environment[0] * 64}",
         "image_revision": SHA,
         "base_digest": "debian:trixie-slim@sha256:" + "c" * 64,
         "harness_name": FAKE,
         "harness_version": "1",
+        "harness_reported_version": "1",
         "model_id": "none (deterministic fake agent)",
+        "models_answered": (),
         "invocation": "bash -c",
+        "output_streams": "separate",
+        "placement": "",
         "task_id": task_id,
         "task_version": 1,
         "call_limit_s": 30,
         "run_limit_s": 300,
+        "turn_cap": 0,
+        "timelike_tools": (),
         "reproduce": f"make bench TASKS={task_id}",
     }
     fields.update(ident)
@@ -86,6 +95,7 @@ def run(
         totals=t.derive_totals(calls, wall_ms),
         ending=t.Ending(kind=kind, reason=reason),
         tokens=tokens or t.Tokens(recorded=False, reason="the fake agent uses no model"),
+        spend=t.NO_SPEND,
     )
     assert t.validate(trace) == []
     return trace
@@ -438,11 +448,16 @@ def test_each_call_is_told_with_its_exit_its_message_or_its_hang() -> None:
     vanilla = run("h", "vanilla", exits=(1, 124, 0, 2), hung=(1,))
     calls = list(vanilla.calls)
     calls[0] = t.ToolCall(
-        1, 1, "git commit -m m", 1, 5, False, 0, 30, 0, False, "\npre-commit: TODO found\nmore"
+        1, 1, "git commit -m m", 1, 5, False, 0, 30, 0, False, "\npre-commit: TODO found\nmore", "other"
     )
-    calls[3] = t.ToolCall(4, 4, "quiet", 2, 5, False, 0, 0, 0, False, "")
+    calls[3] = t.ToolCall(4, 4, "quiet", 2, 5, False, 0, 0, 0, False, "", "other")
     vanilla = t.Trace(
-        vanilla.identity, tuple(calls), t.derive_totals(calls, 1000), vanilla.ending, vanilla.tokens
+        vanilla.identity,
+        tuple(calls),
+        t.derive_totals(calls, 1000),
+        vanilla.ending,
+        vanilla.tokens,
+        vanilla.spend,
     )
     block = explained([vanilla, run("h", "timelike")], r.TaskText("g"), "Timelike wins")
     arm = block[block.index("What happened in vanilla:") :]
@@ -456,9 +471,11 @@ def test_each_call_is_told_with_its_exit_its_message_or_its_hang() -> None:
 
 
 def test_long_stderr_is_cut() -> None:
-    call = t.ToolCall(1, 1, "c", 1, 5, False, 0, 400, 0, False, "x" * 400)
+    call = t.ToolCall(1, 1, "c", 1, 5, False, 0, 400, 0, False, "x" * 400, "other")
     trace = run("h", "vanilla")
-    trace = t.Trace(trace.identity, (call,), t.derive_totals([call], 10), trace.ending, trace.tokens)
+    trace = t.Trace(
+        trace.identity, (call,), t.derive_totals([call], 10), trace.ending, trace.tokens, trace.spend
+    )
     block = explained([trace, run("h", "timelike", exits=(0, 0))], r.TaskText("g"), "Timelike loses")
     line = next(x for x in block if x.startswith("  1. `c`"))
     assert line.endswith("…") and len(line) < 200
