@@ -695,7 +695,10 @@ def host(arg):
 
 
 if image == pins["SYFT_IMAGE"]:
-    print(json.dumps({"source": {"metadata": {"imageID": (state / "saved").read_text()}}, "artifacts": []}))
+    saved = (state / "saved").read_text()
+    n = next(v.get("syft", 1) for v in images.values() if v["id"] == saved)
+    deb = {"id": "deb-1", "name": "base-files", "version": "13", "type": "deb", "locations": []}
+    print(json.dumps({"source": {"metadata": {"imageID": saved}}, "artifacts": [deb] * n}))
 elif image == pins["GRYPE_IMAGE"]:
     print(json.dumps({"matches": []}))
 elif image == pins["GITLEAKS_IMAGE"]:
@@ -742,7 +745,13 @@ def scan_tree(tmp_path: Path, images: list[str], stream: str) -> tuple[Path, dic
         "timelike-vanilla:local": {"id": "sha256:" + "0a" * 32, "python": False, "agent_python": True},
         "timelike-bench-driver:local": {"id": "sha256:" + "bd" * 32, "python": True, "agent_python": False},
         # 002 slice 1: FROM scratch, the two harness binaries only (no interpreter of either kind).
-        "timelike-bench-harness:local": {"id": "sha256:" + "be" * 32, "python": False, "agent_python": False},
+        # Syft catalogues nothing in it (lane 02s1-a); the scan adds both harnesses from their pins.
+        "timelike-bench-harness:local": {
+            "id": "sha256:" + "be" * 32,
+            "python": False,
+            "agent_python": False,
+            "syft": 0,
+        },
     }
     env = {
         "PATH": f"{bin_dir}:/usr/bin:/bin",
@@ -970,3 +979,93 @@ def test_scan_sh_maps_each_image_to_its_base_digest_in_one_place() -> None:
     go, debian = p["GO_IMAGE"].split("@")[1], p["DEBIAN_IMAGE"].split("@")[1]
     assert done.stdout.split() == [debian, go, debian]
     assert text.count("${GO_IMAGE##*@}") == 1 and text.count("${DEBIAN_IMAGE##*@}") == 1
+
+
+# --- lane 02s1-a, item 4: an SBOM of nothing fails, and the harness image's SBOM takes its pins ----------
+
+
+def test_an_sbom_with_no_packages_fails_naming_the_image(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = scan_out(tmp_path, sbom={"source": {"metadata": {"imageID": IMAGE_ID}}, "artifacts": []})
+    code, lines = run_report(out, capsys)
+    assert code == 1 and lines[0] == f"scan: {IMAGE} [supply-chain] — FAIL"
+    detail = step(out, "sbom")["detail"]
+    assert detail.startswith(f"the SBOM of {IMAGE} catalogues no packages") and "cannot fail" in detail
+
+
+def test_pinned_adds_each_package_once_with_its_purl_and_the_report_names_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = scan_out(tmp_path, sbom={"source": {"metadata": {"imageID": IMAGE_ID}}, "artifacts": []})
+    specs = [
+        "opencode-ai@1.19.0=/opt/bench-harness/opencode/bin/opencode",
+        "@openai/codex@0.162.1=/opt/x/codex",
+    ]
+    assert ev.pinned(out / "sbom.syft.json", specs) == 0
+    assert ev.pinned(out / "sbom.syft.json", specs) == 0  # again: already there, nothing added
+    assert capsys.readouterr().out.split() == ["2", "0"]
+    arts = json.loads((out / "sbom.syft.json").read_text())["artifacts"]
+    assert [(a["name"], a["version"], a["type"], a["purl"]) for a in arts] == [
+        ("opencode-ai", "1.19.0", "npm", "pkg:npm/opencode-ai@1.19.0"),
+        ("@openai/codex", "0.162.1", "npm", "pkg:npm/%40openai/codex@0.162.1"),
+    ]
+    assert arts[0]["locations"] == [{"path": "/opt/bench-harness/opencode/bin/opencode"}]
+    code, _ = run_report(out, capsys)
+    assert code == 0
+    assert step(out, "sbom")["detail"] == (
+        f"2 packages catalogued from {IMAGE_ID[:19]} "
+        "(2 from the pins: opencode-ai 1.19.0, @openai/codex 0.162.1)"
+    )
+
+
+@pytest.mark.parametrize(
+    "spec", ["opencode-ai@1.19=/x", "opencode-ai@1.19.0", "OpenCode@1.19.0=/x", "@1.0.0=/x"]
+)
+def test_pinned_refuses_a_package_it_cannot_read(tmp_path: Path, spec: str) -> None:
+    out = scan_out(tmp_path)
+    with pytest.raises(ValueError, match=r"is not NAME@X\.Y\.Z=/PATH"):
+        ev.pinned(out / "sbom.syft.json", [spec])
+
+
+def test_scan_sh_gives_the_harness_image_its_pins_and_fails_another_image_whose_sbom_is_empty(
+    tmp_path: Path,
+) -> None:
+    root, env = scan_tree(tmp_path, [IMAGE, ADELE, "timelike-vanilla:local", HARNESS_IMAGE], gv_stream())
+    images = json.loads(env["FAKE_IMAGES"])
+    images["timelike-vanilla:local"]["syft"] = 0  # as if Syft had seen nothing in it
+    env["FAKE_IMAGES"] = json.dumps(images)
+    done = run_scan(root, env)
+    assert done.returncode == 1
+    verdicts = [line for line in done.stdout.splitlines() if "[supply-chain]" in line]
+    assert verdicts == [
+        f"scan: {IMAGE} [supply-chain] — PASS",
+        f"scan: {ADELE} [supply-chain] — PASS",
+        "scan: timelike-vanilla:local [supply-chain] — FAIL",
+        "scan: timelike-bench-driver:local [supply-chain] — not present (build it with make bench-images); "
+        "not scanned",
+        f"scan: {HARNESS_IMAGE} [supply-chain] — PASS",
+    ]
+    top, p = root / "scan" / "out", pins()
+    vanilla = step(top / "timelike-vanilla", "sbom")
+    assert (
+        vanilla["status"] == "FAIL"
+        and "the SBOM of timelike-vanilla:local catalogues no packages" in vanilla["detail"]
+    )
+    harness = top / "timelike-bench-harness"
+    row = (harness / "steps.tsv").read_text().splitlines()[0]
+    assert (
+        row == f"sbom\tran\tsyft {p['SYFT_IMAGE'].split('@')[0]}; "
+        "2 packages added from pins.env, which Syft cannot see"
+    )
+    arts = json.loads((harness / "sbom.syft.json").read_text())["artifacts"]
+    assert [a["purl"] for a in arts] == [
+        f"pkg:npm/opencode-ai@{p['OPENCODE_VERSION']}",
+        f"pkg:npm/%40openai/codex@{p['CODEX_VERSION']}",
+    ]
+    runs = [json.loads(r) for r in (tmp_path / "state" / "runs.jsonl").read_text().splitlines()]
+    (pin_run,) = [r for r in runs if "pinned" in r["args"]]
+    assert pin_run["image"] == IMAGE and pin_run["opts"]["--network"] == ["none"]
+    # Grype reads the SBOM after the pins went in: its run comes later than the pinned one.
+    grype_runs = [i for i, r in enumerate(runs) if r["image"] == p["GRYPE_IMAGE"]]
+    assert runs.index(pin_run) < grype_runs[-1]
