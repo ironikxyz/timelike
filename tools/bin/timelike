@@ -216,6 +216,12 @@ def generate() -> tuple[list[str], dict[str, str]]:
             "- Not checked: `python -m pip`, a venv's own `pip`, and `/usr/local/bin/pip` or any installer"
             " called by its full path."
         )
+        # lane 013s1-b: the shims exist whether or not their installer does, so a lookup alone proves nothing
+        lines.append(
+            "- These six names always resolve: `command -v pnpm` succeeding does not mean pnpm is installed."
+            " `type -a pnpm` lists a real one after the check; an absent one exits 127 and says how to"
+            " install it."
+        )
     if has("timelike"):
         lines.append(
             "- `timelike tools`: every tool, standard ones too, with the safer command to use instead."

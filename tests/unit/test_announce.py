@@ -313,6 +313,8 @@ def test_announce_names_what_reaches_the_package_guard_only_when_installed(rig: 
     assert "released under 2 days ago, is refused with exit 4" in text
     assert "pin it rather than override" in text and "`type -a pip` shows the check first" in text
     assert "Not checked: `python -m pip`, a venv's own `pip`, and `/usr/local/bin/pip`" in text
+    # lane 013s1-b: a shim resolves when its installer is absent, and the agent is told so
+    assert "`command -v pnpm` succeeding does not mean pnpm is installed" in text
     assert "…[cut" not in text
 
 

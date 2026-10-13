@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -21,11 +20,12 @@ from typing import Any
 
 import pytest
 from conftest import REPO, TOOLS_DIR, base_env
+from realcmd import real_which
 from schema import errors, load
 from standin import CATALOG, Standin
 
 SESSION = "pg"
-pytestmark = pytest.mark.skipif(shutil.which("pip") is None, reason="the host has no pip")
+pytestmark = pytest.mark.skipif(real_which("pip") is None, reason="no real pip")
 
 
 def install(dest: Path, names: tuple[str, ...]) -> Path:
@@ -313,6 +313,8 @@ def test_agent_info_names_the_settings(lab: Lab) -> None:
     ]
     gaps = " ".join(shims["not_reached"])
     assert "python -m pip" in gaps and "venv" in gaps and "/usr/local/bin/pip" in gaps
+    # lane 013s1-b: a lookup finds the shim even when the installer is absent
+    assert "`command -v pnpm`" in shims["resolves_when_absent"] and "127" in shims["resolves_when_absent"]
     assert "--gate" in m["flags"]
 
 

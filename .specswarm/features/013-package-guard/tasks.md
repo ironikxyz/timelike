@@ -151,3 +151,19 @@ From `bridge/feedback/15-20261012-015246-item-24-bare-installs-reach-the-guard.m
   closed; `reboot.md`; commit everything.
 
 **Order:** T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026.
+
+### Addendum 2 — lane 013s1-b: a shim resolves when its installer is absent
+
+- [X] T027 Item 1: the checks look for a real installer past `/opt/timelike/shims`, as the shim does — one helper
+  for the units (`tests/unit/realcmd.py`, `real_which`) used by the skips and setup calls in
+  `test_package_guard_real.py`, `_check.py`, `_tool.py` and `test_registry_standin.py`; one for e2e
+  (`REAL_ON_PATH_SH` in `tests/e2e/helpers.bash`). 007's SC-5 listing cell (declared): installed means a real one;
+  a listed name with only its shim resolves to it and, run, exits 127 with its row's line.
+- [X] T028 Item 2: every installer the guard looks up or runs for itself goes through `resolver()` (the
+  `#!/usr/bin/env` interpreter was the one that did not); units: the resolver skips the shims for all six names
+  and node, and `package-guard --dry-run -- pnpm add` asks the real pnpm, never a trap in the shim's place.
+- [X] T029 Item 3: one announcement line and `--agent-info`'s `shims.resolves_when_absent`; units; the contract,
+  FR-43, the README's guard section (marked, the previous marks cleared); the host lane; the cycle report's
+  Addendum 2; `reboot.md`; commit everything.
+
+**Order:** T027 → T028 → T029.

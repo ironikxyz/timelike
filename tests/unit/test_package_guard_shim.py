@@ -291,3 +291,63 @@ def test_the_shim_lists_the_installers_the_guard_reads() -> None:
     for word in ("add", "install", "i", "dlx", "create", "init"):
         assert f"pnpm:{word} " in text or f"pnpm:{word})" in text, word
     assert tuple(pg.SHIMMED) == NAMES
+
+
+# ── the guard's own installer calls go past the shims (lane 013s1-b) ─────────────────────────────────────
+# The guard runs `pnpm config get registry` to learn pnpm's registry, and finds npm and node to read npm's own
+# npmrc files. Each must be the real one: a shim found first would answer for an installer that is not
+# there (127) or, were it ever to answer, for the wrong one. The trap below stands where the shim stands and
+# gives an answer the guard would visibly use, so reaching it cannot pass unnoticed.
+
+TRAP = """#!/bin/sh
+printf '%s %s\\n' "${0##*/}" "$*" >>"${0%/*}/../trapped"
+echo http://shim.example/
+"""
+
+
+def test_the_guards_resolver_skips_the_shims_for_every_installer_it_calls(tmp_path: Path) -> None:
+    import pgmod
+
+    pg = pgmod.load()
+    shims, real = tmp_path / "shims", tmp_path / "real"
+    shims.mkdir()
+    real.mkdir()
+    for name in (*NAMES, "node"):
+        (shims / name).write_text(TRAP)
+        (shims / name).chmod(0o755)
+    env = {"PATH": f"{shims}:{real}", "TIMELIKE_SHIMS": str(shims)}
+    for name in (*NAMES, "node"):
+        assert pg.resolver(env)(name) is None, f"{name}: only the shim is on PATH, so there is no {name}"
+        (real / name).write_text(DECOY)
+        (real / name).chmod(0o755)
+        assert pg.resolver(env)(name) == str(real / name), name
+
+
+def test_pnpm_config_get_asks_the_real_pnpm_never_the_shim(lab: Lab) -> None:
+    """The shipped tool, end to end: `package-guard --dry-run -- pnpm add tl-left` with a trap where the pnpm
+    shim is and a real pnpm after it. The registry checked is the one the real pnpm names (the stand-in's),
+    not the trap's and not npm's, and the trap is never run."""
+    (lab.shims / "pnpm").unlink()
+    (lab.shims / "pnpm").write_text(TRAP)
+    (lab.shims / "pnpm").chmod(0o755)
+    (lab.real / "pnpm").write_text(
+        "#!/bin/sh\n"
+        f'if [ "$*" = "config get registry" ]; then echo {lab.reg.npm}; exit 0; fi\n'
+        "printf 'decoy pnpm ran: %s\\n' \"$*\"\n"
+    )
+    (lab.real / "pnpm").chmod(0o755)
+    (lab.ws / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
+    r = subprocess.run(
+        [str(lab.bin / "package-guard"), "--dry-run", "--json", "--", "pnpm", "add", "tl-left"],
+        cwd=lab.ws,
+        env=lab.env(npm_config_registry="http://npm-only.example/"),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        start_new_session=True,
+    )
+    assert r.returncode == 0, said(r)
+    assert not (lab.root / "trapped").exists(), (lab.root / "trapped").read_text()
+    assert "shim.example" not in r.stdout and "npm-only.example" not in r.stdout, said(r)
+    assert [q["path"] for q in lab.reg.guard_requests()] == ["/npm/tl-left"], said(r)

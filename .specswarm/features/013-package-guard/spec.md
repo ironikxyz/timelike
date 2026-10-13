@@ -494,4 +494,13 @@ These requirements are added by it; nothing above is withdrawn except where D-1 
   `HOME`; no cell passes `--target` or `--prefix` to pip (lane 013s1-a2, item 1). pnpm is installed in its cell
   into `~/.local/bin` from the stand-in, as the agent would; the package is the stand-in's `pnpm`, a script, so
   pnpm's own forms stay the host's units (Q3).
+- **FR-43 · A name resolves to its shim whether or not the installer is installed (lane 013s1-b; condition 4).**
+  `command -v pnpm`, `type -P pnpm` and Python's `shutil.which("pnpm")` find `/opt/timelike/shims/pnpm` in an
+  image with no pnpm; run, it exits 127 with the data file's hint. So:
+  - the announcement and `--agent-info` (`shims.resolves_when_absent`, beside `not_reached`) say that a lookup
+    succeeding does not mean the installer is installed, for the names, not for pnpm alone;
+  - every installer the guard looks up or runs for itself (`pnpm config get`, npm's and node's own paths for the
+    npmrc chain, a `#!/usr/bin/env` interpreter) is found past the shims, by the same resolver that finds CMD;
+  - a test asking "is NAME installed?" asks what the shim asks: the first NAME on PATH outside the shims
+    directory (`real_which` in `tests/unit/realcmd.py`, `real_on_path` in `tests/e2e/helpers.bash`).
 

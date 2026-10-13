@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -27,7 +27,14 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   `libexec/install-shim`) first on PATH; `package-guard --gate`; the event line's optional `override` (001's
   schema); the four criterion files on bare names (28 cells, pip as a user install into the cell's own HOME);
   CVE-2026-88647 baselined on the operator's "accept it"; the README status block applied (19 of 38), marked.
-  Item 24 closed. **No commit until the mentor says lane 013s1-b has ended.**
+  Item 24 closed. **Lane 013s1-b** (on `6236bc0`): every 013 cell passed; 4 failures with one cause, the pnpm
+  shim resolving in an image with no pnpm (007's SC-5 listing cell, 3 pnpm units). **Addendum 2** (T027–T029):
+  tests ask for a real installer past the shims (`tests/unit/realcmd.py` `real_which`, helpers.bash
+  `REAL_ON_PATH_SH`/`real_on_path`); 007's SC-5 cell declared (a shim-only name: 127 and its row's line); the
+  guard's own lookups all through `resolver()` (pinned by units; the shebang interpreter was the one outside it);
+  the announcement and `--agent-info` (`shims.resolves_when_absent`) say a lookup succeeding is not an install;
+  FR-43; README one marked sentence (old marks cleared). **No commit until the mentor says lane 013s1-c has
+  ended.**
 - **Pushed 2026-10-09** (operator OK, mentor discharge 04:10Z): `public/main` = `ec71f3d`, tag **`v0.16.0`** (object
   `5f3b94f`). Deny-list over the tag message and every object pushed: 0 on P1–P7, control positive.
 - **Plugins:** specswarm **2.40.0** and ccmentor 1.50.2, installed during the operator's pause (04:21Z). This session

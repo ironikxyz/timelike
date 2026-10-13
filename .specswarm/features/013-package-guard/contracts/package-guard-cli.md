@@ -28,6 +28,12 @@ package-guard --help | --agent-info
 `/usr/local/bin/pip` or any installer called by its full path (the visible escape). Slice 2's checking proxy
 closes them. `type -a pip` shows `/opt/timelike/shims/pip` first.
 
+**A name resolves when its installer is absent** (`--agent-info`'s `shims.resolves_when_absent`, and one line of
+the announcement): the six links exist whether or not the installer does, so `command -v pnpm` succeeds in an
+image with no pnpm. `type -a pnpm` lists a real one after the shim; run with none, the shim exits 127 with the
+command-not-found handler's hint. The guard's own lookups (`pnpm config get registry`, npm's and node's paths,
+a `#!/usr/bin/env` interpreter) skip the shims, as CMD's does.
+
 001's output contract, rules 1–16. Manifest:
 - `mutating: true`, `confirm_protocol: true`, `passes_exit: true`;
 - `envelopes: ["confirmation_required"]`;

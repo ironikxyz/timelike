@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import urllib.error
 import urllib.request
@@ -18,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from realcmd import real_which
 from standin import CATALOG, Standin
 
 PEP691 = "application/vnd.pypi.simple.v1+json"
@@ -100,11 +100,11 @@ def test_every_request_is_logged(reg: Standin) -> None:
     assert last["path"] == "/npm/tl-left" and last["user_agent"] == "test" and last["status"] == 200
 
 
-@pytest.mark.skipif(shutil.which("pip") is None, reason="the host has no pip")
+@pytest.mark.skipif(real_which("pip") is None, reason="no real pip")
 def test_real_pip_installs_from_it(reg: Standin, tmp_path: Path) -> None:
     p = subprocess.run(
         [
-            "pip",
+            str(real_which("pip")),
             "install",
             "--no-cache-dir",
             "--target",
@@ -123,14 +123,14 @@ def test_real_pip_installs_from_it(reg: Standin, tmp_path: Path) -> None:
     assert (tmp_path / "t" / "tl_old" / "__init__.py").read_text() == 'NAME = "tl-old"\nVERSION = "1.2.0"\n'
 
 
-@pytest.mark.skipif(shutil.which("npm") is None, reason="the host has no npm")
+@pytest.mark.skipif(real_which("npm") is None, reason="no real npm")
 def test_real_npm_installs_from_it(reg: Standin, tmp_path: Path) -> None:
     proj = tmp_path / "p"
     proj.mkdir()
     (proj / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
     p = subprocess.run(
-        ["npm", "install", "--registry", reg.npm, "--cache", str(tmp_path / "c"), "--no-audit", "--no-fund",
-         "tl-left", "@tl/scoped"],
+        [str(real_which("npm")), "install", "--registry", reg.npm, "--cache", str(tmp_path / "c"),
+         "--no-audit", "--no-fund", "tl-left", "@tl/scoped"],
         cwd=proj,
         capture_output=True,
         text=True,

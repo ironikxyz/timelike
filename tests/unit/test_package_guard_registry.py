@@ -80,7 +80,10 @@ def test_pip_no_index_and_isolated(tmp_path: Path) -> None:
 
 def test_shebang_names_pips_interpreter(tmp_path: Path) -> None:
     pip = write(tmp_path / "bin" / "pip", "#!/opt/agent/python/bin/python3\nimport pip\n")
-    assert PG._shebang_python(str(pip)) == "/opt/agent/python/bin/python3"
+    assert PG._shebang_python(str(pip), lambda _: None) == "/opt/agent/python/bin/python3"
+    # `#!/usr/bin/env NAME` is looked up with the guard's own resolver, the one that skips the shims
+    envpip = write(tmp_path / "bin" / "pip3", "#!/usr/bin/env python3\nimport pip\n")
+    assert PG._shebang_python(str(envpip), {"python3": "/real/python3"}.get) == "/real/python3"
 
 
 def uv_inst(cmd: str, cwd: Path) -> object:

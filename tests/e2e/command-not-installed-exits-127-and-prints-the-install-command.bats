@@ -299,6 +299,7 @@ check_direct_exec_not_reached() {
 # --- the data against the image (FR-16, contract § e2e) ---------------------------------------------
 read -r -d '' READ_LISTED <<'EOF' || true
 f=/etc/timelike/missing-commands.tsv
+shims=${TIMELIKE_SHIMS:-/opt/timelike/shims}
 if [ ! -r "$f" ]; then printf "tsv=unreadable\n"; exit 0; fi
 n=0
 while IFS= read -r line || [ -n "$line" ]; do
@@ -309,7 +310,20 @@ while IFS= read -r line || [ -n "$line" ]; do
   rest="${rest#*$'\t'}"
   value="${rest%%$'\t'*}"
   n=$((n + 1))
-  if p="$(command -v -- "$name")"; then printf "installed=%s at %s\n" "$name" "$p"; fi
+  # Installed means a real NAME past /opt/timelike/shims (real_on_path, helpers.bash): feature 013's shims
+  # resolve whether or not their installer is there (lane 013s1-b). A name that resolves only to its shim is
+  # run, so the cell sees what the ruling made true: 127 and this row's line.
+  if p="$(real_on_path "$name")"; then
+    printf "installed=%s at %s\n" "$name" "$p"
+  elif p="$(command -v -- "$name")"; then
+    if [ "$p" = "$shims/$name" ]; then
+      said="$("$name" </dev/null 2>&1)"
+      printf "shimmed=%s|%s\n" "$name" "$?"
+      printf "%s\n" "$said" | while IFS= read -r l; do printf "shim_said=%s|%s\n" "$name" "$l"; done
+    else
+      printf "installed=%s at %s\n" "$name" "$p"
+    fi
+  fi
   if [ "$kind" = instead ]; then
     w="${value%% *}"
     if p="$(command -v -- "$w")"; then
@@ -325,7 +339,7 @@ EOF
 
 check_listed_absent() {
   sc5_ready
-  run_in c notty "$READ_LISTED"
+  run_in c notty "${REAL_ON_PATH_SH}"$'\n'"${READ_LISTED}"
   assert_within 20
   assert_status 0
   assert_value read "done"
@@ -338,6 +352,26 @@ check_listed_absent() {
   assert_no_line_matching '^installed='
   assert_no_line_matching '^instead_missing='
   assert_no_line_matching '^instead_not_timelike='
+  # Feature 013 (declared there): a listed name with a shim resolves to it although absent; run, it exits
+  # 127 with the row's line (FOR-MENTOR Item 24, condition 4; lane 013s1-b). pnpm is listed and shimmed.
+  local l name rc w
+  if [[ $'\n'"$SC5_TSV" == *$'\n'"pnpm"$'\t'* ]]; then
+    assert_output_has "shimmed=pnpm|"
+  fi
+  for l in "${lines[@]}"; do
+    [[ "$l" == shimmed=* ]] || continue
+    name="${l#shimmed=}"
+    rc="${name#*|}"
+    name="${name%%|*}"
+    if [[ "$rc" != 127 ]]; then
+      printf '%s resolves only to its shim, and running it exited %s, not 127; output:\n%s\n' "$name" "$rc" "$output" >&2
+      return 1
+    fi
+    sc5_expected "$name"
+    for w in "${SC5_WANT[@]}"; do
+      assert_output_has "shim_said=${name}|${w}"
+    done
+  done
 }
 
 @test "SC-5 [bash -c, notty] Typing a command that is not installed exits 127 and prints the install command for the package that provides it or the equivalent timelike tool, when either is known — every listed name is absent in the image, and every equivalent's first word is a timelike tool on PATH" { check_listed_absent; }

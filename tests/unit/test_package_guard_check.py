@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import shutil
 import subprocess
 import time
 from collections.abc import Iterator
@@ -19,6 +18,7 @@ from typing import Any
 
 import pytest
 from pgmod import PG
+from realcmd import real_which
 from standin import CATALOG, Standin
 
 NOW = dt.datetime.now(dt.UTC)
@@ -224,7 +224,7 @@ def npm_project(reg: Standin, tmp: Path, *pkgs: str) -> Path:
     (proj / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
     p = subprocess.run(
         [
-            "npm",
+            str(real_which("npm")),
             "install",
             "--registry",
             reg.npm,
@@ -245,7 +245,7 @@ def npm_project(reg: Standin, tmp: Path, *pkgs: str) -> Path:
     return proj
 
 
-@pytest.mark.skipif(shutil.which("npm") is None, reason="the host has no npm")
+@pytest.mark.skipif(real_which("npm") is None, reason="no real npm")
 def test_package_lock_written_by_npm_pins_without_a_request(reg: Standin, tmp_path: Path) -> None:
     proj = npm_project(reg, tmp_path, "tl-left@1.3.0", "@tl/scoped")
     lock = PG.read_package_lock(proj / "package-lock.json")
@@ -266,14 +266,14 @@ def test_package_lock_written_by_npm_pins_without_a_request(reg: Standin, tmp_pa
     assert p.inst.lockfile_only and p.checks == [] and reg.guard_requests() == []
 
 
-@pytest.mark.skipif(shutil.which("pnpm") is None, reason="the host has no pnpm")
+@pytest.mark.skipif(real_which("pnpm") is None, reason="no real pnpm")
 def test_pnpm_lock_written_by_pnpm(reg: Standin, tmp_path: Path) -> None:
     proj = tmp_path / "pp"
     proj.mkdir()
     (proj / "package.json").write_text('{"name": "p", "version": "1.0.0"}')
     r = subprocess.run(
         [
-            "pnpm",
+            str(real_which("pnpm")),
             "add",
             "--registry",
             reg.npm,

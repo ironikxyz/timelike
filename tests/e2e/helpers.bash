@@ -553,6 +553,26 @@ exec /bin/uv --quiet tool run --python ${AGENT_PY} '${name}@${ver}' \"\$@\""
     { printf 'install_uv_tool_wrappers: mypy warm-up failed:\n%s\n' "$out" >&2; return 1; }
 }
 
+# ── A real installer, past the shims (feature 013; lane 013s1-b) ────────────────────────────────────
+# /opt/timelike/shims is first on PATH and holds pip, pip3, uv, npm, npx and pnpm whether or not the
+# installer is installed, so `command -v pnpm` finds the shim in an image with no pnpm. A cell asking "is NAME
+# installed?" prepends REAL_ON_PATH_SH to its in-container script and calls `real_on_path NAME`, which asks
+# what the shim asks (image/rootfs/opt/timelike/libexec/install-shim): the first NAME on PATH outside the
+# shims directory. It prints that path, or nothing and exit 1. POSIX sh, so any cell's shell can run it.
+# shellcheck disable=SC2016,SC2034 # expanded in the container; read by the cells that load helpers
+REAL_ON_PATH_SH='real_on_path() {
+  _rop_shims=${TIMELIKE_SHIMS:-/opt/timelike/shims}
+  _rop_rest=${PATH-}:
+  while [ -n "$_rop_rest" ]; do
+    _rop_d=${_rop_rest%%:*}
+    _rop_rest=${_rop_rest#*:}
+    [ -n "$_rop_d" ] || _rop_d=.
+    [ "$_rop_d" -ef "$_rop_shims" ] && continue
+    if [ -f "$_rop_d/$1" ] && [ -x "$_rop_d/$1" ]; then printf "%s\n" "$_rop_d/$1"; return 0; fi
+  done
+  return 1
+}'
+
 # ── The registry stand-in (feature 013, the package guard; spec D-10, FR-33) ────────────────────────
 # tests/fixtures/registry-standin.py, run INSIDE the agent container on its loopback with timelike's own
 # interpreter, so no cell reaches a public registry (lore P005) and nothing is added to compose. It logs every

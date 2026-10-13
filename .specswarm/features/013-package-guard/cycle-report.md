@@ -357,3 +357,135 @@ tool's file (the gate, the event's `override`, the shims' directory skipped), 1 
 Commit everything, and report done. No commit after that until the mentor says lane 013s1-b has ended.
 - **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
 - **After it:** the mentor's D24 capture (the agent's own install), then sign-off; merge `--no-ff` after it.
+
+### Addendum 2 — lane 013s1-b: a shim resolves when its installer is absent
+
+**Written:** 2026-10-13T01:16:25Z (read from the clock), on `013-package-guard`. Same send, same cycle. Instructed by the
+operator, relaying the mentor's findings `../bridge/feedback/15-20261012-195021-lane-013s1-b-the-pnpm-shim-answers-which.md`.
+Lane 013s1-b had ended; nothing was edited while it ran. **Nothing was pushed or merged.** None of this
+addendum's work has run in the image: lane 013s1-c decides it.
+
+**Status in one line:** the four failures had one cause, `/opt/timelike/shims/pnpm` resolving in an image with no
+pnpm. The tests now ask for a real installer past the shims. The guard's own lookups already skipped the shims,
+and units now hold that in place. The agent is told that a lookup succeeding is not an install.
+
+| Task | Commit | What |
+|---|---|---|
+| T027 to T029 | this commit | the two helpers and the checks that use them; 007's SC-5 listing cell; the guard's shebang lookup through `resolver()`; its units; the announcement line and `shims.resolves_when_absent`; FR-43, the contract, the README sentence; this addendum; `reboot.md` |
+
+#### Item 1: the checks look for a real installer, as the shim does
+
+- **One helper per lane.**
+  - **Units:** `tests/unit/realcmd.py`, `real_which(name)`. It returns the first executable NAME on PATH whose
+    directory is not `TIMELIKE_SHIMS` (default `/opt/timelike/shims`), which is the shim's own rule.
+  - **e2e:** `REAL_ON_PATH_SH` in `tests/e2e/helpers.bash`, a POSIX sh function `real_on_path NAME` that a cell
+    prepends to its in-container script.
+- **Units changed to use it:**
+  - the skips in `test_package_guard_real.py` (`NODE`, `PNPM`), `test_package_guard_check.py` (npm, pnpm),
+    `test_package_guard_tool.py` (pip) and `test_registry_standin.py` (pip, npm);
+  - the setup calls in those files that ran `npm`, `pnpm` or `pip` by bare name. They now run the real one, so
+    a setup step never goes through a shim's gate.
+  - In the image, the three pnpm units skip again, because there is no real pnpm. The skip count there should
+    return to 6.
+- **007's SC-5 listing cell (declared):**
+  `tests/e2e/command-not-installed-exits-127-and-prints-the-install-command.bats`, `check_listed_absent` and its
+  `READ_LISTED` script.
+  - "Installed" now means a real NAME past the shims.
+  - A listed name that resolves only to its shim is run. The cell asserts exit 127 and its row's own line, built
+    by `sc5_expected`, the same builder the other SC-5 cells use.
+  - While the shipped data lists pnpm, the cell asserts that pnpm is among the shimmed names.
+  - **Rehearsed on the host** with a shims directory laid out as the image's:
+    - with the host's real `/usr/bin/pnpm` on PATH, the script reported it installed;
+    - with only the shim, it reported `shimmed=pnpm|127`, plus `pnpm: command not found` without a handler or
+      `timelike: install it yourself: npm install -g pnpm  (package manager)` with one.
+
+#### Item 2: the guard's own installer calls skip the shims
+
+- **Already so for the calls the findings named.** `main` builds one `resolver(env)`, which skips
+  `TIMELIKE_BIN_DIRS`, `TIMELIKE_SHIMS` (or its default) and the guard's own directory. It passes that resolver
+  to `classify` and `build_plan`, and every lookup goes through it:
+  - `pnpm config get registry`;
+  - npm's and node's paths, for npm's own npmrc files;
+  - CMD itself.
+
+  The lane's unit 4 shows the same thing. `PG.resolver(os.environ)` skipped the shims and found no pnpm, so
+  "pnpm did not answer" meant the image has no pnpm, not that the guard reached the shim.
+- **The one lookup outside it** was a `#!/usr/bin/env NAME` shebang, resolved to find pip's interpreter. It now
+  uses the same resolver.
+- **Units** (`test_package_guard_shim.py`):
+  - The resolver returns None for each of the six names and node when only the shim is on PATH. With a real one
+    after it, the resolver returns the real one.
+  - `package-guard --dry-run --json -- pnpm add tl-left` is run with a trap in the pnpm shim's place and a real
+    pnpm after it. The trap answers `http://shim.example/` and leaves a mark; the real pnpm answers the
+    stand-in's registry; `npm_config_registry` points elsewhere. The guard asks the stand-in, the trap never
+    runs, and neither wrong registry appears.
+  - **Both tests fail when the shims' skip is removed from `_guard_dirs`** (checked by mutation, then restored).
+  - `_shebang_python`'s unit covers the `env` form.
+
+#### Item 3: the agent is told
+
+- **The announcement**, when package-guard is installed, gains one line: "These six names always resolve:
+  `command -v pnpm` succeeding does not mean pnpm is installed. `type -a pnpm` lists a real one after the check;
+  an absent one exits 127 and says how to install it."
+  - It covers the names, not pnpm alone, so it also holds for `uv` in an image without uv.
+  - The announcement is now 37 lines of 60, and its longest line is 196 columns, under the 200-column cut.
+- **`--agent-info`:** `shims.resolves_when_absent`, beside `not_reached`.
+- **Units:** one assertion in `test_announce.py` and one in `test_package_guard_tool.py`.
+- **FR-43** in the spec, and a paragraph in the contract.
+
+### Group C — Addendum 2
+
+**delegations:** `[]`.
+
+**criteria_reestablished:** the same five citations as Addendum 1, each still a single `grep -cF` match. No
+criterion cell changed in this addendum, and lane 013s1-b passed every one, but nothing of this addendum has run in
+the image. So each mode stays as Addendum 1 recorded it, `unconfirmed`, until lane 013s1-c.
+- `15 · "before anything is downloaded, naming the package and the registry checked _(traces to: P4)_"` — **unconfirmed.**
+- `15 · "is refused with exit 4, naming the release date _(traces to: P4)_"` — **unconfirmed.**
+- `15 · "already pinned in the project's lockfile proceeds without registry checks _(traces to: P2)_"` — **unconfirmed.**
+- `15 · "with the confirm flag proceeds and records the override in the session event log _(traces to: P4)_"` — **unconfirmed.**
+- `15 · "is refused with an explanation before any install runs _(traces to: D24)_"` — **unconfirmed** (Manual; the D24 capture follows lane 013s1-c).
+
+**reconcile_mode:** `scoped` (the four failures, one cause, and the three items the findings ask for).
+
+**not_verified**
+- **Everything in the image:** SC-5's new cell, including whether the image's handler prints the row's line
+  through the shim exactly as rehearsed; the pnpm units skipping there; the announcement line in the placed file.
+- **A real pnpm installed after the shim in the image**, the case item 2 guards. It is shown only by units with a
+  stand-in pnpm.
+- **Everything Addendum 1 named is still not verified:** `python -m pip`, a venv's own installer, an installer
+  by full path, `uvx`, `-r /dev/stdin`, and pnpm's own forms in the image.
+
+**changed_other_features**
+- **007:** the SC-5 listing cell (`check_listed_absent` and `READ_LISTED`), declared. The other SC-5 cells are
+  unchanged.
+- **007:** the announcement (`tools/bin/timelike`), one line, and its unit.
+- **README.md:** one sentence in the guard's section, in `<mark>`. The previous update's 11 marks were cleared
+  first. The generated command reference did not change (`--check`: current, 14 tools).
+
+**process_failures_recorded:** none.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host`, timelike's 3.14.8 in a scratch venv, on this commit's tree (with shellcheck 0.11.0 on PATH):
+- pytest tests/unit: **2242 passed, 12 skipped** (408 s). Addendum 1's run was 2239 passed and 13 skipped.
+  - The two new units account for 2 more tests.
+  - One test that skipped then ran this time, and I did not pin down which. Of the 9 skips I listed on this
+    tree, 8 are missing tree-sitter grammars and 1 is `test_missing_commands.py`'s user-rows test. None is an
+    installer check this addendum changed: on the host each of those finds a real pip, npm or pnpm and runs.
+- `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57; `test_command_not_found.sh` 33 of 33.
+
+Exit 0. Other checks:
+- ruff check and format: clean;
+- mypy `--strict`: clean over 31 files;
+- shellcheck 0.11.0: clean over the Makefile's 89 files;
+- `scripts/readme_reference.py --check`: current, 14 tools;
+- the deny-list: PASS before the commit (513 files, P1–P7 0/0).
+
+#### Then
+
+Commit everything, and report done. No commit after that until the mentor says lane 013s1-c has ended.
+- **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
+- **After it:** the D24 capture, then sign-off. Merge `--no-ff` after the sign-off.

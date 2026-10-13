@@ -41,18 +41,18 @@ Whether it works is a measured claim: see Status.
 | 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | slice 0 of 0–2 |
 | 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | not started |
 | 14 | Provider compute | One request for compute or an endpoint; Adele quotes, provisions within the grant, and tears down | not started |
-| 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | <mark>slice 1 of 1–2</mark> |
+| 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | slice 1 of 1–2 |
 | 16 | Model-assisted filters | A grep, or a sed's addresses, chosen by description; off by default, and costed per call | not started |
 | 17 | Web verification | Load a URL headless and return a bounded verdict: screenshot path, console errors, failed requests | not started |
 
 ## Status
 
-<mark>**19 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+**19 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.
-Features 13, 14, 16 and 17 are not started.</mark>
+Features 13, 14, 16 and 17 are not started.
 
-<mark>**Next:** 02 slice 1.</mark>
+**Next:** 02 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -70,8 +70,8 @@ results (constitution P6).
 The image is Debian trixie-slim with a pinned interpreter, an unprivileged `agent` user, no sudo or
 setuid binaries, and non-interactive defaults in the process environment. Its container
 (`timelike-agent`) runs with no capabilities and `no-new-privileges`, and mounts no volumes, no ports and
-no Docker socket. <mark>The tools are on PATH at `/opt/timelike/bin`, ahead of everything but the install shims
-(`/opt/timelike/shims`), which come first so that package installs reach the package guard.</mark> Governance is in
+no Docker socket. The tools are on PATH at `/opt/timelike/bin`, ahead of everything but the install shims
+(`/opt/timelike/shims`), which come first so that package installs reach the package guard. Governance is in
 `.specswarm/` (the constitution, the tech stack and the quality standards), and each feature has its
 specification, plan, contracts and decision log under `.specswarm/features/`.
 
@@ -534,27 +534,29 @@ verify changed                  # tests importing the changed files; lint and ty
 - **The parsers are tested on real runners' output,** recorded by `tests/fixtures/verify/record.sh`, with
   each recording's source beside it.
 
-#### <mark>package-guard — installs checked before they run</mark>
+#### package-guard — installs checked before they run
 
-<mark>`pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` reach the guard by their bare names, from a shell, a script or a
-Makefile alike: `/opt/timelike/shims` is first on PATH, and `type -a pip` shows it. A command that is not an
+`pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` reach the guard by their bare names, from a shell, a script or a
+Makefile alike: `/opt/timelike/shims` is first on PATH, and `type -a pip` shows it. <mark>The six names resolve
+whether or not the installer is there, so `command -v pnpm` succeeding does not mean pnpm is installed: run
+without one, the shim exits 127 and says how to install it.</mark> A command that is not an
 install goes straight to the real one. For an install, before the installer starts, each package it names is
-checked in the registry that installer would use:</mark>
+checked in the registry that installer would use:
 
-- <mark>**It exists there.** A name the registry does not have is refused, naming the package and the registry.</mark>
-- <mark>**It is old enough:** at least `TIMELIKE_PACKAGE_MIN_AGE_DAYS` days (default 2), for the newest release or
-  the one named. The refusal names the release date and the newest release old enough to pin.</mark>
-- <mark>**Or it is pinned** in the project's lockfile (`uv.lock`, `pylock.toml`, a hashed requirements file,
-  `package-lock.json`, `pnpm-lock.yaml`), and then no registry is asked at all.</mark>
+- **It exists there.** A name the registry does not have is refused, naming the package and the registry.
+- **It is old enough:** at least `TIMELIKE_PACKAGE_MIN_AGE_DAYS` days (default 2), for the newest release or
+  the one named. The refusal names the release date and the newest release old enough to pin.
+- **Or it is pinned** in the project's lockfile (`uv.lock`, `pylock.toml`, a hashed requirements file,
+  `package-lock.json`, `pnpm-lock.yaml`), and then no registry is asked at all.
 
-<mark>A refusal exits **4** before anything is downloaded, with the contract's confirmation envelope. A registry that
+A refusal exits **4** before anything is downloaded, with the contract's confirmation envelope. A registry that
 does not answer is refused as unreachable from the container, never called absent. To go ahead anyway, run the
 envelope's `confirm`, `package-guard --yes -- <the original command>`: the install runs, and the session's
 event log records the override, with each package and why it was refused. Pinning the release the refusal
-names needs no override.</mark>
+names needs no override.
 
-<mark>Not checked yet: `python -m pip`, an activated venv's own `pip`, and an installer called by its full path,
-such as `/usr/local/bin/pip`. Registry lookups are not yet a grant under Adele.</mark>
+Not checked yet: `python -m pip`, an activated venv's own `pip`, and an installer called by its full path,
+such as `/usr/local/bin/pip`. Registry lookups are not yet a grant under Adele.
 
 #### adele — reaching actions, by grant
 

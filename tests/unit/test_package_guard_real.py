@@ -12,11 +12,11 @@ from __future__ import annotations
 import json
 import os
 import shlex
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from realcmd import real_which
 from standin import CATALOG, Standin
 from test_package_guard_tool import Lab, make_lab, said
 
@@ -32,8 +32,9 @@ def lab(tmp_path: Path, reg: Standin) -> Lab:
     return make_lab(tmp_path, reg)
 
 
-NODE = pytest.mark.skipif(shutil.which("npm") is None, reason="the host has no npm")
-PNPM = pytest.mark.skipif(shutil.which("pnpm") is None, reason="the host has no pnpm")
+# a real installer, past /opt/timelike/shims: in the image the shims answer for an absent pnpm (lane 013s1-b)
+NODE = pytest.mark.skipif(real_which("npm") is None, reason="no real npm")
+PNPM = pytest.mark.skipif(real_which("pnpm") is None, reason="no real pnpm")
 
 
 def project(lab: Lab) -> Path:

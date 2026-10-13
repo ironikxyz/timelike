@@ -716,7 +716,7 @@ def classify(
     exe = os.path.basename(argv[0])
     rest = argv[1:]
     if PIP_NAME.match(exe):
-        inst = Install("pypi", "pip", argv, interpreter=_shebang_python(resolve(argv[0])))
+        inst = Install("pypi", "pip", argv, interpreter=_shebang_python(resolve(argv[0]), resolve))
         if not rest or _first_positional(rest, PIP_GLOBAL) != "install":
             raise NotInstall
         _pip_install(inst, _after_subcommand(rest, PIP_GLOBAL, "install"), cwd, env)
@@ -789,7 +789,7 @@ def _python_m(args: Sequence[str]) -> list[str] | None:
     return None
 
 
-def _shebang_python(path: str | None) -> str | None:
+def _shebang_python(path: str | None, resolve: Callable[[str], str | None]) -> str | None:
     if not path:
         return None
     try:
@@ -803,7 +803,7 @@ def _shebang_python(path: str | None) -> str | None:
     if not words:
         return None
     if os.path.basename(words[0]) == "env" and len(words) > 1:
-        return shutil.which(words[1])
+        return resolve(words[1])  # past the shims, as every command the guard looks up (lane 013s1-b)
     return words[0]
 
 
@@ -2459,6 +2459,10 @@ def _manifest() -> dict[str, Any]:
             "how": "first on PATH; anything that may be an install asks `package-guard --gate`, then the"
             " wrapper execs the real command (found on PATH without the shims); the rest is exec'd at once",
             "type_a": "`type -a pip` shows /opt/timelike/shims/pip first, then the real pip",
+            "resolves_when_absent": "each name resolves to its shim whether or not the installer is"
+            " installed: `command -v pnpm`, `type -P pnpm` and `which pnpm` succeed in an image with no pnpm."
+            " `type -a pnpm` lists a real one after the shim; run with none, the shim exits 127 and says how"
+            " to install it",
             "not_reached": [
                 "python -m pip (and python3 -m pip): no PATH lookup of pip",
                 "an activated venv's own pip, uv or npm: the venv's bin is ahead of the shims",
