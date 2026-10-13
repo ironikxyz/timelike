@@ -410,3 +410,14 @@ ASSUMED: `git push --force-with-lease` counts as the guarded force push — 005'
 ASSUMED: `python3 -m pip` is not through timelike: it is the escape 013's announcement names, which the shim does not see — (confidence: high)
 ABSENT: no detection of a tool run through `xargs`, `find -exec` or a variable (`$TOOL x`); each would need a guess
 Verification: tests/unit/test_bench_adoption.py 37 passed; ruff clean; mypy --strict clean (33 files)
+SCOPE: in (2 changed files)
+
+### T037: benchlib/keyfile.py — the key file's rule and the write gate (FR-29, FR-31)
+**Started:** 2026-10-13T07:23:36Z | **Completed:** 2026-10-13T07:24:35Z
+
+INHERITED: FR-29's properties (regular, 0600, the bench user's, outside the repository, one line) and FR-31's gate — from spec (confidence: high)
+FLAGGED: mode must be exactly 0600 (0400 is refused too) — chose the send's literal "mode 0600" over "no group or other bits", so the rule is one a person can check by eye (confidence: medium: 0400 is as safe, and an operator who uses it is told exactly what to change)
+ASSUMED: an absolute BENCH_KEY_FILE only — a relative path would resolve against whichever process reads it (cross-stack P002), and run.sh and the driver are two processes — (confidence: high)
+ASSUMED: the gate matches the raw value only; JSON escaping cannot change an OpenRouter key (letters, digits, '-' and '_') — (confidence: medium)
+ABSENT: no check of the value's shape (sk-or-…): a key OpenRouter rejects ends its run stopped (key-rejected, FR-37), which is the provider's answer and not a guess
+Verification: tests/unit/test_bench_keyfile.py 20 passed (every refusal checked for the value); ruff clean; mypy --strict clean (34 files)
