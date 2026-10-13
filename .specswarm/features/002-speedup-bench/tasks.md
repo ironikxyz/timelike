@@ -379,7 +379,7 @@ send's route.
 - [X] T047 [US5] `bench/harness/Dockerfile`, `pins.env` (harness versions and integrity, model price), `Makefile`
   (`bench-images` builds it; `bench-live`; `scan` covers it), `bench/run.sh` (the key file, the pass-through
   variables, the new flags). `tests/unit/test_bench_run_sh.py` for the key-file refusals and the forwarded names.
-- [ ] T048 [US6] The catalog: plain-word goals checked; `python-missing-module` added with its fake policy and check
+- [X] T048 [US6] The catalog: plain-word goals checked; `python-missing-module` added with its fake policy and check
   (FR-38, FR-39). `tests/unit/test_bench_catalog.py`.
 
 ### Phase 11d: The Docker lane (e2e; the operator runs it)

@@ -1,4 +1,4 @@
-"""catalog — the slice-0 task catalog: four git tasks where timelike's defaults can change the outcome.
+"""catalog — the bench's tasks: slice 0's four git tasks, and slice 1's one Python task (FR-38, FR-39).
 
 Each task is identical in both images (RB4). Its setup and check are bash, run in the task directory
 outside the counted run; its policy is fake-agent data interpreted by `fakeagent.next_step`, which
@@ -7,8 +7,11 @@ so the catalog shows where a difference can occur, not how often one does.
 
 Rules every script here obeys, and tests/unit/test_bench_catalog.py enforces:
 - Only what **both** images contain (RB1): bash, coreutils, git, and Debian's Essential tools (sed,
-  grep). No interpreter, no build tool, no process tools, no network — a task that needed one would
-  rig the result, so `prerequisites` declares the OS packages and slice 0 declares only git.
+  grep). The git tasks use no interpreter, no build tool, no process tools and no network — a task that
+  needed one would rig the result, so `prerequisites` declares what a task needs. *(Slice 1, declared:
+  both images have carried the agent runtimes, python3 and pip, since 007 slice 1 (vanilla's FR-30), so
+  the one Python task may use them, and only them; it declares `python3`. Its install attempt is meant to
+  fail for want of a network, which is the failure it exists to produce.)*
 - The identity is repo-local. Neither image sets one, and a global identity would be a difference
   between the bench's own setup and the environment under test.
 - Setup commits carry fixed dates, so the same setup gives the same object ids in both images.
@@ -383,8 +386,91 @@ fi
 )
 
 
-# RB4's order. The report, not the catalog, puts losing cases first (P6).
-CATALOG: tuple[Task, ...] = (_INSPECT, _REBASE, _HOOK_HANGS, _HOOK_REJECTS)
+# --- python-missing-module: a module neither image has (slice 1, FR-39) ---------------------------
+
+_REPORT_PY = """\
+import json
+
+from tabulate import tabulate
+
+with open("data.json") as f:
+    data = json.load(f)
+print(tabulate(sorted(data.items()), tablefmt="plain"))
+"""
+
+# The fake agent's rewrite: the same report without the module, one name and number a line.
+_REWRITE = (
+    'printf \'import json\\n\\nwith open("data.json") as f:\\n    data = json.load(f)\\n'
+    "for name, count in sorted(data.items()):\\n    print(name, count)\\n' > report.py"
+)
+
+_MISSING_MODULE = Task(
+    id="python-missing-module",
+    version=1,
+    capability="Missing modules and installs without a network",
+    goal="Make `python3 report.py` write its totals, one name and count a line, to out/totals.txt.",
+    prerequisites=("python3",),
+    setup=f"""\
+set -eu
+mkdir out
+printf '{{"pears": 5, "apples": 3}}\\n' > data.json
+cat > report.py <<'PY'
+{_REPORT_PY}PY
+""",
+    policy=Policy(
+        start="run",
+        steps=(
+            Step(
+                "run",
+                "python3 report.py > out/totals.txt",
+                on_ok=DONE,
+                on_fail="install",
+                on_hang=give_up("the report hung"),
+            ),
+            Step(
+                "install",
+                "pip install --break-system-packages tabulate",
+                on_ok="rerun",
+                on_fail="rewrite",
+                on_hang="rewrite",
+            ),
+            Step(
+                "rewrite",
+                _REWRITE,
+                on_ok="rerun",
+                on_fail=give_up("could not rewrite report.py"),
+                on_hang=give_up("rewriting report.py hung"),
+            ),
+            Step(
+                "rerun",
+                "python3 report.py > out/totals.txt",
+                on_ok=DONE,
+                on_fail=give_up("the report still fails"),
+                on_hang=give_up("the report hung"),
+            ),
+        ),
+    ),
+    check=_CHECK_PRELUDE
+    + """\
+test -s out/totals.txt || fail "out/totals.txt is missing or empty: the report was not written"
+norm="$(tr -s ' \\t' ' ' < out/totals.txt | sed 's/ *$//')"
+printf '%s\\n' "$norm" | grep -qx 'apples 3' || fail "out/totals.txt does not list apples 3"
+printf '%s\\n' "$norm" | grep -qx 'pears 5' || fail "out/totals.txt does not list pears 5"
+""",
+    expected=(
+        "vanilla: 4 calls, 2 non-zero (module not found, then the install's network failure), completed / "
+        "timelike: the same, the install refused by the package guard instead. Tie"
+    ),
+    difference=(
+        "Both images have the same python3 and pip, and neither has the module the script imports. "
+        "Neither has a network in the bench. Vanilla's pip fails trying to download; timelike's pip goes "
+        "through the package guard, which checks the registry first and reports it unreachable"
+    ),
+)
+
+
+# RB4's order, then slice 1's task. The report, not the catalog, puts losing cases first (P6).
+CATALOG: tuple[Task, ...] = (_INSPECT, _REBASE, _HOOK_HANGS, _HOOK_REJECTS, _MISSING_MODULE)
 
 NOT_BENCHABLE: tuple[tuple[str, str], ...] = (
     (

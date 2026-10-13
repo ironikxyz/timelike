@@ -523,3 +523,15 @@ ASSUMED: make bench-live builds the images first, as make bench does, so DRY_RUN
 ABSENT: the image is not built here (no Docker on this host); its build, its scan and its mount are the lane's
 Verification: tests/unit/test_bench_run_sh.py 16 passed (live flags through, bench-live in the reproduce command, configuration forwarded by name and value, a good key file mounted read-only with its value on no argv, five bad key files refused on the host with exit 4); bash -n and shellcheck clean on run.sh
 SCOPE: out — scan/scan.sh (1 of 6 changed files) (task has FLAGGED: yes)
+
+### T048: the catalog — python-missing-module (FR-38, FR-39)
+**Started:** 2026-10-13T08:10:50Z | **Completed:** 2026-10-13T08:15:40Z
+
+INHERITED: FR-39's purpose (live, it can produce module not found and network denial, which no git task can) — (confidence: high)
+FLAGGED: the module is tabulate (absent from both images and from this host), not yaml, which this host has — chose a module the host lane can also miss, so the unit sees the same failure the images give (confidence: high)
+FLAGGED: slice 0's rule "no interpreter in a task script" now binds the git tasks only, and the Python task may use python3 and pip and nothing that fetches — chose a declared, scoped rule over adding python3 to every task; both images have carried python3 and pip since 007 slice 1 (the vanilla Dockerfile's FR-30), so RB1's "both images contain it" holds (confidence: high)
+ASSUMED: the existing goals are plain words a live agent can act on; only the new task's goal is new — (confidence: medium)
+ASSUMED: in the host emulation pip gets a dead index with one retry; one retry is what makes pip print the connection error, as its default five do in a container — (confidence: high)
+ABSENT: no live verification that a model meets the missing module before trying anything else; the fake agent's path does, and the live run will show what a model does
+Verification: tests/unit/test_bench_catalog.py 33 passed (the new task's path run, install, rewrite, rerun under both emulations, its first failure categorised module not found and its second network denial); tests/unit -k bench 625 passed; ruff clean; mypy --strict clean
+SCOPE: in (2 changed files)

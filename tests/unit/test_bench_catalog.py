@@ -74,6 +74,9 @@ PREDICTED: dict[tuple[str, str], Outcome] = {
     ("git-commit-hook-hangs", "timelike"): Outcome(2, 1, 0, "completed"),  # the dispatcher's verdict
     ("git-commit-hook-rejects", "vanilla"): Outcome(4, 1, 0, "completed"),
     ("git-commit-hook-rejects", "timelike"): Outcome(4, 1, 0, "completed"),  # hooks run (001 cycle 5)
+    # Slice 1 (FR-39): run (module missing), install (no network), rewrite, run again.
+    ("python-missing-module", "vanilla"): Outcome(4, 2, 0, "completed"),
+    ("python-missing-module", "timelike"): Outcome(4, 2, 0, "completed"),
 }
 ENVIRONMENTS = ("vanilla", "timelike")
 
@@ -81,13 +84,17 @@ ENVIRONMENTS = ("vanilla", "timelike")
 # --- static properties -----------------------------------------------------------------------------
 
 
-def test_the_four_rb4_tasks() -> None:
+def test_the_four_rb4_tasks_then_slice_1_s() -> None:
     assert [t.id for t in catalog.CATALOG] == [
         "git-inspect",
         "git-rebase-continue",
         "git-commit-hook-hangs",
         "git-commit-hook-rejects",
+        "python-missing-module",
     ]
+
+
+GIT_TASKS = [t for t in catalog.CATALOG if t.id.startswith("git-")]
 
 
 def test_ids_unique_and_kebab() -> None:
@@ -97,9 +104,12 @@ def test_ids_unique_and_kebab() -> None:
 
 
 def test_versions_and_prerequisites() -> None:
-    for task in catalog.CATALOG:
+    for task in GIT_TASKS:
         assert task.version == 2  # 2: checks print their reason (send …-080659, F003)
         assert task.prerequisites == ("git",)
+    py = catalog.by_id("python-missing-module")
+    assert (py.version, py.prerequisites) == (1, ("python3",))
+    for task in catalog.CATALOG:
         assert task.capability and task.goal and task.expected
 
 
@@ -123,10 +133,18 @@ def test_every_step_is_reachable_from_start() -> None:
 
 
 def test_no_forbidden_tools_or_network() -> None:
-    for task in catalog.CATALOG:
+    for task in GIT_TASKS:
         texts = [task.setup, task.check, *(s.command for s in task.policy.steps)]
         for text in texts:
             assert not FORBIDDEN.search(text), f"{task.id}: {FORBIDDEN.search(text)!r} in {text!r}"
+
+
+def test_the_python_task_uses_python3_and_pip_and_nothing_that_fetches() -> None:
+    task = catalog.by_id("python-missing-module")
+    words = {s.command.split()[0] for s in task.policy.steps}
+    assert words == {"python3", "pip", "printf"}
+    for text in [task.setup, task.check, *(s.command for s in task.policy.steps)]:
+        assert not re.search(r"curl|wget|http", text, re.IGNORECASE), text
 
 
 def test_policies_are_environment_blind_text() -> None:
@@ -185,8 +203,19 @@ def _system_gitconfig() -> str:
     return str(path)
 
 
+# The bench gives task containers no network; here the host has one, so pip is pointed at a closed port on
+# loopback and fails as an install without a network does (python-missing-module). One retry, because pip
+# names the connection error only when it retries, as its default of five does in a container.
+_OFFLINE_PIP = {
+    "PIP_INDEX_URL": "http://127.0.0.1:9/simple",
+    "PIP_RETRIES": "1",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_NO_CACHE_DIR": "1",
+}
+
+
 def _env(kind: str, home: Path) -> dict[str, str]:
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home)}
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home), **_OFFLINE_PIP}
     if kind == "vanilla":
         env["GIT_CONFIG_NOSYSTEM"] = "1"
     else:
@@ -366,3 +395,14 @@ def test_hook_hangs_timelike_ends_on_the_dispatchers_verdict(runs: dict[tuple[st
     assert (run.outcome.nonzero, run.outcome.hangs) == (1, 0)
     assert f"did not finish within {HOOK_LIMIT_S} s and was stopped" in run.stderr[0]
     assert "--no-verify" not in run.stderr[0]
+
+
+def test_python_task_meets_a_missing_module_then_a_network_failure(runs: dict[tuple[str, str], Run]) -> None:
+    from benchlib.categories import categorize
+
+    for kind in ENVIRONMENTS:
+        run = runs[("python-missing-module", kind)]
+        assert run.path == ("run", "install", "rewrite", "rerun", "DONE"), kind
+        assert "ModuleNotFoundError: No module named 'tabulate'" in run.stderr[0]
+        assert categorize(1, False, run.stderr[0]) == "module-not-found"
+        assert categorize(1, False, run.stderr[1]) == "network-denial", run.stderr[1]
