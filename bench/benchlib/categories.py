@@ -53,6 +53,8 @@ NOT_FOUND_EXIT = 127
 
 # 003's `run` verdict: `exit 124 (timeout after 1 s (--timeout); …)` and `exit 137 (out of memory: …)`.
 _RUN_TIMEOUT = re.compile(r"\(timeout after [0-9.]+ s\b")
+# A harness's own call limit, as it reports it (tests/fixtures/transcripts, T041): OpenCode 1.19.0.
+HARNESS_TIMEOUTS = ("shell tool terminated command after exceeding timeout",)
 _RUN_OOM = "(out of memory:"
 
 _COMMAND_NOT_FOUND = (
@@ -68,6 +70,8 @@ _NETWORK_DENIAL = (
     "network is unreachable",
     "No route to host",
     "Could not resolve host",  # git, curl
+    "Failed to connect to",  # git, curl: `Failed to connect to <host> port <n> … Couldn't connect to server`
+    "Couldn't connect to server",
     "Temporary failure in name resolution",  # glibc, pip, python
     "Name or service not known",
     "getaddrinfo ENOTFOUND",  # node
@@ -86,7 +90,12 @@ def categorize(exit_code: int, hung: bool, output: str, oom_rose: bool = False) 
     """The call's category, or "" for a call that succeeded (exit 0 and no hang). See the module doc."""
     if exit_code == 0 and not hung:
         return ""
-    if hung or exit_code == TIMEOUT_EXIT or _RUN_TIMEOUT.search(output):
+    if (
+        hung
+        or exit_code == TIMEOUT_EXIT
+        or _RUN_TIMEOUT.search(output)
+        or any(s in output for s in HARNESS_TIMEOUTS)
+    ):
         return TIMEOUT
     if (exit_code == KILLED_EXIT or _RUN_OOM in output) and oom_rose:
         return MEMORY_KILL

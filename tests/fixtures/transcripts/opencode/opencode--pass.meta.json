@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "relay": {
+    "generations": 4,
+    "models": [
+      "deepseek/deepseek-v4-pro-0813"
+    ],
+    "requests": 4,
+    "statuses": {
+      "200": 4
+    },
+    "stopped_by": "",
+    "turns": 3
+  },
+  "script": [
+    "mkdir -p out && printf 'hello\\n' > out/a.txt",
+    "cat out/a.txt"
+  ]
+}

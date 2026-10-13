@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"01a13432-e173-74a3-8baa-fc7717e6f7d3"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `deepseek/deepseek-v4-pro-0813` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"mkdir -p out && printf 'hello\\\\n' > out/a.txt\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"mkdir -p out && printf 'hello\\\\n' > out/a.txt\"","aggregated_output":"","exit_code":0,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc 'cat out/a.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc 'cat out/a.txt'","aggregated_output":"hello\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"done"}}
+{"type":"turn.completed","usage":{"input_tokens":30,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":15,"reasoning_output_tokens":0}}

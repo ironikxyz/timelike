@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "relay": {
+    "generations": 9,
+    "models": [
+      "deepseek/deepseek-v4-pro-0813"
+    ],
+    "requests": 9,
+    "statuses": {
+      "200": 9
+    },
+    "stopped_by": "",
+    "turns": 9
+  },
+  "script": [
+    "nosuch-bench-cmd-7f3a",
+    "python3 -c 'import nosuch_bench_mod_7f3a'",
+    "node -e \"require('nosuch-bench-mod-7f3a')\"",
+    "timeout 1 sleep 10",
+    "git ls-remote https://bench-7f3a.invalid/x.git",
+    "exec 3<>/dev/tcp/127.0.0.1/9",
+    "bash -c 'kill -KILL $$'",
+    "ls /nonexistent-bench-7f3a"
+  ]
+}

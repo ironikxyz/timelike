@@ -166,3 +166,32 @@ def test_every_category_is_described_in_order() -> None:
     assert len(lines) == len(c.CATEGORIES)
     for i, (line, cat) in enumerate(zip(lines, c.CATEGORIES, strict=True), start=1):
         assert re.match(rf"{i}\. {re.escape(c.LABELS[cat])}:", line), line
+
+
+# --- the harnesses' own texts, from the recorded transcripts (tests/fixtures/transcripts, T041) -----
+
+TRANSCRIPTS = REPO / "tests/fixtures/transcripts"
+
+
+def _opencode_outputs(scenario: str) -> dict[str, tuple[int | None, str]]:
+    import json
+
+    out: dict[str, tuple[int | None, str]] = {}
+    for line in (TRANSCRIPTS / f"opencode/opencode--{scenario}.stdout.jsonl").read_text().splitlines():
+        event = json.loads(line)
+        if event["type"] == "tool_use":
+            state = event["part"]["state"]
+            out[state["input"]["command"]] = (state["metadata"]["exit"], state["output"])
+    return out
+
+
+def test_opencode_s_own_timeout_is_a_timeout() -> None:
+    exit_code, output = _opencode_outputs("failures")["bash -c 'kill -KILL $$'"]
+    assert exit_code is None and "shell tool terminated command after exceeding timeout" in output
+    assert c.categorize(-1, False, output) == c.TIMEOUT
+
+
+def test_git_s_failed_to_connect_is_a_network_denial() -> None:
+    exit_code, output = _opencode_outputs("failures")["git ls-remote https://bench-7f3a.invalid/x.git"]
+    assert exit_code == 128 and "Failed to connect to" in output
+    assert c.categorize(exit_code, False, output) == c.NETWORK_DENIAL

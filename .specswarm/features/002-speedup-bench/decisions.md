@@ -469,3 +469,15 @@ ASSUMED: one run at a time per relay (runs are sequential, FR-1's order); accoun
 ABSENT: the generation-stats lookup is a function (generation_cost) the driver calls after a run; its live behaviour is not testable without a key (not_verified)
 ABSENT: no TLS between harness and relay: the internal network has no other member (FR-25)
 Verification: tests/unit/test_bench_relay.py 15 passed (stream and plain, chat and Responses; turns only for requests offering tools; the turn cap and the spend cap across runs; 429/500/401 passed through and counted; an unreachable upstream as 502 'unreachable'; a missing cost named; the key's header reaches upstream and appears in no accounting); ruff clean; mypy --strict clean (37 files)
+SCOPE: in (2 changed files)
+
+### T041: transcripts recorded from the pinned harnesses (tests/fixtures/transcripts/)
+**Started:** 2026-10-13T07:37:47Z | **Completed:** 2026-10-13T07:42:27Z
+
+INHERITED: the stand-in (T039) and the relay (T040) as the path the harness talked to; the harness binaries from research RB12, checked against npm's sha512 — (confidence: high)
+FLAGGED: the recordings' scratch paths were rewritten to /home/agent/task and /home/agent, and the README says so — chose a stated, single rewrite over committing the host's paths, which name the host user and would also have been checked against the deny-list (confidence: high)
+FLAGGED: two texts added to the categories from what the harnesses really printed: OpenCode's own call timeout ("shell tool terminated command after exceeding timeout") and git's "Failed to connect to … Couldn't connect to server" — chose to match the recorded text over guessing harness wording earlier (T035's ABSENT) (confidence: high)
+ASSUMED: Codex stopping at the first 429 is Codex's own behaviour, measured as it is; no retry setting is added for it (each harness runs with its defaults, so the two arms of a harness see the same retries) — (confidence: medium: live, Codex rows may stop on a 429 more often than OpenCode's; each is named)
+ABSENT: no recording against OpenRouter itself (no key on this side); the mentor's first live run is that tier (llm-apis Q001)
+ABSENT: no memory-kill recording: the host run has no memory limit; the probe produces it in the lane
+Verification: record.py ran both harnesses through four scenarios (exits: pass 0/0, failures 0/0, turn-cap 1/1, rate-limit 0/1); deny-list PASS over the 29 files (P1–P7 0/0); no host path left; categories 23 passed with the two recorded texts
