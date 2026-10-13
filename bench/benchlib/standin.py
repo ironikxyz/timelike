@@ -12,6 +12,9 @@ request itself (the number of tool results it carries), so the stand-in keeps no
 script is done it answers with plain text, which ends the harness's run. A request offering no tools
 (OpenCode's title request) gets a short text answer.
 
+The runner's script for a task is each of the fake policy's step commands once, in policy order
+(`fakeagent.every_command`).
+
 Every answer carries `usage` with `cost`, as OpenRouter's always does, so the relay's accounting runs on the
 same shape. Units can make it answer an error status for the next N requests, to stand in for 429s and 5xx.
 

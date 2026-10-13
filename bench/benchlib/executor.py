@@ -39,6 +39,11 @@ from typing import IO, Protocol
 WRAPPER_SCRIPT = (
     'timeout -s TERM -k 2 "$0" bash -c "$1" & t=$!; wait $t; rc=$?; kill -KILL -$t 2>/dev/null; exit $rc'
 )
+# The same wrapper with dash as the inner shell. A live harness is started with it (feature 002 slice 1): in
+# the timelike image `bash -c` reads BASH_ENV, whose secret strip (001 SC-9) would remove the key the harness
+# needs, in the timelike arms only. dash reads no startup file, so the harness gets its key, and the agent's
+# own commands, which the harness runs with bash, still get the strip, as they do in the product.
+WRAPPER_SCRIPT_SH = WRAPPER_SCRIPT.replace('bash -c "$1"', 'sh -c "$1"')
 HANG_EXIT_CODES = frozenset({124, 137})  # timeout's TERM verdict, and the KILL that follows it
 BACKSTOP_GRACE_S = 10.0
 HEAD_CAP = 4096  # bytes kept per stream; everything is still counted
@@ -62,10 +67,12 @@ class Executor(Protocol):
     def run(self, command: str, limit_s: int) -> CallResult: ...
 
 
-def wrapper_argv(command: str, limit_s: int) -> list[str]:
+def wrapper_argv(command: str, limit_s: int, inner: str = "bash") -> list[str]:
     if limit_s <= 0:
         raise ValueError(f"limit must be positive, got {limit_s}")
-    return ["sh", "-c", WRAPPER_SCRIPT, str(limit_s), command]
+    if inner not in ("bash", "sh"):
+        raise ValueError(f"inner shell must be bash or sh, got {inner!r}")
+    return ["sh", "-c", WRAPPER_SCRIPT if inner == "bash" else WRAPPER_SCRIPT_SH, str(limit_s), command]
 
 
 def is_hang(exit_code: int, duration_ms: int, limit_s: int) -> bool:
@@ -175,6 +182,7 @@ class DockerExecutor:
         env: Mapping[str, str] | None = None,
         exec_env: Mapping[str, str] | None = None,
         pass_env: Sequence[str] = (),
+        inner: str = "bash",
     ) -> None:
         self.container_id = container_id
         self.docker = docker
@@ -186,6 +194,7 @@ class DockerExecutor:
         # Passed by name (`-e NAME`): the value comes from the docker CLI's own environment (`env` above),
         # so it never appears on any argv (FR-30). The harness exec's key is the one use.
         self.pass_env = tuple(pass_env)
+        self.inner = inner  # "sh" for a live harness's own exec (WRAPPER_SCRIPT_SH)
 
     def argv(self, command: str, limit_s: int) -> list[str]:
         prefix = [self.docker, "exec", "-u", self.user, "-w", self.workdir]
@@ -193,7 +202,7 @@ class DockerExecutor:
             prefix += ["-e", f"{name}={value}"]
         for name in self.pass_env:
             prefix += ["-e", name]
-        return [*prefix, self.container_id, *wrapper_argv(command, limit_s)]
+        return [*prefix, self.container_id, *wrapper_argv(command, limit_s, self.inner)]
 
     def run(self, command: str, limit_s: int) -> CallResult:
         return capture(self.argv(command, limit_s), limit_s, env=self.env)

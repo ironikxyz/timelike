@@ -540,7 +540,7 @@ def run_live(
                 f"{spec.version} — rebuild with make bench-images"
             )
         if live.standin is not None:
-            live.standin.set_script(fa.happy_path(task.policy))
+            live.standin.set_script(fa.every_command(task.policy))
         before = _oom(session)
         live.relay.begin_run()
         hx = lsession.harness_executor(spec.exec_env(live.relay_url, live.model), live.key or KEY_PLACEHOLDER)

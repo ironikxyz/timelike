@@ -384,13 +384,13 @@ send's route.
 
 ### Phase 11d: The Docker lane (e2e; the operator runs it)
 
-- [ ] T049 `tests/e2e/speedup-bench.bats`: SC-1 and SC-2 re-established on schema 2, in three arms. SC-4 cells: each
+- [X] T049 `tests/e2e/speedup-bench.bats`: SC-1 and SC-2 re-established on schema 2, in three arms. SC-4 cells: each
   trace labelled, adoption counted per arm. SC-6: the report's verdict lines against the validator's own
   recomputation. A set `BENCH_KEY_FILE` refuses a fake run.
-- [ ] T050 New e2e `tests/e2e/the-same-task-catalog-runs-under-two-harnesses-and-the-report-shows-results-per-harness.bats`
+- [X] T050 New e2e `tests/e2e/the-same-task-catalog-runs-under-two-harnesses-and-the-report-shows-results-per-harness.bats`
   (SC-5): `--standin` with both harnesses on two tasks; per-harness sections; transcripts present; the key gate
   shown to fire with a planted stand-in "key".
-- [ ] T051 New e2e `tests/e2e/failed-commands-are-grouped-into-categories-including-command-not-found-module-not-found-timeout-memory-kill-and-network-denial.bats`
+- [X] T051 New e2e `tests/e2e/failed-commands-are-grouped-into-categories-including-command-not-found-module-not-found-timeout-memory-kill-and-network-denial.bats`
   (SC-7): `categories --probe` in both images, every category produced and matched.
 
 ### Phase 11e: Records

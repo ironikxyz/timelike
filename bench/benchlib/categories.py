@@ -146,8 +146,8 @@ PROBES = (
     Probe(TIMEOUT, "timeout 1 sleep 10", "GNU timeout's own verdict, exit 124"),
     Probe(
         MEMORY_KILL,
-        "python3 -c 'b = bytearray(512 * 1024 * 1024); print(len(b))'",
-        f"512 MiB against a {PROBE_MEMORY} limit: the kernel's OOM killer",
+        "python3 -c 'b = b\"x\" * (512 * 1024 * 1024); print(len(b))'",
+        f"512 MiB, every page written, against a {PROBE_MEMORY} limit: the kernel's OOM killer",
     ),
     Probe(NETWORK_DENIAL, "git ls-remote https://bench-7f3a.invalid/x.git", "DNS failure, no network"),
     Probe(NETWORK_DENIAL, "exec 3<>/dev/tcp/127.0.0.1/9", "connection refused on the container's loopback"),

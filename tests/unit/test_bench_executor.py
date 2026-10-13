@@ -109,3 +109,25 @@ def test_docker_run_goes_through_capture(tmp_path: Path) -> None:
 )
 def test_is_hang(code: int, ms: int, limit: int, hung: bool) -> None:
     assert ex.is_hang(code, ms, limit) is hung
+
+
+def test_a_live_harness_is_started_by_dash_so_bash_env_cannot_strip_its_key() -> None:
+    """In the timelike image `bash -c` reads BASH_ENV, whose secret strip removes key-shaped variables: the
+    harness itself is started with `sh -c` (dash reads no startup file); its own children still use bash."""
+    harness = ex.DockerExecutor(
+        "cid", exec_env={"HOME": "/home/agent"}, pass_env=("OPENROUTER_API_KEY",), inner="sh"
+    )
+    argv = harness.argv("opencode run x", 900)
+    assert argv[:9] == [
+        "docker", "exec", "-u", "agent", "-w", "/home/agent/task", "-e", "HOME=/home/agent", "-e",
+    ]  # fmt: skip
+    assert argv[9:11] == ["OPENROUTER_API_KEY", "cid"]
+    assert 'sh -c "$1"' in argv[13] and 'bash -c "$1"' not in argv[13]
+    assert ex.DockerExecutor("cid").argv("x", 5)[-3] == ex.WRAPPER_SCRIPT  # every other call: bash
+
+
+def test_the_dash_wrapper_runs_the_command_under_dash(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    r = ex.capture(ex.wrapper_argv('test -z "${BASH_VERSION:-}" && echo dash', 5, inner="sh"), 5)
+    assert (r.exit_code, r.stdout_head.strip()) == (0, b"dash")
+    r = ex.capture(ex.wrapper_argv('test -n "${BASH_VERSION:-}" && echo bash', 5), 5)
+    assert (r.exit_code, r.stdout_head.strip()) == (0, b"bash")

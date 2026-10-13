@@ -274,6 +274,7 @@ class DockerSession:
             env=runner.environ_with(hz.KEY_VAR, key),
             exec_env=exec_env,
             pass_env=(hz.KEY_VAR,),
+            inner="sh",  # dash: the timelike image's BASH_ENV strip must not take the harness's own key
         )
 
 

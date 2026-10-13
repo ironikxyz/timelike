@@ -535,3 +535,16 @@ ASSUMED: in the host emulation pip gets a dead index with one retry; one retry i
 ABSENT: no live verification that a model meets the missing module before trying anything else; the fake agent's path does, and the live run will show what a model does
 Verification: tests/unit/test_bench_catalog.py 33 passed (the new task's path run, install, rewrite, rerun under both emulations, its first failure categorised module not found and its second network denial); tests/unit -k bench 625 passed; ruff clean; mypy --strict clean
 SCOPE: in (2 changed files)
+
+### T049–T051: the Docker lane's tests (and two fixes they found)
+**Started:** 2026-10-13T08:15:40Z | **Completed:** 2026-10-13T08:22:02Z
+
+INHERITED: the validator's verdicts and adoption commands (T044–T046), the probe's commands (T039), the harness image (T047), the new task (T048) — (confidence: high)
+FLAGGED (a defect found and fixed): in the timelike image `bash -c` reads BASH_ENV, whose secret strip (001 SC-9) removes key-shaped variables — so the wrapper's `bash -c` would have started the live harness WITHOUT its key in the timelike arms only, while vanilla's had one. The harness is now started by dash (`sh -c`, WRAPPER_SCRIPT_SH); the agent's own commands, which the harness runs with bash, still get the strip, as in the product. Found by reading the live exec end to end; units pin the argv and that the inner shell is dash (confidence: high)
+FLAGGED (a design fix): the stand-in's script was the task's happy path, which for the Python task is its first command alone, so the live path would never have reached the install or network denial; it is now every step's command once, in policy order (fakeagent.every_command). research RB17 amended, declared (confidence: high)
+FLAGGED: an e2e test that wrote a key file under bench/out/e2e to see run.sh refuse it was removed before it ran — inside the runner the repository is /code while bench/out keeps its host path, so the file would not count as inside the repository and the run would have reached the provider from the lane; the refusals stay as host units (confidence: high)
+ASSUMED: the memory probe writes every page (b"x" * n), because bytearray(n) need not — (confidence: medium)
+ASSUMED: tests/run.sh runs every file in tests/e2e, so the two new files need no wiring; they are added to the Makefile's shellcheck list as the later features' files are — (confidence: high)
+ABSENT: none of these ran here: they are the Docker lane's (the operator's); bash -n and shellcheck are what was checked
+Verification: shellcheck 0.11.0 clean over the three bats files and run.sh; tests/unit -k 'bench or executor' 628 passed; ruff clean repo-wide; mypy --strict clean (39 files)
+SCOPE: out — bench/benchlib/executor.py, bench/benchlib/fakeagent.py, tests/unit/test_bench_executor.py, tests/unit/test_bench_standin.py, tests/unit/test_bench_live.py (5 of 14 changed files) (task has FLAGGED: yes)

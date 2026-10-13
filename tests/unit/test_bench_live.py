@@ -207,7 +207,7 @@ def test_a_told_live_run_is_traced_from_the_harness_s_own_transcript(
     assert t.extensions["relay"]["turns"] == 3 and t.extensions["standin"] is True  # type: ignore[index]
     assert (tmp_path / "transcripts" / "git-inspect--opencode--told.stdout.jsonl").exists()
     assert s.key_seen == runner.KEY_PLACEHOLDER and s.closed
-    assert standin.state.script == ("git log -n 5 > out/log.txt", "git diff > out/diff.txt")
+    assert standin.state.script == ("git log -n 5 > out/log.txt", "git diff > out/diff.txt")  # its two steps
 
 
 def test_the_key_goes_to_the_harness_exec_and_the_gate_stops_it_reaching_a_file(

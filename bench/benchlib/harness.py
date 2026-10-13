@@ -57,7 +57,7 @@ class HarnessSpec:
     def command(self, relay_url: str, model: str, prompt: str) -> str:
         """The bash command the wrapper runs: the harness, its output to files the runner collects."""
         argv = " ".join(shlex.quote(a) for a in self._argv(relay_url, model, prompt))
-        return f"mkdir -p {OUT_DIR} && {argv} </dev/null >{STDOUT} 2>{STDERR}"
+        return f"mkdir -p {OUT_DIR} {CODEX_HOME} && {argv} </dev/null >{STDOUT} 2>{STDERR}"
 
     def parse(self, files: dict[str, str]) -> transcripts.Parsed:
         return self._parse(files)

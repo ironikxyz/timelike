@@ -365,8 +365,10 @@ them. **Memory kill needs evidence:** exit 137 alone is also what `kill -9` give
   rollout; `--json` stdout is kept as a transcript too.
 - Both merge stdout and stderr in what they report for a call (Assumption 11).
 - **The stand-in** answers chat completions and Responses requests (streamed or not) with the tool calls of a script.
-  Its default script is the task's fake-agent happy path (start, then `on_ok` until DONE), so the live path in the lane
-  runs the same commands the fake agent would. For the categories script it issues one failing command per category.
+  Its script is each of the task's fake-policy step commands once, in policy order (`fakeagent.every_command`), so the
+  live path in the lane runs every command the fake agent can run, recovery steps included. *(Amended at implement,
+  T050, declared: it first read "the task's fake-agent happy path (start, then `on_ok` until DONE)", which for the
+  Python task is its first command alone, so the live path would never have reached the install and network denial.)* For the categories script it issues one failing command per category.
   It picks the harness's shell tool from the tools the request offers (`bash`, `exec_command`), so it adapts to the
   harness as the real model would. The transcripts recorded with it are each harness's own output (P005), and the
   first live run is still its own tier (llm-apis Q001).

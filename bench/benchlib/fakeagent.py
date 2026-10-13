@@ -224,3 +224,15 @@ def happy_path(policy: Policy) -> tuple[str, ...]:
         commands.append(step.command)
         current = step.on_ok
     return tuple(commands)
+
+
+def every_command(policy: Policy) -> tuple[str, ...]:
+    """Each step's command once, in the order the policy lists its steps: the model stand-in's script.
+
+    A live harness in the lane then runs every command the fake agent can run for the task, its recovery
+    steps included (the Python task's install and rewrite), so the live path meets the same failures the
+    fake path does. The stand-in cannot branch on outcomes (OpenCode tells the model a call's output but not
+    its exit code), so it does not try; a task whose steps only make sense on one branch may end failed
+    under the stand-in, which is a fact about the script, not about timelike.
+    """
+    return tuple(step.command for step in policy.steps)

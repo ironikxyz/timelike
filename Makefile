@@ -53,6 +53,8 @@ test-host:
 # mypy run through the uv inside the built agent image, on the image's own interpreter.
 SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/opt/timelike/libexec/install-shim tests/run.sh tests/host/run.sh \
   tests/e2e/run-killed-by-memory-limit-names-limit-and-peak.bats \
+  tests/e2e/the-same-task-catalog-runs-under-two-harnesses-and-the-report-shows-results-per-harness.bats \
+  tests/e2e/failed-commands-are-grouped-into-categories-including-command-not-found-module-not-found-timeout-memory-kill-and-network-denial.bats \
   tests/e2e/view-directory-overview-dependency-directory-collapsed-within-budget.bats \
   tests/e2e/announcement-at-most-60-lines-in-each-harness-user-level-context-on-start.bats \
   tests/e2e/announcement-generated-from-manifests-missing-tool-fails.bats \

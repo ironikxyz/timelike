@@ -122,3 +122,14 @@ def test_the_script_for_a_task_is_its_fake_policy_happy_path() -> None:
     for t in catalog.CATALOG:
         path = fakeagent.happy_path(t.policy)
         assert path and path[0] == t.policy.step(t.policy.start).command
+
+
+def test_the_stand_in_s_script_is_every_step_once_in_policy_order() -> None:
+    task = catalog.by_id("python-missing-module")
+    assert fakeagent.every_command(task.policy) == tuple(s.command for s in task.policy.steps)
+    assert [c.split()[0] for c in fakeagent.every_command(task.policy)] == [
+        "python3",
+        "pip",
+        "printf",
+        "python3",
+    ]
