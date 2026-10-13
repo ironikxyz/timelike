@@ -13,9 +13,25 @@ three things the send asks for are only visible in the plaintext exchange (resea
   provider answered with (cross-stack P003), and whether its last answer asked for tool calls, which tells
   "a call was in flight" from "the harness hung" when the run limit fires (FR-36).
 
-**Headers are forwarded and never recorded.** The `Authorization` header the harness sends carries the key
-(FOR-MENTOR Item 25 asks whether the relay should add it instead); nothing here logs, stores or writes a
-request header, and the accounting holds none.
+**The relay holds the key** (FOR-MENTOR Item 25, ruled (b) at 2026-10-13T07:12:57Z in
+`bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`). Every harness is given
+`harness.KEY_PLACEHOLDER` for its key variable; the relay drops any `Authorization` (and any other
+credential-carrying header) a request arrives with, never forwarding the incoming value, and adds its own
+`Authorization: Bearer <key>` from the key the driver read from the key file. With the model stand-in there
+is no key, and the relay adds none. Nothing here logs, stores or writes a request header or the key, and the
+accounting holds none.
+
+**It forwards only what a harness needs** (the ruling's condition 4): to its one upstream, only on ROUTES
+(chat completions, Responses, generation stats), and a model request only for the pinned model id. Anything
+else is refused with a named verdict and recorded under `refused`, never forwarded: `route-not-allowed`
+(another method or path, or a request naming another host in absolute form), `no-model` (a model request
+naming no model), `other-model` (another model; the run then ends `stopped`, cause `model-refused`).
+
+**Every request counts, whoever sent it** (condition 5). An agent's command shares the task container, its
+network and its environment with the harness, so it can reach the relay; that is use, not reading, and it is
+bounded by the same caps. The relay cannot tell a harness's request from a command's: both come from the same
+address carrying the same placeholder, and any token the harness held the agent could read too. So nothing is
+attributed to a sender, and the run's summary says so (`senders`).
 
 A cap answers HTTP 400 with `{"error": {"message": "timelike-bench: <cap> reached …"}}`, and every later
 request of that run gets the same answer without reaching the upstream, whatever the harness does with it.
@@ -35,6 +51,14 @@ from typing import Any
 
 PORT = 8417
 ALIAS = "bench-relay"
+# What a harness may ask for (the ruling's condition 4): method, path under the relay. Both harnesses' base
+# URL is the relay's /api/v1. Model requests carry a body naming the model; generation stats are a GET by id.
+MODEL_ROUTES = frozenset({("POST", "/api/v1/chat/completions"), ("POST", "/api/v1/responses")})
+ROUTES = MODEL_ROUTES | {("GET", "/api/v1/generation")}
+REFUSALS = ("route-not-allowed", "no-model", "other-model")
+SENDERS = "not told apart: the harness and the agent's commands share one container, address and environment"
+# Request headers that carry a credential: never forwarded, whatever they hold (condition 1).
+_CREDENTIAL = frozenset({"authorization", "x-api-key", "api-key", "cookie"})
 UPSTREAM_TIMEOUT_S = 300.0
 _HOP = frozenset(
     {
@@ -62,6 +86,8 @@ class Accounting:
     last_asked_tools: bool = False
     waiting: int = 0  # requests still waiting on the upstream
     stopped_by: str = ""  # "", "turn-cap", "spend-cap"
+    refused: dict[str, int] = field(default_factory=dict)  # REFUSALS verdict → count, never forwarded
+    other_model: str = ""  # the first model id refused as not the pinned one, cut to 100 characters
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -71,6 +97,8 @@ class Accounting:
             "generations": len(self.generations),
             "models": list(self.models),
             "stopped_by": self.stopped_by,
+            "refused": dict(sorted(self.refused.items())),
+            "senders": SENDERS,
         }
 
 
@@ -155,13 +183,19 @@ class Relay:
         *,
         turn_cap: int,
         spend_cap_usd: float,
+        model: str,
+        key: str | None = None,
         host: str = "0.0.0.0",  # noqa: S104 — the internal network's interface; nothing else can reach it
         port: int = PORT,
     ) -> None:
         parts = urllib.parse.urlsplit(upstream)
         if parts.scheme not in ("http", "https") or not parts.hostname:
             raise ValueError(f"upstream {upstream!r} is not an http(s) URL")
+        if not model:
+            raise ValueError("the relay needs the pinned model id: it forwards no other")
         self.upstream = parts
+        self.model = model
+        self._key = key  # in memory only; None with the stand-in. Never in a repr, a log or the accounting
         self.turn_cap = turn_cap
         self.spend_cap_usd = spend_cap_usd
         self.spent_usd = 0.0
@@ -206,6 +240,10 @@ class Relay:
     def upstream_path(self, path: str) -> str:
         return self.upstream.path.rstrip("/") + path
 
+    def authorization(self) -> dict[str, str]:
+        """The one credential header the upstream sees: the relay's own, or none against the stand-in."""
+        return {"Authorization": f"Bearer {self._key}"} if self._key else {}
+
 
 def generation_cost(relay_upstream: str, generation: str, key: str, timeout_s: float = 30.0) -> float | None:
     """OpenRouter's generation stats for one id (`GET /api/v1/generation?id=…`): its total cost, or None.
@@ -239,6 +277,21 @@ def _refusal(cap: str, detail: str) -> bytes:
     ).encode()
 
 
+def screen(method: str, target: str, body: Any, model: str) -> tuple[str, str]:
+    """("", "") when the relay may forward this request, else (verdict, why) — condition 4."""
+    path = target.split("?", 1)[0]
+    if not target.startswith("/") or (method, path) not in ROUTES:
+        return "route-not-allowed", f"{method} {target[:120]} is not a route a harness uses"
+    if (method, path) not in MODEL_ROUTES:
+        return "", ""
+    asked = body.get("model") if isinstance(body, dict) else None
+    if not isinstance(asked, str) or not asked:
+        return "no-model", f"{method} {path} names no model"
+    if asked != model:
+        return "other-model", f"{asked[:100]!r} is not the pinned model {model}"
+    return "", ""
+
+
 class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server: _Server
@@ -253,16 +306,50 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _read_body(self) -> tuple[bytes, Any]:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(min(length, _BODY_CAP)) if length > 0 else b""
+        try:
+            return raw, json.loads(raw) if raw else None
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return raw, None
+
+    def _screened(self, body: Any) -> bool:
+        """Refuses and records a request the relay does not forward (condition 4); True when it was."""
+        relay = self.server.relay
+        verdict, why = screen(self.command, self.path, body, relay.model)
+        if not verdict:
+            return False
+        with relay.lock:
+            acct = relay.run
+            acct.requests += 1
+            acct.refused[verdict] = acct.refused.get(verdict, 0) + 1
+            if verdict == "other-model" and not acct.other_model:
+                asked = body.get("model") if isinstance(body, dict) else ""
+                acct.other_model = str(asked)[:100]
+        msg = f"timelike-bench relay: refused ({verdict}): {why}"
+        self._send_json(403, json.dumps({"error": {"message": msg, "code": 403}}).encode())
+        return True
+
+    def _refuse_method(self) -> None:
+        self._read_body()
+        self._screened(None)
+
+    do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = do_CONNECT = do_TRACE = _refuse_method
+
     def do_GET(self) -> None:
-        self._forward(b"", None)
+        if not self._screened(None):
+            with self.server.relay.lock:
+                self.server.relay.run.requests += 1
+            self._forward(b"", None)
 
     def do_POST(self) -> None:
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length) if length else b""
-        try:
-            body: Any = json.loads(raw) if raw else None
-        except json.JSONDecodeError:
-            body = None
+        raw, body = self._read_body()
+        if self._screened(body):
+            return
         relay = self.server.relay
         refusal = b""
         with relay.lock:
@@ -289,7 +376,10 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _forward(self, raw: bytes, body: Any) -> None:
         relay = self.server.relay
-        headers = {k: v for k, v in self.headers.items() if k.lower() not in _HOP}
+        # Condition 1: whatever credential the request arrived with is dropped, never forwarded; the relay's
+        # own is the only one the upstream sees.
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in _HOP | _CREDENTIAL}
+        headers.update(relay.authorization())
         headers["Accept-Encoding"] = "identity"  # the answer is read for accounting, so it is not compressed
         if raw:
             headers["Content-Length"] = str(len(raw))

@@ -1,4 +1,5 @@
-"""Units for the live path of benchlib.runner (feature 002 slice 1, FR-24 to FR-37).
+"""Units for the live path of benchlib.runner (feature 002 slice 1, FR-24 to FR-37; Item 25 ruled (b): the
+relay holds the key).
 
 `live_ending` is pure, so every branch is driven directly. `run_live` is driven end to end on the host with
 the real relay and the real model stand-in on loopback, and a session that stands in for the task container:
@@ -9,9 +10,13 @@ its "harness" makes the requests a harness makes and leaves behind a transcript 
 from __future__ import annotations
 
 import http.client
+import importlib.machinery
+import importlib.util
 import json
+import os
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from benchlib import catalog, runner, trace
@@ -58,6 +63,8 @@ def acct(**over: object) -> Accounting:
     ("o", "kind", "cause"),
     [
         (observed(acct=acct(stopped_by="turn-cap")), "stopped", "turn-cap"),
+        (observed(acct=acct(other_model="openai/gpt-x"), check_ok=True), "stopped", "model-refused"),
+        (observed(acct=acct(other_model="x", stopped_by="spend-cap")), "stopped", "spend-cap"),
         (observed(acct=acct(stopped_by="spend-cap"), check_ok=True), "stopped", "spend-cap"),
         (observed(hit_run_limit=True, acct=acct(waiting=1)), "stopped", "api-unreachable"),
         (observed(hit_run_limit=True, acct=acct(last_asked_tools=True)), "hung", ""),
@@ -96,18 +103,21 @@ def standin() -> Iterator[StandIn]:
     s.stop()
 
 
+MODEL = "deepseek/deepseek-v4-pro-0813"
+
+
 @pytest.fixture
 def relay(standin: StandIn) -> Iterator[Relay]:
-    r = Relay(standin.url, turn_cap=30, spend_cap_usd=10.0, host="127.0.0.1", port=0).start()
+    r = Relay(standin.url, turn_cap=30, spend_cap_usd=10.0, model=MODEL, host="127.0.0.1", port=0).start()
     yield r
     r.stop()
 
 
 class Harness:
-    """Stands in for the harness exec: asks the relay what OpenCode asked, then 'exits'."""
+    """Stands in for the harness exec: asks the relay what OpenCode asked, with the key variable it got."""
 
-    def __init__(self, relay: Relay, requests: int, key: str) -> None:
-        self.relay, self.requests, self.key = relay, requests, key
+    def __init__(self, relay: Relay, requests: int, exec_env: dict[str, str]) -> None:
+        self.relay, self.requests, self.key = relay, requests, exec_env[hz.KEY_VAR]
 
     def run(self, command: str, limit_s: int) -> CallResult:
         tools = [{"type": "function", "function": {"name": "bash"}}]
@@ -115,7 +125,7 @@ class Harness:
             msgs = [{"role": "user", "content": "go"}] + [{"role": "tool", "content": "x"}] * i
             conn = http.client.HTTPConnection("127.0.0.1", self.relay.port, timeout=10)
             body = {
-                "model": "deepseek/deepseek-v4-pro-0813",
+                "model": MODEL,
                 "stream": True,
                 "tools": tools,
                 "messages": msgs,
@@ -140,7 +150,7 @@ class Session:
         )
         self.executor: Executor = self
         self.closed = False
-        self.key_seen = ""
+        self.exec_env: dict[str, str] = {}
 
     def run(self, command: str, limit_s: int) -> CallResult:  # setup and check
         if command == TASK.check and not self.check_ok:
@@ -163,9 +173,9 @@ class Session:
             return 0, self.stdout
         return 0, ""
 
-    def harness_executor(self, exec_env: dict[str, str], key: str) -> Executor:
-        self.key_seen = key
-        return Harness(self.relay, 3, key)
+    def harness_executor(self, exec_env: dict[str, str]) -> Executor:
+        self.exec_env = dict(exec_env)
+        return Harness(self.relay, 3, exec_env)
 
 
 def live_for(
@@ -175,7 +185,7 @@ def live_for(
         spec=hz.specs("1.19.0", "0.162.1")["opencode"],
         relay=relay,
         relay_url="http://bench-relay:8417/api/v1",
-        model="deepseek/deepseek-v4-pro-0813",
+        model=MODEL,
         turn_cap=30,
         run_limit_s=900,
         gate=gate or Gate([key] if key else []),
@@ -206,19 +216,99 @@ def test_a_told_live_run_is_traced_from_the_harness_s_own_transcript(
     assert t.spend.recorded and t.spend.usd == pytest.approx(0.03) and "stand-in" in str(t.spend.source)
     assert t.extensions["relay"]["turns"] == 3 and t.extensions["standin"] is True  # type: ignore[index]
     assert (tmp_path / "transcripts" / "git-inspect--opencode--told.stdout.jsonl").exists()
-    assert s.key_seen == runner.KEY_PLACEHOLDER and s.closed
+    assert s.exec_env[hz.KEY_VAR] == hz.KEY_PLACEHOLDER and s.closed
     assert standin.state.script == ("git log -n 5 > out/log.txt", "git diff > out/diff.txt")  # its two steps
 
 
-def test_the_key_goes_to_the_harness_exec_and_the_gate_stops_it_reaching_a_file(
+def test_c6_the_gate_still_refuses_a_file_holding_the_key_should_it_ever_appear(
     relay: Relay, standin: StandIn, tmp_path: Path
 ) -> None:
     leaked = (FIX / "opencode" / "opencode--pass.stdout.jsonl").read_text().replace("hello", KEY)
     s = Session(relay, stdout=leaked)
     with pytest.raises(GateRefused) as e:
         runner.run_live(TASK, cell("not-told", s), CTX, live_for(relay, None, key=KEY), tmp_path)
-    assert s.key_seen == KEY and KEY not in str(e.value) and s.closed
+    assert KEY not in str(e.value) and s.closed
     assert not list((tmp_path / "transcripts").glob("*")) if (tmp_path / "transcripts").exists() else True
+
+
+def _cli() -> ModuleType:
+    tool = Path(__file__).resolve().parents[2] / "bench" / "bin" / "timelike-bench"
+    loader = importlib.machinery.SourceFileLoader("timelike_bench_cli", str(tool))
+    spec = importlib.util.spec_from_loader("timelike_bench_cli", loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def test_c3_no_harness_exec_and_no_environment_holds_the_key(
+    relay: Relay, standin: StandIn, tmp_path: Path
+) -> None:
+    """With a test key in play: the harness's exec gets the placeholder, the driver's own environment and the
+    docker CLI's never get the key, and the exec the driver would run carries it on no argv and in no env."""
+    keyed = Relay(
+        standin.url, turn_cap=30, spend_cap_usd=10.0, model=MODEL, key=KEY, host="127.0.0.1", port=0
+    )
+    keyed.start()
+    try:
+        s = Session(keyed)
+        t = runner.run_live(TASK, cell("vanilla", s), CTX, live_for(keyed, None, key=KEY), tmp_path)
+        assert t.ending.kind == "completed"
+        assert s.exec_env[hz.KEY_VAR] == hz.KEY_PLACEHOLDER and KEY not in json.dumps(s.exec_env)
+        assert KEY not in json.dumps(dict(os.environ))
+        # The task container's harness exec, as the driver builds it (bench/bin/timelike-bench DockerSession).
+        cli = _cli()
+        session = object.__new__(cli.DockerSession)
+        session.container_id, session.docker = "cid", "docker"
+        hx = session.harness_executor(s.exec_env)
+        argv = hx.argv("opencode run x", 900)
+        assert KEY not in " ".join(argv) and f"{hz.KEY_VAR}={hz.KEY_PLACEHOLDER}" in argv
+        assert hx.env is None  # the docker CLI's own environment is the driver's, untouched: no key added
+    finally:
+        keyed.stop()
+
+
+def test_c7_the_stand_in_path_has_no_key_and_the_relay_adds_none(
+    relay: Relay, standin: StandIn, tmp_path: Path
+) -> None:
+    seen: list[str] = []
+    cls = standin._server.RequestHandlerClass  # type: ignore[attr-defined]
+    original = cls.do_POST
+
+    def spy(handler: object) -> None:
+        seen.append(handler.headers.get("Authorization", "none"))  # type: ignore[attr-defined]
+        original(handler)
+
+    cls.do_POST = spy
+    try:
+        runner.run_live(TASK, cell("told", Session(relay)), CTX, live_for(relay, standin), tmp_path)
+    finally:
+        cls.do_POST = original
+    assert seen and set(seen) == {"none"}
+
+
+def test_a_request_for_another_model_ends_the_run_stopped_and_is_never_forwarded(
+    relay: Relay, standin: StandIn, tmp_path: Path
+) -> None:
+    class OtherModel(Harness):
+        def run(self, command: str, limit_s: int) -> CallResult:
+            conn = http.client.HTTPConnection("127.0.0.1", self.relay.port, timeout=10)
+            body = {"model": "openai/gpt-x", "tools": [{"type": "function"}], "messages": []}
+            conn.request(
+                "POST", "/api/v1/chat/completions", json.dumps(body), {"Authorization": f"Bearer {self.key}"}
+            )
+            assert conn.getresponse().status == 403
+            conn.close()
+            return OK
+
+    s = Session(relay)
+    s.harness_executor = lambda exec_env: OtherModel(relay, 1, exec_env)  # type: ignore[method-assign]
+    before = standin.state.requests
+    t = runner.run_live(TASK, cell("not-told", s), CTX, live_for(relay, standin), tmp_path)
+    assert (t.ending.kind, t.ending.cause) == ("stopped", "model-refused")
+    assert "'openai/gpt-x'" in t.ending.reason and standin.state.requests == before
+    assert t.extensions["relay"]["refused"] == {"other-model": 1}  # type: ignore[index]
+    assert trace.validate(t) == []
 
 
 def test_a_harness_that_is_not_the_pin_refuses_the_run(

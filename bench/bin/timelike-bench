@@ -228,7 +228,8 @@ class DockerSession:
                     agentio.EXIT_CONFIRM,
                     f"task container {self.container_id[:12]} carries API-key-shaped variables: "
                     + ", ".join(found),
-                    "remove them from the image; a key only ever reaches a harness exec (FR-30)",
+                    "remove them from the image; no container holds the key, which only the driver's relay "
+                    "adds (FR-30)",
                 )
             term = dk.exec_term(self.container_id, run)
             if term:
@@ -267,14 +268,15 @@ class DockerSession:
         done = dk.exec_out(self.container_id, argv, self.run)
         return done.returncode, done.stdout
 
-    def harness_executor(self, exec_env: dict[str, str], key: str) -> Executor:
+    def harness_executor(self, exec_env: dict[str, str]) -> Executor:
+        """The harness's exec. It carries no key: its key variable holds the placeholder (Item 25)."""
         return DockerExecutor(
             self.container_id,
             docker=self.docker,
-            env=runner.environ_with(hz.KEY_VAR, key),
             exec_env=exec_env,
-            pass_env=(hz.KEY_VAR,),
-            inner="sh",  # dash: the timelike image's BASH_ENV strip must not take the harness's own key
+            # dash: the timelike image's BASH_ENV strip would remove the placeholder, and both harnesses
+            # refuse to start without the variable.
+            inner="sh",
         )
 
 
@@ -396,6 +398,7 @@ def _plan(
         caps=plan.Caps(turns=turn_cap, run_s=run_limit, spend_usd=spend_cap),
         price_in=float(os.environ.get("BENCH_MODEL_PRICE_IN") or 0),
         price_out=float(os.environ.get("BENCH_MODEL_PRICE_OUT") or 0),
+        price_read=os.environ.get("BENCH_MODEL_PRICE_READ", "").strip(),
         standin=args.standin,
     )
 
@@ -506,7 +509,10 @@ def do_run(args: argparse.Namespace) -> agentio.Result:
                 if standin
                 else (os.environ.get("BENCH_UPSTREAM", "").strip() or "https://openrouter.ai")
             )
-            relay = Relay(upstream, turn_cap=turn_cap, spend_cap_usd=spend_cap, port=PORT).start()
+            # The key lives here, in the driver's memory: the relay adds it to what it forwards (Item 25 (b)).
+            relay = Relay(
+                upstream, turn_cap=turn_cap, spend_cap_usd=spend_cap, model=model, key=key, port=PORT
+            ).start()
         envs = {
             name: runner.Environment(
                 name,
@@ -548,6 +554,14 @@ def do_run(args: argparse.Namespace) -> agentio.Result:
         ) from None
     except keyfile.GateRefused as e:
         raise agentio.ToolError(agentio.EXIT_FAILURE, str(e), "nothing holding the key was written") from None
+    except tr.TraceInvalid as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            "a run's trace broke the trace schema and was refused, so it was not written: "
+            + "; ".join(e.violations),
+            f"the run stopped there; traces written before it are in {out / 'traces'}. The bench recorded "
+            "something its own schema forbids, which is a bench defect, not a result",
+        ) from None
     finally:
         if relay is not None:
             relay.stop()

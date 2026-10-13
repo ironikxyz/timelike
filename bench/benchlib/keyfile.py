@@ -8,9 +8,10 @@ message, here or anywhere in the bench, contains the value**: the module never f
 exists to make sure nothing else does either.
 
 `Gate` is the one way the bench writes a file. It refuses content containing the key's value, naming the file
-and never the value, and writes nothing in that case. In the vanilla image nothing strips secret-shaped
-variables from the agent's commands, so an agent can print the key; the gate is what keeps it out of the
-record. A fake-agent run has no key, and its gate passes everything.
+and never the value, and writes nothing in that case. Since FOR-MENTOR Item 25's ruling (b) only the driver
+holds the key, and its relay adds it to what it forwards, so no harness or agent command can print it; the
+gate stays, against something that should now never happen (condition 6). A fake-agent run has no key, and its
+gate passes everything.
 
 Stdlib only (constitution H5).
 """

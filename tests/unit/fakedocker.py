@@ -10,6 +10,9 @@ Config: {"root": dir, "images": {ref: {"id", "revision", "env": [..], "exec_env"
 Slice 1 adds: the timelike tool list (`docker run --rm --entrypoint …/timelike IMAGE tools --json`, from
 "tools"), the told placement (`exec … timelike announce --install --json`, every harness placed unless the
 image sets "placement_fails"), and the OOM count (`exec CID cat …/memory.events`, always 0 here).
+
+Lane 02s1-a adds two setup edges, matched by the setup's own first git command: "setup_sleep" (seconds the
+setup takes before it starts, as a slow container's did) and "setup_fails" (the setup exits 3 at once).
 """
 
 from __future__ import annotations
@@ -84,6 +87,11 @@ def main(argv: list[str]) -> int:
         home = root / cid / "home"
         cwd = home if workdir in (None, "/home/agent") else home / "task"
         env = {k: v.replace("@HOME@", str(home)) for k, v in img["exec_env"].items()}
+        if "git init -q -b main" in cmd[-1]:  # a task's setup (catalog _PRELUDE), run through the wrapper
+            if img.get("setup_fails"):
+                cmd = [*cmd[:-1], "echo 'fatal: setup (fakedocker)' >&2; exit 3"]
+            elif img.get("setup_sleep"):
+                cmd = [*cmd[:-1], f"sleep {img['setup_sleep']}; {cmd[-1]}"]
         if cmd[:2] == ["mkdir", "-p"]:
             (home / cmd[2]).mkdir(exist_ok=True)
             return 0

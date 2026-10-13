@@ -34,6 +34,7 @@ def full() -> p.Plan:
         caps=p.Caps(turns=30, run_s=900, spend_usd=10.0),
         price_in=1.32,
         price_out=3.96,
+        price_read="2026-10-13",
     )
 
 
@@ -54,6 +55,16 @@ def test_the_plan_names_cells_harnesses_model_caps_and_the_estimate() -> None:
     assert "model: deepseek/deepseek-v4-pro-0813 ($1.32 in, $3.96 out, per million tokens)" in text
     assert "$7.29 at 8 turns per run; $27.32 at the turn cap — the spend cap binds first" in text
     assert "never this estimate" in text
+    assert (
+        "basis: per run, 8 requests typical or 30 at the turn cap, each assumed 20000 input and 1000 output "
+        "tokens (160000 + 8000 per typical run); prices $1.32 input and $3.96 output per million tokens, "
+        "read from OpenRouter's model list on 2026-10-13"
+    ) in lines
+
+
+def test_the_basis_says_when_the_price_date_is_missing() -> None:
+    lines = p.Plan(**{**full().__dict__, "price_read": ""}).lines()
+    assert any(line.startswith("basis: ") and line.endswith("date read not recorded") for line in lines)
 
 
 def test_a_standin_plan_costs_nothing() -> None:

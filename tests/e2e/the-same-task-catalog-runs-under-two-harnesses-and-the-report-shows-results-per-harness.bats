@@ -100,6 +100,17 @@ validate() {
   [[ -z "${output}" ]]
 }
 
+@test "SC-5 the relay forwarded every request both harnesses made in a container, and refused none (Item 25 (b))" {
+  # The relay holds the key and forwards only chat completions, Responses and generation stats for the pinned
+  # model (bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md, condition 4). Run in the
+  # containers here, as on the host when the cycle was built: nothing a harness asked for was refused.
+  local f
+  for f in "${LIVE_OUT}"/traces/*.json; do
+    grep -q '"refused": {}' "${f}" || { echo "${f}"; grep -A3 '"refused"' "${f}"; false; }
+    grep -q '"senders": "not told apart: ' "${f}"
+  done
+}
+
 # The key-file refusals (FR-29) are units on the host lane (tests/unit/test_bench_run_sh.py): here the repository
 # is mounted at /code while the bench output keeps its host path, so a key file written there would not count as
 # inside the repository, and the run would go on to reach the provider. The lane never does that.

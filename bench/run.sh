@@ -21,8 +21,9 @@
 #   operator's shell can never reach it by accident (RB9). A planted key must be passed deliberately.
 # - Slice 1 (FR-29): a live run's key is read from the file BENCH_KEY_FILE names, checked HERE on the host
 #   (a regular file, not a link, mode 0600, the user's own, outside this repository) and mounted read-only
-#   at /run/timelike-bench/key; the driver checks it again there. The value is never read by this script,
-#   never on an argv and never in an -e. The bench's configuration (BENCH_MODEL, the caps, the prices, the
+#   at /run/timelike-bench/key; the driver checks it again there and holds the value in memory, for its relay
+#   alone (FOR-MENTOR Item 25, ruled (b)). The value is never read by this script, never on an argv and never
+#   in an -e. The bench's configuration (BENCH_MODEL, the caps, the prices, the
 #   harness pins from pins.env) is forwarded by name and value, and none of it is key-shaped.
 set -euo pipefail
 
@@ -109,7 +110,8 @@ fi
 
 # The bench's configuration, by name and value; none of these names is key-shaped (RB9).
 declare -a config=()
-for name in BENCH_MODEL BENCH_UPSTREAM BENCH_TURN_CAP BENCH_SPEND_CAP_USD BENCH_MODEL_PRICE_IN BENCH_MODEL_PRICE_OUT; do
+for name in BENCH_MODEL BENCH_UPSTREAM BENCH_TURN_CAP BENCH_SPEND_CAP_USD BENCH_MODEL_PRICE_IN BENCH_MODEL_PRICE_OUT \
+  BENCH_MODEL_PRICE_READ; do
   [[ -z "${!name:-}" ]] || config+=(-e "${name}=${!name}")
 done
 [[ -z "${OPENCODE_VERSION:-}" ]] || config+=(-e "BENCH_OPENCODE_VERSION=${OPENCODE_VERSION}")

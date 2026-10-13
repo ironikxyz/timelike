@@ -10,6 +10,7 @@ tool gets the bench/out base to stamp under.
 
 from __future__ import annotations
 
+import shutil
 import socket
 import subprocess
 from collections.abc import Iterator
@@ -42,11 +43,13 @@ def harness(tmp_path: Path) -> Iterator[dict[str, object]]:
     sock.close()
 
 
-def run_sh(h: dict[str, object], *args: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+def run_sh(
+    h: dict[str, object], *args: str, script: Path = RUN_SH
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     env = h["env"]
     assert isinstance(env, dict)
     p = subprocess.run(
-        [str(RUN_SH), *args], env=env, capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL
+        [str(script), *args], env=env, capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL
     )
     argv_file = h["argv"]
     assert isinstance(argv_file, Path)
@@ -145,6 +148,7 @@ def test_the_bench_configuration_is_forwarded_by_name_and_value(harness: dict[st
         BENCH_SPEND_CAP_USD="2.50",
         OPENCODE_VERSION="1.19.0",
         CODEX_VERSION="0.162.1",
+        BENCH_MODEL_PRICE_READ="2026-10-13",
     )
     p, argv = run_sh(harness, "--harness", "opencode")
     assert p.returncode == 0, p.stderr
@@ -155,6 +159,7 @@ def test_the_bench_configuration_is_forwarded_by_name_and_value(harness: dict[st
         "BENCH_SPEND_CAP_USD=2.50",
         "BENCH_OPENCODE_VERSION=1.19.0",
         "BENCH_CODEX_VERSION=0.162.1",
+        "BENCH_MODEL_PRICE_READ=2026-10-13",
     ):
         assert want in e
 
@@ -192,7 +197,7 @@ def test_a_bad_key_file_is_refused_on_the_host(harness: dict[str, object], setup
     key = tmp / "or.key"
     key.write_text("x\n")
     key.chmod(0o644 if setup == "mode" else 0o600)
-    path = str(key)
+    path, script = str(key), RUN_SH
     if setup == "link":
         (tmp / "link").symlink_to(key)
         path = str(tmp / "link")
@@ -201,16 +206,19 @@ def test_a_bad_key_file_is_refused_on_the_host(harness: dict[str, object], setup
     elif setup == "relative":
         path = "or.key"
     elif setup == "inside":
-        inside = REPO / "bench" / "out" / ".unit-key-file"
-        inside.parent.mkdir(exist_ok=True)
+        # run.sh takes the repository from its own location, so a copy in a throwaway repository is checked
+        # against that one, and nothing is written into the real checkout (read-only in the runner, lane
+        # 02s1-a).
+        throwaway = tmp.resolve() / "repo"
+        script = throwaway / "bench" / "run.sh"
+        script.parent.mkdir(parents=True)
+        shutil.copy2(RUN_SH, script)
+        inside = throwaway / "secrets" / "or.key"
+        inside.parent.mkdir()
         inside.write_text("x\n")
         inside.chmod(0o600)
         path = str(inside)
     env["BENCH_KEY_FILE"] = path
-    try:
-        p, argv = run_sh(harness, "--harness", "opencode")
-    finally:
-        if setup == "inside":
-            Path(path).unlink()
+    p, argv = run_sh(harness, "--harness", "opencode", script=script)
     assert p.returncode == 4 and text in p.stderr, p.stderr
     assert argv == []

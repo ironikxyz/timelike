@@ -14,7 +14,9 @@ Configuration goes in at exec time and nothing is written into the task director
   `--dangerously-bypass-approvals-and-sandbox`, because the task container is the sandbox, which is the case
   that flag is for.
 
-The key's variable is passed to the harness exec by name only (FR-30); its value never appears here.
+**No harness holds the key** (FOR-MENTOR Item 25, ruled (b)): each harness's key variable is set to
+KEY_PLACEHOLDER, the same fixed string for every harness and run, and the relay replaces whatever credential a
+request carries with its own (benchlib.relay).
 Each harness writes its transcript where the runner collects it: stdout to `~/.bench/stdout.jsonl`, stderr to
 `~/.bench/stderr.txt`, and Codex's own rollout under `$CODEX_HOME/sessions`. Stdlib only (constitution H5).
 """
@@ -35,6 +37,10 @@ OUT_DIR = f"{HOME}/.bench"
 STDOUT = f"{OUT_DIR}/stdout.jsonl"
 STDERR = f"{OUT_DIR}/stderr.txt"
 KEY_VAR = "OPENROUTER_API_KEY"
+# What every harness's KEY_VAR holds: both harnesses refuse to start with the variable unset, and the relay
+# adds the real credential. Fixed and documented, and not shaped like a key: no provider prefix, words not
+# entropy.
+KEY_PLACEHOLDER = "placeholder-the-bench-relay-adds-the-key"
 PROMPT_TAIL = "You are in {dir}. Work there with your shell tool until the task is done."
 
 
@@ -51,8 +57,13 @@ class HarnessSpec:
     _parse: Callable[[dict[str, str]], transcripts.Parsed]
 
     def exec_env(self, relay_url: str, model: str) -> dict[str, str]:
-        """Variables set inside the harness exec (not secrets: they are on its argv)."""
-        return {"HOME": HOME, "CODEX_HOME": CODEX_HOME, **self._env(relay_url, model)}
+        """Variables set inside the harness exec. None is a secret: the key variable holds the placeholder."""
+        return {
+            "HOME": HOME,
+            "CODEX_HOME": CODEX_HOME,
+            KEY_VAR: KEY_PLACEHOLDER,
+            **self._env(relay_url, model),
+        }
 
     def command(self, relay_url: str, model: str, prompt: str) -> str:
         """The bash command the wrapper runs: the harness, its output to files the runner collects."""

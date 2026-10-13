@@ -105,7 +105,7 @@ def run(harness: str, binary: str, scenario: str, root: Path, out: Path) -> None
     if scenario == "rate-limit":
         standin.fail_next(429, 3, "rate limited (stand-in)")
     relay = Relay(standin.url, turn_cap=1 if scenario == "turn-cap" else 30, spend_cap_usd=10.0,
-                  host="127.0.0.1", port=0).start()  # fmt: skip
+                  model=MODEL, host="127.0.0.1", port=0).start()  # fmt: skip
     relay.begin_run()
     proxy = (
         "http://127.0.0.1:9"  # a dead port: any request but loopback fails, so nothing leaves this machine

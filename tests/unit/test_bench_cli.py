@@ -314,6 +314,50 @@ def test_a_failed_placement_is_a_stopped_told_row(bench: dict[str, Any], tmp_pat
     assert (told["ending"]["kind"], told["ending"]["cause"]) == ("stopped", "placement")
 
 
+def test_a_told_run_whose_setup_fails_is_a_valid_failed_trace_not_placed(
+    bench: dict[str, Any], tmp_path: Path
+) -> None:
+    """Lane 02s1-a, item 2: a told arm's setup-failed trace had no placement, which its schema refuses."""
+    cfg = docker_config(bench["tmp"], timelike_agent={"setup_fails": True})
+    p = bench_run(bench, "run", "--task", "git-inspect", "--json", BENCH_OUT=str(tmp_path / "o"),
+                  FAKE_DOCKER_CONFIG=str(cfg))  # fmt: skip
+    assert p.returncode == 0, p.stderr
+    traces = Path(json.loads(p.stdout)["out"], "traces")
+    told = json.loads((traces / "git-inspect--fake--told.json").read_text())
+    assert told["identity"]["placement"] == "not placed"
+    assert (told["ending"]["kind"], told["ending"]["reason"]) == (
+        "failed",
+        "setup failed: fatal: setup (fakedocker)",
+    )
+
+
+def test_setup_is_bounded_by_the_bench_s_step_limit_not_the_agent_s_call_limit(
+    bench: dict[str, Any], tmp_path: Path
+) -> None:
+    """Lane 02s1-a, item 2: under --call-limit 2 a slow container's setup passed the agent's limit."""
+    cfg = docker_config(bench["tmp"], timelike_agent={"setup_sleep": 2})
+    p = bench_run(bench, "run", "--task", "git-inspect", "--call-limit", "1", "--json",
+                  BENCH_OUT=str(tmp_path / "o"), FAKE_DOCKER_CONFIG=str(cfg))  # fmt: skip
+    assert p.returncode == 0, p.stderr
+    for arm in ("not-told", "told"):
+        t = json.loads(
+            (Path(json.loads(p.stdout)["out"], "traces") / f"git-inspect--fake--{arm}.json").read_text()
+        )
+        assert not t["ending"]["reason"].startswith("setup failed"), t["ending"]
+        assert t["identity"]["call_limit_s"] == 1  # the agent's own limit is unchanged
+
+
+def test_c7_a_fake_run_starts_no_relay_network_and_no_harness_holder(
+    full_run: tuple[dict[str, Any], Any],
+) -> None:
+    """Item 25 (b), condition 7: the relay exists only on a live run's internal network, which a fake run
+    never makes (and the key-shaped and BENCH_KEY_FILE refusals are the units around this one)."""
+    b, p = full_run
+    assert p.returncode == 0, p.stderr
+    calls = (b["tmp"] / "containers" / "calls.log").read_text().splitlines()
+    assert not [c for c in calls if c.split()[:1] in (["network"], ["create"])]
+
+
 def test_a_key_file_set_for_a_fake_run_refuses(bench: dict[str, Any], tmp_path: Path) -> None:
     p = bench_run(bench, "run", BENCH_KEY_FILE=str(tmp_path / "key"))
     assert p.returncode == 4 and "BENCH_KEY_FILE is set for a fake-agent run" in p.stderr

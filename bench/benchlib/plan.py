@@ -4,8 +4,10 @@ A live run spends money, so its plan comes first: the cells (tasks × harnesses 
 pin, the model, the caps, and an estimate. `--dry-run` prints only this.
 
 The estimate is research RB18's: a per-turn token figure (both harnesses send a long system prompt and the
-growing conversation) at the model's base price from `pins.env`. It is an estimate and says so. The spend the
-bench records is OpenRouter's own figure, read from each response (FR-35), never this.
+growing conversation) at the model's base price from `pins.env`. It is an estimate and says so, and it states
+its basis (Item 25's ruling): the requests and tokens assumed per run, and the prices with the date they were
+read, so the operator can check it against the cap. The spend the bench records is OpenRouter's own figure,
+read from each response (FR-35), never this.
 
 The model must be pinned to a dated id (FR-27): a moving alias would let the same command measure a different
 model next week. Stdlib only (constitution H5).
@@ -53,6 +55,7 @@ class Plan:
     price_in: float  # USD per million input tokens
     price_out: float  # USD per million output tokens
     standin: bool = False
+    price_read: str = ""  # the date the prices were read (pins.env BENCH_MODEL_PRICE_READ)
 
     @property
     def runs(self) -> int:
@@ -64,6 +67,20 @@ class Plan:
 
     def estimate(self, turns: int) -> float:
         return self.runs * turns * self.per_turn_usd
+
+    def _basis(self) -> str:
+        typical_in, typical_out = TYPICAL_TURNS * TOKENS_IN_PER_TURN, TYPICAL_TURNS * TOKENS_OUT_PER_TURN
+        read = (
+            f"read from OpenRouter's model list on {self.price_read}"
+            if self.price_read
+            else "date read not recorded"
+        )
+        return (
+            f"basis: per run, {TYPICAL_TURNS} requests typical or {self.caps.turns} at the turn cap, "
+            f"each assumed {TOKENS_IN_PER_TURN} input and {TOKENS_OUT_PER_TURN} output tokens "
+            f"({typical_in} + {typical_out} per typical run); "
+            f"prices ${self.price_in:g} input and ${self.price_out:g} output per million tokens, {read}"
+        )
 
     def lines(self) -> list[str]:
         harnesses = ", ".join(f"{n} {v}" for n, v in self.harnesses)
@@ -89,6 +106,7 @@ class Plan:
             f"estimate: about ${self.per_turn_usd:.3f} per turn ({TOKENS_IN_PER_TURN} in + "
             f"{TOKENS_OUT_PER_TURN} out tokens); ${typical:.2f} at {TYPICAL_TURNS} turns per run; "
             f"${ceiling:.2f} at the turn cap{binds}",
+            self._basis(),
             "spend recorded is OpenRouter's own figure from each response, never this estimate",
         ]
         return out

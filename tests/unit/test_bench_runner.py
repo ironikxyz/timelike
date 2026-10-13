@@ -8,6 +8,7 @@ Edge endings (backstop, run limit, escalation, harness cut) use a scripted execu
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import tempfile
 from collections.abc import Callable
@@ -183,6 +184,56 @@ def test_setup_failure_gives_a_trace_with_no_calls_and_closes() -> None:
     t = runner.run_task(task_with(ONE), scripted_env(s), CTX)
     assert (t.calls, t.ending) == ((), trace.Ending("failed", "setup failed: fatal: no"))
     assert trace.validate(t) == [] and s.closed
+
+
+def test_a_told_setup_failure_records_the_placement_as_not_placed() -> None:
+    s = Scripted([result(3, err=b"fatal: no\n")])
+    told = runner.Cell("told", runner.Environment("timelike", "sha256:" + "e" * 64, SHA, lambda: s))
+    t = runner.run_task(task_with(ONE), told, CTX)
+    assert (t.identity.placement, t.ending.reason) == ("not placed", "setup failed: fatal: no")
+    assert trace.validate(t) == [] and s.closed
+
+
+class Limited(Scripted):
+    def __init__(self, results: list[CallResult]) -> None:
+        super().__init__(results)
+        self.limits: list[int] = []
+
+    def run(self, command: str, limit_s: int) -> CallResult:
+        self.limits.append(limit_s)
+        return super().run(command, limit_s)
+
+
+def test_setup_and_check_run_under_the_step_limit_and_the_agent_s_calls_under_the_call_limit() -> None:
+    s = Limited([result(), result(), result()])
+    ctx = runner.RunContext(SHA, DIGEST, "make bench", runner.Limits(call_s=2, run_s=60, step_s=90))
+    runner.run_task(task_with(ONE), scripted_env(s), ctx)
+    assert s.commands == ["setup", "cmd", "check"] and s.limits == [90, 2, 90]
+
+
+def test_run_bench_names_the_trace_its_schema_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = runner.run_task
+
+    def broken(
+        task: catalog.Task, cell: runner.Cell, ctx: runner.RunContext, clock: object = None
+    ) -> trace.Trace:
+        t = real(task_with(ONE), scripted_env(Scripted([result(3, err=b"x\n")])), CTX)
+        return dataclasses.replace(
+            t, identity=dataclasses.replace(t.identity, arm="told", environment="timelike")
+        )
+
+    monkeypatch.setattr(runner, "run_task", broken)
+    told = runner.Cell(
+        "told", runner.Environment("timelike", "sha256:" + "e" * 64, SHA, lambda: Scripted([]))
+    )
+    with pytest.raises(trace.TraceInvalid) as e:
+        runner.run_bench([task_with(ONE)], [told], CTX, tmp_path)
+    assert e.value.violations == [
+        "t--fake--told.json: identity.placement: non-empty exactly when the arm is told"
+    ]
+    assert not (tmp_path / "traces" / "t--fake--told.json").exists()
 
 
 def test_setup_hang_and_check_hang() -> None:

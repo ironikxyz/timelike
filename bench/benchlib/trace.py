@@ -44,6 +44,7 @@ STOP_CAUSES = (
     "spend-cap",
     "placement",
     "transcript-unreadable",
+    "model-refused",
 )
 ENVIRONMENTS = ("vanilla", "timelike")
 ARMS = ("vanilla", "not-told", "told")

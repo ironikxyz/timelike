@@ -15,13 +15,15 @@ Endings (trace-schema rule 3):
 - ESCALATE:<reason>                                     → escalated, <reason>
 - the run limit passes, or the driver's backstop fires → hung. A hung CALL followed by recovery is not a
   hung run: it ends however the walk ends, with the hang counted
-- setup fails                                           → failed, "setup failed: …", no calls
+- setup fails                                           → failed, "setup failed: …", no calls (told: the
+  placement is recorded as "not placed", as it never ran)
 
 **A live harness** (FR-24 to FR-37) runs in the task container under the run limit, talking to the model only
-through the relay, which counts its turns and spend and enforces the caps. Its calls come from its own
-transcript (benchlib.transcripts), and its ending from what was observed (`live_ending`): a cap, an unreadable
-transcript, the run limit, the provider's last answer, the harness's exit, then the check. An infrastructure
-cause ends the run `stopped` (FR-36), which the report never counts as a loss.
+through the relay, which holds the key, counts its turns and spend and enforces the caps. Its calls come from
+its own transcript (benchlib.transcripts), and its ending from what was observed (`live_ending`), in this
+order: a cap, a request for a model other than the pin, the run limit, an unreadable transcript, the check,
+the provider's last answer, then the harness's exit. An infrastructure cause ends the run `stopped` (FR-36),
+which the report never counts as a loss.
 
 Every call gets its category (FR-40) and, in the timelike arms, the timelike tools its command words name and
 what it ran through timelike (FR-19). Every session is closed in a `finally`, so a failed run never leaves a
@@ -34,7 +36,6 @@ real harness caps); what it cut is recorded per call, so plan's byte-cap questio
 from __future__ import annotations
 
 import dataclasses
-import os
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -58,6 +59,7 @@ from benchlib.trace import (
     Tokens,
     ToolCall,
     Trace,
+    TraceInvalid,
     derive_totals,
     write_trace,
 )
@@ -70,9 +72,6 @@ INVOCATION = "bash -c"
 NO_TOKENS = Tokens(recorded=False, reason="the fake agent uses no model")
 ARMS = ("vanilla", "not-told", "told")
 FAKE_KEY = "fake"
-KEY_PLACEHOLDER = (
-    "stand-in-placeholder-not-a-key"  # what a harness gets for its key variable against the stand-in
-)
 PLACED_STATES = ("placed", "replaced", "current")
 
 
@@ -83,6 +82,10 @@ class Limits:
     # It was 30 s, above 001's 20 s git bound, until then.
     call_s: int = 120
     run_s: int = 300
+    # The bench's own steps, setup and check, are not the agent's calls, so the agent's call limit does not
+    # bound them (lane 02s1-a: under `--call-limit 2` a timelike-arm setup, which runs every git hook through
+    # the dispatcher, passed the limit in the runner container and was recorded as a failed setup).
+    step_s: int = 120
 
 
 LIVE_RUN_S = 900  # FR-33: a live run's wall-clock limit; the fake agent's stays Limits.run_s
@@ -109,7 +112,7 @@ class Session(Protocol):
 class LiveSession(Session, Protocol):
     def read(self, argv: Sequence[str]) -> tuple[int, str]: ...
 
-    def harness_executor(self, exec_env: dict[str, str], key: str) -> Executor: ...
+    def harness_executor(self, exec_env: dict[str, str]) -> Executor: ...
 
 
 class PlacementFailed(Exception):
@@ -150,7 +153,7 @@ class Live:
     turn_cap: int
     run_limit_s: int
     gate: Gate
-    key: str | None = None  # None: the stand-in, which gets a placeholder
+    key: str | None = None  # None: the stand-in. Used only for generation stats; the relay holds its own copy
     upstream: str = "https://openrouter.ai"
     standin: StandIn | None = None
     stopped_for_all: str = ""  # "key-rejected" once OpenRouter has refused the key (FR-37)
@@ -212,7 +215,7 @@ def _place(session: Session, harness_files: Sequence[str]) -> str:
 
 
 def _check(ex: Executor, task: Task, ctx: RunContext) -> tuple[bool, str]:
-    check = ex.run(task.check, ctx.limits.call_s)
+    check = ex.run(task.check, ctx.limits.step_s)
     if check.exit_code == 0 and not check.hung:
         return True, "check passed"
     why = "hung" if check.hung else _first_line(check.stderr_head, f"exit {check.exit_code}")
@@ -329,9 +332,11 @@ def run_task(
     session = cell.env.open_session()
     try:
         ex = session.executor
-        setup = ex.run(task.setup, ctx.limits.call_s)
+        setup = ex.run(task.setup, ctx.limits.step_s)
         if setup.exit_code != 0 or setup.hung:
             why = "hung" if setup.hung else _first_line(setup.stderr_head, f"exit {setup.exit_code}")
+            if cell.arm == "told":  # the placement comes after setup, so it never happened (rule 1)
+                ident = identity_for(task, cell, ctx, "not placed")
             return _trace(ident, [], Ending("failed", f"setup failed: {why}"), 0)
         if cell.arm == "told":
             try:
@@ -378,6 +383,12 @@ def live_ending(o: Observed, run_limit_s: int, harness: str) -> Ending:
     if a.stopped_by:
         cap = "the turn cap" if a.stopped_by == "turn-cap" else "the spend cap"
         return Ending("stopped", f"{cap} was reached; the relay refused the next request", a.stopped_by)
+    if a.other_model:
+        return Ending(
+            "stopped",
+            f"the relay refused a request for {a.other_model!r}: it forwards only the pinned model",
+            "model-refused",
+        )
     if o.hit_run_limit:
         if a.waiting > 0:
             return Ending(
@@ -519,7 +530,7 @@ def run_live(
     placement = ""
     try:
         ex = session.executor
-        setup = ex.run(task.setup, ctx.limits.call_s)
+        setup = ex.run(task.setup, ctx.limits.step_s)
         if setup.exit_code != 0 or setup.hung:
             why = "hung" if setup.hung else _first_line(setup.stderr_head, f"exit {setup.exit_code}")
             ident = _live_identity(
@@ -543,7 +554,7 @@ def run_live(
             live.standin.set_script(fa.every_command(task.policy))
         before = _oom(session)
         live.relay.begin_run()
-        hx = lsession.harness_executor(spec.exec_env(live.relay_url, live.model), live.key or KEY_PLACEHOLDER)
+        hx = lsession.harness_executor(spec.exec_env(live.relay_url, live.model))
         prompt = hz.prompt_for(task.goal, "/home/agent/task")
         started = clock()
         r = hx.run(spec.command(live.relay_url, live.model, prompt), live.run_limit_s)
@@ -630,13 +641,10 @@ def run_bench(
                 else:
                     t = run_live(task, cell, ctx, live, out, clock)
                     key = live.spec.name
-                write_trace(t, trace_path(out, task.id, key, cell.arm), gate)
+                path = trace_path(out, task.id, key, cell.arm)
+                try:
+                    write_trace(t, path, gate)
+                except TraceInvalid as e:  # name the trace, so the refusal says which run broke the schema
+                    raise TraceInvalid([f"{path.name}: {v}" for v in e.violations]) from None
                 traces.append(t)
     return traces
-
-
-def environ_with(name: str, value: str) -> dict[str, str]:
-    """The docker CLI's own environment plus one variable, for a `-e NAME` exec (FR-30)."""
-    env = dict(os.environ)
-    env[name] = value
-    return env
