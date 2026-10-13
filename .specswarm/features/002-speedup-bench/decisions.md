@@ -421,3 +421,13 @@ ASSUMED: an absolute BENCH_KEY_FILE only — a relative path would resolve again
 ASSUMED: the gate matches the raw value only; JSON escaping cannot change an OpenRouter key (letters, digits, '-' and '_') — (confidence: medium)
 ABSENT: no check of the value's shape (sk-or-…): a key OpenRouter rejects ends its run stopped (key-rejected, FR-37), which is the provider's answer and not a guess
 Verification: tests/unit/test_bench_keyfile.py 20 passed (every refusal checked for the value); ruff clean; mypy --strict clean (34 files)
+SCOPE: in (2 changed files)
+
+### T043: benchlib/plan.py — the plan before any request, the estimate, the dated-model rule (FR-27, FR-34)
+**Started:** 2026-10-13T07:24:35Z | **Completed:** 2026-10-13T07:25:18Z
+
+INHERITED: RB18's per-turn figures (20 000 in, 1 000 out) and the base prices OpenRouter lists (.32, .96) — from research (confidence: medium: the figures are an assumption about two harnesses' prompts, stated as one in the plan)
+FLAGGED: the estimate uses the base price, not the cheaper listed UTC hours — chose the higher, so the printed figure is an upper bound on price (confidence: high)
+ASSUMED: a dated id ends in 4 or 8 digits after its last '-'; OpenRouter's own ids use both (`-0813`, the canonical `-20260813`) — (confidence: medium)
+ABSENT: no live price lookup — the plan needs neither the network nor a key (--dry-run), so the price comes from pins.env
+Verification: tests/unit/test_bench_plan.py 11 passed; ruff clean; mypy --strict clean (35 files)
