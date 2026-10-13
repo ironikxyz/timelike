@@ -481,3 +481,15 @@ ASSUMED: Codex stopping at the first 429 is Codex's own behaviour, measured as i
 ABSENT: no recording against OpenRouter itself (no key on this side); the mentor's first live run is that tier (llm-apis Q001)
 ABSENT: no memory-kill recording: the host run has no memory limit; the probe produces it in the lane
 Verification: record.py ran both harnesses through four scenarios (exits: pass 0/0, failures 0/0, turn-cap 1/1, rate-limit 0/1); deny-list PASS over the 29 files (P1–P7 0/0); no host path left; categories 23 passed with the two recorded texts
+SCOPE: in (32 changed files)
+
+### T042: benchlib/transcripts.py — the OpenCode and Codex parsers (FR-44)
+**Started:** 2026-10-13T07:42:27Z | **Completed:** 2026-10-13T07:44:07Z
+
+INHERITED: T041's recordings, and research RB17's reading of each harness's output — (confidence: high: the tests run on the harnesses' own files)
+FLAGGED: Codex is read from its rollout file, not from exec --json — chose the file with model-response boundaries (token_usage_record) so a Codex turn is a model response, as OpenCode's step is; stdout is read only for the errors Codex printed (confidence: high)
+FLAGGED: a non-shell tool call (an edit, a read, Codex's update_goal) is a call in the trace, with command "[tool] …" — chose to count every tool call the harness made, as the "tool calls" row says, over counting only shell commands; adoption still counts command words only (confidence: medium)
+ASSUMED: an exit code the harness did not report is -1 (NO_EXIT), never 0, and the call is failed; OpenCode's own-timeout text marks the call hung — (confidence: high)
+ASSUMED: both harnesses merge stdout and stderr; the merged size goes in stderr_bytes beside the merged head, and stdout_bytes is 0 (Assumption 11, output_streams: merged) — applied in T044 — (confidence: medium)
+ABSENT: no parser for Claude Code (excluded, FR-21)
+Verification: tests/unit/test_bench_transcripts.py 17 passed on the recorded transcripts (pass, failures with exits and categories per call, OpenCode's own timeout, both harnesses' cap error, Codex's 429, turns from response records) and on empty, non-JSON, truncated and foreign input; ruff clean; mypy --strict clean (38 files) — after a fix: the first commit of this task went in before mypy's result was read, with 31 narrowing errors; amended before anything else was built on it
