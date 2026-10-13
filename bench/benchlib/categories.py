@@ -26,6 +26,7 @@ predict it. Stdlib only (constitution H5).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 TIMEOUT = "timeout"
 MEMORY_KILL = "memory-kill"
@@ -112,3 +113,34 @@ def describe() -> list[str]:
         "the package guard's 'unreachable'",
         f"6. {LABELS[OTHER]}: anything else; shown, never dropped",
     ]
+
+
+@dataclass(frozen=True)
+class Probe:
+    """One real failing command for `timelike-bench categories --probe` (FR-43), and its category."""
+
+    expect: str
+    command: str
+    note: str
+
+
+# Run in a task container of each image with `--network none` and a 64 MiB memory limit (PROBE_MEMORY), at a
+# call limit of PROBE_CALL_LIMIT_S. Every command uses only what both images contain (bash, coreutils, git,
+# python3, node; research RB1), and each is the real thing, not a printed message (P005).
+PROBE_MEMORY = "64m"
+PROBE_CALL_LIMIT_S = 5
+PROBES = (
+    Probe(COMMAND_NOT_FOUND, "nosuch-bench-cmd-7f3a", "bash's own message (and 007's lines in timelike)"),
+    Probe(MODULE_NOT_FOUND, "python3 -c 'import nosuch_bench_mod_7f3a'", "Python's ModuleNotFoundError"),
+    Probe(MODULE_NOT_FOUND, "node -e \"require('nosuch-bench-mod-7f3a')\"", "Node's Cannot find module"),
+    Probe(TIMEOUT, "sleep 60", f"hangs past the {PROBE_CALL_LIMIT_S} s call limit"),
+    Probe(TIMEOUT, "timeout 1 sleep 10", "GNU timeout's own verdict, exit 124"),
+    Probe(
+        MEMORY_KILL,
+        "python3 -c 'b = bytearray(512 * 1024 * 1024); print(len(b))'",
+        f"512 MiB against a {PROBE_MEMORY} limit: the kernel's OOM killer",
+    ),
+    Probe(NETWORK_DENIAL, "git ls-remote https://bench-7f3a.invalid/x.git", "DNS failure, no network"),
+    Probe(NETWORK_DENIAL, "exec 3<>/dev/tcp/127.0.0.1/9", "connection refused on the container's loopback"),
+    Probe(OTHER, "ls /nonexistent-bench-7f3a", "a plain failure, which must not be dropped"),
+)

@@ -203,3 +203,24 @@ def reachable_terminals(policy: Policy, start: str | None = None) -> frozenset[s
             else:
                 todo.append(target)
     return frozenset(found)
+
+
+def happy_path(policy: Policy) -> tuple[str, ...]:
+    """The commands of the walk on which every call succeeds: the start, then each `on_ok`, up to a terminal.
+
+    The model stand-in's script for a task (feature 002 slice 1, FR-47): a live harness then runs the same
+    commands the fake agent would on its best path, so the live path in the lane exercises the task's own
+    commands. The stand-in cannot branch on outcomes the way this policy does (OpenCode tells the model a
+    call's output but not its exit code), so it does not try. A cycle ends at the loop guard's bound.
+    """
+    commands: list[str] = []
+    current = policy.start
+    visits: Counter[str] = Counter()
+    while not is_terminal(current):
+        visits[current] += 1
+        if visits[current] > MAX_VISITS:
+            break
+        step = policy.step(current)
+        commands.append(step.command)
+        current = step.on_ok
+    return tuple(commands)
