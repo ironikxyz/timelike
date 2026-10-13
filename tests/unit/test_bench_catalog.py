@@ -397,7 +397,7 @@ def test_hook_hangs_timelike_ends_on_the_dispatchers_verdict(runs: dict[tuple[st
     assert "--no-verify" not in run.stderr[0]
 
 
-def test_python_task_meets_a_missing_module_then_a_network_failure(runs: dict[tuple[str, str], Run]) -> None:
+def test_python_task_meets_a_missing_module_then_a_failed_install(runs: dict[tuple[str, str], Run]) -> None:
     from benchlib.categories import categorize
 
     for kind in ENVIRONMENTS:
@@ -405,4 +405,7 @@ def test_python_task_meets_a_missing_module_then_a_network_failure(runs: dict[tu
         assert run.path == ("run", "install", "rewrite", "rerun", "DONE"), kind
         assert "ModuleNotFoundError: No module named 'tabulate'" in run.stderr[0]
         assert categorize(1, False, run.stderr[0]) == "module-not-found"
-        assert categorize(1, False, run.stderr[1]) == "network-denial", run.stderr[1]
+        # The install fails without reaching a network. Which way depends on the interpreter: here the host's;
+        # in the images vanilla's pip refuses (externally managed) and timelike's guard finds no registry
+        # (the Docker lane checks each, speedup-bench.bats).
+        assert run.outcome.nonzero == 2

@@ -753,3 +753,225 @@ The `unrecorded=1` is T033 itself, recorded right after this section. There are 
 
 **Git workflow (implement step 11):** option 2, stay on `modify/002-rev8-carried`. The merge is `--no-ff` after the
 mentor's sign-off, and it rides the next germane push and its tag.
+
+## Cycle 4 — bridge/sends/02-rev8-20261013-064725.md
+
+**Written:** 2026-10-13T08:43:56Z (read from the clock). Not in dispatch mode (attended). Built with `/specswarm:modify 002 --from-send
+bridge/sends/02-rev8-20261013-064725.md`, then plan, tasks and `/specswarm:implement` (T034–T052), on `modify/002-slice-1`
+from `master` at `8dbddc7` (= `public/main`, `v0.19.0`). **Nothing pushed; not merged.**
+
+**specswarm version (lore specswarm Q002):** this session ran **4.0.1-botbaubble.2.44.0** (`claude plugin list`, and the
+`PLUGIN_DIR` every command expanded).
+
+**Status in one line:** slice 1 built and unit-tested on the host. Nothing has run in Docker yet. Every criterion is
+`unconfirmed` until the mentor's lane, and D11 until the live run and the operator's reading. FOR-MENTOR Item 25 is
+open, and nothing built waits on it.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/02-rev8-20261013-064725.md |
+| source_prompt | plan/.discover/prompts/02-speedup-bench.md |
+| prompt_revision | 8 |
+| discovery_revision | 15 |
+| slice | 1 of [0, 1, 2] (intensity: natural) |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No subagent wrote code or documents. Every task was done in this session.
+
+**criteria_reestablished.** Each is cited by text that matches exactly one criterion line (`- [ ]`) of the send
+(`grep -F` over the send, counting `- [ ]` lines: 1 each). Four of the texts also appear once in the send's "In scope"
+list, which is not a criterion line. **No mode below is `executed`.** A host-lane pass never counts as an
+acceptance-criterion pass (README, "Two verification lanes"), and no lane has run on this branch. The cells that will
+execute each one are named.
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` _(slice 0)_ — **unconfirmed**
+  (lane: `tests/e2e/speedup-bench.bats` "SC-1 one command runs…", "SC-1 a hanging call…", "SC-1 a stamp that does not
+  match…"; schema 2, three arms, five tasks)
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` _(slice 0)_ —
+  **unconfirmed** (lane: `speedup-bench.bats` "SC-2 the bench runs end to end…", "SC-2 a planted API key…", "SC-2 a set
+  BENCH_KEY_FILE refuses…")
+- `02 · "Each run is labelled told or not-told, and the report counts timelike tool invocations per arm"` _(slice 1)_ —
+  **unconfirmed** (lane: `speedup-bench.bats` "SC-4 each run is labelled…"; the validator's `adoption` recount, and the
+  same under both live harnesses in the SC-5 file)
+- `02 · "The same task catalog runs under two harnesses and the report shows results per harness"` _(slice 1)_ —
+  **unconfirmed** (lane: `the-same-task-catalog-runs-under-two-harnesses-and-the-report-shows-results-per-harness.bats`,
+  five cells: OpenCode and Codex CLI against the model stand-in, `--standin`, no key)
+- `02 · "Two arms that end the same way in the same number of turns are ranked by hangs, then by failed commands"`
+  _(slice 1; revision 8)_ — **unconfirmed** (lane: `speedup-bench.bats` "SC-6 …", the validator's independent
+  `verdicts` recomputation; host units: `test_bench_report.py` rows differing in one column at a time, and the pair on
+  which slice 0's summed tiebreak and revision 8 disagree)
+- `02 · "Failed commands are grouped into categories including command not found"` _(slice 1)_ — **unconfirmed**
+  (lane: `failed-commands-are-grouped-into-categories-…-network-denial.bats`, `categories --probe` in both images:
+  one real failing command per category, memory kill under a 64 MiB limit with the kernel's OOM count; and
+  `speedup-bench.bats` "SC-7 …")
+- `02 · "DEMO: the Adopting developer compares timelike tool adoption between a told arm and a not-told arm"` _(slice 1;
+  D11, Manual)_ — **unconfirmed**. The mentor's live run, then the operator's reading.
+
+Slice 0's D2 is not re-cited (the send). Slice 2's criteria are not built and not cited.
+
+**reconcile_mode:** `scoped`. This cycle examined revision 8's change and did its code work: the verdict order, each call
+counted once per row, the sentence quoting only table counts (T034). It checked the spec against the slice-1 criteria it
+built, revision 8's among them, and not against slice 2's. The installed `audit-append` block ran with `LOG_ONLY=yes`,
+because this is modify row 4 and 8 was already listed. It took `MODE=scoped`, `PROMPT_REV=1`, `AUDITED=[1, 8]`, `N=8`,
+`REMOVALS_VISIBLE=yes`, with `OUT_OF_SCOPE` and `UNVERIFIED` empty, and returned `MODE_USED=scoped`, `APPENDED` empty and
+`NEW_AUDITED=[1, 8]`. The `audit-log.md` row supersedes Cycle 3's `carried` mode for revision 8, and both earlier rows
+are kept. `spec.md`'s `audited_against` is unchanged.
+
+**What was built** (T034–T052; `tasks.md` Phase 11, `decisions.md` § Cycle 4):
+- **Arms** (FR-17 to FR-20). The arms are vanilla, timelike not told, and timelike told. The told arm runs 007's own
+  `timelike announce --install` after setup, because task containers start with `--entrypoint sleep`, which skips the
+  entrypoint that runs it in the product.
+- **Adoption** is counted from the commands' words. Calls through the shims or guards are counted apart and are never
+  adoption.
+- **Two live harnesses**, run inside the task container from a read-only harness volume:
+  - OpenCode 1.19.0;
+  - Codex CLI 0.162.1, chosen on OpenRouter's own guides and runs against a stand-in. Claude Code is excluded
+    (research RB12).
+- **The relay** in the driver is a harness's only road to the model. It counts turns, reads spend from each answer's
+  `usage.cost`, enforces the caps, and records no header.
+- **The key** is read from a 0600 file, passed to the harness exec only, and kept out of every artifact by the write
+  gate.
+- **Caps and the plan.** The plan is printed before any request; `--dry-run` prints only the plan.
+- **A `stopped` ending** with a named cause, never a loss.
+- **Failure categories**, and the probe.
+- **Parsers**, tested on transcripts the harnesses wrote themselves.
+- **Trace schema 2.**
+- **The report:** per harness, three arms, two verdicts, adoption and category tables, and spend only in the appendix.
+- **A fifth task**, `python-missing-module`.
+
+**The live run (the mentor's).** One command, from `code/` on the Docker host, after `make bench-images` at the
+revision under test. The first form prints only the plan:
+
+```bash
+BENCH_KEY_FILE=/path/outside/code/openrouter.key make bench-live DRY_RUN=1   # the plan: no request, no spend
+BENCH_KEY_FILE=/path/outside/code/openrouter.key make bench-live             # 5 tasks × 2 harnesses × 3 arms = 30 runs, n = 1
+```
+
+- **It needs `BENCH_KEY_FILE`**: one line, mode `0600`, yours, outside the repository. `run.sh` checks it on the host,
+  and the driver checks it again on its read-only mount.
+- **Caps** (defaults):
+  - `BENCH_TURN_CAP=30` per run;
+  - `BENCH_SPEND_CAP_USD=10.00` per invocation;
+  - 900 s per run (`bench/run.sh --run-limit S`).
+
+  `BENCH_MODEL` defaults to `deepseek/deepseek-v4-pro-0813` (`pins.env`).
+- **Spend estimate** (research RB18; printed by the plan): about $0.03 per turn, so about $7.29 at 8 turns per run and
+  $27.32 at the turn cap. The $10 spend cap therefore binds. The recorded spend is OpenRouter's own figure from each
+  answer.
+- **Where it lands:** `bench/out/<UTC stamp>/`:
+  - `report.txt`;
+  - `traces/<task>--<harness>--<arm>.json`;
+  - `transcripts/` (each harness's own output, and Codex's rollout).
+
+**What the lane needs:**
+- `make test`: the three bench e2e files above, and everything else.
+- `make bench-images`: it builds the new harness image, whose build fetches both tarballs from the npm registry and
+  checks them against `pins.env`.
+- `make scan`: the harness image is scanned when present, and has **no reviewed baseline yet**.
+- `make lint`: the two new bats files are on the shellcheck list.
+
+**Host lane** (advisory, `tests/host/run.sh` on CPython 3.14.8 over the working tree this cycle's last commit records, 2026-10-13T08:34:17Z–08:42:59Z): **rc 0. pytest 2452 passed, 12 skipped (the first full run, 08:23:37Z–08:32:17Z, failed 2, both fixed: see process failure 8); env layer 60/60, shell-env hook 57/57, command-not-found 33/33**. Bench
+units alone: 628 passed. ruff check and format: clean (120 files). mypy `--strict`: clean (39 files). shellcheck
+0.11.0: clean on `bench/run.sh` and the three bench bats files. Publish deny-list over the committed tree: run over the tree before the commit and again at HEAD after it (P1–P7, below in the commit report).
+
+**not_verified**
+- **Nothing ran in Docker:**
+  - the harness image's build (npm fetch, sha512, each binary's `--version`), its scan, and its `--volumes-from` mount;
+  - the per-invocation internal network and the driver joining it by host name;
+  - the relay reached as `bench-relay`;
+  - every e2e cell above.
+- **The scan:** the harness image has no reviewed baseline. If Grype reports an unfixable High or Critical in the Bun
+  or Rust binaries, `make scan` fails until the operator reviews one.
+- **OpenRouter, without a key:**
+  - whether it accepts Codex's `namespace` tool (`multi_agent_v1`) for this model;
+  - whether it answers both protocols for this model (OpenCode chat completions, Codex Responses);
+  - whether `usage.cost` arrives in the Responses stream's `response.completed`;
+  - the generation-stats fallback's field (`data.total_cost`);
+  - how often it answers 429.
+
+  The first live run is its own test tier (llm-apis Q001).
+- **Codex stops at the first 429** (recorded against the stand-in), so live Codex rows may stop more often than
+  OpenCode's. Each is named `stopped (api-rate-limit)`, never a loss.
+- **The key, by the send's route:**
+  - both harnesses pass `OPENROUTER_API_KEY` to the agent's commands (each printed it present, against the stand-in);
+  - in the timelike arms, 001's strip removes it from the agent's bash, which is not checked live;
+  - in vanilla nothing strips it, so the provider sees whatever the agent prints. The gate keeps it out of every
+    file.
+
+  FOR-MENTOR Item 25 asks whether the relay should hold the key instead.
+- **The told placement:** that each harness actually reads the placed file (`~/.config/opencode/AGENTS.md`,
+  `$CODEX_HOME/AGENTS.md`) is 007's claim (its research R1), not observed in this cycle's transcripts.
+- **Turns are counted per harness** (OpenCode's steps, Codex's response records) and are not comparable across
+  harnesses. The report never compares harnesses.
+- **Codex's own per-call limit** is unknown, so its traces record the run limit in its place. OpenCode's is 120 s, as
+  its transcript showed. OpenCode also waited out its 120 s when a command's shell was killed (`kill -KILL $$`).
+- **Codex runs as its native binary, not through its npm launcher**, so its bundled `rg` is not on its PATH.
+- **Memory kill has no live task**; only the probe produces it.
+- **python-missing-module's install** fails in vanilla as `other` (an externally managed interpreter) and in timelike
+  as `network denial` (the guard), by each image's design. A live model may try something else first.
+- **The fake agent cannot read a placement**, so its told and not-told arms are equal by construction. The report says
+  so.
+- **The stand-in's script is every step once.** A task whose steps make sense on one branch only may end failed under
+  it. That is a fact about the script, not about timelike.
+- **The spend estimate's per-turn figures** (20 000 in, 1 000 out) are assumed.
+- **Schema-1 trace sets** (slice 0's `bench/out` runs) are refused by this build's `report`. Slice 0's revision
+  re-reports them.
+- **The host-lane probe of the harnesses' own network fetches** used a dead proxy, not network isolation, which
+  unprivileged namespaces did not allow on this host.
+
+**changed_other_features:**
+- No other feature's code or contract. The told arm runs 007's `timelike announce --install` unchanged. The categories
+  read 003's, 007's, 013's and agentio's verdict texts and change none of them.
+- **Shared files changed:**
+  - `README.md`: the send's block (row 02, Status: 20 of 38, Next: 12 slice 1), the bench's section, and the scan and
+    layout lines; previous marks cleared, every changed passage in `<mark>`; the command reference unchanged and its
+    drift test passing.
+  - `.specswarm/tech-stack.md` 1.7.0: two harnesses auto-added by plan, declared, not a discovery audit.
+  - `pins.env`: harness pins, `BENCH_MODEL` and its price.
+  - `Makefile`: the harness image, `bench-live`, two bats files on the lint list.
+  - `scan/scan.sh`: the harness image.
+  - `FOR-MENTOR.md`: Item 25.
+  - `tests/unit/test_scan_report.py`: five images.
+- The `.specswarm/metrics.json` entry was not written (implement step 10j), as in Cycles 2 and 3.
+
+**process_failures_recorded:**
+1. **A composed time:** T034's "Completed" was typed, not read. Caught at once, corrected from the clock, and the commit
+   amended before the next task.
+2. **mypy unread before commit:** T042 was committed before mypy's result was read (31 narrowing errors). Fixed, and the
+   commit amended with a true record before anything was built on it.
+3. **A scope miscount:** T038's scope line said 7 changed files. It was 6, corrected from git.
+4. **An unverified claim, caught:** FOR-MENTOR Item 25's first draft said Codex drops `*KEY*` variables from the
+   agent's commands. Tested against the stand-in, neither harness does. Corrected before the commit.
+5. **`pkill -f` killed my own shell:** while probing, a `pkill -f` matched its own command line (exit 144), against a
+   standing rule. No harm, and later probes tracked the stand-in by its own timeout.
+6. **A blocked removal:** a `rm -rf "$HOME"`-shaped cleanup in a probe was stopped by the harness's safety check. Nothing
+   was removed, and fresh literal directories were used instead.
+7. **An e2e test that could reach the provider** (a key file under `bench/out/e2e`) was written and removed before any
+   commit.
+8. **The full host lane caught two failures** after the per-task runs had passed:
+   - a scan unit still counting four images;
+   - `--break-system-packages` in the new task, which 007's FR-28 forbids repo-wide.
+
+   Both were fixed before this report (FR-39 amended, declared).
+9. **Two design defects, found by reading before any lane:**
+   - the harness would have been started by `bash -c`, whose BASH_ENV strip in the timelike image would take its key;
+   - `BENCH_KEY_FILE` is itself key-shaped, so every live run would have refused itself.
+
+   Both were fixed, with units.
+
+**retired_prompts_seen:** none. The mailbox this send replaced held 15 slice 1, discharged at `8dbddc7`.
+
+### Implement step 10 — quality validation (specswarm 2.44.0 blocks), as the library reported it
+
+- The detector found `pytest` (`"primary": "pytest", "count": 1`).
+- `run_tests pytest` returned exit 2, "pytest is declared by this project but not installed here": the library runs
+  `/usr/bin/python3`, which has no pytest. Unit tests are therefore **unmeasured** by this step (the host lane above
+  measured them, on CPython 3.14.8).
+- The score is **`unknown`**. `min_quality_score: 0` and `block_merge_on_failure: false` (`quality-standards.md`), so
+  it is informational and blocks nothing.

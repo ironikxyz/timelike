@@ -28,7 +28,7 @@ Whether it works is a measured claim: see Status.
 | # | Feature | What it does | Status |
 |---|---|---|---|
 | 01 | Shell baseline & output contract | The container, an unprivileged `agent` user, non-interactive defaults, and one contract every tool speaks: verdict first, bounded output, JSON when piped, and `timelike-conform` to check it | complete (0, 1) |
-| 02 | Speedup bench | Runs the same tasks in a vanilla and a timelike container and reports turns, failed commands and hangs, losing cases first | slice 0 of 0–2 |
+| 02 | Speedup bench | Runs the same tasks in a vanilla and a timelike container and reports turns, failed commands and hangs, losing cases first | <mark>slices 0–1 of 0–2</mark> |
 | 03 | `run` | Every command ends with a verdict: the whole process tree is stopped at its limit, memory kills and full disks are named, and secrets are redacted | slices 0, 1 of 0–2 |
 | 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all; a missing command names how to get it, package installs need no privilege, and `timelike budget` shows the resource budget | complete (0, 1) |
 | 05 | `view`, `search` | Bounded reads and searches, each ending with the next command; a directory overview within a budget | complete (0, 1) |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**19 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+<mark>**20 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.
 Features 13, 14, 16 and 17 are not started.
 
-**Next:** 02 slice 1.
+<mark>**Next:** 12 slice 1.</mark>
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -537,9 +537,9 @@ verify changed                  # tests importing the changed files; lint and ty
 #### package-guard — installs checked before they run
 
 `pip`, `pip3`, `uv`, `npm`, `npx` and `pnpm` reach the guard by their bare names, from a shell, a script or a
-Makefile alike: `/opt/timelike/shims` is first on PATH, and `type -a pip` shows it. <mark>The six names resolve
+Makefile alike: `/opt/timelike/shims` is first on PATH, and `type -a pip` shows it. The six names resolve
 whether or not the installer is there, so `command -v pnpm` succeeding does not mean pnpm is installed: run
-without one, the shim exits 127 and says how to install it.</mark> A command that is not an
+without one, the shim exits 127 and says how to install it. A command that is not an
 install goes straight to the real one. For an install, before the installer starts, each package it names is
 checked in the registry that installer would use:
 
@@ -594,8 +594,8 @@ in the session's timeline, by session and time:
 docker exec timelike-adele adeled ledger --json | docker exec -i timelike-agent journal --session <s> --all --ledger -
 ```
 
-**The scan.** `make scan` is the supply-chain gate over the agent, Adele, vanilla and bench-driver
-images: Syft and Grype, pip-audit, govulncheck (Adele) and gitleaks. Each image is judged against a
+**The scan.** `make scan` is the supply-chain gate over the agent, Adele, vanilla, bench-driver <mark>and
+bench-harness</mark> images: Syft and Grype, pip-audit, govulncheck (Adele) and gitleaks. Each image is judged against a
 reviewed baseline in `scan/baseline/`; its verdict is in `scan/out/verdict.json`.
 
 ## Command reference
@@ -1010,24 +1010,29 @@ A host-lane pass never counts as an acceptance-criterion pass.
 ### Speedup bench
 
 ```bash
-make bench                              # every catalog task, in the vanilla image and the timelike image
+make bench                              # every catalog task, the fake agent, in three arms (CI's run)
 make bench TASKS=git-rebase-continue    # one task (space-separated for several)
 less bench/out/<run-id>/report.txt      # the report
 ```
 
-`make bench` builds three images from the pinned base, all stamped with the checkout's revision:
+<mark>`make bench` builds four images from the pinned base, all stamped with the checkout's revision:</mark>
 - the agent image
 - a **vanilla** baseline: the same base, the same unprivileged user and git, and the same agent
   runtimes (Python and Node) with their stock behaviour, without any of timelike's layers
 - the bench **driver**, the only container that holds the Docker socket
+- <mark>the **harness** image: the two pinned live harnesses (below), mounted read-only into the task
+  containers when a live run needs them, and never part of either image under test</mark>
 
 The driver refuses any image whose revision label differs from the checkout, and refuses to start if
-an API-key-shaped variable is present. It runs each task in a fresh container for each environment, with
-every tool call a non-interactive `bash -c` with no terminal. It writes one trace per run to
+an API-key-shaped variable is present. <mark>It runs each task in a fresh container in three **arms**:
+vanilla; timelike **not told** (the tools are on PATH, nothing announces them); and timelike **told** (the
+announcement placed where each harness reads its context, as the agent image does on start). The fake
+agent's every tool call is a non-interactive `bash -c` with no terminal; a live harness runs inside the
+task container and starts its own shell there.</mark> It writes one trace per run to
 `bench/out/<run-id>/traces/` and a report to `bench/out/<run-id>/report.txt`. `timelike-bench report
 <dir>` rebuilds the report from the traces alone.
 
-**Read the report's first line.** Slice 0 drives the tasks with a deterministic fake agent, and every
+**Read the report's first line.** `make bench` drives the tasks with a deterministic fake agent, and every
 report it produces begins:
 
 > FAKE-AGENT BENCH PIPELINE DEMO RUN -- This is not a test of timelike, rather a test of the bench test
@@ -1036,13 +1041,37 @@ report it produces begins:
 
 The fake agent's policy, the task selection and the recoveries it takes were all chosen by the people
 who built timelike, so a fake-agent report shows that the bench runs, traces and reports. It is not
-evidence that timelike helps.
+evidence that timelike helps. <mark>It cannot read an announcement either, so its told and not-told arms
+run the same policy.</mark>
 
-After the maintainer statement, the reproduce command and the exact revisions, harness and model
-compared, the report lists the tasks where timelike **loses** first, then the ties and the wins. Each
-task says what it tests and what differs between the two images, gives the verdict in words, shows the
-metrics, and then tells what happened in each image call by call and why the run ended as it did.
-Tokens appear only in an appendix.
+<mark>The report has one section per harness. Each section opens with the **adoption** table (the calls in
+each arm that ran a timelike tool by name, and, apart, the calls that went through timelike's shims or
+guards, which are not adoption) and the **failure categories** of every failed call (command not found,
+module not found, timeout, memory kill, network denial, other). Then come the tasks, those where timelike
+**loses** first, then the ties and the wins. A task's verdict compares each timelike arm with vanilla by
+how the run ended, then turns, then hangs, then failed commands. Each task says what it tests, gives both
+verdicts in words, shows the metrics, and tells what happened in each arm call by call. Runs that stopped
+for an infrastructure reason (the provider's rate limit, a cap) are listed apart and never counted as a
+loss. Tokens and spend appear only in an appendix.</mark>
+
+<mark>**A live run.** The same catalog can run under two real harnesses, OpenCode and Codex CLI, pinned by
+version and checksum in `pins.env`, both driving one model, also pinned there (`BENCH_MODEL`, a dated id).
+A live run **spends money**: it calls the model through OpenRouter on a key you supply.</mark>
+
+```bash
+BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live DRY_RUN=1   # the plan only: nothing is called
+BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live             # every task, both harnesses, three arms
+```
+
+<mark>- **The key** is read only from the file `BENCH_KEY_FILE` names: one line, mode `0600`, yours, outside
+  the repository. It goes to the harness process and nowhere else, and every file the bench writes is
+  checked for it first.
+- **The caps:** `BENCH_TURN_CAP` (default 30 turns per run), `BENCH_SPEND_CAP_USD` (default 10.00 per
+  invocation), and 900 s per run. A run that reaches a cap is recorded as stopped, never as a loss.
+- **Before any request** the run prints its plan: the runs, the harnesses, the model, the caps and an
+  estimate of the spend. The spend it records is OpenRouter's own figure.
+- A live run is **one repetition**, and its report says so. Publishing results is a later slice, so this
+  README cites none.</mark>
 
 ### Layout
 
@@ -1051,8 +1080,8 @@ image/        Dockerfile and the fallback config layer (/etc/gitconfig, /etc/pro
 tools/        agentio (the contract) and the tools on PATH in the image
 tests/        unit (pytest), e2e (bats, driven from outside), host (advisory), fixtures, runner
 adele/        Adele (Go, FROM scratch): adeled, the test-only stand-in, grants.example.conf
-scan/         the supply-chain gate (the agent, Adele, vanilla and driver images)
-bench/        the speedup bench: benchlib, timelike-bench, the vanilla and driver images, run.sh
+scan/         the supply-chain gate (the agent, Adele, vanilla, driver <mark>and harness</mark> images)
+bench/        the speedup bench: benchlib, timelike-bench, the vanilla, driver <mark>and harness</mark> images, run.sh
 scripts/      the manual demo, and the README's command-reference generator
 compose.yaml  the agent (no capabilities, no-new-privileges, no Docker socket), Adele, the stand-in
 pins.env      every pinned image and version

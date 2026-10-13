@@ -741,6 +741,8 @@ def scan_tree(tmp_path: Path, images: list[str], stream: str) -> tuple[Path, dic
         ADELE: {"id": "sha256:" + "ad" * 32, "python": False, "agent_python": False},
         "timelike-vanilla:local": {"id": "sha256:" + "0a" * 32, "python": False, "agent_python": True},
         "timelike-bench-driver:local": {"id": "sha256:" + "bd" * 32, "python": True, "agent_python": False},
+        # 002 slice 1: FROM scratch, the two harness binaries only (no interpreter of either kind).
+        "timelike-bench-harness:local": {"id": "sha256:" + "be" * 32, "python": False, "agent_python": False},
     }
     env = {
         "PATH": f"{bin_dir}:/usr/bin:/bin",
@@ -767,10 +769,11 @@ def pins() -> dict[str, str]:
     return dict(re.findall(r"^([A-Z_]+)=(.*)$", (REPO / "pins.env").read_text(), re.M))
 
 
-ALL_IMAGES = [IMAGE, ADELE, "timelike-vanilla:local", "timelike-bench-driver:local"]
+HARNESS_IMAGE = "timelike-bench-harness:local"
+ALL_IMAGES = [IMAGE, ADELE, "timelike-vanilla:local", "timelike-bench-driver:local", HARNESS_IMAGE]
 
 
-def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_for_adele_only(
+def test_scan_sh_scans_five_images_with_their_own_base_digest_and_govulncheck_for_adele_only(
     tmp_path: Path,
 ) -> None:
     root, env = scan_tree(tmp_path, ALL_IMAGES, gv_stream())
@@ -806,7 +809,7 @@ def test_scan_sh_scans_four_images_with_their_own_base_digest_and_govulncheck_fo
                 "not a Go image: govulncheck runs over Adele's source only",
             ]
     py = "/opt/timelike/python/bin/python3"
-    for img in (ADELE, "timelike-vanilla:local"):
+    for img in (ADELE, "timelike-vanilla:local", HARNESS_IMAGE):
         pip = (dirs[img] / "steps.tsv").read_text().splitlines()[2]
         said = f"no interpreter in image: {img} has no {py}, so pip-audit had nothing to audit"
         assert pip == f"pip-audit\tnone\t{said}"

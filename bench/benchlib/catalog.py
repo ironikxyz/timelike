@@ -10,8 +10,10 @@ Rules every script here obeys, and tests/unit/test_bench_catalog.py enforces:
   grep). The git tasks use no interpreter, no build tool, no process tools and no network — a task that
   needed one would rig the result, so `prerequisites` declares what a task needs. *(Slice 1, declared:
   both images have carried the agent runtimes, python3 and pip, since 007 slice 1 (vanilla's FR-30), so
-  the one Python task may use them, and only them; it declares `python3`. Its install attempt is meant to
-  fail for want of a network, which is the failure it exists to produce.)*
+  the one Python task may use them, and only them; it declares `python3`. Its install fails in both images,
+  differently: vanilla's interpreter is externally managed, so its pip refuses; timelike's pip goes through
+  the package guard, which finds the registry unreachable. No script here ever passes pip the flag that
+  overrides an externally managed interpreter (007's FR-28).)*
 - The identity is repo-local. Neither image sets one, and a global identity would be a difference
   between the bench's own setup and the environment under test.
 - Setup commits carry fixed dates, so the same setup gives the same object ids in both images.
@@ -429,7 +431,7 @@ cat > report.py <<'PY'
             ),
             Step(
                 "install",
-                "pip install --break-system-packages tabulate",
+                "pip install tabulate",
                 on_ok="rerun",
                 on_fail="rewrite",
                 on_hang="rewrite",
@@ -458,13 +460,15 @@ printf '%s\\n' "$norm" | grep -qx 'apples 3' || fail "out/totals.txt does not li
 printf '%s\\n' "$norm" | grep -qx 'pears 5' || fail "out/totals.txt does not list pears 5"
 """,
     expected=(
-        "vanilla: 4 calls, 2 non-zero (module not found, then the install's network failure), completed / "
-        "timelike: the same, the install refused by the package guard instead. Tie"
+        "vanilla: 4 calls, 2 non-zero (module not found, then pip refusing an externally managed "
+        "interpreter), completed / timelike: the same count, the install refused by the package guard "
+        "(registry unreachable). Tie"
     ),
     difference=(
         "Both images have the same python3 and pip, and neither has the module the script imports. "
-        "Neither has a network in the bench. Vanilla's pip fails trying to download; timelike's pip goes "
-        "through the package guard, which checks the registry first and reports it unreachable"
+        "Neither has a network in the bench. Vanilla's interpreter is externally managed, so its pip "
+        "refuses to install; timelike's pip goes through the package guard, which checks the registry "
+        "first and reports it unreachable"
     ),
 )
 

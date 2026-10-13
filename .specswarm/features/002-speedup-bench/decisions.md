@@ -548,3 +548,14 @@ ASSUMED: tests/run.sh runs every file in tests/e2e, so the two new files need no
 ABSENT: none of these ran here: they are the Docker lane's (the operator's); bash -n and shellcheck are what was checked
 Verification: shellcheck 0.11.0 clean over the three bats files and run.sh; tests/unit -k 'bench or executor' 628 passed; ruff clean repo-wide; mypy --strict clean (39 files)
 SCOPE: out — bench/benchlib/executor.py, bench/benchlib/fakeagent.py, tests/unit/test_bench_executor.py, tests/unit/test_bench_standin.py, tests/unit/test_bench_live.py (5 of 14 changed files) (task has FLAGGED: yes)
+
+### T052: README, reboot.md, the cycle report, the audit-log row; the full host lane
+**Started:** 2026-10-13T08:22:03Z | **Completed:** 2026-10-13T08:43:56Z
+
+INHERITED: every task above; the send's README block and cycle-report block — (confidence: high)
+FLAGGED: the full host lane found two failures the per-task runs had not (a scan unit counting four images; `--break-system-packages` in the new task, which 007's FR-28 forbids repo-wide) — chose a plain `pip install`, so the install fails as each image makes it fail (vanilla: externally managed, `other`; timelike: the guard, `network denial`), over a venv detour that would hide that difference; FR-39 amended, declared; e2e cells adjusted (confidence: high)
+FLAGGED: the README's Status and row 02 are applied from the send's block, marked, because all four slice-1 Automated criteria are built (the send's condition) — their confirmation is the lane's (confidence: medium: built is not executed)
+ASSUMED: the audit-log row is a record-only `scoped` correction (row 4), superseding Cycle 3's `carried`; the block's own output is quoted — (confidence: high)
+ABSENT: no Docker lane, no live run, no D11 observation: the mentor's, after this report
+Verification: host lane rc 0 (pytest 2452 passed, 12 skipped; 60/60, 57/57, 33/33); ruff and format clean (120 files); mypy --strict clean (39 files); shellcheck 0.11.0 clean over the Makefile's 91 files; readme_reference drift test passing (reference unchanged)
+SCOPE: out — tests/unit/test_scan_report.py (1 of 7 changed files) (task has FLAGGED: yes)

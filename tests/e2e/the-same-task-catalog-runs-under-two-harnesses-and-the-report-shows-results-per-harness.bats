@@ -75,13 +75,17 @@ validate() {
   [[ -s "${LIVE_OUT}/transcripts/git-inspect--codex--told.rollout.jsonl" ]]
 }
 
-@test "SC-5 the live path has no route out but the relay: the install meets network denial under both harnesses" {
+@test "SC-5 the live path has no route out but the relay: the guarded install meets network denial under both harnesses" {
+  # In the timelike arms pip goes through the package guard, which asks the registry from the task container
+  # and finds no route; vanilla's pip refuses earlier (externally managed), so it is checked for the module.
   local h arm f
   for h in opencode codex; do
     for arm in vanilla not-told told; do
       f="${LIVE_OUT}/traces/python-missing-module--${h}--${arm}.json"
       grep -q '"category": "module-not-found"' "${f}"
-      grep -q '"category": "network-denial"' "${f}"
+    done
+    for arm in not-told told; do
+      grep -q '"category": "network-denial"' "${LIVE_OUT}/traces/python-missing-module--${h}--${arm}.json"
     done
   done
 }

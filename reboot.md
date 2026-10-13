@@ -5,11 +5,25 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
 
+- **`modify/002-slice-1`** (from `master` `8dbddc7` = `public/main`, **`v0.19.0` pushed 2026-10-13**: object `278d1a7`):
+  **002 Cycle 4 = 02 slice 1** (natural), send `bridge/sends/02-rev8-20261013-064725.md`, specswarm **2.44.0**,
+  attended. Modify row 4 (revision 8 already listed; the audit-log row is a record-only `scoped` correction of Cycle 3's
+  `carried`). Built T034–T052 (`cd82451` design … the cycle report): revision 8's verdict order (T034); categories,
+  adoption, the key file and write gate, the plan (T035–T037, T043); trace schema 2 (T038, schema 1 refused); the model
+  stand-in and the relay (T039–T040); transcripts recorded from OpenCode 1.19.0 and Codex CLI 0.162.1 against the
+  stand-in (T041, `tests/fixtures/transcripts/`, `record.py`) and their parsers (T042); arms, the live path, the CLI and
+  the report (T044–T046); the harness image, pins, `make bench-live`, `run.sh`'s key file (T047); the
+  `python-missing-module` task (T048); e2e (T049–T051). **FOR-MENTOR Item 25** (the relay holding the key: raised, not
+  built; the send's route is built). The second harness is **Codex CLI** (OpenRouter's own guides; Claude Code excluded).
+  Two defects found and fixed before any lane: the harness starts under **dash**, because the timelike image's BASH_ENV
+  strip would take its key; `BENCH_KEY_FILE` is itself key-shaped, so a live run accepts that one name. **The mentor's
+  live run:** `BENCH_KEY_FILE=… make bench-live DRY_RUN=1`, then without `DRY_RUN`. **No commit until the mentor says the
+  lane has ended.**
 - **`013-package-guard`** (from `master` `50dd84d` = `public/main`, **`v0.18.0` pushed 2026-10-12**: `main` and the
   tag, object `6dc8ca9`): **013 Cycle 1 = 15 slice 1 (first build)**, send `bridge/sends/15-rev2-20261012-001145.md`,
   specswarm 2.44.0. **FOR-MENTOR Item 24 raised first** (`5740354`): how the bare `pip`/`npm`/`uv`/`npx`/`pnpm` reach the

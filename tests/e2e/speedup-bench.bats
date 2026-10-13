@@ -154,11 +154,18 @@ driver_run() {
   [[ "${status}" -ne 0 ]]
 }
 
-@test "SC-7 the python task's failed commands are categorised in both images: module not found, then network denial" {
+@test "SC-7 the python task's failed commands are categorised in both images" {
+  # Module not found in every arm; the install then fails as each image makes it fail: vanilla's pip refuses
+  # an externally managed interpreter (other), and timelike's goes through the package guard, which finds no
+  # registry from a container with no network (network denial).
   local arm f
   for arm in vanilla not-told told; do
     f="${RUN_OUT}/traces/python-missing-module--fake--${arm}.json"
     grep -q '"category": "module-not-found"' "${f}"
-    grep -q '"category": "network-denial"' "${f}"
+  done
+  grep -q '"category": "other"' "${RUN_OUT}/traces/python-missing-module--fake--vanilla.json"
+  grep -q 'externally-managed-environment' "${RUN_OUT}/traces/python-missing-module--fake--vanilla.json"
+  for arm in not-told told; do
+    grep -q '"category": "network-denial"' "${RUN_OUT}/traces/python-missing-module--fake--${arm}.json"
   done
 }

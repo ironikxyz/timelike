@@ -395,7 +395,7 @@ send's route.
 
 ### Phase 11e: Records
 
-- [ ] T052 README (the send's block, only if the four Automated criteria are built; command reference regenerated;
+- [X] T052 README (the send's block, only if the four Automated criteria are built; command reference regenerated;
   previous marks cleared, changed passages marked). `reboot.md`. The cycle report § Cycle 4. The `audit-log.md` row
   (row 4, record-only: revision 8's work is done this cycle, superseding Cycle 3's `carried`). Lint, host lane,
   deny-list, commit.

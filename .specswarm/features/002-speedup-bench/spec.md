@@ -511,7 +511,10 @@ runs one real failing command per category in each image and prints how each was
 - **FR-39** One task is added, `python-missing-module`: a script imports a module neither image has, and the goal is
   its output in a file. Live, it can produce **module not found** and **network denial** (an install attempt with no
   network), which no slice-0 task can. Command not found and memory kill have no live task; the probe produces them
-  (FR-43).
+  (FR-43). *(Amended at implement, T052, declared: the install is a plain `pip install`, because 007's FR-28 forbids the flag
+  that overrides an externally managed interpreter anywhere in the repository. So the install fails differently per
+  image: vanilla's pip refuses at once (externally managed: `other`), and timelike's goes through the package guard,
+  which finds no registry (`network denial`). The probe produces network denial in both images.)*
 
 **Failure categories (SC-7)**
 - **FR-40** Every failed call (a non-zero exit, or a hang) carries **exactly one** category, decided in this order from
