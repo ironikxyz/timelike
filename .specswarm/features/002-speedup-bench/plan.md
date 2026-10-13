@@ -309,7 +309,9 @@ lets the lane run the whole live path with no key. The mentor's live run is one 
   reported version against its pin. ✓
 - **H9** (supply chain): the harness image goes through `make scan`; the harness tarballs are pinned by integrity. ✓
 - **P4:** key in a 0600 file, passed to the harness exec only, write gate; caps; plan before spend. Item 25 asks
-  whether to go further. ✓
+  whether to go further. ✓ *(Cycle 4 addendum: Item 25 was ruled (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`. The relay holds the key;
+  every harness gets a placeholder; the relay forwards only the harnesses' routes for the pinned model. P4's "use but
+  never read" now holds in every arm.)*
 - **P6:** the vanilla image and the agent image are unchanged; spend and tokens only in the appendix; n = 1 labelled. ✓
 - **P7:** two harnesses; nothing works only through one. ✓
 

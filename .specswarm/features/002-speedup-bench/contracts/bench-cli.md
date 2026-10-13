@@ -148,7 +148,11 @@ timelike-bench categories [--probe]
   5. Checks the images' identity, as before, plus `timelike-bench-harness:local` for a live run.
   6. Reads the timelike tool list once (`timelike tools --json` in a throwaway container of the agent image).
   7. Live: creates the network, connects itself, starts the relay (and the stand-in, with `--standin`), creates the
-     harness container.
+     harness container. The relay is given the key read in step 3, in memory, and the pinned model (Cycle 4 addendum,
+     Item 25 (b)).
+  8a. *(Cycle 4 addendum, lane 02s1-a item 2.)* A trace that breaks the trace schema is refused before it is written,
+     and the run stops with exit 1 and `a run's trace broke the trace schema and was refused, so it was not written:
+     <trace file>: <violation>`, not an internal error.
   8. Runs each task × harness × arm, vanilla first, then not-told, then told; writes each trace as it ends; for a
      live run, also `transcripts/<task>--<harness>--<arm>.{jsonl,rollout.jsonl,stderr.txt}`.
   9. Writes `report.txt`; removes the harness container and the network.
@@ -165,7 +169,8 @@ timelike-bench categories [--probe]
   `<image> · <category expected> · <category given> · <command> · <evidence>`, and exits 1 if any differ.
 - **Environment, added:** `BENCH_KEY_FILE`, `BENCH_MODEL` (default `deepseek/deepseek-v4-pro-0813`),
   `BENCH_UPSTREAM` (default `https://openrouter.ai`), `BENCH_TURN_CAP` (30), `BENCH_SPEND_CAP_USD` (10.00),
-  `BENCH_MODEL_PRICE_IN` and `BENCH_MODEL_PRICE_OUT` (USD per million tokens), `BENCH_OPENCODE_VERSION` and
+  `BENCH_MODEL_PRICE_IN` and `BENCH_MODEL_PRICE_OUT` (USD per million tokens), `BENCH_MODEL_PRICE_READ` (the date
+  those were read, printed in the plan's `basis:` line; Cycle 4 addendum), `BENCH_OPENCODE_VERSION` and
   `BENCH_CODEX_VERSION` (the pins). All are passed by `bench/run.sh` from `pins.env` or the operator's shell.
 - **First line** (rule 12) scope: `FAKE-AGENT BENCH PIPELINE DEMO RUN -- not a test of timelike`, `STAND-IN MODEL
   RUN -- not a test of timelike`, or `LIVE RUN n=1`.
@@ -181,20 +186,37 @@ bench/run.sh [--out DIR] [--task ID ...] [--harness H ...] [--arm A ...] [--dry-
   `0600`, owned by the user running the script (exit 4, naming the path and the property, never the value). Mounts
   it read-only at `/run/timelike-bench/key` and passes `-e BENCH_KEY_FILE=/run/timelike-bench/key`.
 - Passes, by name and value from its own environment, only: `BENCH_MODEL`, `BENCH_UPSTREAM`, `BENCH_TURN_CAP`,
-  `BENCH_SPEND_CAP_USD`, `BENCH_MODEL_PRICE_IN`, `BENCH_MODEL_PRICE_OUT`, `BENCH_OPENCODE_VERSION`,
+  `BENCH_SPEND_CAP_USD`, `BENCH_MODEL_PRICE_IN`, `BENCH_MODEL_PRICE_OUT`, `BENCH_MODEL_PRICE_READ`,
+  `BENCH_OPENCODE_VERSION`,
   `BENCH_CODEX_VERSION`. None is key-shaped, and nothing else is forwarded (RB9).
 - `make bench-live` = `bench/run.sh --harness opencode --harness codex`; `make bench-live DRY_RUN=1` adds `--dry-run`.
 
 ## The live exec (`harness.py`), identical for every arm
 
 ```
-docker exec -u agent -w /home/agent/task -e OPENROUTER_API_KEY -e HOME=/home/agent -e CODEX_HOME=/home/agent/.codex \
+docker exec -u agent -w /home/agent/task -e CODEX_HOME=/home/agent/.codex -e HOME=/home/agent \
+  -e OPENROUTER_API_KEY=placeholder-the-bench-relay-adds-the-key \
   [-e OPENCODE_CONFIG_CONTENT -e OPENCODE_DISABLE_…] <container> \
   sh -c '<the wrapper>' <run limit> '<harness argv, quoted> > ~/.bench/stdout.jsonl 2> ~/.bench/stderr.txt'
 ```
 
-The value of each `-e NAME` without `=` comes from the docker CLI's own environment, which the driver sets for that
-one exec. Only the harness exec carries `OPENROUTER_API_KEY`.
+*(Cycle 4 addendum: FOR-MENTOR Item 25, ruled (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.)* Every `-e` carries its value on argv, and
+none is a secret: `OPENROUTER_API_KEY` holds the fixed placeholder for every harness and run, and the docker CLI runs
+in the driver's environment unchanged. No exec carries the key. The relay drops whatever `Authorization` a request
+arrives with and adds its own.
+
+## The relay (`relay.py`), Cycle 4 addendum
+
+| Method and path (under the relay) | Forwarded when | Otherwise |
+|---|---|---|
+| `POST /api/v1/chat/completions` | the body's `model` is the pin | 403, `no-model` or `other-model` |
+| `POST /api/v1/responses` | the body's `model` is the pin | 403, `no-model` or `other-model` |
+| `GET /api/v1/generation?id=…` | always | — |
+| anything else, or a target naming another host | never | 403, `route-not-allowed` |
+
+A refusal's body is `{"error": {"message": "timelike-bench relay: refused (<verdict>): <why>", "code": 403}}`. Each
+is counted under the run's `extensions.relay.refused`. The caps answer 400 as before. `other-model` ends the run
+`stopped` (`model-refused`).
 
 ## Report layout, schema 2
 

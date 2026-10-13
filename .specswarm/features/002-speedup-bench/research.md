@@ -338,8 +338,12 @@ Debian trixie provides glibc in both images. Codex's is static.
 - **"A call in flight"** at the run limit (FR-36): the relay's last answer for the run asked for tool calls (chat
   `finish_reason` `tool_calls`, or a Responses `function_call` item), and no later request arrived. That run ends
   `hung`. Otherwise it is `stopped`, `harness-unresponsive`, or `api-…` if a request was still waiting on upstream.
-- The key reaches the harness by `docker exec -e OPENROUTER_API_KEY`, the value in the docker CLI's environment
-  (FR-30). Item 25 asks whether the relay should hold it instead.
+- ~~The key reaches the harness by `docker exec -e OPENROUTER_API_KEY`, the value in the docker CLI's environment
+  (FR-30). Item 25 asks whether the relay should hold it instead.~~ *(Cycle 4 addendum: Item 25 ruled (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.
+  The relay adds `Authorization` itself and drops any it receives; every harness gets the placeholder. Both pinned
+  harnesses were run through the new relay against the stand-in on this host, all four recorded scenarios each. Nothing
+  was refused, and the request, turn and status counts equalled the recordings', so the three routes are all they
+  use.)*
 
 ### RB16 · Categories (seam 7, FR-40)
 

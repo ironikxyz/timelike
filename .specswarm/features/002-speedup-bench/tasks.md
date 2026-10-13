@@ -403,3 +403,28 @@ send's route.
 **Dependencies:** T034–T038 first (T038 before T044–T046). T039 → T040, T041 → T042. T044 needs T035–T043. T045
 needs T044 and T046. T047 and T048 are independent. T049–T051 need everything above. T052 last.
 **Parallel:** T035, T036, T037 and T043 touch separate files.
+
+## Phase 12: Cycle 4 addendum (lane 02s1-a; Item 25 ruled (b))
+
+Instructed through `../bridge/feedback/02-20261013-102310-lane-02s1-a-item-25-not-built-told-arm-trace-sbom-empty.md`
+(the lane's four items) and `../bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md` (the ruling).
+Same send, same cycle.
+
+- [X] T053 [US5] Item 25 (b), the relay holds the key: `relay.py` (drops every incoming credential header and adds
+  its own; `ROUTES` and the pinned model only, refusals `route-not-allowed`, `no-model`, `other-model` named, counted
+  and never forwarded; every request counted; `senders`), `harness.py` (`KEY_PLACEHOLDER` in every harness's exec
+  environment), `runner.py` (no key to the harness exec; `model-refused` ending), `executor.py` (`pass_env` removed),
+  `trace.py` (the cause), `bin/timelike-bench` (the relay is given the key and the model). A unit per condition in
+  `test_bench_relay.py`, `test_bench_live.py`, `test_bench_executor.py`, `test_bench_cli.py`; an e2e cell that no
+  harness request is refused in the containers.
+- [X] T054 The plan's estimate states its basis (the ruling's addition): `plan.py`, `BENCH_MODEL_PRICE_READ` in
+  `pins.env`, forwarded by `run.sh`; units.
+- [X] T055 Lane item 2: a told run whose setup fails records `not placed`; setup and check under `Limits.step_s`; the
+  refused trace named, not an internal error. `runner.py`, `bin/timelike-bench`, `fakedocker.py`; units.
+- [X] T056 Lane item 3: the key-file cell for "inside the repository" uses a throwaway repository.
+  `test_bench_run_sh.py`.
+- [X] T057 Lane item 4: an empty SBOM fails, naming the image; the harness image's SBOM takes its pins.
+  `scan/evaluate.py` (`pinned`), `scan/scan.sh` (`pinned_packages_of`); units, `scan.sh` over the stand-in docker.
+- [X] T058 Records: spec (FR-16, FR-25, FR-26, FR-28, FR-30, FR-31, FR-32, FR-36, edge cases), contracts, data
+  model, plan, research, quickstart, README, FOR-MENTOR Item 25 closed, the cycle report's addendum, `reboot.md`;
+  the host lane; the deny-list; commit.

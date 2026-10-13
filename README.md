@@ -1064,8 +1064,10 @@ BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live             # every ta
 ```
 
 <mark>- **The key** is read only from the file `BENCH_KEY_FILE` names: one line, mode `0600`, yours, outside
-  the repository. It goes to the harness process and nowhere else, and every file the bench writes is
-  checked for it first.
+  the repository. Only the bench driver holds it: its relay adds the key to each request it forwards, so
+  neither harness and no command the agent runs ever holds it. The relay forwards only the harnesses' own
+  requests, for the pinned model. An agent's command can still reach the relay, so it can spend within the
+  caps, but it cannot read the key. Every file the bench writes is checked for the key first.
 - **The caps:** `BENCH_TURN_CAP` (default 30 turns per run), `BENCH_SPEND_CAP_USD` (default 10.00 per
   invocation), and 900 s per run. A run that reaches a cap is recorded as stopped, never as a loss.
 - **Before any request** the run prints its plan: the runs, the harnesses, the model, the caps and an

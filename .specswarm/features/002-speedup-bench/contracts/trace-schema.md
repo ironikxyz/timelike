@@ -66,12 +66,16 @@ Schema 1's rules 1 to 6 hold, with these changes and additions.
    category present to its count, and lists no category with a count of 0.
 5. **Endings.** `kind` ∈ {`completed`, `escalated`, `failed`, `hung`, `stopped`}. `cause` is non-empty exactly when
    `kind` is `stopped`, and is one of `api-rate-limit`, `api-error`, `api-unreachable`, `key-rejected`,
-   `harness-exit`, `harness-unresponsive`, `turn-cap`, `spend-cap`, `placement`, `transcript-unreadable`.
+   `harness-exit`, `harness-unresponsive`, `turn-cap`, `spend-cap`, `placement`, `transcript-unreadable`, and
+   *(Cycle 4 addendum, Item 25 (b))* `model-refused`.
 6. **Spend** follows the tokens rule: `usd` (a number ≥ 0) and `source` are present only when `recorded` is true;
    otherwise `reason` says why. `unknown_generations` counts generations whose cost OpenRouter did not report; it is
    present when recorded. The fake agent records `{"recorded": false, "reason": "the fake agent uses no model"}`.
 7. **Extensions.** `extensions.relay`, on live runs: the relay's own counts for the run (requests, turns, statuses).
-   Readers ignore other keys under `extensions`.
+   Readers ignore other keys under `extensions`. *(Cycle 4 addendum, Item 25 (b):)* it also carries `refused` (verdict
+   → count, for requests the relay did not forward) and `senders`, a fixed sentence saying the relay cannot tell a
+   harness's request from an agent command's. A told run whose setup failed records `placement: "not placed"`
+   (lane 02s1-a, item 2).
 
 ---
 

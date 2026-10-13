@@ -975,3 +975,194 @@ units alone: 628 passed. ruff check and format: clean (120 files). mypy `--stric
   measured them, on CPython 3.14.8).
 - The score is **`unknown`**. `min_quality_score: 0` and `block_merge_on_failure: false` (`quality-standards.md`), so
   it is informational and blocks nothing.
+
+### Addendum 1 — Item 25 ruled (b), built; lane 02s1-a's items 2 to 4
+
+**Written:** 2026-10-13T17:11:10Z (read from the clock), on `modify/002-slice-1`. Same send, same cycle. Instructed by the
+operator, relaying `../bridge/feedback/02-20261013-102310-lane-02s1-a-item-25-not-built-told-arm-trace-sbom-empty.md`
+(the lane's four items) and `../bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md` (the ruling,
+read in full). Lane 02s1-a had ended (`0d47e3f`); nothing was edited while it ran. **Nothing was pushed or merged.**
+None of this addendum's work has run in Docker: lane 02s1-b decides it.
+
+**Status in one line:** the relay in the bench driver now holds the key, under all seven of the ruling's conditions,
+each with a test. The told arm's setup-failed trace is valid. The key-file cell writes nothing into the checkout. The
+harness image's scan sees both harnesses, and an empty SBOM fails. FOR-MENTOR Item 25 is closed.
+
+| Task | Commit | What |
+|---|---|---|
+| T057 | `22c9071` | lane item 4: `scan/evaluate.py` (an empty SBOM fails, naming the image; `pinned`), `scan/scan.sh` (`pinned_packages_of`), their units |
+| T053 to T056 | `3311da2` | Item 25 (b) in `relay.py`, `harness.py`, `runner.py`, `executor.py`, `trace.py`, `bin/timelike-bench`; the plan's basis; lane items 2 and 3; their units; one e2e cell |
+| T058 | this commit | the spec, contracts, data model, plan, research, quickstart; README; FOR-MENTOR Item 25 closed; this addendum; `tasks.md`, `decisions.md`, `reboot.md` |
+
+#### Item 25's ruling, as built (each condition and its test)
+
+1. **The relay replaces any incoming `Authorization`.** It drops `Authorization`, `X-Api-Key`, `Api-Key` and `Cookie`
+   from every request, placeholder or not, and adds `Authorization: Bearer <key>` from the key in its memory. Against
+   the stand-in there is no key and it adds none.
+   *Tests:* `test_c1_the_relay_replaces_the_authorization_a_request_arrives_with` (the placeholder, another bearer,
+   and an `X-Api-Key` with a cookie all reach the stand-in as the relay's test key, nothing else);
+   `test_c1_with_the_stand_in_no_credential_is_forwarded_at_all`; `test_c7_the_stand_in_path_has_no_key_and_the_relay_adds_none`.
+2. **One placeholder,** `placeholder-the-bench-relay-adds-the-key` (`harness.KEY_PLACEHOLDER`, documented there and in
+   FR-30). It is lowercase words with no provider prefix, the same for every harness and every run, and it is in each
+   harness's exec environment as `OPENROUTER_API_KEY`.
+   *Tests:* `test_c2_the_placeholder_is_fixed_documented_and_not_key_shaped` (both harnesses, two sets of pins);
+   `test_a_live_harness_is_started_by_dash_so_bash_env_cannot_strip_its_key_variable` (the exec's argv).
+3. **The key lives in the driver's memory only,** read from `BENCH_KEY_FILE` at start and handed to the relay (and to
+   the driver's own generation-stats lookup, FR-35). `pass_env` is gone from the executor, and `runner.environ_with`
+   is removed: no `docker exec -e` carries it, and the docker CLI's environment is the driver's own, unchanged.
+   *Tests, with a test key value:* `test_c3_no_harness_exec_and_no_environment_holds_the_key` (the harness exec's
+   environment, the driver's `os.environ`, and the argv and environment of the exec that `bin/timelike-bench`'s
+   `DockerSession` builds); `test_c3_the_key_appears_in_no_accounting_summary_or_refusal`; the driver's `Config.Env`
+   is `run.sh`'s `-e` list, where `test_a_good_key_file_is_mounted_read_only_and_its_value_never_travels` asserts
+   only the path travels; each task container's environment is refused when key-shaped, as before.
+4. **Only what a harness needs is forwarded:** `POST /api/v1/chat/completions` and `POST /api/v1/responses` for the
+   pinned model, and `GET /api/v1/generation`, to the one upstream. Anything else is answered 403 with a named verdict,
+   counted under `refused`, and never forwarded: `route-not-allowed` (another method or path, an absolute-form target
+   naming another host, `CONNECT`), `no-model`, or `other-model`. `other-model` ends the run `stopped`, cause
+   `model-refused`, a new cause in the trace schema.
+   *Tests:* `test_c4_screen_forwards_only_the_harness_routes_and_the_pinned_model` (11 cases);
+   `test_c4_refusals_are_named_recorded_and_never_forwarded` (the stand-in sees none of four refused requests);
+   `test_c4_generation_stats_are_forwarded_with_the_relay_s_key`;
+   `test_a_request_for_another_model_ends_the_run_stopped_and_is_never_forwarded`; `live_ending`'s table.
+   *Evidence that the routes are enough:* both pinned harness binaries ran on this host through the new relay against
+   the stand-in, all four recorded scenarios each (`record.py`'s setup, dead proxy). Nothing was refused, and every
+   request, turn and status count equalled the recordings'. A new e2e cell checks the same in the containers.
+5. **Every request counts, whoever sent it.** The same turn and spend rules apply to any request. The relay **cannot
+   tell** a harness's request from an agent command's: they come from the same container and address, and anything the
+   harness carries the agent can read. So each live trace's `extensions.relay.senders` says exactly that.
+   *Test:* `test_c5_every_request_counts_whoever_sent_it_and_the_summary_says_senders_are_not_told_apart` (a
+   curl-shaped request takes a turn and spends like the harness's, and the cap stops the third).
+6. **The write gate stays** (FR-31). *Test:* `test_c6_the_gate_still_refuses_a_file_holding_the_key_should_it_ever_appear`.
+7. **Fake-agent runs are unchanged.** They still refuse any key-shaped variable and a set `BENCH_KEY_FILE`, and start
+   no relay. *Tests:* the existing refusal units, and `test_c7_a_fake_run_starts_no_relay_network_and_no_harness_holder`
+   (no `network` or `create` call in a full fake run).
+
+**The ruling's addition:** the plan's estimate states its basis. A new `basis:` line gives the requests per run (8
+typical, or the turn cap), the tokens assumed per request (20 000 input, 1 000 output), and the prices with the date
+they were read: `BENCH_MODEL_PRICE_READ=2026-10-13`, a new pin forwarded by `run.sh`.
+*Tests:* `test_bench_plan.py`, `test_bench_run_sh.py`.
+
+#### Lane item 2: the told arm's trace
+
+- **The cause:** `run_task`'s setup-failure path built the trace before the placement, so a told run whose setup
+  failed had an empty placement, which its own schema refuses. That path is reachable only when setup fails. So in
+  the runner container the timelike setup failed, and vanilla's did not.
+- **Why setup failed, inferred, not observed** (the runner's traceback file is gone): setup ran under the agent's call
+  limit, which the unit sets to 2 s. The timelike setup runs every git hook through the dispatcher. On this host it
+  takes 0.31 s for `git-inspect`, against vanilla's 0.06 s.
+- **The fix:**
+  - the invariant is kept, and the trace is made true: a told run whose setup failed records `not placed`, as the live
+    path already did;
+  - setup and check are the bench's own steps, so they run under `Limits.step_s` (120 s). The agent's calls keep the
+    call limit, and `call_limit_s` in the trace is unchanged.
+- **The wording:** a trace that breaks the schema now stops the run with `a run's trace broke the trace schema and was
+  refused, so it was not written: <file>: <violation>`. The remediation says it is a bench defect, not a result.
+- **Tests:** two CLI cells through the fake docker: a failing setup, and a 2 s setup under `--call-limit 1`. The first
+  reproduces the lane's exact error on the old runner and passes on the new one. There are also three runner units.
+
+#### Lane item 3: the key-file cell
+
+The "inside the repository" cell copies `run.sh` into a throwaway repository in its temp directory and puts the key
+file there. `run.sh` takes the repository from its own location. Nothing is written into the real checkout, and the
+file holds `x`.
+
+#### Lane item 4: the harness image's SBOM
+
+- **An SBOM with no packages fails** its step, for every image, naming it: `the SBOM of <image> catalogues no packages,
+  though the image holds software: Grype had nothing to match, so its result says nothing (a pass on nothing cannot
+  fail)`.
+- **The harness image's SBOM takes both harnesses from their pins,** before Grype reads it:
+  - `scan.sh`'s `pinned_packages_of` names them, and `evaluate.py pinned` adds them;
+  - they run on the agent image's interpreter with no network;
+  - each is marked as found in the pins and located at its binary;
+  - the step's detail says how many were added.
+- **Which names:** each binary is named by the package its advisories are filed under, at its pin: `opencode-ai@1.19.0`
+  and `@openai/codex@0.162.1`. Read from the npm registry, each lists the platform build the image holds
+  (`opencode-linux-x64`, `@openai/codex@0.162.1-linux-x64`) among its optionalDependencies, at the same version.
+  Keeping each package's `package.json` in the image would have let Syft catalogue the platform packages, which carry
+  no advisories, so Grype's 0 would still have said nothing.
+- **No baseline entry was written.** If Grype reports an unfixable High or Critical, it goes to the operator.
+
+### Group C — Addendum 1
+
+**delegations:** `[]`.
+
+**criteria_reestablished** (the same seven citations as Cycle 4's report, each still one `- [ ]` line of the send;
+nothing has run in Docker since lane 02s1-a, which was not a sign-off lane, so every mode is still **`unconfirmed`**):
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` _(slice 0)_ — **unconfirmed**
+  (lane: `speedup-bench.bats`, SC-1 cells).
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` _(slice 0)_ —
+  **unconfirmed** (lane: `speedup-bench.bats`, SC-2 cells; host: the five `test_bench_cli.py` units item 2 fixed).
+- `02 · "Each run is labelled told or not-told, and the report counts timelike tool invocations per arm"` _(slice 1)_
+  — **unconfirmed** (lane: `speedup-bench.bats` SC-4, and the SC-5 file's adoption recounts).
+- `02 · "The same task catalog runs under two harnesses and the report shows results per harness"` _(slice 1)_ —
+  **unconfirmed** (lane: the SC-5 file, now six cells; the new one checks that no harness request was refused).
+- `02 · "Two arms that end the same way in the same number of turns are ranked by hangs, then by failed commands"`
+  _(slice 1; revision 8)_ — **unconfirmed** (lane: `speedup-bench.bats` SC-6, the validator's `verdicts`).
+- `02 · "Failed commands are grouped into categories including command not found"` _(slice 1)_ — **unconfirmed**
+  (lane: the SC-7 probe file).
+- `02 · "DEMO: the Adopting developer compares timelike tool adoption between a told arm and a not-told arm"` _(slice 1;
+  D11, Manual)_ — **unconfirmed**. The mentor's live run, then the operator's reading.
+
+**reconcile_mode:** `scoped` (unchanged; no revision moved, and `audited_against` stays `[1, 8]`).
+
+**not_verified** (Cycle 4's list stands, with these changes):
+- **Removed:** the key-by-the-send's-route lines. No harness and no agent command holds the key now, so the vanilla
+  arm's agent cannot print it to the provider.
+- **Added, condition 5:** **an agent's command can spend through the relay, within the caps.** It shares the harness's
+  network, so it can reach `bench-relay:8417`. The relay forwards its requests by the same rules, so the agent can use
+  the key without reading it. The relay cannot tell such a request from the harness's, and the traces say so
+  (`senders`) instead of attributing any.
+- **Not checked by the relay:** the `Host` header. The relay connects only to its one upstream, and refuses an
+  absolute-form target and `CONNECT`, so the header changes nothing it forwards.
+- **Everything in Docker:**
+  - the relay's refusals in the containers (the new e2e cell);
+  - the harness image's scan with its pinned entries, including whether Grype matches entries `pinned` added (syft
+    JSON, `type: npm`, a purl) as it matches Syft's own;
+  - lane item 2's fix in the runner container. Its cause there is inferred.
+- **OpenRouter, without a key** (unchanged): Codex's `namespace` tool for this model, both protocols, `usage.cost` in
+  the Responses stream, the generation-stats field, how often it answers 429. Now also: whether it takes the relay's
+  `Authorization` as it would a harness's. It should, since only the header's source changed.
+
+**changed_other_features:**
+- **The scan gate, every image** (001's agent image, 004's Adele, the bench's three): an SBOM that catalogues nothing
+  now fails. All five catalogued packages in lane 02s1-a except the harness image, which now gets its pins.
+  `scan/evaluate.py` and `scan/scan.sh` are shared files.
+- **Shared files changed:** `pins.env` (`BENCH_MODEL_PRICE_READ`), `README.md` (the bench's key passage, inside the
+  mark this cycle already gave it; the cycle's other marks kept, since this addendum is part of the same update),
+  `FOR-MENTOR.md` (Item 25 closed), `tests/fixtures/transcripts/record.py` (the Relay's new `model` argument; the
+  recordings are unchanged).
+- No other feature's contract or code.
+
+**process_failures_recorded:**
+1. **A unit called the function it had patched:** the first draft of
+   `test_run_bench_names_the_trace_its_schema_refused` monkeypatched `runner.run_task` and called it from inside the
+   patch (RecursionError). Fixed by keeping the original first, before any commit.
+2. **59 lines over the 110-column limit** in the first ruff run, all this addendum's. They were rewrapped and
+   shortened, and ruff was clean before any commit.
+3. **To prove item 2's unit,** I swapped the committed `runner.py` and `bin/timelike-bench` into the working tree,
+   ran two units, and copied the new files back from the scratchpad. The diff was checked afterwards. No commit was
+   involved, but for a moment the working tree held the old code.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host`, timelike's CPython 3.14.8 in a scratch venv, over the working tree of `3311da2` plus this commit's
+records (no code changed after the run), 2026-10-13T17:01:57Z–17:10:47Z (read from the clock): **rc 0**.
+- pytest tests/unit: **2489 passed, 12 skipped** (497 s);
+- `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57; `test_command_not_found.sh` 33 of 33.
+
+Other checks:
+- ruff check and format: clean (285 files);
+- mypy `--strict`: clean (39 files);
+- shellcheck: clean over the Makefile's 91 files;
+- `scripts/readme_reference.py --check`: current, 14 tools;
+- the deny-list: PASS over the working tree before the commits (562 files) and over the three commit messages, P1–P7 0/0.
+
+#### Then
+
+Commit everything, and report done. No commit after that until the mentor says lane 02s1-b has ended.
+- **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
+- **After it:** the live run (D11), `BENCH_KEY_FILE=… make bench-live DRY_RUN=1`, then without `DRY_RUN`. Its plan now
+  prints the estimate's basis.

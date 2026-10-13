@@ -56,6 +56,13 @@ It runs all 5 tasks under both live harnesses (OpenCode 1.19.0, Codex CLI 0.162.
 **What it needs:**
 - `BENCH_KEY_FILE`: the OpenRouter key, one line, in a file **outside** the repository, mode `0600`, owned by you.
   It is refused otherwise; the refusal names the path and the property, never the value.
+  - *(Cycle 4 addendum, Item 25 (b).)* **Only the bench driver holds the key**, in memory, read from that file at
+    start. Its relay adds the key to each request it forwards to OpenRouter. No harness and no agent command ever
+    holds it: each harness gets the placeholder `placeholder-the-bench-relay-adds-the-key`.
+  - The relay forwards only the requests a harness makes (chat completions, Responses, generation stats), and only for
+    the pinned model. A request for another model ends that run `stopped` (`model-refused`).
+  - An agent's command can reach the relay too, since it shares the harness's network. It can then **spend through
+    it, within the caps**, but never read the key. The relay cannot tell its requests from the harness's.
 - Optional caps, with their defaults:
   - `BENCH_TURN_CAP=30`: turns per run;
   - `BENCH_SPEND_CAP_USD=10.00`: per invocation. When it is reached, the remaining cells are recorded `stopped`
@@ -64,7 +71,10 @@ It runs all 5 tasks under both live harnesses (OpenCode 1.19.0, Codex CLI 0.162.
 - `BENCH_MODEL` defaults to `deepseek/deepseek-v4-pro-0813`. An undated id is refused.
 
 **Spend estimate** (printed by the plan; research RB18): about $0.03 per turn, so about $7 for the catalog at a
-typical 8 turns per run, and $27 at the turn cap. The default spend cap of $10 therefore binds. The figures recorded
+typical 8 turns per run, and $27 at the turn cap. The default spend cap of $10 therefore binds. The plan's `basis:`
+line states what the estimate assumes (8 requests per run typical, or the turn cap; 20000 input and 1000 output tokens
+each) and the prices with the date they were read (`BENCH_MODEL_PRICE_READ`, 2026-10-13), so you can check it
+against the cap. The figures recorded
 are OpenRouter's own, read from each response.
 
 **Where it lands:** `bench/out/<UTC stamp>/` on the host:
@@ -73,6 +83,7 @@ are OpenRouter's own, read from each response.
 - `traces/<task>--<harness>--<arm>.json`;
 - `transcripts/`: each harness's own output.
 
-Every file was checked for the key's value before it was written.
+Every file was checked for the key's value before it was written. Since only the driver holds the key, that check
+should never find it.
 
 `timelike-bench report bench/out/<stamp>` re-reports from the traces alone.

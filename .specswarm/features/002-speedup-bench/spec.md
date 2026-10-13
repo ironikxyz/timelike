@@ -229,7 +229,10 @@ builds neither test, but it records how each run ended, which keeps P1's test an
 - **FR-15** The bench's command-line tools MUST follow the output contract from feature 001, and MUST
   pass `timelike-conform`.
 - **FR-16** Every image the bench adds (the vanilla image and the driver) MUST pass the supply-chain
-  gate (`make scan`, constitution H9) under the revision-5 baseline rule.
+  gate (`make scan`, constitution H9) under the revision-5 baseline rule. *(Cycle 4 addendum, lane 02s1-a item 4: an
+  SBOM that catalogues no packages fails the gate, naming the image, because every image the scan knows holds
+  software; and the harness image's SBOM takes its two harnesses from their pins, `opencode-ai` and `@openai/codex`
+  at `OPENCODE_VERSION` and `CODEX_VERSION`, because Syft catalogues nothing in a binary-only image.)*
 
 ## Success Criteria
 
@@ -287,7 +290,8 @@ against slices it was never sent.
   the operator may do a live run. It needs an API key. **No key goes into either image under test, into
   CI, or into this repository** (P4; Adele, feature 12, doesn't exist yet). If a live harness adapter is
   built at all in this slice, the key reaches the harness process only, which runs outside the
-  environment under test.
+  environment under test. *(Slice 1, Cycle 4 addendum: superseded by FOR-MENTOR Item 25's ruling (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`
+  — the relay in the bench driver holds the key, and no harness or agent command holds it; FR-26, FR-30.)*
 - **Value claims.** No report from this slice may be read as evidence that timelike helps.
 - **Revising the output contract.** Two contract questions are flagged by plan at discovery revision 6:
   - a mandatory closing line
@@ -439,19 +443,33 @@ runs one real failing command per category in each image and prints how each was
 - **FR-25** **Network, live runs only.** The task containers of a live invocation join a per-invocation
   `--internal` Docker network whose only other member is the driver. A harness reaches the model only through the
   driver's relay (FR-26). The agent's commands have no other network, in every arm alike, which is what makes network
-  denial producible live. Fake-agent runs keep `--network none`.
-- **FR-26** **The relay** (`benchlib/relay.py`) runs in the driver. It forwards `/api/v1/…` requests to the upstream
-  (`https://openrouter.ai`, or the stand-in) unchanged, streams the response back, and reads from each response its
-  status, its generation id, the model id that answered, and its usage (tokens, and cost when present). It never logs,
-  stores or writes a request header. It enforces the turn cap and the spend cap by answering any further request
-  with an error that names the cap. A **turn** at the relay is a request that offers tools (a harness's title or
-  summary request offers none and is not a turn).
+  denial producible live. Fake-agent runs keep `--network none`. *(Cycle 4 addendum, Item 25 (b), condition 5: an
+  agent's command shares this network with the harness, so it can reach the relay too. That is use, not reading: the
+  relay holds the key, and every request counts toward the caps whoever sent it.)*
+- **FR-26** **The relay** (`benchlib/relay.py`) runs in the driver. It forwards requests to the upstream
+  (`https://openrouter.ai`, or the stand-in), streams the response back, and reads from each response its status, its
+  generation id, the model id that answered, and its usage (tokens, and cost when present). It never logs, stores or
+  writes a request header. It enforces the turn cap and the spend cap by answering any further request with an error
+  that names the cap. A **turn** at the relay is a request that offers tools (a harness's title or summary request
+  offers none and is not a turn). *(Cycle 4 addendum: amended by FOR-MENTOR Item 25's ruling (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.)*
+  - **It holds the key** (condition 1). It drops the `Authorization` header a request arrives with, and every other
+    credential-carrying header (`X-Api-Key`, `Api-Key`, `Cookie`), placeholder or not, and adds its own
+    `Authorization: Bearer <key>`. Against the stand-in there is no key and it adds none.
+  - **It forwards only what a harness needs** (condition 4): `POST /api/v1/chat/completions`, `POST /api/v1/responses`
+    and `GET /api/v1/generation`, to its one upstream, and a model request only when its body names the pinned model.
+    Anything else is answered 403 with a named verdict, recorded under the run's `refused` counts, and never forwarded:
+    `route-not-allowed` (another method or path, or a target naming another host), `no-model`, or `other-model`. A
+    request for another model ends the run `stopped`, cause `model-refused` (FR-36).
+  - **Every request counts, whoever sent it** (condition 5): the same rules for turns and spend apply to any request
+    that reaches it. The relay cannot tell a harness's request from an agent command's: both come from the same
+    address, and anything the harness carries to identify itself the agent can read too. So nothing is attributed to
+    a sender, and the run's relay summary says so (`senders`).
 - **FR-27** The model is pinned to a dated id, `deepseek/deepseek-v4-pro-0813` (`BENCH_MODEL`). An id without a date
   suffix (four or eight digits after the last `-`), or one ending `-latest`, is refused before anything runs. Each
   trace records the pinned id and the ids OpenRouter answered with (P003); a different answer is recorded, not refused.
 - **FR-28** Harness configuration is given at exec time, and no configuration file is written into the task directory:
-  OpenCode through `OPENCODE_CONFIG_CONTENT` (provider `openrouter` with the relay's base URL and the key read from the
-  environment, `model` and `small_model` both the pinned id, every permission allowed, sharing and autoupdate off),
+  OpenCode through `OPENCODE_CONFIG_CONTENT` (provider `openrouter` with the relay's base URL and the key variable read
+  from the environment, which holds the placeholder (FR-30), `model` and `small_model` both the pinned id, every permission allowed, sharing and autoupdate off),
   `--pure`, `--format json`, and `OPENCODE_DISABLE_MODELS_FETCH`, `_DEFAULT_PLUGINS`, `_LSP_DOWNLOAD`, `_CLAUDE_CODE`,
   `_SHARE` and `_AUTOUPDATE`; Codex through `-c` overrides (provider `openrouter`, the relay's base URL, `env_key`,
   `wire_api = "responses"`, `web_search = "disabled"`, analytics and the update check off), `--strict-config`,
@@ -464,18 +482,28 @@ runs one real failing command per category in each image and prints how each was
   the same again on the read-only mount (`/run/timelike-bench/key`). The key is never read from argv, a compose file,
   an image's `ENV`, a container's `Config.Env` or a file in `code/`. Every refusal names the path and the failing
   property, never the value (exit 4).
-- **FR-30** The key reaches the harness process only: `docker exec -e OPENROUTER_API_KEY` for the harness's exec, with
+- **FR-30** ~~The key reaches the harness process only: `docker exec -e OPENROUTER_API_KEY` for the harness's exec, with
   the value in the docker CLI's own environment and only the name on argv. Setup, the placement, the check, the
-  version probe and every other exec get no key. It goes when the task container is removed.
+  version probe and every other exec get no key. It goes when the task container is removed.~~ *(Cycle 4 addendum,
+  superseded by FOR-MENTOR Item 25's ruling (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`, conditions 2 and 3:)* **No harness and no agent command
+  holds the key.** Every harness's `OPENROUTER_API_KEY` holds one fixed, documented placeholder,
+  `placeholder-the-bench-relay-adds-the-key`, the same for every harness and run; it is not shaped like a key (words,
+  no provider prefix), and both harnesses refuse to start with the variable unset. The key lives in the driver's
+  memory, read from `BENCH_KEY_FILE` at start (FR-29), and is used by the relay (FR-26) and by the driver's own
+  generation-stats lookup (FR-35). It is **never** in the driver's environment, a `docker exec -e`, a container's
+  `Config.Env`, a command line, a mount other than the key file's own read-only one, or a log line.
 - **FR-31** **The write gate.** Every file the bench writes (traces, the report, transcripts, the run log) is written
   through one function that refuses content containing the key's value. The refusal names the file and never prints
-  the value; the invocation stops (exit 1), keeping what it had already written. In the vanilla image nothing strips
+  the value; the invocation stops (exit 1), keeping what it had already written. ~~In the vanilla image nothing strips
   secret-shaped variables from the agent's commands, so an agent could print the key there; the gate keeps it out of
-  the record, and the provider still sees whatever the agent prints (not_verified).
+  the record, and the provider still sees whatever the agent prints (not_verified).~~ *(Cycle 4 addendum, Item 25
+  (b), condition 6: the gate stays. No agent can print the key now, since none holds it, so the gate guards against
+  something that should never happen.)*
 - **FR-32** A fake-agent run still refuses any API-key-shaped variable (FR-12, no exemption) **and** a set
   `BENCH_KEY_FILE`. CI never has a key. A live run needs `BENCH_KEY_FILE`, except against the stand-in (`--standin`). *(Implement, T045: `BENCH_KEY_FILE` is itself key-shaped under FR-12's rule — `KEY` is one of its parts — and its
   value is a path. A **live** run accepts that one name and still refuses every other key-shaped variable; a fake
-  run refuses it with its own message.)*
+  run refuses it with its own message.)* *(Cycle 4 addendum, Item 25 (b), condition 7: fake-agent runs are unchanged,
+  and start no relay.)*
 
 **Caps and the plan (P4, P2)**
 - **FR-33** Caps: a **turn cap** per run (`BENCH_TURN_CAP`, default 30), a **wall-clock limit** per live run
@@ -496,8 +524,9 @@ runs one real failing command per category in each image and prints how each was
 **Endings (natural intensity)**
 - **FR-36** A fifth ending, **`stopped`**, means the run ended for an infrastructure reason. It carries a cause:
   `api-rate-limit` (429), `api-error` (5xx or a malformed answer), `api-unreachable`, `key-rejected` (401 or 403),
-  `harness-exit` (a non-zero exit or a crash), `harness-unresponsive`, `turn-cap`, `spend-cap`, `placement` or
-  `transcript-unreadable`. Its reason line names it. A `stopped` row is listed under **Not compared
+  `harness-exit` (a non-zero exit or a crash), `harness-unresponsive`, `turn-cap`, `spend-cap`, `placement`,
+  `transcript-unreadable` or *(Cycle 4 addendum, Item 25 (b))* `model-refused` (the relay refused a request naming a
+  model other than the pin). Its reason line names it. A `stopped` row is listed under **Not compared
   (infrastructure)** and is never counted as a loss or a win for either image. A run limit reached while a tool
   call is in flight ends `hung` (the environment's outcome, as in slice 0); reached with no call in flight, it is
   `stopped`, `harness-unresponsive`.
@@ -570,6 +599,11 @@ runs one real failing command per category in each image and prints how each was
 - **The harness's reported version differs from the pin.** The run is refused (FR-23).
 - **A key-shaped string in a transcript that is not the key.** Not refused: the gate matches the key's value only.
 - **A timelike tool name inside an argument** (`echo run`). Not counted: only command words count (FR-19).
+- *(Cycle 4 addendum)* **An agent's command calls the relay itself** (`curl http://bench-relay:8417/...`). It is
+  served or refused by the same rules as the harness, counted toward the same caps, and not told apart (FR-26).
+- *(Cycle 4 addendum)* **A task's setup is slow.** Setup and check are the bench's own steps, not the agent's calls,
+  so they run under the bench's step limit (120 s), not the agent's call limit (lane 02s1-a, item 2). A told run whose
+  setup fails records its placement as `not placed`, since the placement comes after setup.
 
 ### Out of scope (slice 1)
 

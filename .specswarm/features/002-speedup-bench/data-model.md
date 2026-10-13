@@ -151,7 +151,9 @@ dropped.
 
 ## Arm
 `vanilla` | `not-told` | `told`. The environment follows from it (vanilla → the vanilla image; the others → the
-timelike image). `told` adds the placement step (FR-18) after setup. Order of runs per task and harness: vanilla,
+timelike image). `told` adds the placement step (FR-18) after setup. *(Cycle 4 addendum, lane 02s1-a item 2: a told
+run whose setup fails records `placement: "not placed"`. Setup and check run under the bench's step limit,
+`Limits.step_s`, 120 s, not the agent's call limit.)* Order of runs per task and harness: vanilla,
 not-told, told.
 
 ## Harness (`harness.py`)
@@ -173,15 +175,20 @@ shimmed installers, and the guarded forms (through timelike).
 ## Relay accounting (`relay.py`), per run
 requests; turns (requests offering tools); statuses; generation ids; models answered; tokens; cost (sum of
 `usage.cost`) and the ids without one; whether the last answer asked for tool calls; whether a request is waiting on
-upstream; which cap, if any, stopped it. Per invocation: the spend so far, against the spend cap.
+upstream; which cap, if any, stopped it. Per invocation: the spend so far, against the spend cap. *(Cycle 4
+addendum, Item 25 (b):)* the requests it refused, by verdict (`route-not-allowed`, `no-model`, `other-model`), and
+the first model id it refused as not the pin. No sender is recorded: the relay cannot tell a harness from an agent's
+command. The relay holds the key in memory; the accounting never does.
 
 ## Live run result
 The parsed calls (turn, command, exit code, merged output head and size, duration), the parser's errors, the
 harness's exit code, the relay's accounting, the check's result. From these the runner derives the ending:
 - the relay stopped it for a cap → `stopped` (`turn-cap`, `spend-cap`);
-- the transcript did not parse → `stopped` (`transcript-unreadable`);
+- *(Cycle 4 addendum, Item 25 (b))* the relay refused a request for another model → `stopped` (`model-refused`);
 - the run limit fired: a call in flight → `hung`; a request waiting upstream → `stopped` (`api-unreachable`);
   otherwise `stopped` (`harness-unresponsive`);
+- the transcript did not parse → `stopped` (`transcript-unreadable`) *(Cycle 4 addendum: listed above the run limit
+  until now, though the runner has always checked the run limit first; this is the order it runs)*;
 - the relay's last status was 401 or 403 → `stopped` (`key-rejected`); 429 → `api-rate-limit`; 5xx or no answer →
   `api-error`, when the check also failed;
 - the harness exited non-zero and the check failed → `stopped` (`harness-exit`);

@@ -1251,7 +1251,16 @@ These facts hold in every option:
 
 ## Item 25 — Feature 02 slice 1 (`002-speedup-bench`, Cycle 4): the key's route through the bench's relay (blocks nothing built; one question)
 
-**Status:** open. Raised 2026-10-13T07:11:27Z (read from the clock) on `modify/002-slice-1`, from send
+**Status:** closed 2026-10-13T17:00:23Z (read from the clock), answered by the mentor in
+`../bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md` (2026-10-13T07:12:57Z), and built in
+002's Cycle 4 addendum (`.specswarm/features/002-speedup-bench/cycle-report.md`). The answer: Q1 **(b), the relay
+holds the key**, with seven conditions, each built with a test: the relay replaces any incoming `Authorization`; one
+fixed placeholder that is not key-shaped, carried by every harness; the key in the driver's memory only; only the
+harnesses' routes and the pinned model forwarded, everything else refused and recorded (`model-refused` a `stopped`
+cause); every request counted toward the caps whoever sent it (the relay cannot tell senders apart, and says so);
+the write gate kept; fake-agent runs unchanged. The rest of the item was accepted as decided in the spec, and the
+ruling added one thing: the plan's estimate states its basis, with the prices' date (built). The text below is kept
+as raised. Raised 2026-10-13T07:11:27Z (read from the clock) on `modify/002-slice-1`, from send
 `bridge/sends/02-rev8-20261013-064725.md`, seams 1 to 4. The send asks for this item where a decision would put the
 key anywhere but the harness process. **One proposal does, so it is raised here and not built.** What is built follows
 the send's own route. Everything else the seams asked for is decided in the spec (§ Slice 1) and listed below for
