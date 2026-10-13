@@ -376,7 +376,7 @@ send's route.
   refusals, a full fake run in three arms, a stand-in run through the fake docker).
 - [X] T046 [US4] [US5] [US6] [US7] `report.py` render for schema 2 (contracts/bench-cli.md § Slice 1): harness
   sections, adoption, categories, three arms, two verdicts, `stopped` section, appendix with spend.
-- [ ] T047 [US5] `bench/harness/Dockerfile`, `pins.env` (harness versions and integrity, model price), `Makefile`
+- [X] T047 [US5] `bench/harness/Dockerfile`, `pins.env` (harness versions and integrity, model price), `Makefile`
   (`bench-images` builds it; `bench-live`; `scan` covers it), `bench/run.sh` (the key file, the pass-through
   variables, the new flags). `tests/unit/test_bench_run_sh.py` for the key-file refusals and the forwarded names.
 - [ ] T048 [US6] The catalog: plain-word goals checked; `python-missing-module` added with its fake policy and check

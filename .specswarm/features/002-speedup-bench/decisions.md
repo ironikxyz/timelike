@@ -511,3 +511,15 @@ ABSENT: no unit for `categories --probe` on the host: the fake docker runs comma
 ABSENT: the e2e validator gained `verdicts` (revision 8's ranking recomputed independently) and `adoption` (recounted per arm) here rather than in T049, because its unit fixture broke with the file naming
 Verification: tests/unit -k bench 612 passed (runner 26, live 19, report 33, CLI 34 incl. conform, validator 43); ruff and format clean; mypy --strict clean (39 files)
 SCOPE: out — bench/benchlib/executor.py, tests/unit/fakedocker.py, tests/unit/test_bench_runner.py, tests/unit/test_bench_live.py (4 of 13 changed files) (task has FLAGGED: yes)
+
+### T047: the harness image, the pins, make bench-images and bench-live, the scan, run.sh
+**Started:** 2026-10-13T08:08:30Z | **Completed:** 2026-10-13T08:10:50Z
+
+INHERITED: research RB14's design (FROM scratch, VOLUME /opt/bench-harness, --volumes-from), the npm integrity values checked in T041 — (confidence: high)
+FLAGGED: each harness's native binary is run directly, not through its npm launcher script — chose no Node dependency (Codex's launcher is codex.js) over the launcher's PATH additions; Codex's bundled rg (codex-path/) is therefore not on its PATH, which affects only its own file-search tool (confidence: medium; in not_verified)
+FLAGGED: the harness image is added to make scan's list, scanned when present, with no reviewed baseline yet — chose the gate as written (an unbaselined High or Critical fails until the operator reviews one) over pre-writing a baseline nobody reviewed (confidence: high; a lane risk, named)
+ASSUMED: the image's build checks each binary's own --version against the pin, as the driver checks it again at run time (FR-23) — (confidence: high)
+ASSUMED: make bench-live builds the images first, as make bench does, so DRY_RUN=1 also builds them — (confidence: medium)
+ABSENT: the image is not built here (no Docker on this host); its build, its scan and its mount are the lane's
+Verification: tests/unit/test_bench_run_sh.py 16 passed (live flags through, bench-live in the reproduce command, configuration forwarded by name and value, a good key file mounted read-only with its value on no argv, five bad key files refused on the host with exit 4); bash -n and shellcheck clean on run.sh
+SCOPE: out — scan/scan.sh (1 of 6 changed files) (task has FLAGGED: yes)

@@ -31,7 +31,7 @@
 #   does not fail: nothing was checked, so it is never a pass. It scans the tree, not history: history
 #   keeps these strings until the publishing step starts a new root, and gitleaks already reads history
 #
-# Four images (feature 002, FR-16: every image the bench adds goes through the same gate; feature 004,
+# Five images (feature 002, FR-16: every image the bench adds goes through the same gate; feature 004,
 # research R5: Adele's too):
 #   timelike-agent:local          → scan/out/                       required (unchanged since 001)
 #   timelike-adele:local          → scan/out/timelike-adele/        required. FROM scratch: no interpreter,
@@ -42,6 +42,9 @@
 #   timelike-bench-driver:local   → scan/out/timelike-bench-driver/ (holds the docker CLI, a Go binary:
 #                                    grype may report fixable Go-stdlib Highs that block until
 #                                    DOCKER_CLI_IMAGE is bumped, research RB10)
+#   timelike-bench-harness:local  → scan/out/timelike-bench-harness/ (002 slice 1: FROM scratch, the two
+#                                    pinned harness binaries only; no interpreter, so pip-audit records
+#                                    none; its base digest is DEBIAN_IMAGE's, the stage that fetched them)
 # Each image is judged against its own reviewed baseline, scan/baseline/<image>.json. An image with no
 # baseline accepts nothing: its proposed baseline is written for a person to review, never adopted
 # from another image's review. The two required images (make build) must exist, or the scan fails
@@ -327,7 +330,7 @@ gitleaks_line=$(grep "^gitleaks$(printf '\t')" "$top/steps.tsv" || true)
 : >"$top/steps.tsv"
 
 final=0
-for img in "$agent" "$adele" timelike-vanilla:local timelike-bench-driver:local; do
+for img in "$agent" "$adele" timelike-vanilla:local timelike-bench-driver:local timelike-bench-harness:local; do
   dir=$top
   [ "$img" = "$agent" ] || dir=$top/${img%%:*}
   if ! docker image inspect "$img" >/dev/null 2>&1; then

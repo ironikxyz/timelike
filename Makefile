@@ -12,7 +12,7 @@ DIRTY := $(shell git status --porcelain 2>/dev/null | grep -v '^?? tests/out/' |
 PYTHON ?= python3
 COMPOSE := docker compose
 
-.PHONY: build up down test test-host lint lint-host scan demo docker-check stamp-check bench bench-images grants
+.PHONY: build up down test test-host lint lint-host scan demo docker-check stamp-check bench bench-images bench-live grants
 
 docker-check:
 	@docker info >/dev/null 2>&1 || { \
@@ -156,11 +156,16 @@ scan: docker-check
 demo: up
 	scripts/demo.sh
 
-# Speedup bench (feature 002). Three images, all from the pinned base and stamped with the checkout's
-# revision: the agent (make build), the vanilla baseline and the bench driver. The driver refuses any
-# image whose revision label differs from GIT_SHA (research RB8), so a stale image is never measured.
-#   make bench                              all catalog tasks
+# Speedup bench (feature 002). Four images, all from the pinned base and stamped with the checkout's
+# revision: the agent (make build), the vanilla baseline, the bench driver and, since slice 1, the harness
+# image (the pinned live harnesses, mounted read-only into task containers, never run itself). The driver
+# refuses any image whose revision label differs from GIT_SHA (research RB8), so a stale image is never
+# measured.
+#   make bench                              all catalog tasks, the fake agent, three arms (CI's)
 #   make bench TASKS=git-rebase-continue    one task (space-separated for several)
+#   make bench-live                         the live run: both harnesses, every task, three arms, n = 1;
+#                                           needs BENCH_KEY_FILE (a 0600 file outside the repository)
+#   make bench-live DRY_RUN=1               its plan only: cells, harnesses, model, caps, the estimate
 bench-images: build
 	docker build -f bench/vanilla/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
 	  --build-arg UV_IMAGE=$(UV_IMAGE) --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
@@ -171,6 +176,13 @@ bench-images: build
 	  --build-arg UV_IMAGE=$(UV_IMAGE) --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
 	  --build-arg DOCKER_CLI_IMAGE=$(DOCKER_CLI_IMAGE) --build-arg GIT_SHA=$(GIT_SHA) \
 	  -t timelike-bench-driver:local .
+	docker build -f bench/harness/Dockerfile --build-arg DEBIAN_IMAGE=$(DEBIAN_IMAGE) \
+	  --build-arg OPENCODE_VERSION=$(OPENCODE_VERSION) --build-arg OPENCODE_SHA512=$(OPENCODE_SHA512) \
+	  --build-arg CODEX_VERSION=$(CODEX_VERSION) --build-arg CODEX_SHA512=$(CODEX_SHA512) \
+	  --build-arg GIT_SHA=$(GIT_SHA) -t timelike-bench-harness:local .
 
 bench: bench-images
 	bench/run.sh $(foreach t,$(TASKS),--task $(t))
+
+bench-live: bench-images
+	bench/run.sh --harness opencode --harness codex $(if $(DRY_RUN),--dry-run) $(foreach t,$(TASKS),--task $(t))
