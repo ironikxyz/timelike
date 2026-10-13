@@ -473,7 +473,9 @@ runs one real failing command per category in each image and prints how each was
   secret-shaped variables from the agent's commands, so an agent could print the key there; the gate keeps it out of
   the record, and the provider still sees whatever the agent prints (not_verified).
 - **FR-32** A fake-agent run still refuses any API-key-shaped variable (FR-12, no exemption) **and** a set
-  `BENCH_KEY_FILE`. CI never has a key. A live run needs `BENCH_KEY_FILE`, except against the stand-in (`--standin`).
+  `BENCH_KEY_FILE`. CI never has a key. A live run needs `BENCH_KEY_FILE`, except against the stand-in (`--standin`). *(Implement, T045: `BENCH_KEY_FILE` is itself key-shaped under FR-12's rule — `KEY` is one of its parts — and its
+  value is a path. A **live** run accepts that one name and still refuses every other key-shaped variable; a fake
+  run refuses it with its own message.)*
 
 **Caps and the plan (P4, P2)**
 - **FR-33** Caps: a **turn cap** per run (`BENCH_TURN_CAP`, default 30), a **wall-clock limit** per live run

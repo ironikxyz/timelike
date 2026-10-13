@@ -493,3 +493,21 @@ ASSUMED: an exit code the harness did not report is -1 (NO_EXIT), never 0, and t
 ASSUMED: both harnesses merge stdout and stderr; the merged size goes in stderr_bytes beside the merged head, and stdout_bytes is 0 (Assumption 11, output_streams: merged) — applied in T044 — (confidence: medium)
 ABSENT: no parser for Claude Code (excluded, FR-21)
 Verification: tests/unit/test_bench_transcripts.py 17 passed on the recorded transcripts (pass, failures with exits and categories per call, OpenCode's own timeout, both harnesses' cap error, Codex's 429, turns from response records) and on empty, non-JSON, truncated and foreign input; ruff clean; mypy --strict clean (38 files) — after a fix: the first commit of this task went in before mypy's result was read, with 31 narrowing errors; amended before anything else was built on it
+SCOPE: in (2 changed files)
+
+### T044–T046: the runner's cells and live path, the CLI, the report for schema 2 (one integration)
+**Started:** 2026-10-13T07:44:23Z | **Completed:** 2026-10-13T08:08:30Z
+
+INHERITED: the parsers (T042), relay and stand-in (T039–T040), categories, adoption and the gate (T035–T037), trace schema 2 (T038) — (confidence: high)
+FLAGGED: T044, T045 and T046 are built and committed together — chose one integration over three commits because the told and not-told traces share an environment, so the runner's cells broke slice 0's report pairing and the CLI's call at once; three separate commits would each have left the suite red (confidence: high)
+FLAGGED: BENCH_KEY_FILE is itself key-shaped under FR-12's rule (it has a KEY part), so every live run refused itself; a live run now accepts exactly that one name, and a fake run refuses it with its own message — recorded in spec FR-32 and the CLI contract, declared (confidence: high)
+FLAGGED: the tool is declared destructive, so agentio adds --dry-run ("show the plan, change nothing") and conform's C2 holds; it starts and removes containers and, live, spends money (confidence: high)
+FLAGGED: the plan printed before any request goes to stderr — stdout carries the output contract, and a plan line there would break --json; the same lines head the final result (confidence: high)
+FLAGGED: a live run's ending follows data-model § Live run result in that order, with one deliberate exception: a passing check makes the run completed even if the harness exited non-zero or the provider's last answer was an error, because the goal was reached (confidence: medium)
+ASSUMED: Codex's own per-call limit is not known (none was observed), so its traces record the run limit as the call limit; OpenCode's is 120 s, as its transcript reported — (confidence: medium)
+ASSUMED: the relay's port is fixed (8417) inside the per-invocation network; nothing else listens there — (confidence: high)
+DEFERRED: the CLI's live path end to end (network, harness container, relay, real harness binaries) runs only in the Docker lane (T050); on the host it is driven at the runner level with the real relay and stand-in and a recorded transcript (tests/unit/test_bench_live.py)
+ABSENT: no unit for `categories --probe` on the host: the fake docker runs commands locally, where the memory probe would allocate 512 MiB for real; the probe is T051's, in the lane
+ABSENT: the e2e validator gained `verdicts` (revision 8's ranking recomputed independently) and `adoption` (recounted per arm) here rather than in T049, because its unit fixture broke with the file naming
+Verification: tests/unit -k bench 612 passed (runner 26, live 19, report 33, CLI 34 incl. conform, validator 43); ruff and format clean; mypy --strict clean (39 files)
+SCOPE: out — bench/benchlib/executor.py, tests/unit/fakedocker.py, tests/unit/test_bench_runner.py, tests/unit/test_bench_live.py (4 of 13 changed files) (task has FLAGGED: yes)

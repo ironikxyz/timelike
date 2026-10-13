@@ -139,7 +139,8 @@ timelike-bench categories [--probe]
 
 - **`run`**, in order:
   1. Refuses an API-key-shaped variable in its own environment, as before (exit 4), for every harness: the key is
-     never in the environment, only in a file.
+     never in the environment, only in a file. One name is accepted, by a live run only: `BENCH_KEY_FILE`, which is
+     key-shaped by FR-12's rule but holds a path.
   2. With the fake agent only (the default): refuses a set `BENCH_KEY_FILE` (exit 4, FR-32).
   3. With a live harness: refuses an undated `BENCH_MODEL` (exit 2); unless `--standin`, reads `BENCH_KEY_FILE` (a
      regular file, mode `0600`, owned by this user, one line; otherwise exit 4, naming the path and the property).

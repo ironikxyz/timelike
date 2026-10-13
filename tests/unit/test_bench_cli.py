@@ -81,7 +81,7 @@ def bench_run(b: dict[str, Any], *args: str, timeout: float = 120, **env: str) -
 def test_catalog_text_and_json(bench: dict[str, Any]) -> None:
     p = bench_run(bench, "catalog", "--text")
     assert p.returncode == 0, p.stderr
-    assert p.stdout.splitlines()[0] == "timelike-bench: catalog [slice 0]"
+    assert p.stdout.splitlines()[0] == "timelike-bench: catalog [slice 1]"
     assert "task git-commit-hook-rejects" in p.stdout
     doc = json.loads(bench_run(bench, "catalog", "--json").stdout)
     assert [t["id"] for t in doc["tasks"]][:1] == ["git-inspect"]
@@ -106,7 +106,10 @@ def full_run(bench: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     return bench, p
 
 
-def test_run_writes_eight_traces_and_the_report(full_run: tuple[dict[str, Any], Any]) -> None:
+N_TRACES = 3 * len([t for t in cat_t.catalog.CATALOG])  # every task, three arms, the fake agent
+
+
+def test_run_writes_three_traces_per_task_and_the_report(full_run: tuple[dict[str, Any], Any]) -> None:
     b, p = full_run
     assert p.returncode == 0, p.stderr
     lines = p.stdout.splitlines()
@@ -115,14 +118,19 @@ def test_run_writes_eight_traces_and_the_report(full_run: tuple[dict[str, Any], 
         == f"timelike-bench: {b['out']} [FAKE-AGENT BENCH PIPELINE DEMO RUN -- not a test of timelike]"
     )
     assert lines[-1] == f"report: {b['out'] / 'report.txt'}"
-    assert len(list((b["out"] / "traces").glob("*.json"))) == 8
+    names = sorted(p.name for p in (b["out"] / "traces").glob("*.json"))
+    assert len(names) == N_TRACES and all("--fake--" in n for n in names)
     report = (b["out"] / "report.txt").read_text().splitlines()
     assert report[0].startswith("FAKE-AGENT BENCH PIPELINE DEMO RUN -- This is not a test of timelike")
-    appendix = report.index("## Appendix: tokens")
+    appendix = report.index("# Appendix: tokens and spend")
     assert not any("token" in line.lower() for line in report[:appendix])  # the REAL catalog's text too
+    assert (
+        "# Harness: timelike-fake-agent 1 (reported 1) · answered by no answer recorded · invocation bash -c"
+        in report
+    )
+    assert "## Adoption: timelike tool calls per arm" in report
     # 001 cycle 5 (discovery revision 7): hooks run, bounded, so the hooks-off loss became a tie.
     assert "## Timelike loses (0)" in report
-    assert "## Ties (2)" in report and "## Timelike wins (2)" in report
 
 
 def test_the_hook_tasks_explain_themselves_from_the_report_alone(
@@ -137,16 +145,16 @@ def test_the_hook_tasks_explain_themselves_from_the_report_alone(
     rejects = rejects[: rejects.index("\n### ") if "\n### " in rejects else len(rejects)]
     assert "Tests: Hooks run (a repository's own policy). Both images run the repository's hooks" in rejects
     assert "Verdict: Tie — both completed" in rejects
-    for arm in ("vanilla", "timelike"):
+    for arm in ("vanilla", "timelike, not told", "timelike, told"):
         assert (
-            f"What happened in {arm}:\n  1. `git commit -m 'bench: update f'` → exit 1: "
+            f"What happened in {arm}:\n  1. `git commit -m 'bench: update f'` → exit 1 [other]: "
             "pre-commit: TODO found" in rejects
         )
     hangs = report[report.index("### git-commit-hook-hangs") :]
     hangs = hangs[: hangs.index("\n### ") if "\n### " in hangs else len(hangs)]
     assert "Tests: Hooks run, bounded (a hook that never finishes)." in hangs
     assert (
-        "What happened in timelike:\n  1. `git commit -m 'bench: update f'` → exit 1: "
+        "What happened in timelike, told:\n  1. `git commit -m 'bench: update f'` → exit 1 [other]: "
         "error: git hook pre-commit" in hangs
     )
     assert "Why: The pre-commit hook ran under timelike's limit and was stopped with a verdict" in hangs
@@ -157,7 +165,7 @@ def test_run_removes_every_container(full_run: tuple[dict[str, Any], Any]) -> No
     root = b["tmp"] / "containers"
     started = [d.name for d in root.iterdir() if d.is_dir()]
     removed = (root / "removed.log").read_text().split()
-    assert len(started) == 8 and sorted(started) == sorted(removed)
+    assert len(started) == N_TRACES and sorted(started) == sorted(removed)
 
 
 def test_report_rebuilds_from_traces_alone(full_run: tuple[dict[str, Any], Any]) -> None:
@@ -176,7 +184,7 @@ def test_out_is_exactly_the_directory_and_a_used_one_is_refused(full_run: tuple[
     p = bench_run(b, "run", "--out", str(b["out"]), "--task", "git-inspect")
     assert p.returncode == 1
     assert "already holds traces" in p.stderr
-    assert len(list((b["out"] / "traces").glob("*.json"))) == 8  # nothing was added or mixed in
+    assert len(list((b["out"] / "traces").glob("*.json"))) == N_TRACES  # nothing was added or mixed in
 
 
 def test_planted_api_key_refuses_before_anything(bench: dict[str, Any]) -> None:
@@ -238,6 +246,14 @@ def test_term_inside_a_task_container_refuses(bench: dict[str, Any]) -> None:
         (["run", "--task", "no-such-task"], {}, 3, "unknown task"),
         (["run", "somedir"], {}, 2, "no directory argument"),
         (["run", "--call-limit", "0"], {}, 2, "must be positive"),
+        (["run", "--harness", "fake", "--harness", "codex"], {}, 2, "not mixed in one run"),
+        (["run", "--standin"], {}, 2, "--standin drives live harnesses"),
+        (
+            ["run", "--harness", "codex", "--standin"],
+            {"BENCH_MODEL": "deepseek/deepseek-v4-pro"},
+            2,
+            "no date suffix",
+        ),
         (["run"], {"BENCH_GIT_SHA": ""}, 1, "BENCH_GIT_SHA is empty"),
         (["run"], {"BENCH_BASE_DIGEST": ""}, 1, "BENCH_BASE_DIGEST is empty"),
         (["report"], {}, 2, "needs a run directory"),
@@ -259,7 +275,7 @@ def test_report_over_an_empty_directory_is_not_found(bench: dict[str, Any], tmp_
 
 def test_report_over_a_corrupt_trace_fails(bench: dict[str, Any], tmp_path: Path) -> None:
     (tmp_path / "bad" / "traces").mkdir(parents=True)
-    (tmp_path / "bad" / "traces" / "x--vanilla.json").write_text("{}")
+    (tmp_path / "bad" / "traces" / "x--fake--vanilla.json").write_text("{}")
     p = bench_run(bench, "report", str(tmp_path / "bad"))
     assert p.returncode == 1 and "invalid trace" in p.stderr
 
@@ -268,6 +284,74 @@ def test_one_task_with_default_out_under_bench_out(bench: dict[str, Any], tmp_pa
     p = bench_run(bench, "run", "--task", "git-inspect", "--json", BENCH_OUT=str(tmp_path / "o"))
     doc = json.loads(p.stdout)
     assert p.returncode == 0, p.stderr
-    assert doc["verdicts"] == {"git-inspect": "tie"}
+    assert doc["verdicts"] == {"fake": {"git-inspect": {"not-told": "tie", "told": "tie"}}}
     assert Path(doc["out"]).parent == tmp_path / "o"
-    assert len(list(Path(doc["out"], "traces").glob("*.json"))) == 2
+    assert len(list(Path(doc["out"], "traces").glob("*.json"))) == 3
+
+
+def test_one_arm_runs_only_that_arm_and_vanilla_is_not_implied(bench: dict[str, Any], tmp_path: Path) -> None:
+    p = bench_run(
+        bench, "run", "--task", "git-inspect", "--arm", "told", "--json", BENCH_OUT=str(tmp_path / "o")
+    )
+    doc = json.loads(p.stdout)
+    assert p.returncode == 0, p.stderr
+    assert [x.name for x in Path(doc["out"], "traces").glob("*.json")] == ["git-inspect--fake--told.json"]
+
+
+def test_a_failed_placement_is_a_stopped_told_row(bench: dict[str, Any], tmp_path: Path) -> None:
+    cfg = docker_config(bench["tmp"], timelike_agent={"placement_fails": True})
+    p = bench_run(
+        bench,
+        "run",
+        "--task",
+        "git-inspect",
+        "--json",
+        BENCH_OUT=str(tmp_path / "o"),
+        FAKE_DOCKER_CONFIG=str(cfg),
+    )
+    assert p.returncode == 0, p.stderr
+    told = json.loads(next(Path(json.loads(p.stdout)["out"], "traces").glob("*--told.json")).read_text())
+    assert (told["ending"]["kind"], told["ending"]["cause"]) == ("stopped", "placement")
+
+
+def test_a_key_file_set_for_a_fake_run_refuses(bench: dict[str, Any], tmp_path: Path) -> None:
+    p = bench_run(bench, "run", BENCH_KEY_FILE=str(tmp_path / "key"))
+    assert p.returncode == 4 and "BENCH_KEY_FILE is set for a fake-agent run" in p.stderr
+
+
+def test_a_live_dry_run_prints_the_plan_and_touches_nothing(bench: dict[str, Any]) -> None:
+    p = bench_run(
+        bench, "run", "--harness", "opencode", "--harness", "codex", "--standin", "--dry-run", "--text",
+        BENCH_OPENCODE_VERSION="1.19.0", BENCH_CODEX_VERSION="0.162.1",
+    )  # fmt: skip
+    assert p.returncode == 0, p.stderr
+    n = len(cat_t.catalog.CATALOG)
+    assert f"plan: {n} tasks × 2 harnesses × 3 arms = {n * 6} runs, n = 1 each" in p.stdout
+    assert f"timelike-bench: plan: {n} tasks" in p.stderr  # printed before anything else happens
+    assert not (bench["tmp"] / "containers").exists()
+
+
+def test_a_live_run_without_a_key_file_refuses_naming_the_property(
+    bench: dict[str, Any], tmp_path: Path
+) -> None:
+    key = tmp_path / "key"
+    key.write_text("x\n")
+    key.chmod(0o644)
+    p = bench_run(bench, "run", "--harness", "opencode", BENCH_KEY_FILE=str(key))
+    assert p.returncode == 4 and "mode is 0644, must be 0600" in p.stderr
+    p = bench_run(bench, "run", "--harness", "opencode")
+    assert p.returncode == 4 and "BENCH_KEY_FILE is empty" in p.stderr
+
+
+def test_a_live_run_needs_the_harness_image(bench: dict[str, Any]) -> None:
+    p = bench_run(bench, "run", "--harness", "opencode", "--standin")
+    assert (
+        p.returncode == 1 and "timelike-bench-harness:local" in p.stderr and "make bench-images" in p.stderr
+    )
+
+
+def test_categories_lists_the_rules_in_order(bench: dict[str, Any]) -> None:
+    p = bench_run(bench, "categories", "--text")
+    assert p.returncode == 0, p.stderr
+    rules = [line for line in p.stdout.splitlines() if line[:2] in {f"{i}." for i in range(1, 7)}]
+    assert len(rules) == 6 and rules[0].startswith("1. timeout:") and rules[5].startswith("6. other:")

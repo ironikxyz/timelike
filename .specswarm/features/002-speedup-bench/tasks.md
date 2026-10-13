@@ -326,55 +326,55 @@ send's route.
 
 ### Phase 11a: Foundational (pure modules, host lane)
 
-- [ ] T034 [US6] Revision 8's verdict order in `bench/benchlib/report.py` (`verdict`, `_verdict_line`, the table's row
+- [X] T034 [US6] Revision 8's verdict order in `bench/benchlib/report.py` (`verdict`, `_verdict_line`, the table's row
   order): ending, turns, hangs, failed commands; the sentence quotes table counts only. Units in
   `tests/unit/test_bench_report.py` with rows that differ in exactly one column at a time, and one where the summed
   tiebreak and the new order disagree. Annotate decisions T016 (already done in Cycle 2; add the Cycle 4 line).
   `data-model.md` step 3 was corrected at plan.
-- [ ] T035 [P] [US7] `bench/benchlib/categories.py`: `categorize(exit_code, hung, output, oom_rose)` → one category or
+- [X] T035 [P] [US7] `bench/benchlib/categories.py`: `categorize(exit_code, hung, output, oom_rose)` → one category or
   `""` (FR-40), with the patterns of research RB16; `CATEGORIES`, `describe()` for `timelike-bench categories`. Units
   in `tests/unit/test_bench_categories.py`, on real outputs captured from the host where possible (bash 127, python's
   traceback, node's error, git's DNS failure), and on 003's, 007's and 013's own texts read from their files.
-- [ ] T036 [P] [US4] `bench/benchlib/adoption.py`: `command_words`, `timelike_tools_in`, `through_timelike` (FR-19).
+- [X] T036 [P] [US4] `bench/benchlib/adoption.py`: `command_words`, `timelike_tools_in`, `through_timelike` (FR-19).
   Units in `tests/unit/test_bench_adoption.py` (wrappers, assignments, pipelines, quoting, `echo run` not counted,
   `rm -r`/`rm -rf`/`rm -fr`, `git -C x reset --hard`, `git push -f`).
-- [ ] T037 [P] `bench/benchlib/keyfile.py`: `read_key(path)` (FR-29) and `Gate` (FR-31: `check(text, name)`,
+- [X] T037 [P] `bench/benchlib/keyfile.py`: `read_key(path)` (FR-29) and `Gate` (FR-31: `check(text, name)`,
   `write_text(path, text)`, atomic). Units in `tests/unit/test_bench_keyfile.py`: mode 0644 and 0640 refused, a
   symlink refused, another owner refused (simulated with `os.stat` injected), empty or multi-line refused, a match
   refused naming the file and not the value, nothing written on refusal.
-- [ ] T038 `bench/benchlib/trace.py` schema 2 (contracts/trace-schema.md): list and float fields; arm, placement and
+- [X] T038 `bench/benchlib/trace.py` schema 2 (contracts/trace-schema.md): list and float fields; arm, placement and
   category rules; derived totals; `stopped` and `cause`; `spend`; schema 1 refused with its message; `write_trace`
   through the gate. Update `tests/unit/test_bench_trace.py`, `test_validate_bench.py` and
   `tests/e2e/fixtures/validate_bench.py` (the independent validator, its own code) to schema 2.
 
 ### Phase 11b: The live path's parts (host lane, loopback only)
 
-- [ ] T039 [P] [US5] `bench/benchlib/standin.py`: the model stand-in (FR-47; chat completions and Responses, streamed
+- [X] T039 [P] [US5] `bench/benchlib/standin.py`: the model stand-in (FR-47; chat completions and Responses, streamed
   and not, `usage.cost`, scripted per task from the fake policy's happy path, and a categories script). Units start it
   on loopback.
-- [ ] T040 [US5] `bench/benchlib/relay.py` (FR-26): forwarding, streaming, accounting, caps, never a header in any
+- [X] T040 [US5] `bench/benchlib/relay.py` (FR-26): forwarding, streaming, accounting, caps, never a header in any
   record. Units: relay → stand-in on loopback (turns count only tool-offering requests; the turn cap and the spend cap
   answer 400 naming the cap; 429 and 500 recorded; `last_asked_tools`; a header value is never in the accounting).
-- [ ] T041 [US5] Record transcripts with the pinned harnesses against `standin.py` (host, scratchpad, no key, no
+- [X] T041 [US5] Record transcripts with the pinned harnesses against `standin.py` (host, scratchpad, no key, no
   network but loopback), for: a passing task, the categories script, an empty run. Store them in
   `tests/fixtures/transcripts/{opencode,codex}/` with a `README.md` saying how they were made (versions, sha512,
   date). Deny-list them.
-- [ ] T042 [US5] `bench/benchlib/transcripts.py`: `parse_opencode(stdout)`, `parse_codex(rollout, stdout)` (FR-44),
+- [X] T042 [US5] `bench/benchlib/transcripts.py`: `parse_opencode(stdout)`, `parse_codex(rollout, stdout)` (FR-44),
   each raising `TranscriptUnreadable(what)` rather than returning zero calls. Units in
   `tests/unit/test_bench_transcripts.py` on T041's recordings, and on truncated or foreign input.
-- [ ] T043 [P] `bench/benchlib/plan.py`: the plan text and the estimate (FR-34, RB18), and the model-id rule (FR-27).
+- [X] T043 [P] `bench/benchlib/plan.py`: the plan text and the estimate (FR-34, RB18), and the model-id rule (FR-27).
   Units.
 
 ### Phase 11c: Runs, the CLI, the image
 
-- [ ] T044 [US4] [US5] `bench/benchlib/harness.py` and `runner.py`: arms, the told placement (FR-18), the fake path
+- [X] T044 [US4] [US5] `bench/benchlib/harness.py` and `runner.py`: arms, the told placement (FR-18), the fake path
   with categories and adoption, the live path (version check, exec with the key in the docker CLI's env only,
   transcripts, parse, check, ending per data-model § Live run result). `docker.py`: start options (network,
   `--volumes-from`, memory), network and harness-container lifecycle, `oom_kills`. Units through the fake docker.
-- [ ] T045 [US5] [US7] `bench/bin/timelike-bench`: `--harness`, `--arm`, `--dry-run`, `--standin`, caps, the key-file
+- [X] T045 [US5] [US7] `bench/bin/timelike-bench`: `--harness`, `--arm`, `--dry-run`, `--standin`, caps, the key-file
   rule, `categories [--probe]`, the report per harness. `tests/unit/test_bench_cli.py` (conform, the plan, the
   refusals, a full fake run in three arms, a stand-in run through the fake docker).
-- [ ] T046 [US4] [US5] [US6] [US7] `report.py` render for schema 2 (contracts/bench-cli.md § Slice 1): harness
+- [X] T046 [US4] [US5] [US6] [US7] `report.py` render for schema 2 (contracts/bench-cli.md § Slice 1): harness
   sections, adoption, categories, three arms, two verdicts, `stopped` section, appendix with spend.
 - [ ] T047 [US5] `bench/harness/Dockerfile`, `pins.env` (harness versions and integrity, model price), `Makefile`
   (`bench-images` builds it; `bench-live`; `scan` covers it), `bench/run.sh` (the key file, the pass-through

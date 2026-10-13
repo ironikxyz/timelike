@@ -37,6 +37,9 @@ class LocalSession:
     def close(self) -> None:
         LocalSession.closed.append(self.dir)
 
+    def place(self) -> str:
+        return "claude-code: placed; codex: placed; opencode: placed"
+
 
 def local_env(kind: str, root: Path) -> runner.Environment:
     return runner.Environment(kind, "sha256:" + kind[0] * 64, SHA, lambda: LocalSession(root, kind))
@@ -60,21 +63,25 @@ EXPECTED = {
 def bench_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[trace.Trace]]:
     root = tmp_path_factory.mktemp("bench")
     out = root / "out"
-    envs = [local_env("vanilla", root), local_env("timelike", root)]
-    return out, runner.run_bench(catalog.CATALOG, envs, CTX, out)
+    cells = runner.cells(local_env("vanilla", root), local_env("timelike", root))
+    return out, runner.run_bench(GIT_TASKS, cells, CTX, out)
 
 
-def test_run_bench_writes_two_valid_traces_per_task_in_order(
+GIT_TASKS = [t for t in catalog.CATALOG if t.id.startswith("git-")]
+
+
+def test_run_bench_writes_three_valid_traces_per_task_in_order(
     bench_run: tuple[Path, list[trace.Trace]],
 ) -> None:
     out, traces = bench_run
-    assert [(t.identity.task_id, t.identity.environment) for t in traces] == [
-        (task.id, env) for task in catalog.CATALOG for env in ("vanilla", "timelike")
+    assert [(t.identity.task_id, t.identity.arm) for t in traces] == [
+        (task.id, arm) for task in GIT_TASKS for arm in ("vanilla", "not-told", "told")
     ]
     files = sorted(p.name for p in (out / "traces").iterdir())
-    assert len(files) == 8
+    assert len(files) == 3 * len(GIT_TASKS)
+    assert all(f.split("--")[1] == "fake" for f in files)
     assert trace.load_traces(out) == sorted(
-        traces, key=lambda t: f"{t.identity.task_id}--{t.identity.environment}.json"
+        traces, key=lambda t: f"{t.identity.task_id}--fake--{t.identity.arm}.json"
     )
 
 
@@ -82,10 +89,30 @@ def test_run_bench_writes_two_valid_traces_per_task_in_order(
 def test_totals_and_endings_match_rb4(
     bench_run: tuple[Path, list[trace.Trace]], task_id: str, env: str
 ) -> None:
-    t = next(x for x in bench_run[1] if (x.identity.task_id, x.identity.environment) == (task_id, env))
-    got = (t.totals.tool_calls, t.totals.nonzero_exits, t.totals.hangs, t.ending.kind)
-    assert got == EXPECTED[(task_id, env)], (t.ending, [c.command for c in t.calls])
-    assert t.totals.turns == t.totals.tool_calls
+    runs = [x for x in bench_run[1] if (x.identity.task_id, x.identity.environment) == (task_id, env)]
+    assert len(runs) == (1 if env == "vanilla" else 2)  # timelike: not told, then told
+    for t in runs:
+        got = (t.totals.tool_calls, t.totals.nonzero_exits, t.totals.hangs, t.ending.kind)
+        assert got == EXPECTED[(task_id, env)], (t.identity.arm, t.ending, [c.command for c in t.calls])
+        assert t.totals.turns == t.totals.tool_calls
+
+
+def test_the_told_arm_records_its_placement(bench_run: tuple[Path, list[trace.Trace]]) -> None:
+    for t in bench_run[1]:
+        want = "claude-code: placed; codex: placed; opencode: placed" if t.identity.arm == "told" else ""
+        assert t.identity.placement == want
+
+
+def test_failed_calls_carry_a_category(bench_run: tuple[Path, list[trace.Trace]]) -> None:
+    hung = next(
+        x
+        for x in bench_run[1]
+        if (x.identity.task_id, x.identity.arm) == ("git-commit-hook-hangs", "vanilla")
+    )
+    assert [c.category for c in hung.calls if c.hung] == ["timeout"]
+    for t in bench_run[1]:
+        for c in t.calls:
+            assert bool(c.category) == (c.exit_code != 0 or c.hung)
 
 
 def test_identity_is_fully_stamped(bench_run: tuple[Path, list[trace.Trace]]) -> None:
@@ -113,7 +140,7 @@ def test_timelike_hang_ends_on_the_hook_dispatchers_verdict(
 
 
 def test_every_session_is_closed(bench_run: tuple[Path, list[trace.Trace]]) -> None:
-    assert len(LocalSession.closed) >= 8
+    assert len(LocalSession.closed) >= 3 * len(GIT_TASKS)
 
 
 # --- scripted edges --------------------------------------------------------------------------------
@@ -219,5 +246,38 @@ def test_session_closes_when_the_executor_raises() -> None:
 
 
 def test_trace_path() -> None:
-    assert runner.trace_path(Path("/o"), "t", "vanilla") == Path("/o/traces/t--vanilla.json")
+    assert runner.trace_path(Path("/o"), "t", "fake", "told") == Path("/o/traces/t--fake--told.json")
     assert os.sep == "/"
+
+
+def test_a_told_run_whose_placement_fails_is_stopped_not_failed() -> None:
+    s = Scripted([result()])  # setup only: the placement fails before the agent starts
+    cell = runner.Cell("told", runner.Environment("timelike", "sha256:" + "e" * 64, SHA, lambda: s))
+    t = runner.run_task(task_with(ONE), cell, CTX)
+    assert (t.ending.kind, t.ending.cause) == ("stopped", "placement")
+    assert t.calls == () and trace.validate(t) == [] and s.closed
+
+
+def test_cells_keep_the_arm_order() -> None:
+    v = runner.Environment("vanilla", "sha256:" + "a" * 64, SHA, lambda: Scripted([]))
+    tl = runner.Environment("timelike", "sha256:" + "b" * 64, SHA, lambda: Scripted([]))
+    assert [(c.arm, c.env.name) for c in runner.cells(v, tl, ["told", "vanilla"])] == [
+        ("vanilla", "vanilla"),
+        ("told", "timelike"),
+    ]
+
+
+def test_adoption_is_counted_from_command_words_in_timelike_arms_only() -> None:
+    ctx = runner.RunContext(SHA, DIGEST, "make bench", runner.Limits(2, 60), ("run", "view"))
+    pol = fa.Policy("a", (fa.Step("a", "run make && pip install x", fa.DONE, fa.DONE, fa.DONE),))
+    for arm, env in (("vanilla", "vanilla"), ("not-told", "timelike")):
+        s = Scripted([result(), result(), result()])
+        cell = runner.Cell(arm, runner.Environment(env, "sha256:" + "e" * 64, SHA, lambda s=s: s))
+        t = runner.run_task(task_with(pol), cell, ctx)
+        call = t.calls[0]
+        if arm == "vanilla":
+            assert (call.timelike_tools, call.through_timelike) == ((), ())
+        else:
+            assert (call.timelike_tools, call.through_timelike) == (("run",), ("shim:pip",))
+            assert (t.totals.timelike_tool_calls, t.totals.through_timelike_calls) == (1, 1)
+        assert trace.validate(t) == [] and t.identity.timelike_tools == ("run", "view")

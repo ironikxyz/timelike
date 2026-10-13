@@ -5,7 +5,11 @@ FAKE_DOCKER_CONFIG, and runs `exec` commands LOCALLY in a per-container director
 the config gives that image (the vanilla / timelike emulations of test_bench_catalog.py). It proves
 the CLI wires docker.py, runner.py and report.py together; it proves nothing about Docker (R10).
 
-Config: {"root": dir, "images": {ref: {"id", "revision", "env": [..], "exec_env": {..}}}}
+Config: {"root": dir, "images": {ref: {"id", "revision", "env": [..], "exec_env": {..}}}, "tools": [..]}
+
+Slice 1 adds: the timelike tool list (`docker run --rm --entrypoint …/timelike IMAGE tools --json`, from
+"tools"), the told placement (`exec … timelike announce --install --json`, every harness placed unless the
+image sets "placement_fails"), and the OOM count (`exec CID cat …/memory.events`, always 0 here).
 """
 
 from __future__ import annotations
@@ -35,6 +39,14 @@ def main(argv: list[str]) -> int:
         labels = {"org.opencontainers.image.revision": img["revision"]} if img["revision"] else {}
         print(json.dumps([{"Id": img["id"], "Config": {"Labels": labels, "Env": img["env"]}}]))
         return 0
+    if argv[0] == "run" and "--rm" in argv:
+        entry = argv[argv.index("--entrypoint") + 1] if "--entrypoint" in argv else ""
+        if entry.endswith("/timelike") and argv[-2:] == ["tools", "--json"]:
+            names = cfg.get("tools", ["run", "view", "search", "timelike"])
+            print(json.dumps({"tools": [{"name": n, "kind": "timelike", "installed": True} for n in names]}))
+            return 0
+        print(f"fakedocker: unexpected run --rm {argv}", file=sys.stderr)
+        return 1
     if argv[0] == "run":
         image_id = argv[-2]
         cid = uuid.uuid4().hex
@@ -51,13 +63,24 @@ def main(argv: list[str]) -> int:
             fh.write(argv[-1] + "\n")
         return 0
     if argv[0] == "exec":
-        # exec -u agent [-w DIR] CID CMD...
-        rest = argv[3:]
-        workdir = None
-        if rest[0] == "-w":
-            workdir, rest = rest[1], rest[2:]
-        cid, cmd = rest[0], rest[1:]
+        # exec [-u USER] [-w DIR] [-e NAME[=VALUE]]... CID CMD...
+        i, workdir = 1, None
+        while argv[i].startswith("-"):
+            if argv[i] == "-w":
+                workdir = argv[i + 1]
+            i += 2 if argv[i] in ("-u", "-w", "-e") else 1
+        cid, cmd = argv[i], argv[i + 1 :]
         img = by_id[(root / cid / "image").read_text()]
+        if cmd == ["cat", "/sys/fs/cgroup/memory.events"]:
+            print("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0")
+            return 0
+        if cmd[:3] == ["/opt/timelike/bin/timelike", "announce", "--install"]:
+            if img.get("placement_fails"):
+                print("timelike: announce failed", file=sys.stderr)
+                return 1
+            states = [{"harness": h, "state": "placed"} for h in ("claude-code", "codex", "opencode")]
+            print(json.dumps({"placements": states}))
+            return 0
         home = root / cid / "home"
         cwd = home if workdir in (None, "/home/agent") else home / "task"
         env = {k: v.replace("@HOME@", str(home)) for k, v in img["exec_env"].items()}

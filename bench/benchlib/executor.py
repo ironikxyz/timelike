@@ -173,16 +173,27 @@ class DockerExecutor:
         user: str = TASK_USER,
         workdir: str = TASK_DIR,
         env: Mapping[str, str] | None = None,
+        exec_env: Mapping[str, str] | None = None,
+        pass_env: Sequence[str] = (),
     ) -> None:
         self.container_id = container_id
         self.docker = docker
         self.user = user
         self.workdir = workdir
         self.env = dict(env) if env is not None else None  # the docker CLI's own env; never forwarded
+        # Set inside the exec (`-e NAME=value`): configuration, never a secret, because argv is visible.
+        self.exec_env = dict(exec_env or {})
+        # Passed by name (`-e NAME`): the value comes from the docker CLI's own environment (`env` above),
+        # so it never appears on any argv (FR-30). The harness exec's key is the one use.
+        self.pass_env = tuple(pass_env)
 
     def argv(self, command: str, limit_s: int) -> list[str]:
-        prefix = [self.docker, "exec", "-u", self.user, "-w", self.workdir, self.container_id]
-        return prefix + wrapper_argv(command, limit_s)
+        prefix = [self.docker, "exec", "-u", self.user, "-w", self.workdir]
+        for name, value in sorted(self.exec_env.items()):
+            prefix += ["-e", f"{name}={value}"]
+        for name in self.pass_env:
+            prefix += ["-e", name]
+        return [*prefix, self.container_id, *wrapper_argv(command, limit_s)]
 
     def run(self, command: str, limit_s: int) -> CallResult:
         return capture(self.argv(command, limit_s), limit_s, env=self.env)
