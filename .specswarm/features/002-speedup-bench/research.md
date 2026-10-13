@@ -248,3 +248,134 @@ already holds the same CLI unscanned [V]. That is recorded, not fixed here.
 
 These five limits are why every fake-agent report says, on its first line, that it proves the pipeline
 and not the value.
+
+---
+
+# Research — slice 1 (Cycle 4, send `bridge/sends/02-rev8-20261013-064725.md`)
+
+Probes were run on the host in the scratchpad, never in `code/`, with an isolated `HOME` per run and no key. The
+harness packages were downloaded from the npm registry, and their `sha512` was checked against the registry's
+`dist.integrity` before anything ran. The model stand-in used for the probes was a throwaway; the one the bench
+ships is `benchlib/standin.py` (RB17).
+
+### RB12 · The second harness (seam 1, P7)
+
+**Decision: Codex CLI 0.162.1, beside OpenCode 1.19.0. Claude Code is excluded.**
+
+| | OpenCode 1.19.0 | Codex CLI 0.162.1 | Claude Code 2.1.296 |
+|---|---|---|---|
+| Package (linux-x64) | `opencode-linux-x64`, 60 MB tgz, one Bun binary | `@openai/codex@0.162.1-linux-x64`, 165 MB tgz, a static musl binary | `@anthropic-ai/claude-code-linux-x64`, 115 MB tgz |
+| License (registry) | none given (MIT upstream) | Apache-2.0 | "SEE LICENSE IN LICENSE.md" |
+| Protocol it spoke to the stand-in | OpenAI chat completions, `<baseURL>/chat/completions` | OpenAI Responses, `<base_url>/responses`; `wire_api = "chat"` refused by its own config check: "`wire_api = "chat"` is no longer supported" | Anthropic messages, `<base>/v1/messages?beta=true` |
+| Carried a scripted shell call | yes (`bash`) | yes (`exec_command`) | yes (`Bash`) |
+| Exit code in its own output | `part.state.metadata.exit` | `exit_code` (`--json` and the rollout) | not as a field; `is_error` |
+| What OpenRouter says | native provider | guide: "Point `model` at any OpenRouter slug … or a pinned version" | guide: "only guaranteed to work with the Anthropic first-party provider" |
+
+Sources read: `https://openrouter.ai/docs/cookbook/coding-agents/codex-cli.md`,
+`…/claude-code-integration.md`, `https://openrouter.ai/docs/api_reference/responses/overview.md` (stateless: "Requests
+that set `store: true` or a non-null `previous_response_id` are" refused) and `…/responses/tool-calling.md` (function
+calling in the OpenAI format). The model's entry in `https://openrouter.ai/api/v1/models`: `deepseek/deepseek-v4-pro-0813`,
+canonical slug `deepseek/deepseek-v4-pro-20260813`, `supported_parameters` include `tools` and `tool_choice`, prompt
+$1.32 and completion $3.96 per million tokens at the base rate (cheaper at listed UTC hours). The moving alias
+`deepseek/deepseek-v4-pro` currently points at a different snapshot (`…-20260423`), which is why FR-27 refuses
+undated ids.
+
+Codex's request to the stand-in carried `store: false`, no `previous_response_id`, `include:
+["reasoning.encrypted_content"]`, and tools of type `function`, one `namespace` (`multi_agent_v1`) and the hosted
+`web_search` (removed by `web_search = "disabled"`). **Open until the first live run:** whether OpenRouter accepts the
+`namespace` tool for this model (`not_verified`).
+
+Claude Code also carried a stand-in's tool call, so it could be a harness. It is excluded because OpenRouter itself
+promises it only with Anthropic's own provider, and the send forbids changing the model.
+
+### RB13 · Running a harness without the network (seam 2)
+
+With `HTTP(S)_PROXY` pointed at a dead port and only loopback exempt, both harnesses completed a scripted run:
+- **OpenCode** fetched `models.dev` and npm-installed `@opencode-ai/plugin` into `~/.config/opencode` on its first
+  unconfigured run. With `OPENCODE_DISABLE_MODELS_FETCH`, `OPENCODE_DISABLE_DEFAULT_PLUGINS`, `--pure` and a fresh
+  home it made no other request. It also asks a **small model** for a session title; unconfigured, that was another
+  model on OpenRouter's catalog. `small_model` is pinned to the same id (FR-28), and the relay does not count a request
+  without tools as a turn.
+- **Codex** ran under `--strict-config` with `web_search = "disabled"`, and warned only that it has no metadata for
+  the model ("Defaulting to fallback metadata").
+
+Unprivileged network namespaces were not permitted on the probe host, so this is a proxy-based check, not an
+isolation proof. In the bench, the internal network is the isolation (FR-25).
+
+**Both harnesses pass their key variable to the agent's commands.** A scripted `env | grep -c OPENROUTER_API_KEY`
+printed `1` under each (FOR-MENTOR Item 25).
+
+### RB14 · Where the harness runs, and the harness image (seam 2, FR-24)
+
+A real harness runs its own shell, so it must run where the agent's commands should run: in the task container.
+It must not enter either image (P6 for vanilla; the agent image carries timelike's files only). It is mounted
+read-only at run time from a bench image, `timelike-bench-harness:local`:
+- built from `DEBIAN_IMAGE` in a stage that `ADD`s each npm tarball, checks its `sha512` against `pins.env`, and
+  unpacks only the binary; the final stage is `FROM scratch` with `/opt/bench-harness/{opencode,codex}/` and
+  `VOLUME /opt/bench-harness`;
+- per invocation, `docker create` makes one harness container from it, whose volume Docker fills from the image. Every
+  task container gets `--volumes-from <it>:ro`. One copy per invocation, not per run.
+
+`--mount type=image` would avoid the copy, but needs Engine API 1.48. The lane host's engine version could not be read
+from here (no Docker on this host), so the portable form is used. OpenCode's binary is glibc-linked (Bun), and
+Debian trixie provides glibc in both images. Codex's is static.
+
+### RB15 · The relay, the network and the key (seams 2 to 4)
+
+- The driver creates a per-invocation `--internal` network, connects itself under the alias `bench-relay` (its
+  container name is its host name), and starts the live task containers on it. The relay listens there.
+- A harness's base URL is `http://bench-relay:8417/api/v1`. The relay forwards to `BENCH_UPSTREAM` (default
+  `https://openrouter.ai`) with `http.client`, streaming the body through as it arrives.
+- **What the relay reads** (OpenRouter's usage accounting: usage "is now always included automatically in every
+  response", in the last SSE message when streaming): the status, `id` (the generation id), `model`, and `usage`
+  (tokens and `cost`). For chat completions it reads the last `data:` chunk carrying `usage`. For the Responses API it
+  reads the `response.completed` event's `response`. A response without `usage.cost` is looked up afterwards through
+  `GET /api/v1/generation?id=…`, and named if still unknown.
+- **What it never does:** log, store or write a request header.
+- **A turn** is a request offering tools (chat `tools`, Responses `tools`). The turn cap and the spend cap answer the
+  next request with HTTP 400 and `{"error": {"message": "timelike-bench: <cap> reached"}}`. Each harness treats a 400
+  as final rather than retrying it.
+- **"A call in flight"** at the run limit (FR-36): the relay's last answer for the run asked for tool calls (chat
+  `finish_reason` `tool_calls`, or a Responses `function_call` item), and no later request arrived. That run ends
+  `hung`. Otherwise it is `stopped`, `harness-unresponsive`, or `api-…` if a request was still waiting on upstream.
+- The key reaches the harness by `docker exec -e OPENROUTER_API_KEY`, the value in the docker CLI's environment
+  (FR-30). Item 25 asks whether the relay should hold it instead.
+
+### RB16 · Categories (seam 7, FR-40)
+
+The texts matched are the environment's own: bash's `command not found`, and 007's handler lines from
+`/etc/timelike/shell-env.bash` (`timelike: install it yourself: …`, `… which is not installed`); 003's `run` verdict
+words, `(timeout after N s …)` and `(out of memory: …)` (`tools/bin/run`); the package guard's `unreachable`
+(`tools/bin/package-guard`); Adele's refusal (`tools/bin/adele`). Python's `ModuleNotFoundError` and `No module named`;
+Node's `Cannot find module` and `ERR_MODULE_NOT_FOUND`; DNS and socket failures as glibc, git, curl, pip and Node print
+them. **Memory kill needs evidence:** exit 137 alone is also what `kill -9` gives, so the container's cgroup
+`memory.events` `oom_kill` count is read before and after (003 reads the same count, R16). The probe (FR-43) runs with
+`--memory 64m`.
+
+### RB17 · Parsing, transcripts and the stand-in (seam 8)
+
+- **OpenCode** `run --format json`: one JSON object per line. `step_start` opens a turn; `tool_use` carries
+  `part.tool` (`bash`), `part.state.input.command`, `part.state.output`, `part.state.metadata.exit` and
+  `part.state.time.{start,end}` (ms); `step_finish` carries `part.tokens` and `part.cost`. That cost is OpenCode's own
+  price-table figure, not OpenRouter's, so the trace never uses it as spend.
+- **Codex** `exec --json` gives `item.completed` `command_execution` with `exit_code` and `aggregated_output`, but no
+  model-response boundaries. The rollout file `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` has them: a
+  `function_call` response item, then a `token_usage_record` (with OpenRouter's `response_id`) per model response, then
+  an `item_completed` `CommandExecution` with `exit_code`, `aggregated_output` and `duration`. The parser reads the
+  rollout; `--json` stdout is kept as a transcript too.
+- Both merge stdout and stderr in what they report for a call (Assumption 11).
+- **The stand-in** answers chat completions and Responses requests (streamed or not) with the tool calls of a script.
+  Its default script is the task's fake-agent happy path (start, then `on_ok` until DONE), so the live path in the lane
+  runs the same commands the fake agent would. For the categories script it issues one failing command per category.
+  It picks the harness's shell tool from the tools the request offers (`bash`, `exec_command`), so it adapts to the
+  harness as the real model would. The transcripts recorded with it are each harness's own output (P005), and the
+  first live run is still its own tier (llm-apis Q001).
+
+### RB18 · The spend estimate (FR-34)
+
+Per turn: 20 000 input tokens (both harnesses send a long system prompt and the growing conversation) and 1 000 output
+tokens, at the base prices in `pins.env`, gives about $0.030 per turn. Upper bound per run: turn cap × that ($0.91 at
+30). The full live catalog is 5 tasks × 2 harnesses × 2 timelike arms + 5 × 2 vanilla = 30 runs: an upper bound of
+about $27, above the default spend cap of $10, which therefore binds. A typical run of 8 turns is about $0.24, so about
+$7 for the catalog. The plan prints these figures and says they are estimates. Spend is only ever what OpenRouter
+reports (FR-35).

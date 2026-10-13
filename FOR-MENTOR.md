@@ -1246,3 +1246,95 @@ These facts hold in every option:
 - Q2: the confirm's form;
 - Q3: pnpm;
 - Q4: the record's place.
+
+---
+
+## Item 25 — Feature 02 slice 1 (`002-speedup-bench`, Cycle 4): the key's route through the bench's relay (blocks nothing built; one question)
+
+**Status:** open. Raised 2026-10-13T07:11:27Z (read from the clock) on `modify/002-slice-1`, from send
+`bridge/sends/02-rev8-20261013-064725.md`, seams 1 to 4. The send asks for this item where a decision would put the
+key anywhere but the harness process. **One proposal does, so it is raised here and not built.** What is built follows
+the send's own route. Everything else the seams asked for is decided in the spec (§ Slice 1) and listed below for
+your eye.
+
+### Q1 · Should the relay hold the key, so that no harness or agent ever does?
+
+**What is built (the send's route).** A live harness reaches OpenRouter only through a small relay in the bench
+driver (spec FR-25, FR-26). The relay exists for three things the send asks for, which a TLS tunnel would hide:
+- the spend, read from each response's usage, and the spend cap enforced before the next request;
+- the turn cap, counted harness-agnostically as requests that offer tools;
+- the model id OpenRouter answered with (cross-stack P003), and the status of each response, which names a
+  `stopped` row's cause (429, 5xx, 401).
+
+The key goes to the harness process only, as an exec-time variable (`docker exec -e OPENROUTER_API_KEY`, the value in
+the docker CLI's own environment). The harness sends it as `Authorization`, and the relay forwards that header
+unchanged and never logs, stores or writes it. The relay runs in the driver, which already reads the key file (the
+send: "the bench reads it from a file named by a variable"), so no new process holds it. The write gate (FR-31)
+keeps it out of every artifact.
+
+**What remains with that route, and goes in `not_verified`:**
+- the harness's children inherit the variable. **Both harnesses pass it to the agent's commands.** Run against
+  the stand-in with a scripted `env | grep -c OPENROUTER_API_KEY`, each command printed `1`, under OpenCode 1.19.0
+  and Codex 0.162.1 alike;
+- in the timelike arms, 001's secret strip removes it from the agent's `bash -c` and `bash -lc` (the name is
+  key-shaped, SC-9). That is not checked live in this cycle;
+- in the **vanilla** arm nothing strips it, so the agent can print it under either harness. The gate keeps it out of
+  the record, but the model provider then sees it.
+
+**The proposal (not built).** The relay adds the `Authorization` header itself, and the harness is given a
+placeholder that is not the key. Then:
+- no harness, and no agent command in any arm, ever holds the key, which is P4 as written: "the agent can use
+  granted credentials but never read them";
+- the vanilla leak above closes;
+- both harnesses still start, because each needs only *some* value for its key variable. Both were shown to send it
+  as given, against the stand-in.
+
+It puts the key in the relay rather than the harness process, which the send rules out, so it waits for you.
+
+**Your call:**
+- (a) keep the send's route, as built;
+- (b) the relay holds the key. That is a few lines in `relay.py` and `harness.py`, and a test that the harness's
+  environment carries the placeholder.
+
+### Decided in the spec, for the mentor's eye (not blocking)
+
+- **The second harness is Codex CLI 0.162.1** (seam 1; research RB12). Read and run without a key:
+  - OpenRouter's Claude Code guide says Claude Code "is only guaranteed to work with the Anthropic first-party
+    provider", and this model is not Anthropic's. Claude Code 2.1.296 did carry a stand-in's tool call over
+    Anthropic messages, so it can parse one; OpenRouter does not promise to translate this model's.
+  - OpenRouter's Codex guide points `model` at "any OpenRouter slug … or a pinned version". Codex 0.162.1 refuses
+    `wire_api = "chat"` ("no longer supported"), so it speaks the Responses API. It sends `store: false` and no
+    `previous_response_id`, which OpenRouter's stateless Responses API requires. Against a stand-in it ran a
+    scripted `exec_command` call and reported its exit code.
+  - **The risk:** Codex also declares a `namespace` tool (`multi_agent_v1`). Only a live request shows whether
+    OpenRouter accepts it for this model. If it does not, Codex's cells end `stopped` (`api-error`), named. The
+    first live run is its own test tier (llm-apis Q001).
+- **Where a harness runs** (seam 2): in the task container, as `agent`, mounted read-only from one harness container
+  per invocation, made from a new bench image `timelike-bench-harness:local` (`--volumes-from …:ro`). **Neither image
+  under test changes.** Both arms get the same mount. The harness image goes through `make scan` like every bench
+  image. `--volumes-from` rather than `--mount type=image`, because the latter needs Engine API 1.48 and the lane
+  host's engine version is not known here.
+- **The network, live runs only** (seam 2): the task containers join a per-invocation `--internal` network whose
+  only other member is the driver. The agent's commands therefore have no network in any arm, which is also what lets
+  a live run produce network denial. Fake-agent runs keep `--network none`.
+- **Pins** (seam 1): each harness by version and the npm registry's `sha512` integrity, in `pins.env`. Each trace
+  also records the version the harness itself reports, and a mismatch refuses the run.
+- **The key file** (seam 3): `BENCH_KEY_FILE`, outside the repository, mode `0600`, owned by the bench's user.
+  `run.sh` checks it on the host and the driver checks it again; it is mounted read-only. Refusals name the path and
+  the property, never the value.
+- **Caps** (seam 4): turn cap 30 per run (`BENCH_TURN_CAP`), 900 s per live run, spend cap 10.00 USD per invocation
+  (`BENCH_SPEND_CAP_USD`). The plan, with the estimate, is printed before any request; `--dry-run` prints only that.
+  Spend comes from OpenRouter (response usage, else generation stats), and appears only in the appendix.
+- **Told and not-told** (seam 5): told runs `timelike announce --install` (007's placement, unchanged) before the
+  harness starts, because task containers skip the entrypoint that runs it in the product. Not-told is the same image
+  with no placement. The vanilla arm is labelled `vanilla`, neither. A shimmed install or a guarded `rm`/`git` is
+  counted separately, as "through timelike", never as adoption.
+- **The catalog** (seam 6): the four git tasks, plus **one**, `python-missing-module`. Live, it can produce module
+  not found and network denial, which no git task can. Command not found and memory kill have no live task. The
+  probe produces them in both images (`timelike-bench categories --probe`), which is how SC-7 is executed.
+- **Infrastructure endings** (intensity natural): a fifth ending, `stopped`, with a named cause. Never a loss.
+- **Trace schema 2.** A slice-0 (schema 1) trace set is refused by this build's reader. The refusal says that slice
+  0's revision re-reports it.
+
+**For the mentor (route: code):**
+- Q1: (a) or (b).
