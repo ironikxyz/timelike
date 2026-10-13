@@ -399,3 +399,14 @@ ASSUMED: exit 124 is a timeout even when it ran quickly — GNU timeout and 003'
 ASSUMED: a 137 without OOM evidence is "other", not "timeout": the bench's hang flag already covers its own kill, so a bare 137 is someone else's kill -9 — (confidence: high)
 ABSENT: no live-harness wording for a harness's own call timeout yet (OpenCode, Codex): added when T041's recordings show it, so the pattern is the harness's real text, not a guess
 Verification: tests/unit/test_bench_categories.py 21 passed — command not found, module not found (python3, node), timeout (GNU timeout), refused and DNS failure (bash /dev/tcp, git on .invalid), a kill -9, an ls error, all produced on this host; 003's, 007's, 013's and agentio's texts read from their files; ruff clean
+SCOPE: in (2 changed files)
+
+### T036: benchlib/adoption.py — command words, timelike tools, through timelike (SC-4, FR-19)
+**Started:** 2026-10-13T07:22:21Z | **Completed:** 2026-10-13T07:23:36Z
+
+INHERITED: FR-19's rule; the shimmed names from 013 (/opt/timelike/shims) and the guarded forms from 005 — from spec and plan (confidence: high)
+FLAGGED: a command inside a string (`bash -c 'run x'`) is not looked into — chose command words only, as the spec says, over parsing nested shells, because a nested string can be anything (a heredoc, a python -c) and a guess there would count calls nobody made; the report says counts come from command words (confidence: medium)
+ASSUMED: `git push --force-with-lease` counts as the guarded force push — 005's guard reads any --force* (confidence: medium)
+ASSUMED: `python3 -m pip` is not through timelike: it is the escape 013's announcement names, which the shim does not see — (confidence: high)
+ABSENT: no detection of a tool run through `xargs`, `find -exec` or a variable (`$TOOL x`); each would need a guess
+Verification: tests/unit/test_bench_adoption.py 37 passed; ruff clean; mypy --strict clean (33 files)
