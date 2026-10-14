@@ -74,7 +74,10 @@ Schema 1's rules 1 to 6 hold, with these changes and additions.
 7. **Extensions.** `extensions.relay`, on live runs: the relay's own counts for the run (requests, turns, statuses).
    Readers ignore other keys under `extensions`. *(Cycle 4 addendum, Item 25 (b):)* it also carries `refused` (verdict
    → count, for requests the relay did not forward) and `senders`, a fixed sentence saying the relay cannot tell a
-   harness's request from an agent command's. A told run whose setup failed records `placement: "not placed"`
+   harness's request from an agent command's. *(Cycle 4 addendum 2, live run 1, item 2:)* its `turns` counts only
+   tool-offering requests the upstream answered (HTTP 200); `unanswered` counts the tool-offering requests that got no
+   answer or an error status; `turns_counted` is a fixed sentence saying so, and that these turns are not
+   `totals.turns`, which is the harness's own count (rule 2). A told run whose setup failed records `placement: "not placed"`
    (lane 02s1-a, item 2).
 
 ---

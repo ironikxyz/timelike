@@ -7,8 +7,13 @@ three things the send asks for are only visible in the plaintext exchange (resea
 
 - **spend**, read from each answer's `usage.cost` (OpenRouter always includes it), so the spend cap can
   stop the next request; a generation without one is named for a generation-stats lookup afterwards;
-- **turns**, counted the same way under every harness: a request that offers tools is a turn (a harness's
-  title request offers none). The turn cap stops the next one;
+- **turns**, counted the same way under every harness: a request that offers tools and is **answered** (HTTP
+  200) is a turn (a harness's title request offers none). A request the upstream never answered, or answered
+  with an error, produced no model turn: it is counted under `unanswered`, not `turns`, so a harness retrying
+  an unreachable provider does not use up the cap (live run 1, item 2). The turn cap refuses the next
+  tool-offering request once the answered turns, with those still waiting, reach it. This is the relay's
+  count; the trace's `totals.turns` is the harness's own (the last turn that issued a tool call), and the two
+  are different counts, which `turns_counted` says in every summary;
 - **what answered**: each status (429, 5xx and 401/403 name a `stopped` row's cause), the model id the
   provider answered with (cross-stack P003), and whether its last answer asked for tool calls, which tells
   "a call was in flight" from "the harness hung" when the run limit fires (FR-36).
@@ -56,6 +61,10 @@ ALIAS = "bench-relay"
 MODEL_ROUTES = frozenset({("POST", "/api/v1/chat/completions"), ("POST", "/api/v1/responses")})
 ROUTES = MODEL_ROUTES | {("GET", "/api/v1/generation")}
 REFUSALS = ("route-not-allowed", "no-model", "other-model")
+TURNS_COUNTED = (
+    "requests offering tools that the upstream answered with HTTP 200; unanswered ones are under unanswered. "
+    "Not the trace's totals.turns, which is the harness's own last turn that issued a tool call"
+)
 SENDERS = "not told apart: the harness and the agent's commands share one container, address and environment"
 # Request headers that carry a credential: never forwarded, whatever they hold (condition 1).
 _CREDENTIAL = frozenset({"authorization", "x-api-key", "api-key", "cookie"})
@@ -74,7 +83,9 @@ class Accounting:
     """One run's view from the relay. No header, and nothing a header held, is ever stored here."""
 
     requests: int = 0
-    turns: int = 0
+    turns: int = 0  # tool-offering requests answered 200 (TURNS_COUNTED)
+    unanswered: int = 0  # tool-offering requests forwarded and not answered 200: unreachable, or an error
+    turns_waiting: int = 0  # tool-offering requests forwarded, not yet answered; they count against the cap
     statuses: dict[str, int] = field(default_factory=dict)
     generations: list[str] = field(default_factory=list)
     models: list[str] = field(default_factory=list)
@@ -93,6 +104,8 @@ class Accounting:
         return {
             "requests": self.requests,
             "turns": self.turns,
+            "unanswered": self.unanswered,
+            "turns_counted": TURNS_COUNTED,
             "statuses": dict(sorted(self.statuses.items())),
             "generations": len(self.generations),
             "models": list(self.models),
@@ -344,7 +357,7 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._screened(None):
             with self.server.relay.lock:
                 self.server.relay.run.requests += 1
-            self._forward(b"", None)
+            self._forward(b"", None, turn=False)
 
     def do_POST(self) -> None:
         raw, body = self._read_body()
@@ -356,11 +369,10 @@ class _Handler(BaseHTTPRequestHandler):
             acct = relay.run
             acct.requests += 1
             acct.last_asked_tools = False  # a new request: the harness has run what the last answer asked for
-            if offers_tools(body):
-                acct.turns += 1
+            turn = offers_tools(body)
             if acct.stopped_by:
                 refusal = _refusal(acct.stopped_by, "this run was already stopped")
-            elif relay.turn_cap and acct.turns > relay.turn_cap:
+            elif turn and relay.turn_cap and acct.turns + acct.turns_waiting >= relay.turn_cap:
                 acct.stopped_by = "turn-cap"
                 refusal = _refusal("turn-cap", f"{relay.turn_cap} turns per run")
             elif relay.spent_usd + acct.cost_usd >= relay.spend_cap_usd:
@@ -369,12 +381,14 @@ class _Handler(BaseHTTPRequestHandler):
             if refusal:
                 acct.statuses["400 cap"] = acct.statuses.get("400 cap", 0) + 1
                 acct.last_status = "400 cap"
+            elif turn:
+                acct.turns_waiting += 1
         if refusal:
             self._send_json(400, refusal)
             return
-        self._forward(raw, body)
+        self._forward(raw, body, turn=turn)
 
-    def _forward(self, raw: bytes, body: Any) -> None:
+    def _forward(self, raw: bytes, body: Any, *, turn: bool) -> None:
         relay = self.server.relay
         # Condition 1: whatever credential the request arrived with is dropped, never forwarded; the relay's
         # own is the only one the upstream sees.
@@ -386,6 +400,7 @@ class _Handler(BaseHTTPRequestHandler):
         with relay.lock:
             acct = relay.run
             acct.waiting += 1
+        answered = False
         conn = relay.connection()
         try:
             try:
@@ -399,6 +414,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(502, json.dumps({"error": {"message": msg, "code": 502}}).encode())
                 return
             status = str(resp.status)
+            answered = resp.status == 200
             with relay.lock:
                 acct.statuses[status] = acct.statuses.get(status, 0) + 1
                 acct.last_status = status
@@ -407,6 +423,12 @@ class _Handler(BaseHTTPRequestHandler):
             conn.close()
             with relay.lock:
                 acct.waiting -= 1
+                if turn:
+                    acct.turns_waiting -= 1
+                    if answered:
+                        acct.turns += 1
+                    else:
+                        acct.unanswered += 1
 
     def _relay_answer(self, resp: http.client.HTTPResponse, acct: Accounting, accounted: bool) -> None:
         relay = self.server.relay

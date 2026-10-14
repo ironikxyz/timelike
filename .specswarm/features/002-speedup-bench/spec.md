@@ -450,8 +450,14 @@ runs one real failing command per category in each image and prints how each was
   (`https://openrouter.ai`, or the stand-in), streams the response back, and reads from each response its status, its
   generation id, the model id that answered, and its usage (tokens, and cost when present). It never logs, stores or
   writes a request header. It enforces the turn cap and the spend cap by answering any further request with an error
-  that names the cap. A **turn** at the relay is a request that offers tools (a harness's title or summary request
-  offers none and is not a turn). *(Cycle 4 addendum: amended by FOR-MENTOR Item 25's ruling (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.)*
+  that names the cap. ~~A **turn** at the relay is a request that offers tools (a harness's title or summary request
+  offers none and is not a turn).~~ A **turn** at the relay is a request that offers tools **and that the upstream
+  answered** (HTTP 200); a harness's title or summary request offers none and is not a turn. A tool-offering request
+  that got no answer, or an error status, produced no model turn: it is counted under the summary's `unanswered`,
+  and does not count toward the turn cap. The cap refuses the next tool-offering request once the answered turns,
+  with those still waiting on the upstream, reach it. The relay's `turns` and the trace's `totals.turns` are two
+  different counts, and the summary says so (`turns_counted`): the trace's is the harness's own last turn that issued
+  a tool call (§ Assumptions (slice 1), item 10). *(Cycle 4 addendum 2, live run 1, item 2: `bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md`.)* *(Cycle 4 addendum: amended by FOR-MENTOR Item 25's ruling (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.)*
   - **It holds the key** (condition 1). It drops the `Authorization` header a request arrives with, and every other
     credential-carrying header (`X-Api-Key`, `Api-Key`, `Cookie`), placeholder or not, and adds its own
     `Authorization: Bearer <key>`. Against the stand-in there is no key and it adds none.
@@ -460,6 +466,10 @@ runs one real failing command per category in each image and prints how each was
     Anything else is answered 403 with a named verdict, recorded under the run's `refused` counts, and never forwarded:
     `route-not-allowed` (another method or path, or a target naming another host), `no-model`, or `other-model`. A
     request for another model ends the run `stopped`, cause `model-refused` (FR-36).
+  - **It verifies the upstream.** Against `https://openrouter.ai` the relay is an HTTPS client and sends it the key,
+    so it verifies the peer's certificate with the interpreter's default context, which reads the driver image's
+    system store (`ca-certificates`). Verification is never turned off and the relay is given no context of its own.
+    *(Cycle 4 addendum 2, live run 1, item 1: the driver image had no CA certificates, and every request failed.)*
   - **Every request counts, whoever sent it** (condition 5): the same rules for turns and spend apply to any request
     that reaches it. The relay cannot tell a harness's request from an agent command's: both come from the same
     address, and anything the harness carries to identify itself the agent can read too. So nothing is attributed to
@@ -604,6 +614,12 @@ runs one real failing command per category in each image and prints how each was
 - *(Cycle 4 addendum)* **A task's setup is slow.** Setup and check are the bench's own steps, not the agent's calls,
   so they run under the bench's step limit (120 s), not the agent's call limit (lane 02s1-a, item 2). A told run whose
   setup fails records its placement as `not placed`, since the placement comes after setup.
+- *(Cycle 4 addendum 2)* **The provider does not answer, and the harness retries.** Each retry reaches the relay and is
+  counted as a request and under `unanswered`, not as a turn, so retries do not use up the turn cap; the run limit
+  bounds them, and the run ends `stopped` (`api-unreachable`) as before (live run 1, item 2).
+- *(Cycle 4 addendum 2)* **The upstream's certificate does not verify.** The relay answers the harness 502 naming the
+  failure and forwards nothing, so the key is never sent to an unverified peer; the run ends `stopped`
+  (`api-unreachable`) (live run 1, item 1).
 
 ### Out of scope (slice 1)
 

@@ -428,3 +428,19 @@ Same send, same cycle.
 - [X] T058 Records: spec (FR-16, FR-25, FR-26, FR-28, FR-30, FR-31, FR-32, FR-36, edge cases), contracts, data
   model, plan, research, quickstart, README, FOR-MENTOR Item 25 closed, the cycle report's addendum, `reboot.md`;
   the host lane; the deny-list; commit.
+
+## Phase 13: Cycle 4 addendum 2 (live run 1)
+
+Instructed through `../bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md` (live run 1
+on `ec6f626`: 30 of 30 runs `stopped (api-unreachable)`). Same send, same cycle.
+
+- [X] T059 [US5] Item 1, the driver has no CA certificates: `bench/driver/Dockerfile` §1 installs `ca-certificates`
+  (its comment says why now) and checks the store at build time; the relay's HTTPS client is unchanged, verifying with
+  the default context. The SC-5 cell "the relay verifies an HTTPS upstream against the driver's system store, and
+  refuses one it cannot verify" (`tests/e2e/fixtures/relay_tls.py`, no network, a throwaway CA); its steps as a host
+  unit in `test_bench_relay.py`.
+- [X] T060 [US5] Item 2, failed requests counted as turns: a relay turn is a tool-offering request the upstream
+  answered (200); the rest are `unanswered`; the cap counts answered and waiting turns; `turns_counted` says the
+  relay's turns are not the trace's `totals.turns`. `relay.py`; units in `test_bench_relay.py`.
+- [X] T061 Records: spec (FR-26, edge cases), contracts, data model, the cycle report's Addendum 2, `tasks.md`,
+  `decisions.md`, `reboot.md`; the host lane; the deny-list; commit.

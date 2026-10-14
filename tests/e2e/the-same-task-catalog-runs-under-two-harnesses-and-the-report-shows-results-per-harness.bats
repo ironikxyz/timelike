@@ -111,6 +111,30 @@ validate() {
   done
 }
 
+@test "SC-5 the relay verifies an HTTPS upstream against the driver's system store, and refuses one it cannot verify" {
+  # Live run 1 (bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md, item 1): the
+  # driver had no CA certificates, so every request to OpenRouter failed verification, and no cell could see it,
+  # because every cell above talks to the stand-in over plain HTTP. Here, with no network at all, the relay's own
+  # HTTPS client meets the stand-in served over TLS, its certificate issued by a throwaway CA made for the cell:
+  # refused while the CA is not in the store (verification is on), forwarded once update-ca-certificates has
+  # added it (the store is the one the relay reads). Also: the store is there and not empty.
+  run docker run --rm --network none --entrypoint /bin/bash \
+    -v "${REPO_HOST}/tests/e2e/fixtures/relay_tls.py:/relay_tls.py:ro" "${DRIVER}" -c '
+      set -euo pipefail
+      P=/opt/timelike/python/bin/python3
+      "$P" -I /relay_tls.py store
+      d="$(mktemp -d)"
+      "$P" -I /relay_tls.py make "$d"
+      "$P" -I /relay_tls.py check "$d" refused
+      cp "$d/ca.pem" /usr/local/share/ca-certificates/timelike-bench-relay-tls-cell.crt
+      update-ca-certificates >/dev/null
+      "$P" -I /relay_tls.py check "$d" verified'
+  echo "${output}"
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" == *"ok: with the CA not in the store, the relay refused the peer and forwarded nothing"* ]]
+  [[ "${output}" == *"ok: with the CA in the system store, the relay verified the peer and forwarded the request"* ]]
+}
+
 # The key-file refusals (FR-29) are units on the host lane (tests/unit/test_bench_run_sh.py): here the repository
 # is mounted at /code while the bench output keeps its host path, so a key file written there would not count as
 # inside the repository, and the run would go on to reach the provider. The lane never does that.

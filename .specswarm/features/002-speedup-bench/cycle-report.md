@@ -1166,3 +1166,156 @@ Commit everything, and report done. No commit after that until the mentor says l
 - **The lane:** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
 - **After it:** the live run (D11), `BENCH_KEY_FILE=… make bench-live DRY_RUN=1`, then without `DRY_RUN`. Its plan now
   prints the estimate's basis.
+
+### Addendum 2 — live run 1: the driver's CA store; what a relay turn is
+
+**Written:** 2026-10-14T03:45:57Z (read from the clock), on `modify/002-slice-1`. Same send, same cycle. Instructed by the
+operator, relaying `../bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md` (read in
+full). Lane 02s1-b had passed on `ec6f626` (observed by the mentor, `bridge/history.md` row 2026-10-13T18:57:18Z), and
+live run 1 had ended; nothing was edited while either ran. **Nothing was pushed or merged.** None of this addendum's
+work has run in Docker: lane 02s1-c decides it.
+
+**Status in one line:** the driver image now carries a CA store, and a no-network cell proves the relay's own HTTPS
+client verifies against it and refuses what it cannot verify. A relay turn is now a tool-offering request that was
+answered, so a harness retrying an unreachable provider no longer spends the turn cap.
+
+| Task | Commit | What |
+|---|---|---|
+| T059 to T061 | this commit | item 1 in `bench/driver/Dockerfile`, the SC-5 cell and `tests/e2e/fixtures/relay_tls.py`, a host unit; item 2 in `relay.py` and its units; the spec, contracts, data model, this addendum, `tasks.md`, `decisions.md`, `reboot.md` |
+
+#### Item 1: the relay could not verify OpenRouter's certificate
+
+- **The fix, in the image:** `bench/driver/Dockerfile` §1 installs `ca-certificates` (with the `openssl` it depends
+  on), and its comment now says why: since slice 1 the relay is an HTTPS client of OpenRouter that sends it the key.
+  The build fails if `/etc/ssl/certs/ca-certificates.crt` is empty or `/etc/ssl/certs` holds no hashed certificate.
+  The relay is unchanged: it still verifies with the interpreter's default context, which reads `/etc/ssl/certs`.
+  Verification is never turned off, and the relay is given no context of its own.
+- **The cell, and which one:** the stronger of the two offered. `SC-5 the relay verifies an HTTPS upstream against the
+  driver's system store, and refuses one it cannot verify` runs in the driver image with `--network none`:
+  - `store`: `/etc/ssl/certs` holds hashed entries, and the bundle loads a non-zero CA count;
+  - `make`: a throwaway CA and a `localhost` certificate it issued, made with `openssl` at test time and never kept;
+  - `check refused`: the model stand-in served over TLS with that certificate, and the relay pointed at it as a live run
+    is (`https://localhost:<port>`, no context given). The answer is 502 naming `CERTIFICATE_VERIFY_FAILED`, the
+    stand-in receives nothing, and the request counts as unanswered. This proves verification is on;
+  - `update-ca-certificates` adds the CA to the system store, then `check verified`: 200, forwarded once, one turn.
+    This proves the store is the one the relay reads.
+- **Why not the minimum alone:** `cert_store_stats()['x509_ca'] > 0` on the default context cannot pass with this
+  interpreter. Its default context has no cafile on Debian (it looks for `/etc/ssl/cert.pem`) and reads
+  `/etc/ssl/certs` only lazily, at lookup. On this host it reports 0 with 147 hashed entries installed. So the
+  `store` step counts the bundle instead, loaded on its own.
+- **On the host:** the cell's steps are also a unit,
+  `test_live_run_1_item1_the_relay_s_https_client_verifies_its_peer`. It trusts the CA through `SSL_CERT_FILE`, since
+  only the image's cell may change a system store. I also ran the `verified` step through a rehashed `SSL_CERT_DIR`
+  with no cafile, which is the image's arrangement; it verified.
+- **The scan:** `ca-certificates` and `openssl` are new in the driver image. `make scan` reports what they bring; any
+  finding with no fix goes to the operator for review, as before. No baseline entry was written.
+
+#### Item 2: failed requests counted as turns — the answer
+
+**An unanswered request does not count toward the turn cap.** The cap bounds model turns. A request the upstream
+never answered, or answered with an error status (429, 5xx, 401), produced no model turn. Under the old rule a
+harness's retries spent the cap: in `git-commit-hook-hangs · codex · not-told`, 30 retries made 30 "turns" and no
+answers.
+
+`stopped_by` was empty there, and that was correct under the old rule too. The cap refuses only a turn beyond it, and
+the run made exactly 30.
+
+- **Built:**
+  - a relay turn is a tool-offering request answered with HTTP 200. The others are counted under the summary's new
+    `unanswered`;
+  - the cap refuses the next tool-offering request once the answered turns, with those still waiting on the upstream,
+    reach it, so concurrent requests cannot pass it;
+  - retries against a dead provider are now bounded by the run limit and the harness's own retry policy. The run ends
+    `stopped` (`api-unreachable`), as before.
+- **The two figures are labelled as two counts, not made equal.**
+  - The relay's `turns` counts answered tool-offering requests, including the final answer.
+  - The trace's `totals.turns` is the harness's own last turn that issued a tool call (spec § Assumptions (slice 1),
+    item 10).
+  - A normal run has one more of the first. Every summary now carries `turns_counted`, a fixed sentence saying so.
+  - On live run 1's runs, both would now read 0.
+- **Tests:**
+  - `test_item2_unanswered_requests_are_not_turns_and_do_not_reach_the_cap`: five 502s with a cap of 3, none refused;
+    0 turns, 5 unanswered;
+  - `test_item2_answered_turns_reach_the_cap_after_errors`: two 500s, then two answers, then the cap;
+  - `test_error_statuses_pass_through_and_are_counted`: 429, 500 and 401 are unanswered;
+  - `test_c5_…`: its count is now 2, because the refused third was never answered.
+- **Left as recorded:** the relay counts in `tests/fixtures/transcripts/*.meta.json` were recorded under the old rule.
+  Nothing reads them.
+
+### Group C — Addendum 2
+
+**delegations:** `[]`.
+
+**criteria_reestablished** (the same seven citations; lane 02s1-b ran every automated one on `ec6f626`, and this
+addendum changes the driver image and the relay after it, so lane 02s1-c decides them again):
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` _(slice 0)_ — **observed by the
+  mentor** on `ec6f626` (lane 02s1-b: `speedup-bench.bats`, SC-1 cells, in e2e 688 of 688); not yet on this commit.
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` _(slice 0)_ —
+  **observed by the mentor** on `ec6f626` (lane 02s1-b: SC-2 cells, and the host units in its unit run); not yet on
+  this commit.
+- `02 · "Each run is labelled told or not-told, and the report counts timelike tool invocations per arm"` _(slice 1)_
+  — **observed by the mentor** on `ec6f626` (lane 02s1-b: SC-4, and the SC-5 file's adoption recounts); not yet on
+  this commit.
+- `02 · "The same task catalog runs under two harnesses and the report shows results per harness"` _(slice 1)_ —
+  **observed by the mentor** on `ec6f626` (lane 02s1-b: the SC-5 file's six cells); this commit adds a seventh, the TLS
+  cell, which has not run.
+- `02 · "Two arms that end the same way in the same number of turns are ranked by hangs, then by failed commands"`
+  _(slice 1; revision 8)_ — **observed by the mentor** on `ec6f626` (lane 02s1-b: SC-6, the validator's `verdicts`);
+  not yet on this commit.
+- `02 · "Failed commands are grouped into categories including command not found"` _(slice 1)_ — **observed by the
+  mentor** on `ec6f626` (lane 02s1-b: the SC-7 probe file); not yet on this commit.
+- `02 · "DEMO: the Adopting developer compares timelike tool adoption between a told arm and a not-told arm"` _(slice 1;
+  D11, Manual)_ — **unconfirmed**. Live run 1 reached no model: 30 of 30 runs `stopped (api-unreachable)`.
+
+**reconcile_mode:** `scoped` (unchanged; no revision moved, and `audited_against` stays `[1, 8]`).
+
+**not_verified** (Addendum 1's list stands, with these changes):
+- **Added, live Codex rows:** Codex prints `Model metadata for <model> not found. Defaulting to fallback metadata` at
+  the start of each run (live run 1, with `deepseek/deepseek-v4-flash-0731`). It may change how Codex budgets its
+  context. It probably applies to the pinned pro model too. Nothing built for it.
+- **Added, item 1:** that Debian trixie's `ca-certificates` brings `openssl`, which the cell uses to make its CA. It
+  does on Ubuntu 24.04 here (`apt-cache depends`). The image was not built here, so this is not checked; if the CLI is
+  absent the cell fails, naming it.
+- **Added, item 1:** what `make scan` reports for `ca-certificates` and `openssl` in the driver image.
+- **Added, item 1:** OpenRouter's real certificate chain against the image's store. The cell proves the mechanism with
+  a throwaway CA; only the next live run meets the real chain. No cell may use the real network.
+- **Updated, from Addendum 1:** lane 02s1-b ran the relay-refusal cell in the containers (none refused), and the
+  harness image's scan read its two pinned entries with 0 matches (the mentor's history row). Whether Grype would
+  match such entries when an advisory exists is still not shown.
+- **Unchanged:** an agent's command can spend through the relay, within the caps; OpenRouter, without a key, as
+  listed. Live run 1 got no answer, so none of those were reached.
+
+**changed_other_features:**
+- **The bench driver image** gains `ca-certificates` and `openssl`. It is 002's own image; the scan gate covers it.
+- No other feature's contract, code or shared file. `pins.env` is unchanged.
+
+**process_failures_recorded:**
+1. **Slice 1 made the relay an HTTPS client and left the driver image as slice 0 built it.** Its §1 comment said "no
+   TLS, so no ca-certificates", and nothing re-read it when the relay was added. Every lane cell used the stand-in
+   over plain HTTP, so nothing could fail. The first live run found it. The new cell exercises the relay's HTTPS
+   path, with no network.
+2. **The relay counted a turn before it knew whether one happened,** at request time. The count was named as a model
+   turn, but it was a count of attempts. Its unit never put an unanswered request against the cap.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host`, timelike's CPython 3.14.8 in a scratch venv, over this commit's working tree (code and tests final;
+only this addendum's records written after), 2026-10-14T03:36:43Z–03:45:42Z (read from the clock): **rc 0**.
+- pytest tests/unit: **2492 passed, 12 skipped** (501 s);
+- `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57; `test_command_not_found.sh` 33 of 33.
+
+Other checks:
+- ruff check and format: clean;
+- mypy `--strict`: clean (39 files);
+- shellcheck: clean over the Makefile's 91 files;
+- `scripts/readme_reference.py --check`: current, 14 tools;
+- the deny-list: see the commit's own check (run before it, over the working tree and the commit message).
+
+#### Then
+
+Commit everything, and report done. No commit after that until the mentor says lane 02s1-c has ended.
+- **The lane (02s1-c, full, sign-off):** `make test` (it builds the driver image with the new §1; the SC-5 file's
+  seventh cell is the TLS one), `make bench-images`, `make scan` with the deny-list read, and `make lint`.
+- **After it:** live run 2.

@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -29,8 +29,14 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   only chat completions, Responses and generation stats for the pinned model (`model-refused` otherwise), and counts
   every request. The plan's estimate states its basis (`BENCH_MODEL_PRICE_READ`). Lane items: a told setup failure is
   `not placed` and setup and check run under `Limits.step_s`; the run.sh key-file cell uses a throwaway repository; an
-  empty SBOM fails the scan, and the harness image's SBOM takes `opencode-ai` and `@openai/codex` from the pins. **Next:
-  lane 02s1-b (sign-off), then the live run (D11). No commit until the mentor says the lane has ended.**
+  empty SBOM fails the scan, and the harness image's SBOM takes `opencode-ai` and `@openai/codex` from the pins. Lane
+  02s1-b passed on `ec6f626`. **Cycle 4 addendum 2** (live run 1 on `ec6f626`: 30 of 30 `stopped (api-unreachable)`;
+  `cycle-report.md` § Addendum 2; T059–T061, `bridge/feedback/02-20261014-031353-…`): the driver image installs
+  `ca-certificates` (the relay is an HTTPS client of OpenRouter; verification never off), with an SC-5 cell proving the
+  relay verifies against the system store with no network (`tests/e2e/fixtures/relay_tls.py`, a throwaway CA); a relay
+  turn is now a tool-offering request answered 200, the rest `unanswered`, and `turns_counted` labels it as a count
+  apart from the trace's `totals.turns`. **Next: lane 02s1-c (full, sign-off), then live run 2. No commit until the
+  mentor says the lane has ended.**
 - **`013-package-guard`** (from `master` `50dd84d` = `public/main`, **`v0.18.0` pushed 2026-10-12**: `main` and the
   tag, object `6dc8ca9`): **013 Cycle 1 = 15 slice 1 (first build)**, send `bridge/sends/15-rev2-20261012-001145.md`,
   specswarm 2.44.0. **FOR-MENTOR Item 24 raised first** (`5740354`): how the bare `pip`/`npm`/`uv`/`npx`/`pnpm` reach the

@@ -218,6 +218,11 @@ A refusal's body is `{"error": {"message": "timelike-bench relay: refused (<verd
 is counted under the run's `extensions.relay.refused`. The caps answer 400 as before. `other-model` ends the run
 `stopped` (`model-refused`).
 
+*(Cycle 4 addendum 2, live run 1.)* A **turn** is a tool-offering request the upstream answered with HTTP 200; one it
+did not answer, or answered with an error, is counted under `extensions.relay.unanswered` and does not count toward
+the turn cap (item 2). Against an `https` upstream the relay verifies the certificate against the driver image's
+system store; one that does not verify is answered 502 (`unreachable`) and nothing is forwarded (item 1).
+
 ## Report layout, schema 2
 
 ```

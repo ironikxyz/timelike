@@ -630,3 +630,36 @@ FLAGGED: the README's bench passage, already marked in this cycle's T052, is ame
 ABSENT: no Docker lane and no live run; lane 02s1-b and the mentor's live run, after this report
 SCOPE: in
 Verification: host lane rc 0 (pytest 2489 passed, 12 skipped; 60/60, 57/57, 33/33); ruff, mypy --strict, shellcheck (91 files) clean; deny-list PASS
+
+### T059: live run 1, item 1 — the driver's CA store, and a cell that would have caught it
+**Started:** 2026-10-14T03:28:29Z | **Completed:** 2026-10-14T03:36:37Z
+
+INHERITED: the relay as T053 left it; its HTTPS client is http.client's HTTPSConnection with no context, so the interpreter's default context — from T039 (confidence: high)
+ASSUMED: Debian trixie's ca-certificates depends on openssl, as Ubuntu 24.04's does here (apt-cache depends), so the image gains the openssl CLI the cell uses to make its CA; the build-time check fails loudly on the store, and the cell fails loudly if openssl is absent (confidence: medium)
+FLAGGED: the cell — chose the stronger of the two the mentor offered: the relay's own client against the stand-in over TLS, with a throwaway CA, refused while the CA is not trusted and forwarded once update-ca-certificates adds it, all with --network none; over the minimum alone (cert_store_stats()['x509_ca'] > 0) because that minimum cannot pass here: the pinned interpreter's default context has no cafile on Debian (it looks for /etc/ssl/cert.pem) and reads /etc/ssl/certs lazily, so its count is 0 with the store installed (measured on this host: 147 hashed entries, x509_ca 0). The cell's 'store' step counts the bundle instead, loaded on its own (confidence: high)
+FLAGGED: the CA and keys are made at test time and never kept, so no key material is in the tree; the PEM labels in the fixture were checked against the deny-list first (pass) (confidence: high)
+ABSENT: no SSL_CERT_FILE in the image's environment and no context given to the relay: the system store is what a live run uses, and the cell refuses to run with either variable set
+ABSENT: the image was not built here (no Docker); lane 02s1-c builds it, and make scan reports what ca-certificates and openssl bring
+SCOPE: in
+Verification: host probes of relay_tls.py — store (147 hashed entries; 146 CAs in the bundle), make, check refused (502, CERTIFICATE_VERIFY_FAILED, nothing forwarded), check verified with the CA trusted through SSL_CERT_FILE, and again through a rehashed SSL_CERT_DIR with no cafile (the image's arrangement); test_live_run_1_item1_the_relay_s_https_client_verifies_its_peer passes
+
+### T060: live run 1, item 2 — what a relay turn is
+**Started:** 2026-10-14T03:28:29Z | **Completed:** 2026-10-14T03:36:37Z
+
+INHERITED: FR-26's turn (a request offering tools) and FR-33's cap — from T039, T053 (confidence: high)
+FLAGGED: the answer — an unanswered request does not count toward the turn cap. A turn is a model turn, and a request the upstream never answered, or answered with an error, produced none; counting it let a harness's retries of an unreachable provider spend the cap (live run 1: 30 retries, 30 'turns', 0 answers). Chose answered (HTTP 200) over 'any answer', since a 429 or 5xx is no turn either. The cap now counts answered turns plus those still waiting, so concurrent requests cannot pass it; the refusal still comes on the next tool-offering request once the cap is reached (confidence: high)
+FLAGGED: the two figures are labelled, not made equal: the relay's turns (answered tool-offering requests, including the final answer) and the trace's totals.turns (the harness's own last turn that issued a tool call, spec § Assumptions (slice 1), item 10) measure different things, and a run normally has one more of the first. The summary carries unanswered and a fixed sentence, turns_counted, saying so (confidence: high)
+ASSUMED: live run 1's stopped_by was right under the old rule too: the cap refused only a turn beyond 30, and the run made exactly 30 (confidence: high)
+ABSENT: the recorded transcripts' meta.json relay counts (tests/fixtures/transcripts) are left as recorded under the old rule; nothing reads them, and re-recording is not this addendum's work
+ABSENT: a flaky provider's retries are now bounded by the run limit and the harness's own retry policy, not the turn cap; that is the intent, and it is said in the edge cases
+SCOPE: in
+Verification: test_bench_relay.py 36 passed (new: unanswered requests are not turns and do not reach the cap; answered turns reach it after errors; error statuses counted as unanswered; c5's count now 2)
+
+### T061: the records; the host lane
+**Started:** 2026-10-14T03:36:37Z | **Completed:** 2026-10-14T03:45:57Z
+Verification: host lane rc 0 (pytest 2492 passed, 12 skipped; 60/60, 57/57, 33/33), 2026-10-14T03:36:43Z–03:45:42Z; ruff, mypy --strict, shellcheck (91 files) clean; readme reference current
+
+INHERITED: T059, T060 — (confidence: high)
+ABSENT: no FOR-MENTOR item: the items were raised by the mentor in its feedback file, which is answered there by the mentor; the answers are in the cycle report's Addendum 2
+ABSENT: the Codex model-metadata note is recorded under not_verified, as asked; nothing built for it
+SCOPE: in

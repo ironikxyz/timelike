@@ -173,7 +173,8 @@ skipped; the next word is the command word. Its base name is matched against the
 shimmed installers, and the guarded forms (through timelike).
 
 ## Relay accounting (`relay.py`), per run
-requests; turns (requests offering tools); statuses; generation ids; models answered; tokens; cost (sum of
+requests; turns (requests offering tools that the upstream answered 200; *(Cycle 4 addendum 2)* the tool-offering
+requests it did not, under unanswered); statuses; generation ids; models answered; tokens; cost (sum of
 `usage.cost`) and the ids without one; whether the last answer asked for tool calls; whether a request is waiting on
 upstream; which cap, if any, stopped it. Per invocation: the spend so far, against the spend cap. *(Cycle 4
 addendum, Item 25 (b):)* the requests it refused, by verdict (`route-not-allowed`, `no-model`, `other-model`), and

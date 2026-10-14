@@ -10,12 +10,15 @@ from __future__ import annotations
 import dataclasses
 import http.client
 import json
+import runpy
+import shutil
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
 from benchlib.harness import KEY_PLACEHOLDER
-from benchlib.relay import REFUSALS, SENDERS, Relay, generation_cost, screen
+from benchlib.relay import REFUSALS, SENDERS, TURNS_COUNTED, Relay, generation_cost, screen
 from benchlib.standin import FINAL_TEXT, StandIn
 
 KEY = "not-a-key-but-unique-7f3a91"  # the relay's test key: unique, so a leak of it is findable
@@ -156,6 +159,7 @@ def test_error_statuses_pass_through_and_are_counted(relay: Relay, standin: Stan
     acct = relay.end_run()
     assert acct.statuses == {str(code): 1} and acct.last_status == str(code)
     assert acct.generations == [] and acct.cost_usd == 0
+    assert (acct.turns, acct.unanswered) == (0, 1)  # an error answer is no model turn (live run 1, item 2)
 
 
 def test_an_upstream_that_does_not_answer_is_a_502_named_unreachable() -> None:
@@ -167,6 +171,42 @@ def test_an_upstream_that_does_not_answer_is_a_502_named_unreachable() -> None:
         status, _, text = chat(relay)
         assert status == 502 and "the upstream did not answer" in text
         assert relay.end_run().statuses == {"unreachable": 1}
+    finally:
+        relay.stop()
+
+
+def test_item2_unanswered_requests_are_not_turns_and_do_not_reach_the_cap() -> None:
+    # Live run 1: Codex retried an unreachable provider until the relay had counted 30 "turns" with no
+    # answer. A turn is now a tool-offering request the upstream answered; the rest are `unanswered`.
+    relay = Relay(
+        "http://127.0.0.1:9", turn_cap=3, spend_cap_usd=10, model=MODEL, key=KEY, host="127.0.0.1", port=0
+    ).start()
+    try:
+        relay.begin_run()
+        assert [chat(relay)[0] for _ in range(5)] == [502] * 5  # more than the cap, and none refused
+        acct = relay.end_run()
+        assert (acct.requests, acct.turns, acct.unanswered, acct.stopped_by) == (5, 0, 5, "")
+        summary = acct.summary()
+        assert (summary["turns"], summary["unanswered"]) == (0, 5)
+        assert summary["turns_counted"] == TURNS_COUNTED
+        assert "not the trace's totals.turns" in TURNS_COUNTED.lower()
+    finally:
+        relay.stop()
+
+
+def test_item2_answered_turns_reach_the_cap_after_errors(standin: StandIn) -> None:
+    relay = relay_for(standin, turn_cap=2)
+    try:
+        relay.begin_run()
+        standin.fail_next(500, count=2)
+        assert [chat(relay)[0] for _ in range(2)] == [500, 500]
+        assert chat(relay)[0] == 200
+        assert chat(relay, results=1)[0] == 200
+        status, _, text = chat(relay, results=2)
+        assert status == 400 and "turn-cap reached (2 turns per run)" in text
+        acct = relay.end_run()
+        assert (acct.turns, acct.unanswered, acct.stopped_by) == (2, 2, "turn-cap")
+        assert acct.turns_waiting == 0
     finally:
         relay.stop()
 
@@ -319,7 +359,7 @@ def test_c5_every_request_counts_whoever_sent_it_and_the_summary_says_senders_ar
         status, _, text = chat(relay, results=1)
         assert status == 400 and "turn-cap reached" in text
         acct = relay.end_run()
-        assert (acct.turns, acct.stopped_by) == (3, "turn-cap")
+        assert (acct.turns, acct.stopped_by) == (2, "turn-cap")  # the refused third was never answered
         assert acct.cost_usd == pytest.approx(0.5)  # both forwarded requests spent
         assert acct.summary()["senders"] == SENDERS and "not told apart" in SENDERS
     finally:
@@ -346,3 +386,21 @@ def test_generation_cost_reads_openrouter_s_figure_or_nothing() -> None:
 def test_the_final_answer_text_is_relayed_whole(relay: Relay) -> None:
     status, _, text = chat(relay, results=3, stream=False)
     assert status == 200 and json.loads(text)["choices"][0]["message"]["content"] == FINAL_TEXT
+
+
+TLS_CELL = Path(__file__).resolve().parents[1] / "e2e" / "fixtures" / "relay_tls.py"
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="needs the openssl CLI to make a throwaway CA")
+def test_live_run_1_item1_the_relay_s_https_client_verifies_its_peer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The driver-image cell's own steps (tests/e2e/fixtures/relay_tls.py), on the host: the CA is trusted here
+    # through SSL_CERT_FILE instead of the system store, which only the image's cell may change.
+    cell = runpy.run_path(str(TLS_CELL))
+    cell["make"](tmp_path)
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "nothing-trusted.pem"))
+    monkeypatch.setenv("SSL_CERT_DIR", str(tmp_path / "no-such-dir"))
+    cell["check"](tmp_path, "refused")
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "ca.pem"))
+    cell["check"](tmp_path, "verified")
