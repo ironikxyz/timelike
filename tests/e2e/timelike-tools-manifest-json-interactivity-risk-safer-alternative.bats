@@ -292,7 +292,7 @@ EOF
 
 check_vanilla_untouched() {
   local label entry
-  label="$(timeout "$RUN_TIMEOUT" docker image inspect --format "{{ index .Config.Labels \"${REVISION_LABEL}\" }}" "$VANILLA_IMAGE" </dev/null 2>&1)" || {
+  label="$(timeout "$PLUMBING_TIMEOUT" docker image inspect --format "{{ index .Config.Labels \"${REVISION_LABEL}\" }}" "$VANILLA_IMAGE" </dev/null 2>&1)" || {
     printf 'cannot inspect %s (built by tests/run.sh step benchimg): %s\n' "$VANILLA_IMAGE" "$label" >&2
     return 1
   }
@@ -300,7 +300,7 @@ check_vanilla_untouched() {
     printf 'stale vanilla image: %s carries revision %q, HEAD is %q (rebuild with make bench-images)\n' "$VANILLA_IMAGE" "$label" "$GIT_SHA" >&2
     return 1
   fi
-  entry="$(timeout "$RUN_TIMEOUT" docker image inspect --format '{{json .Config.Entrypoint}}' "$VANILLA_IMAGE" </dev/null 2>&1)"
+  entry="$(timeout "$PLUMBING_TIMEOUT" docker image inspect --format '{{json .Config.Entrypoint}}' "$VANILLA_IMAGE" </dev/null 2>&1)"
   if [[ "$entry" != null && "$entry" != "[]" ]]; then
     printf '%s declares an ENTRYPOINT (%s): FR-13 says the vanilla image declares none\n' "$VANILLA_IMAGE" "$entry" >&2
     return 1
@@ -321,10 +321,19 @@ check_vanilla_untouched() {
   local mod="tlprobe_${n}" ver="1.0.${n}"
   local -a shell
   mapfile -t shell < <(_shell_argv "$1")
-  run timeout "$RUN_TIMEOUT" docker run --rm --network none --cap-drop ALL \
+  # A fresh container and a refused pip install, whose time P6 does not name: the plumbing bound. Under the
+  # 30 s bound par1 stopped it twice; BusyBox's timeout then exits 143, and the message showed the earlier
+  # run_in's 0.1 s, so it looked like a stray TERM (feedback maint-20261015-115635, items 3 and 8). Its own
+  # time is set here, so assert_status reports this run's.
+  local start
+  start=$(now_ms)
+  run timeout "$PLUMBING_TIMEOUT" docker run --rm --network none --cap-drop ALL \
     --security-opt no-new-privileges:true --label "${THROWAWAY_LABEL}=1" \
     -e "P6_MOD=${mod}" -e "P6_VER=${ver}" \
     "$VANILLA_IMAGE" "${shell[@]}" "$READ_VANILLA"
+  ELAPSED_MS=$(($(now_ms) - start))
+  # shellcheck disable=SC2034 # read by helpers.bash assert_status
+  ELAPSED_S="$(ms_to_s "$ELAPSED_MS")"
   assert_status 0
   assert_value read "done"
   assert_value user agent

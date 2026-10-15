@@ -542,3 +542,197 @@ file: clean. The deny-list over the tree and the commit message: below the commi
 - **The rerun, on one HEAD:** as the feedback says.
 - **If SC-8 fails again:** its reason now ends `(bound 300s)`. A start that does not finish inside 300 s is no
   longer load alone, and would be worth a lane that keeps `docker events` for the window.
+
+## Cycle 1, Addendum 3 — bridge/feedback/maint-20261015-115635-lane-speed-proof-parallel-lanes-fail.md
+
+The mentor's third proof chain, on `5c3c84a` (2026-10-15T17:04:02Z–19:52:19Z), appended to the same feedback file
+("Rerun on `5c3c84a`"). The serial lane passed (689 of 689). The three parallel lanes failed at many sites, on a
+busier host: serial e2e 3335 s against proof 2's 2762 s. Items 5 and 6 held, and so did 1, 2 and 4. This addendum
+takes items 7 to 10 and the note about the stack. Read from `bridge/.make-*-ls3*.log` (read only), and by one
+read-only survey agent (below). Nothing here has run in Docker. **No criterion's budget was raised, no cell's
+assertion changed, no file was added to lane.conf's serial group, no unit was marked, and `E2E_JOBS` is unchanged.**
+
+### Group B — copied from the send
+
+Unchanged: `source_send` `bridge/sends/maint-lane-speed-20261015-062546.md`; no prompt, no feature, no discovery
+revision of its own; no slice. The instruction is the feedback file named in the heading.
+
+### Item 7 · the plumbing bound, as a class
+
+**The rule, written once in `tests/e2e/helpers.bash`:** two runner-side bounds.
+- **`RUN_TIMEOUT` (30 s, unchanged)** bounds the command a cell measures: `run_in`, `exec_in` and `run_bare`,
+  whose elapsed time `assert_within` reads, and the direct calls whose time or timeout a cell asserts.
+- **`PLUMBING_TIMEOUT` (300 s, new)** bounds everything else: steps that set a cell up, read evidence back or
+  clean up, and whose time no criterion names. `pyq`'s `PYQ_TIMEOUT` now defaults to it (it was 120 s).
+
+**Moved to `PLUMBING_TIMEOUT`, in the helpers:** `exec_plain`, `copy_into_container`, `start_throwaway`,
+`remove_throwaway`, `remove_stale_throwaways`, `adeled`, `standin_list`, `canary_bytes`, `pyj`, and so everything
+built on them (`container_tmpdir`, `state_root_dir`, `container_rm`, `stamp_check`, the stand-in helpers,
+`install_uv_tool_wrappers`).
+
+**Moved, in the .bats files** (51 uses in 13 files):
+- the image inspects, throwaway starts and readiness waits of the announcement file;
+- the fixture server's start in `credentials-fail-fast.bats`;
+- the snapshot-after-recreate file's volume removal, fixture copy, manifest reads and its `in_rc` (no cell times
+  these, and one builds the fixture repository);
+- `standin_post`'s container in `adele-isolation-…` (cell 106: the request has its own 5 s `urlopen` bound inside
+  the container, so a refusal that never answers still fails the cell);
+- `exec_root` in `edit-slice-0-…`;
+- the gofmt cross-check in `edit-would-fail-…`;
+- the process and environment reads in `no-credential-…`, and its `setup_file` request cycle;
+- the cgroup read in `one-command-…`;
+- SC-8's whole setup in `container-derived-defaults.bats`;
+- the P6 image inspects and probe in `timelike-tools-manifest-…` (item 8);
+- the two whole-filesystem `find` walks in `agent-cannot-run-as-root-…` (`RUN_TIMEOUT="$PLUMBING_TIMEOUT" run_in`,
+  the pattern the file set already uses for `RUN_TIMEOUT=60`): those cells have no `assert_within`.
+
+The `local RUN_TIMEOUT=300` overrides from Addenda 1 and 2 (the git-log fixture's `prepare`, `sc8_prepare`) and
+`install_uv_tool_wrappers`' own are gone: they now get the same bound from the helpers.
+
+**The failing sites, mapped:**
+
+| Site | Bound before | Now |
+|---|---|---|
+| `recover-repo-sc6/7/8.sh` in `setup` (cells 83, 85, 88, 89, 99) | `exec_plain` | plumbing |
+| the first container in the after-recreate file (cells 100, 101) | `start_throwaway` | plumbing |
+| SC-4's setuid `find` (cell 117) | `run_in`, no `assert_within` | plumbing, per call |
+| cell 106, the stand-in without a credential | `standin_post`'s `docker run` | plumbing |
+
+**Kept at `RUN_TIMEOUT`, per step:**
+- `run_in`, `exec_in` and `run_bare` everywhere else: the style under test.
+- The cells that set it locally around one command (`RUN_TIMEOUT=60 run_in`, the 90 s hook file, the 120 s
+  installs).
+- `run-exceeding-its-timeout-…`: its local 30 s is read by its own elapsed check.
+- `direct_exec` in `command-not-installed-…`: docker's own error is the evidence, and it starts nothing.
+- The printed extend command in `request-within-grant-…`: run exactly as printed.
+- SC-8's REPL session: its message names `RUN_TIMEOUT`.
+
+None of these failed in the three lanes.
+
+**`E2E_JOBS`:** unchanged at 8. I cannot measure another value without Docker. If the next lanes still fail on
+load, `E2E_JOBS=4` is the lever to measure.
+
+### Item 8 · P6 in par1: not a stray TERM
+
+**What happened:** the vanilla probe's `docker run` (line 324) went past its 30 s bound, and BusyBox's `timeout`
+exits with the killed command's status, 143, not GNU's 124 (helpers.bash already says so, for `pyq`). Both P6
+cells took 30.2 s and 30.3 s in all (TAP's own times). The "after 0.095s" was `ELAPSED_S` from the cell's
+earlier `run_in`: the probe is a bare bats `run`, which sets no time, and `assert_status` printed the stale one.
+Proof 1's "143 after 0.129 s" was the same: that cell took 30.3 s (30258 ms).
+
+**Nothing shared:** no other file stops, recreates or kills a container this file uses. The probe is a fresh
+container of its own (`--rm`). So lane.conf states no dependency.
+
+**What changed:** the probe runs under `PLUMBING_TIMEOUT` (it is a fresh container and a refused pip install, and
+P6 names no time), and the cell sets its own `ELAPSED_MS`/`ELAPSED_S` around the run, so a failure reports the
+probe's own time.
+
+### Item 9 · the broker tests' stand-in client, beside e2e
+
+**Which:** plumbing. The fixture's client is `NewStandinClient`, whose 10 s is the production bound ("well
+inside the agent's 30 s limit"), and no broker test asserts it.
+- The stand-in in these tests is an in-process httptest server.
+- Its store fsyncs the record file and its directory on every change, and so does the ledger's sqlite.
+- So the 10 s ran out on the lane's I/O, not on anything the tests check. That I/O reading is inferred: the
+  logs show only the client's deadline.
+
+**What changed:** the fixture sets its own client bound, `fixtureUpstreamTimeout` (120 s), in
+`adele/internal/broker/fixture_test.go`. The production 10 s and every test's assertion are unchanged. The two
+tests that build their own client (wrong canary, bad host) fail fast and keep 10 s.
+
+### Item 10 · `test_budget_json_shape`
+
+The test runs the tool twice (`json_of`, `text_of`) and compared the lines whole. It now blanks the disk's free
+figure (`without_free`) on both sides, and still compares everything else. The free figure itself is checked
+against `statvfs` in the disks tests, with their slack. Not marked.
+
+### The stack after a lane
+
+Yes: lanes leave the stack up. That predates this send: `compose_up` takes it down and up at the start of each
+lane, and nothing takes it down at the end. It is left running on the lane's own grant file and volumes, and
+`compose_up`'s comment says to run `make up` afterwards for the operator's grants. Nothing records a decision to
+leave it up rather than stop it. I have not changed it in this addendum; if the lane should stop the stack at the
+end, that is one step after the summary, and it is the mentor's or the operator's call.
+
+### Group C — written by the code instance
+
+**delegations:**
+- one read-only Explore agent surveyed every `RUN_TIMEOUT` use in tests/e2e: each helper's class, the failing
+  sites and the cells that depend on the bound's value.
+- I checked each site I moved against the file, and I moved more than it proposed: `in_rc`, the P6 probe and the
+  two `find` walks, each with the reason above.
+
+**criteria_reestablished:** none (a maintenance send carries no acceptance criteria). Units: `test_budget.py` 73
+`executed`; the Go tests over adele/ `executed` (host, below).
+
+**reconcile_mode:** scoped (items 7 to 10).
+
+**not_verified:**
+- **Nothing has run in Docker,** so it is not shown that 300 s is enough under proof 3's load, or that no cell now
+  waits long enough to stretch the lane noticeably. A plumbing step that hangs now costs 300 s before it fails,
+  not 30.
+- **Item 9's cause** (I/O rather than CPU) is inferred.
+- **Item 8:** that nothing else contributed to the probe's 30 s.
+
+**changed_other_features:** test code only: the e2e files and helpers named above, which belong to several
+features, `tests/unit/test_budget.py`, and Adele's Go test fixture. No production code.
+
+**process_failures_recorded:** items 2 and 5 were fixed one site each. This addendum should have been the first
+fix.
+
+**retired_prompts_seen:** none.
+
+## npm 11.21.1 — bridge/feedback/maint-20261015-195341-npm-advisories-scan-blocks.md
+
+Proof 3's scan on `5c3c84a` (2026-10-15T19:50:14Z, `bridge/.make-scan-ls3.log`) blocked the agent and vanilla images
+on three Highs bundled in the pinned npm 11.21.0: `GHSA-6j4f-fj2g-mc7p` and `GHSA-qhr7-859c-m2p7` (brace-expansion
+5.0.9) and `GHSA-rfgv-xxqx-mfg5` (undici 6.28.0). The gate's release check named npm 11.21.1 as the release that
+ships the fixes. Fixed on `maint/lane-speed`, in its own commit, because it blocks this branch's merge.
+
+**The rule applied: H9, not SC-2.**
+- **H9 (constitution; quality-standards' *Vulnerability baseline*)** decides what blocks:
+  - A High with a fix available blocks.
+  - For a bundled library, "fix available" means a stable release of the bundling component inside the
+    constraint. For npm, that is any stable npm whose `engines` admits the pinned Node.
+  - It sets no release age.
+  - The release check blocks "whatever the baseline says" once such a release ships the fix. So a dated baseline
+    entry for these three ids is not open to me: the gate would still block them, and H9 keeps the baseline for
+    findings with no fix.
+- **SC-2's minimum release age** is an acceptance criterion of the package guard: what the *agent's* installs
+  refuse. No governance file applies it to timelike's own pins. I found no age rule in the constitution,
+  tech-stack.md or quality-standards.md. It does not apply to this bump. If the project wants a cooling-off for
+  its own pins, that is a governance change for plan, not a reading I can make here.
+
+**Checked before the bump (host, before 2026-10-15T20:38:00Z, read from the clock):**
+- npm 11.21.1, from the registry's metadata: not deprecated, published 2026-10-15T15:45:16Z, `engines` `node:
+  ^20.17.0 || >=22.9.0`, which admits Node 24.21.0. It is the newest 11.21.x; `latest` is 12.2.0.
+- The tarball's sha512 matches the registry's `dist.integrity` (`sha512sum -c` OK).
+- It bundles brace-expansion 5.0.12 (fixed in 5.0.10 and 5.0.11) and undici 6.29.0 (fixed in 6.28.1).
+- Its bundled tree against 11.21.0's: those two, and patch or minor moves in arborist, http-cache-semantics, ip-address,
+  libnpmdiff, libnpmexec, libnpmfund, libnpmpack and postcss-selector-parser. Nothing added or removed.
+
+**What changed:** `pins.env`: `NPM_VERSION=11.21.1` and `NPM_SHA512` (the integrity as hex), with the comment
+updated. Both Dockerfiles take them as build args and check the checksum and `npm --version`, unchanged. Units:
+`test_agent_runtimes.py` and `test_scan_release_check.py`, 129 passed.
+
+**Left for the baseline's review:** the three bundled-class entries for these ids in `scan/baseline/timelike-agent.json`
+and `timelike-vanilla.json` will match no finding. The gate reports that as "match no finding in this scan (drop
+them at the next review)", which does not block. Their reasons ("no stable npm release … ships it") are now
+out of date. I did not edit a reviewed baseline outside its review. `GHSA-ch52-4w7c-c8xp` (http-cache-semantics,
+now 4.3.0) may also stop matching; the scan will say.
+
+**not_verified:** no image was built and no scan was run. That the images build with 11.21.1, that grype then
+finds none of the three, and what the release check prints, are all for the mentor's scan.
+
+#### Host lane (Addendum 3 and npm 11.21.1, one tree)
+
+`make test-host` on timelike's CPython 3.14.8 in a scratch venv (`venv-xdist`: pytest 8.4.2, pytest-xdist 3.8.0, the
+pins), over this tree, 2026-10-15T20:37:53Z–20:47:22Z (read from the clock): **rc 0**. pytest tests/unit, serially:
+**2529 passed, 13 skipped** (535 s); `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57;
+`test_command_not_found.sh` 33 of 33. Then the Docker lane's two unit parts, 20:47:22Z–20:50:22Z:
+`-n 8 -m "not timed"` **rc 0, 2513 passed, 13 skipped** (135 s); `-m timed` **rc 0, 16 passed** (44 s).
+
+Go: `go vet ./internal/broker/` and `go test -count=1 ./...` over adele/ with the scratch Go 1.27.2 (cold module
+cache, so it fetched modules): every package `ok`; `gofmt -l internal/` empty. shellcheck 0.11.0 over helpers.bash,
+lane.bash, tests/run.sh and all 86 e2e files, and ruff check and ruff format over `test_budget.py`: clean. The
+deny-list over the tree and the commit messages: in the reply.

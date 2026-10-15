@@ -57,6 +57,12 @@ func newFixture(t *testing.T, grantFile string) *fixture {
 	return newFixtureFile(t, gf)
 }
 
+// fixtureUpstreamTimeout bounds the fixture's calls to its own in-process stand-in. NewStandinClient's 10 s is
+// the production bound, and no test here asserts it: in these tests it is plumbing. Beside the e2e lane, a
+// request to the httptest stand-in (which fsyncs its record, as the ledger does) went past 10 s, and the
+// setup request of a test failed with 502 (feedback maint-20261015-115635, item 9).
+const fixtureUpstreamTimeout = 120 * time.Second
+
 // newFixtureFile takes a grants.File built directly, for grants the parser cannot express (a grant
 // without standin.box, while standin.box is the only capability slice 0 knows).
 func newFixtureFile(t *testing.T, gf *grants.File) *fixture {
@@ -74,7 +80,9 @@ func newFixtureFile(t *testing.T, gf *grants.File) *fixture {
 	}
 	srv := httptest.NewServer(standin.Handler(testCanary, store, clock))
 	t.Cleanup(func() { srv.Close(); _ = led.Close() })
-	b := &Broker{Grants: gf, Ledger: led, Upstream: NewStandinClient(srv.URL, testCanary), Now: clock, Revision: "rev-test"}
+	up := NewStandinClient(srv.URL, testCanary)
+	up.HTTP.Timeout = fixtureUpstreamTimeout
+	b := &Broker{Grants: gf, Ledger: led, Upstream: up, Now: clock, Revision: "rev-test"}
 	return &fixture{b: b, led: led, store: store, srv: srv, dbPath: dbPath, storePath: storePath}
 }
 

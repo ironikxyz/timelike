@@ -54,12 +54,10 @@ teardown() {
 
 # prepare STATE — a fresh repository in the given state (fixtures/sc1-repo.sh), in a new temp dir.
 # The fixture makes 60 commits: test plumbing, timed by no criterion (the 20 s is the command's, from
-# run_in), so it has its own bound. Under a loaded host it took longer than RUN_TIMEOUT's 30 s, and a cell
-# then ran against a part-built repository (feedback maint-20261015-115635, item 2); exec_plain now fails
-# at its bound, and this bound is the fixture's.
+# run_in), so it runs under PLUMBING_TIMEOUT, as exec_plain does. Under a loaded host it took longer than
+# RUN_TIMEOUT's 30 s, and a cell then ran against a part-built repository (feedback maint-20261015-115635,
+# item 2); exec_plain now fails at its bound.
 prepare() {
-  # shellcheck disable=SC2034 # read by exec_plain and container_tmpdir, which this calls (dynamic scope)
-  local RUN_TIMEOUT=300
   WORK="$(container_tmpdir sc1)"
   REPO_DIR="${WORK}/repo"
   exec_plain sh /tmp/sc1-repo.sh "$REPO_DIR" "$1" >/dev/null

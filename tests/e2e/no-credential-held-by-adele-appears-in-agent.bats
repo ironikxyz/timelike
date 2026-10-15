@@ -30,6 +30,10 @@ setup_file() {
   export CANARY
   CYCLE_OUT="${BATS_FILE_TMPDIR}/cycle.out"
   export CYCLE_OUT
+  # The request cycle the cells then search for the canary: plumbing, timed by no cell (feedback
+  # maint-20261015-115635, item 7).
+  # shellcheck disable=SC2034 # read by exec_in, which this calls (dynamic scope)
+  local RUN_TIMEOUT="$PLUMBING_TIMEOUT"
   local style port
   for style in c lc; do
     port=2
@@ -76,7 +80,7 @@ check_env() {
 
 @test "SC-4 004 no credential held by Adele appears in any process's arguments or environment the agent can read" {
   local n
-  n="$(timeout "$RUN_TIMEOUT" docker exec "$AGENT_CONTAINER" bash -c 'for f in /proc/[0-9]*/cmdline /proc/[0-9]*/environ; do cat "$f" 2>/dev/null; echo; done' </dev/null | count_in)"
+  n="$(timeout "$PLUMBING_TIMEOUT" docker exec "$AGENT_CONTAINER" bash -c 'for f in /proc/[0-9]*/cmdline /proc/[0-9]*/environ; do cat "$f" 2>/dev/null; echo; done' </dev/null | count_in)"
   [[ "$n" -eq 0 ]] || { echo "the canary is in /proc ($n occurrences)" >&2; return 1; }
 }
 
@@ -92,9 +96,9 @@ check_env() {
   name="sc4-control-$$"
   # a throwaway of the agent's image with the canary in a file, an env var and a process's arguments
   # (sh stays alive while sleep runs, so its own command line, holding the canary, is in /proc)
-  timeout "$RUN_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" --network none \
+  timeout "$PLUMBING_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" --network none \
     -e "PLANTED=${CANARY}" "$image" sh -c "printf '%s' '${CANARY}' > /tmp/planted; sleep 300; : '${CANARY}'" </dev/null >/dev/null
-  n="$(timeout "$RUN_TIMEOUT" docker exec "$name" bash -c 'for f in /proc/[0-9]*/cmdline /proc/[0-9]*/environ; do cat "$f" 2>/dev/null; echo; done' </dev/null | count_in)"
+  n="$(timeout "$PLUMBING_TIMEOUT" docker exec "$name" bash -c 'for f in /proc/[0-9]*/cmdline /proc/[0-9]*/environ; do cat "$f" 2>/dev/null; echo; done' </dev/null | count_in)"
   local fs
   fs="$(timeout 120 docker exec "$name" tar -cf - --exclude=/proc --exclude=/sys --exclude=/dev --ignore-failed-read / 2>/dev/null </dev/null | count_in)"
   remove_throwaway "$name"

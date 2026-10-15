@@ -58,18 +58,16 @@ teardown() {
 
 # sc8_prepare — sets SC8_EXPECT and SC8_HOST_CPUS, starts both throwaway containers and reads their
 # limits back; on any problem sets SC8_ERROR (so only the SC-8 tests fail, with the reason).
-# All of it is test plumbing, timed by no criterion, so it has its own bound, as the git-log fixture's has.
-# In two parallel lanes of three, the first `docker run -d` here was stopped at RUN_TIMEOUT's 30 s with
-# nothing printed; this file starts while the four `first` files (the bench and the catalog among them) are
-# still running. SC-7 starts a throwaway with the same --cpus 1.5 later in the lane and passed in all three,
-# so the flag is not the cause (feedback maint-20261015-115635, item 5).
+# All of it is test plumbing, timed by no criterion, so it runs under PLUMBING_TIMEOUT. In two parallel
+# lanes of three, the first `docker run -d` here was stopped at RUN_TIMEOUT's 30 s with nothing printed;
+# this file starts while the four `first` files (the bench and the catalog among them) are still running.
+# SC-7 starts a throwaway with the same --cpus 1.5 later in the lane and passed in all three, so the flag
+# is not the cause (feedback maint-20261015-115635, items 5 and 7).
 sc8_prepare() {
-  # shellcheck disable=SC2034 # read by start_throwaway and exec_plain, which this calls (dynamic scope)
-  local RUN_TIMEOUT=300
   local ncpu status_out line list="" affinity base limit_arg quota_line cpuset_line first
   SC8_EXPECT=""
   SC8_HOST_CPUS=""
-  ncpu="$(timeout "$RUN_TIMEOUT" docker info --format '{{.NCPU}}' </dev/null 2>&1)"
+  ncpu="$(timeout "$PLUMBING_TIMEOUT" docker info --format '{{.NCPU}}' </dev/null 2>&1)"
   if ! [[ "$ncpu" =~ ^[0-9]+$ ]]; then
     SC8_ERROR="cannot read the host's CPU count from the daemon (docker info NCPU): ${ncpu}"
     return 1
@@ -99,7 +97,7 @@ sc8_prepare() {
     SC8_ERROR="cannot start ${SC8_QUOTA} with --cpus ${limit_arg}: ${err}"
     return 1
   }
-  quota_line="$(timeout "$RUN_TIMEOUT" docker exec "$SC8_QUOTA" cat /sys/fs/cgroup/cpu.max </dev/null 2>&1)"
+  quota_line="$(timeout "$PLUMBING_TIMEOUT" docker exec "$SC8_QUOTA" cat /sys/fs/cgroup/cpu.max </dev/null 2>&1)"
   if [[ "$quota_line" != "$((SC8_EXPECT * 100000 - 50000)) 100000" ]]; then
     SC8_ERROR="--cpus ${limit_arg} is not visible as cgroup v2 cpu.max in ${SC8_QUOTA} (read '${quota_line}', want '$((SC8_EXPECT * 100000 - 50000)) 100000'). A cgroup v1 host or a non-default period breaks spec Assumption 8's reading"
     return 1
@@ -111,8 +109,8 @@ sc8_prepare() {
     SC8_ERROR="cannot start ${SC8_CPUSET} with --cpuset-cpus ${first}: ${err}"
     return 1
   }
-  cpuset_line="$(timeout "$RUN_TIMEOUT" docker exec "$SC8_CPUSET" cat /sys/fs/cgroup/cpu.max </dev/null 2>&1)"
-  status_out="$(timeout "$RUN_TIMEOUT" docker exec "$SC8_CPUSET" cat /proc/self/status </dev/null 2>&1)"
+  cpuset_line="$(timeout "$PLUMBING_TIMEOUT" docker exec "$SC8_CPUSET" cat /sys/fs/cgroup/cpu.max </dev/null 2>&1)"
+  status_out="$(timeout "$PLUMBING_TIMEOUT" docker exec "$SC8_CPUSET" cat /proc/self/status </dev/null 2>&1)"
   list=""
   while IFS= read -r line; do
     [[ "$line" == Cpus_allowed_list:* ]] && list="${line#Cpus_allowed_list:}"

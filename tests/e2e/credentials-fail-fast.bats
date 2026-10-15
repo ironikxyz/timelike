@@ -44,7 +44,7 @@ setup_file() {
   stamp_check
   copy_into_container "${BATS_TEST_DIRNAME}/fixtures/http401.py" /tmp/sc3-http401.py
   SC3_STATE="$(container_tmpdir sc3srv)"
-  timeout "$RUN_TIMEOUT" docker exec -d "$AGENT_CONTAINER" \
+  timeout "$PLUMBING_TIMEOUT" docker exec -d "$AGENT_CONTAINER" \
     "$AGENT_PY" -I /tmp/sc3-http401.py "$SC3_STATE" </dev/null
   local server=""
   for _ in $(seq 1 50); do

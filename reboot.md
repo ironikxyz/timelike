@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z, its Addendum 3 and npm 11.21.1 added 2026-10-15T20:50:35Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -33,8 +33,16 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   - **Rerun on `7505a57`** (mentor, 2026-10-15T12:33:43Z–15:00:38Z): serial, par3 and both partial lanes pass;
     par1 and par2 fail, on two new items appended to the same feedback file. Addendum 2 fixes them: SC-8's setup
     (`container-derived-defaults.bats`, `sc8_prepare`) has its own 300 s bound, and the lane unit's fake `docker`
-    logs each call in one write (gounit's call had landed inside another's line). The mentor reruns the proof; no
-    commits until the lane ends.
+    logs each call in one write (gounit's call had landed inside another's line).
+  - **Rerun on `5c3c84a`** (mentor, 2026-10-15T17:04:02Z–19:52:19Z): serial passes; the three parallel lanes fail on
+    a busier host, at many 30 s plumbing bounds (items 7–10 of the same feedback). Addendum 3: `PLUMBING_TIMEOUT`
+    (300 s) in helpers.bash bounds every step no criterion times; `RUN_TIMEOUT` (30 s) keeps the measured commands.
+    P6's 143 was the probe stopped at 30 s (BusyBox `timeout`), shown with a stale elapsed time. The broker test
+    fixture has its own 120 s client bound, and `test_budget_json_shape` ignores the moving free-space figure.
+  - **npm 11.21.1** (feedback `bridge/feedback/maint-20261015-195341-npm-advisories-scan-blocks.md`): three bundled
+    Highs blocked the scan; bumped under H9, which sets no release age (SC-2's age rule is the agent's installs).
+    The three now-stale baseline entries are left for the baseline's review. The mentor reruns the proof; no commits
+    until the lane ends.
 
 - **`modify/002-slice-1`** (from `master` `8dbddc7` = `public/main`, **`v0.19.0` pushed 2026-10-13**: object `278d1a7`):
   **002 Cycle 4 = 02 slice 1** (natural), send `bridge/sends/02-rev8-20261013-064725.md`, specswarm **2.44.0**,

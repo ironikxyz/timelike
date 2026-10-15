@@ -42,7 +42,7 @@ teardown() {
   container_rm "$WORK"
   state_root_rm "$STATE"
   remove_throwaway "$RC_NAME" "${RC_NAME}-2" "${RC_NAME}-plain"
-  timeout "$RUN_TIMEOUT" docker volume rm -f "$RC_STATE" "$RC_HOME" </dev/null >/dev/null 2>&1 || true
+  timeout "$PLUMBING_TIMEOUT" docker volume rm -f "$RC_STATE" "$RC_HOME" </dev/null >/dev/null 2>&1 || true
 }
 
 MANIFEST_SH='set -eu
@@ -92,9 +92,11 @@ check_new_session() {
 @test "SC-8 [bash -c, notty] a snapshot taken in one session is listed and restorable from a new session" { check_new_session c; }
 @test "SC-8 [bash -lc, notty] a snapshot taken in one session is listed and restorable from a new session" { check_new_session lc; }
 
-# in_rc NAME CMD — CMD as the agent in throwaway NAME (bash -c), no scheduled snapshot.
+# in_rc NAME CMD — CMD as the agent in throwaway NAME (bash -c), no scheduled snapshot. Under the plumbing
+# bound: no cell times these, and one of them builds the fixture repository first (feedback
+# maint-20261015-115635, item 7).
 in_rc() {
-  run timeout "$RUN_TIMEOUT" docker exec -e TIMELIKE_SNAPSHOT_INTERVAL=off "$1" bash -c "$2" </dev/null
+  run timeout "$PLUMBING_TIMEOUT" docker exec -e TIMELIKE_SNAPSHOT_INTERVAL=off "$1" bash -c "$2" </dev/null
   output="${output//$'\r'/}"
   mapfile -t lines <<<"$output"
 }
@@ -106,11 +108,11 @@ in_rc() {
   in_rc "$RC_NAME" 'stat -c "%a %U" /var/lib/timelike'
   [[ "$output" == "700 agent" ]] || flunk "a fresh state volume did not take the image's ownership (Q003)"
   # as the agent user, as copy_into_container does (docker cp would create the file as root)
-  timeout "$RUN_TIMEOUT" docker exec -i "$RC_NAME" sh -c 'cat >/tmp/recover-repo.sh' \
+  timeout "$PLUMBING_TIMEOUT" docker exec -i "$RC_NAME" sh -c 'cat >/tmp/recover-repo.sh' \
     <"${BATS_TEST_DIRNAME}/fixtures/recover-repo.sh" || flunk "cannot copy the fixture in"
   in_rc "$RC_NAME" 'sh /tmp/recover-repo.sh /home/agent/proj >/dev/null && cd /home/agent/proj && snapshot --text'
   [[ "$status" == 0 && "${lines[1]}" == "verdict: snapshot 1 taken: "* ]] || flunk "the first container's snapshot"
-  before="$(timeout "$RUN_TIMEOUT" docker exec "$RC_NAME" sh -c "$MANIFEST_SH" m /home/agent/proj </dev/null)"
+  before="$(timeout "$PLUMBING_TIMEOUT" docker exec "$RC_NAME" sh -c "$MANIFEST_SH" m /home/agent/proj </dev/null)"
 
   remove_throwaway "$RC_NAME"
   start_throwaway "${RC_NAME}-2" -v "${RC_STATE}:/var/lib/timelike" -v "${RC_HOME}:/home/agent" ||
@@ -121,7 +123,7 @@ in_rc() {
   [[ "$status" == 0 && "${lines[1]}" == "verdict: 1 snapshots" ]] || flunk "the recreated container does not list it"
   in_rc "${RC_NAME}-2" 'cd /home/agent/proj && undo 1 --yes --text'
   [[ "$status" == 0 && "${lines[1]}" == "verdict: restored to snapshot 1: "* ]] || flunk "the restore after recreate"
-  after="$(timeout "$RUN_TIMEOUT" docker exec "${RC_NAME}-2" sh -c "$MANIFEST_SH" m /home/agent/proj </dev/null)"
+  after="$(timeout "$PLUMBING_TIMEOUT" docker exec "${RC_NAME}-2" sh -c "$MANIFEST_SH" m /home/agent/proj </dev/null)"
   [[ "$after" == "$before" ]] || { diff <(echo "$before") <(echo "$after") >&2; flunk "not restored"; }
 }
 

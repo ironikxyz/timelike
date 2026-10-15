@@ -172,7 +172,7 @@ numbered() {
 # exec_root CMD... — `docker exec -u 0` (root, but with the container's dropped capabilities), bounded
 # like exec_plain. Setup only: never the command under test.
 exec_root() {
-  timeout "$RUN_TIMEOUT" docker exec -u 0 "$AGENT_CONTAINER" "$@" </dev/null
+  timeout "$PLUMBING_TIMEOUT" docker exec -u 0 "$AGENT_CONTAINER" "$@" </dev/null
 }
 
 # ── checks ────────────────────────────────────────────────────────────────────────────────────
