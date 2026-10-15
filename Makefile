@@ -3,7 +3,23 @@
 #   make test       Docker lane — authoritative for the acceptance criteria
 #   make test-host  host lane — advisory: agentio/conform units and the env-layer files
 
+# The bench's operator-set values (02 slice 1's live run, maint-lane-speed item 3): pins.env holds their
+# defaults, and an assignment in an included file overrides the environment, so `BENCH_MODEL=… make
+# bench-live` used to measure the pinned model and drop the value silently. pins.env stays plain `K=V`,
+# because tests/run.sh and scan/scan.sh source it as shell. So the environment's values are noted before
+# the include and put back after it; an empty one counts as unset. A make command-line value already
+# outranks the include. The caps (BENCH_TURN_CAP, BENCH_SPEND_CAP_USD) are not in pins.env, so the
+# environment always reached them.
+# BENCH_<NAME>_SOURCE tells the bench's plan where each value came from.
+BENCH_OPERATOR_VARS := BENCH_MODEL BENCH_MODEL_PRICE_IN BENCH_MODEL_PRICE_OUT BENCH_MODEL_PRICE_READ
+$(foreach v,$(BENCH_OPERATOR_VARS),$(if $(filter environment,$(origin $(v))),$(if $(strip $(value $(v))),\
+  $(eval BENCH_FROM_ENV_$(v) := $(value $(v))))))
+
 include pins.env
+
+$(foreach v,$(BENCH_OPERATOR_VARS),$(if $(filter undefined,$(origin BENCH_FROM_ENV_$(v))),\
+  $(eval $(v)_SOURCE := $(if $(filter command line,$(origin $(v))),the make command line,pins.env)),\
+  $(eval $(v) := $(BENCH_FROM_ENV_$(v)))$(eval $(v)_SOURCE := the environment)))
 export
 
 SHELL := /bin/bash
