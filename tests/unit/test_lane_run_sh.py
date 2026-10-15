@@ -10,6 +10,7 @@ e2e. Whether the cells pass side by side is the Docker lane's to show (the mento
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -34,7 +35,9 @@ case "$1" in
   run)
     for a in "$@"; do
       case "$a" in
-        timelike-test-runner:local) printf '1..1\nok 1 cell # in 1 ms\n'; exit 0 ;;
+        timelike-test-runner:local)
+          [ -z "$FAKE_E2E_SLEEP" ] || sleep "$FAKE_E2E_SLEEP"
+          printf "${FAKE_TAP:-1..1\\nok 1 cell # in 1 ms\\n}"; exit 0 ;;
         timelike-agent:local) echo "1 passed"; exit 0 ;;
       esac
     done ;;
@@ -70,6 +73,7 @@ def lane(tmp_path: Path) -> dict[str, object]:
         "LOG": str(logs),
         "DOCKER_HOST": "tcp://stand-in:2375",
         "FAKE_STALE": "",
+        "FAKE_E2E_SLEEP": "",
     }
     return {"root": root, "env": env, "logs": logs}
 
@@ -256,3 +260,49 @@ def test_every_e2e_file_takes_the_lane_lock() -> None:
     for f in sorted((REPO / "tests" / "e2e").glob("*.bats")):
         lines = f.read_text().splitlines()
         assert "load helpers" in lines or "load lane" in lines, f"{f.name} loads neither helpers nor lane"
+
+
+def test_each_lane_writes_the_bench_s_output_in_a_directory_of_its_own(lane: dict[str, object]) -> None:
+    # Two lanes on one commit collided on the bench files' names, which end in a pid that repeats in a fresh
+    # runner (feedback maint-20261015-115635, item 1): the directory is the lane's, named by its stamp.
+    p, _ = run_lane(lane)
+    assert p.returncode == 0, p.stdout + p.stderr
+    root = lane["root"]
+    assert isinstance(root, Path)
+    runner = runner_call(lane)
+    (env,) = [a for a in runner if a.startswith("BENCH_E2E_OUT=")]
+    out = env.split("=", 1)[1]
+    assert Path(out).parent == root / "bench" / "out" / "e2e"
+    assert re.fullmatch(r"\d{8}T\d{6}Z", Path(out).name)
+    assert f"{out}:{out}" in runner and Path(out).is_dir()
+
+
+def test_a_tap_stream_short_of_its_plan_fails_e2e_and_says_why(lane: dict[str, object]) -> None:
+    # A failed setup_file prints one line in place of its file's cells (feedback maint-20261015-115635, 1).
+    tap = "1..12\\nok 1 a\\nnot ok 2 setup_file failed\\nok 10 c\\nnot ok 11 d\\nok 12 e\\n"
+    p, summary = run_lane(lane, FAKE_TAP=tap)
+    assert p.returncode != 0
+    assert (
+        "e2e: 4 of 12 cells reported, 1 of them not ok; 8 not reported: 1 setup_file failed, "
+        "each in place of its file's cells"
+    ) in p.stdout
+    steps = {s["name"]: s for s in summary["steps"]}
+    assert steps["e2e"]["status"] == "fail"
+    p, summary = run_lane(lane, FAKE_TAP="1..2\\nok 1 a\\nok 2 b\\n")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "e2e: 2 of 2 cells reported, 0 not ok" in p.stdout
+
+
+def test_gounit_beside_e2e_prints_its_own_seconds_and_when_it_was_collected(lane: dict[str, object]) -> None:
+    # Its figure was the time until bg_collect took it, e2e's and unit's included (item 4 of the feedback).
+    if shutil.which("flock") is None:
+        pytest.skip("no flock on this host: gounit runs after e2e, timed by step")
+    p, summary = run_lane(lane, FAKE_E2E_SLEEP="3")
+    assert p.returncode == 0, p.stdout + p.stderr
+    m = re.search(r"════ step gounit: rc=0 \((\d+) s; collected after (\d+) s, beside e2e\) ════", p.stdout)
+    assert m, p.stdout
+    own, waited = int(m.group(1)), int(m.group(2))
+    assert own <= 1 and waited >= 3
+    steps = {s["name"]: s for s in summary["steps"]}
+    assert steps["gounit"]["seconds"] == own
+    assert f"collected after {waited} s" in steps["gounit"]["note"]

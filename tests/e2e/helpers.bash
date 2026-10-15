@@ -198,8 +198,19 @@ drop_ic_notty_lines() {
 
 # exec_plain CMD... — `docker exec` (no shell, no tty) for setup, teardown and control reads.
 # Bounded like everything else. Not a style under test.
+# Reaching the bound is a failure (124) whatever status the killed CLI left, as in exec_in: a docker CLI
+# stopped by the runner's timeout can exit 0, and the command it started carries on in the container. A
+# fixture cut off that way let the git-log file's cells run against a half-built repository while its
+# script went on committing beside them (feedback maint-20261015-115635, item 2).
 exec_plain() {
-  timeout "$RUN_TIMEOUT" docker exec "$AGENT_CONTAINER" "$@" </dev/null
+  local start rc
+  start=$(now_ms)
+  timeout "$RUN_TIMEOUT" docker exec "$AGENT_CONTAINER" "$@" </dev/null && rc=0 || rc=$?
+  if (($(now_ms) - start >= RUN_TIMEOUT * 1000)); then
+    printf 'exec_plain: stopped at the %ss bound, so it did not finish: %s\n' "$RUN_TIMEOUT" "$*" >&2
+    rc=124
+  fi
+  return "$rc"
 }
 
 # assert_within LIMIT_S — the last run_in concluded in under LIMIT_S seconds and did not time out.
@@ -409,17 +420,24 @@ stamp_check() {
 THROWAWAY_LABEL=timelike.test.throwaway
 
 # start_throwaway NAME [DOCKER RUN ARG]... — start one detached; extra args (e.g. --cpus 1.5) go
-# before the image. Prints nothing on success; docker's error on failure.
+# before the image. Prints nothing on success; docker's error on failure, or, when docker printed none,
+# its exit status and how long it took: a CLI stopped by the runner's timeout prints nothing (lane-speed
+# par1, SC-8: "cannot start … with --cpus 1.5:" and no reason; feedback maint-20261015-115635, item 3).
+# A start that failed part-way is removed, so a container it created is not left behind.
 start_throwaway() {
-  local name="$1" image
+  local name="$1" image err rc start
   shift
   image="$(docker inspect --format '{{.Image}}' "$AGENT_CONTAINER" 2>&1)" || {
     echo "start_throwaway: cannot read the image of ${AGENT_CONTAINER}: ${image}" >&2
     return 1
   }
-  timeout "$RUN_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" \
+  start=$(now_ms)
+  err="$(timeout "$RUN_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" \
     --cap-drop ALL --security-opt no-new-privileges:true --init \
-    "$@" "$image" sleep infinity </dev/null >/dev/null
+    "$@" "$image" sleep infinity </dev/null 2>&1 >/dev/null)" && return 0 || rc=$?
+  printf '%s\n' "${err:-docker printed nothing: exit ${rc} after $(ms_to_s $(($(now_ms) - start)))s (bound ${RUN_TIMEOUT}s)}" >&2
+  remove_throwaway "$name"
+  return "$rc"
 }
 
 # remove_throwaway NAME... — best effort; a missing container is not an error.
@@ -545,11 +563,17 @@ adele_run_with_grants() {
 # pyq SCRIPT — run Python (the agent image's interpreter) in a THROWAWAY container with no network and
 # nothing mounted, reading stdin: the runner has neither jq nor python. Used to read JSON that came
 # from outside the agent (the ledger, the stand-in's record); the agent container never sees it.
+# On failure it says so on stderr with its exit status and time: a cell that fails here failed in its own
+# parsing, not in the tool it ran (lane-speed par1, SC-4's entry cap: the tool's answer was right and the
+# parse failed after 295 s of a stalled daemon; feedback maint-20261015-115635, item 3).
 pyq() {
-  local image
+  local image rc start
   image="$(agent_image)" || return 1
+  start=$(now_ms)
   timeout "$PYQ_TIMEOUT" docker run --rm -i --network none --cap-drop ALL --label "${THROWAWAY_LABEL}=1" \
-    --entrypoint "$AGENT_PY" "$image" -I -c "$1"
+    --entrypoint "$AGENT_PY" "$image" -I -c "$1" && return 0 || rc=$?
+  printf 'pyq: the parser exited %s after %ss (bound %ss)\n' "$rc" "$(ms_to_s $(($(now_ms) - start)))" "$PYQ_TIMEOUT" >&2
+  return "$rc"
 }
 
 # ── Real pytest, ruff and mypy in the agent container (feature 012, research R1) ───────────────────

@@ -280,12 +280,17 @@ docker_endpoint_args() {
 
 # shellcheck disable=SC2329 # invoked indirectly, by step
 run_e2e() {
+  local rc
   local -a endpoint
   mapfile -t endpoint < <(docker_endpoint_args)
   rm -f "${out}/e2e.tap" "${out}/report.xml"
   # The speedup bench (feature 002) writes here; mounted at the SAME absolute path, because the bench
   # driver bind-mounts it again by that path from the Docker host (research RB7, lore P001/P002).
-  local bench_out="${repo}/bench/out/e2e"
+  # One directory per lane, named by the lane's stamp: the files' own names end in the runner's pid,
+  # which repeats from one lane to the next in a fresh container, so two lanes on one commit collided,
+  # and the fixed run.stdout, run.stderr and run.rc of one lane were overwritten by the next (feedback
+  # maint-20261015-115635, item 1).
+  local bench_out="${repo}/bench/out/e2e/${stamp}"
   mkdir -p "${bench_out}"
   # The parallel lane (E2E_JOBS > 1; maint-lane-speed part 1a): files side by side, each file's own cells in
   # sequence, under lane.bash's file lock (shared; exclusive for lane.conf's serial files). The throwaway
@@ -323,7 +328,29 @@ run_e2e() {
     "${RUNNER_IMAGE}" \
     ${lane_args[@]+"${lane_args[@]}"} \
     --formatter tap --report-formatter junit --output /out --timing \
-    "${E2E_TARGETS[@]}" | tee "${out}/e2e.tap"
+    "${E2E_TARGETS[@]}" | tee "${out}/e2e.tap" && rc=0 || rc=$?
+  e2e_account "${out}/e2e.tap" || ((rc != 0)) || rc=1
+  return "${rc}"
+}
+
+# e2e_account TAP — the cells the TAP stream reports against its plan. A file whose setup_file fails prints
+# one `not ok N setup_file failed` in place of all its cells, so the stream then holds fewer results than
+# `1..PLAN`: say how many went unreported and why, and fail (feedback maint-20261015-115635, item 1).
+# shellcheck disable=SC2329 # invoked from run_e2e, itself invoked indirectly by step
+e2e_account() {
+  local plan reported failed setup
+  plan="$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "$1" | head -n 1)"
+  [[ -n "${plan}" ]] || { echo "e2e: no plan line in $1"; return 1; }
+  reported="$(grep -cE '^(ok|not ok) [0-9]+ ' "$1")" || true
+  failed="$(grep -cE '^not ok [0-9]+ ' "$1")" || true
+  setup="$(grep -cE '^not ok [0-9]+ setup_file failed$' "$1")" || true
+  if ((setup == 0 && reported == plan)); then
+    echo "e2e: ${reported} of ${plan} cells reported, ${failed} not ok"
+    return 0
+  fi
+  echo "e2e: $((reported - setup)) of ${plan} cells reported, $((failed - setup)) of them not ok;" \
+    "$((plan - reported + setup)) not reported: ${setup} setup_file failed, each in place of its file's cells"
+  return 1
 }
 
 # shellcheck disable=SC2329 # invoked indirectly, by step
@@ -472,30 +499,43 @@ bg_start() {
   BG_START[$name]="$(date +%s)"
   echo
   echo "════ step ${name}: $* — started beside e2e (its output follows when it ends) ════"
+  # Its own run time goes to .step-NAME.secs when it ends: the time until bg_collect takes it also counts
+  # the steps it waited behind (feedback maint-20261015-115635, item 4).
+  rm -f "${out}/.step-${name}.secs"
   # shellcheck disable=SC2094 # the lock file is only held open, never read or written here
-  (flock -s 9 || exit 1; "$@") 9>>"${LANE_LOCK}" >"${out}/.step-${name}.out" 2>&1 &
+  (
+    flock -s 9 || exit 1
+    s="$(date +%s)" rc=0
+    "$@" || rc=$?
+    echo $(($(date +%s) - s)) >"${out}/.step-${name}.secs"
+    exit "${rc}"
+  ) 9>>"${LANE_LOCK}" >"${out}/.step-${name}.out" 2>&1 &
   BG_PID[$name]=$!
 }
 
-# bg_collect NAME — wait for it, print its output and its rc line; sets BG_RC and BG_SECS.
+# bg_collect NAME — wait for it, print its output and its rc line; sets BG_RC, BG_SECS (its own run time)
+# and BG_WAITED (from its start until it was collected).
 bg_collect() {
   local name="$1" end
   wait "${BG_PID[$name]}" && BG_RC=0 || BG_RC=$?
   end="$(date +%s)"
-  BG_SECS=$((end - BG_START[$name]))
+  BG_WAITED=$((end - BG_START[$name]))
+  BG_SECS="$(cat "${out}/.step-${name}.secs" 2>/dev/null)" || BG_SECS=""
+  [[ "${BG_SECS}" =~ ^[0-9]+$ ]] || BG_SECS="${BG_WAITED}"
   echo
   echo "════ step ${name}: ${BG_CMD[$name]} — ran beside e2e ════"
   cat "${out}/.step-${name}.out"
 }
 
-# bg_record NAME RC SECONDS — record a step that ran (in part) beside e2e, with its rc line.
+# bg_record NAME RC SECONDS WAITED — record a step that ran (in part) beside e2e, with its rc line: SECONDS
+# is its own run time, WAITED the time from its start until it was collected after e2e and unit.
 bg_record() {
   if [[ "$2" -eq 0 ]]; then
-    record "$1" "$2" pass "$3" "beside e2e"
+    record "$1" "$2" pass "$3" "beside e2e; collected after $4 s"
   else
-    record "$1" "$2" fail "$3" "exit $2; beside e2e"
+    record "$1" "$2" fail "$3" "exit $2; beside e2e; collected after $4 s"
   fi
-  echo "════ step $1: rc=$2 ($3 s) ════"
+  echo "════ step $1: rc=$2 ($3 s; collected after $4 s, beside e2e) ════"
 }
 
 # shellcheck disable=SC2329 # invoked from run_unit, itself invoked indirectly by step
@@ -605,7 +645,7 @@ main() {
 
   if [[ "${together}" == yes ]]; then
     bg_collect gounit
-    bg_record gounit "${BG_RC}" "${BG_SECS}"
+    bg_record gounit "${BG_RC}" "${BG_SECS}" "${BG_WAITED}"
   else
     # Adele's Go units (feature 004) need no image of ours: only the pinned GO_IMAGE and the module.
     step gounit run_go_unit

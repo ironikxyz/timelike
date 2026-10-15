@@ -32,9 +32,12 @@ load lane
 setup_file() {
   : "${GIT_SHA:?}" "${DEBIAN_IMAGE:?}" "${REPO_HOST:?}" "${BENCH_E2E_OUT:?}"
   export RUN_OUT="${BENCH_E2E_OUT}/run-${GIT_SHA:0:12}-$$"
-  # The one command, over the whole catalog. Its output and status are kept for the tests below.
-  bench/run.sh --out "${RUN_OUT}" >"${BENCH_E2E_OUT}/run.stdout" 2>"${BENCH_E2E_OUT}/run.stderr"
-  echo $? >"${BENCH_E2E_OUT}/run.rc"
+  # The one command, over the whole catalog. Its output and status are kept for the tests below, which
+  # judge them: a failing run fails those cells with its stderr, rather than failing setup_file, which
+  # would drop the file's cells from the TAP stream and print no reason.
+  local rc=0
+  bench/run.sh --out "${RUN_OUT}" >"${BENCH_E2E_OUT}/run.stdout" 2>"${BENCH_E2E_OUT}/run.stderr" || rc=$?
+  echo "${rc}" >"${BENCH_E2E_OUT}/run.rc"
 }
 
 # validate ARGS... — the independent validator, on the driver's interpreter, reading the run read-only.

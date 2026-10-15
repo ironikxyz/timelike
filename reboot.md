@@ -24,9 +24,12 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   - **unit:** pytest-xdist 3.8.0 and execnet 2.1.2 (pins.env). The 16 tests marked `timed` run after the rest,
     serially. The unit step never runs beside e2e: its bench units' 2 s call limit failed under host load.
   - **gounit** runs beside e2e when the host has flock.
-  - **No lane has run on it.** The defaults come from host measurements and an estimate from lane 02s1-d's per-file
-    times (about 752 s for e2e, capped by `git-log-…` at 362 s plus 390 s of serial files). The mentor runs the proof
-    lanes: one serial, three parallel, two partial.
+  - **Proof on `17efa2f`** (mentor, 2026-10-15): serial 689/689 and both partial lanes pass; the three parallel lanes
+    failed (feedback `bridge/feedback/maint-20261015-115635-lane-speed-proof-parallel-lanes-fail.md`). Addendum 1
+    fixes it: a bench directory per lane (`bench/out/e2e/<stamp>`), the bench's rc judged by cells rather than by
+    setup_file, the TAP stream counted against its plan, `exec_plain` failing at its bound, the git-log fixture's
+    own 300 s bound, gounit's own seconds, and failure messages for par1's daemon stalls. P6's SIGTERM and par1's
+    bench stop are unexplained. The mentor reruns the proof; no commits until the lane ends.
 
 - **`modify/002-slice-1`** (from `master` `8dbddc7` = `public/main`, **`v0.19.0` pushed 2026-10-13**: object `278d1a7`):
   **002 Cycle 4 = 02 slice 1** (natural), send `bridge/sends/02-rev8-20261013-064725.md`, specswarm **2.44.0**,
