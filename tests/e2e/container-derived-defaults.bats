@@ -58,7 +58,14 @@ teardown() {
 
 # sc8_prepare — sets SC8_EXPECT and SC8_HOST_CPUS, starts both throwaway containers and reads their
 # limits back; on any problem sets SC8_ERROR (so only the SC-8 tests fail, with the reason).
+# All of it is test plumbing, timed by no criterion, so it has its own bound, as the git-log fixture's has.
+# In two parallel lanes of three, the first `docker run -d` here was stopped at RUN_TIMEOUT's 30 s with
+# nothing printed; this file starts while the four `first` files (the bench and the catalog among them) are
+# still running. SC-7 starts a throwaway with the same --cpus 1.5 later in the lane and passed in all three,
+# so the flag is not the cause (feedback maint-20261015-115635, item 5).
 sc8_prepare() {
+  # shellcheck disable=SC2034 # read by start_throwaway and exec_plain, which this calls (dynamic scope)
+  local RUN_TIMEOUT=300
   local ncpu status_out line list="" affinity base limit_arg quota_line cpuset_line first
   SC8_EXPECT=""
   SC8_HOST_CPUS=""

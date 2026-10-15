@@ -24,8 +24,11 @@ first   b-long.bats  # the longest
 serial  d-timed.bats  # measures the machine
 """
 
+# Each call is logged in ONE write: gounit runs beside e2e, so two of these append to the log at once, and a
+# call written as its arguments and then its newline let the other's line in between (feedback
+# maint-20261015-115635, item 6: `rm -f stale-1` followed by gounit's `run` on one line, under -n 8).
 FAKE_DOCKER = r"""#!/bin/sh
-printf '%s\037' "$@" >> "$LOG/docker.log"; printf '\n' >> "$LOG/docker.log"
+line=$(printf '%s\037' "$@"); printf '%s\n' "$line" >> "$LOG/docker.log"
 case "$1" in
   info|build|compose|rm) exit 0 ;;
   inspect) echo healthy ;;

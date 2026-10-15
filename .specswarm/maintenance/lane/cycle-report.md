@@ -455,3 +455,90 @@ tree and the commit message: below the commit, in the reply.
   - the announcement file's `state: status …`.
   Each of these says that a step waited, not that the behaviour under test was wrong.
 - The bench's output for each lane is now `bench/out/e2e/<stamp>/`; earlier lanes' files stay where they were.
+
+## Cycle 1, Addendum 2 — bridge/feedback/maint-20261015-115635-lane-speed-proof-parallel-lanes-fail.md
+
+The mentor's second proof chain, on `7505a57` (2026-10-15T12:33:43Z–15:00:38Z), appended to the same feedback file
+("Rerun on `7505a57`"). The serial lane, par3 and both partial lanes passed. Items 1, 2 and 4 held in all four full
+lanes. par1 and par2 failed, on two new items (5 and 6), which this addendum takes in order. Read from
+`bridge/.make-test-ls2-*.log` (read only). Nothing here has run in Docker. **No criterion's budget was raised, no
+cell's assertion changed, no file was added to lane.conf's serial group, and no unit was marked `timed`.**
+
+### Group B — copied from the send
+
+Unchanged from Cycle 1 and Addendum 1: `source_send` `bridge/sends/maint-lane-speed-20261015-062546.md`; no prompt,
+no feature, no discovery revision of its own; no slice. The instruction is the feedback file named in the heading.
+
+### Item 5 · `container-derived-defaults.bats`: the throwaway start (par1 and par2)
+
+**What it shared:** the Docker daemon, at its busiest point in the lane. The file is 14th of 86 in the parallel
+plan (cells 157–163 in both lanes), so it starts while the four `first` files are still running, the bench and the
+catalog among them. Its first `docker run -d` was stopped at RUN_TIMEOUT's 30 s with nothing printed, in two lanes
+of three. That timing is inferred from the plan's order: the TAP stream carries no timestamps.
+
+**Not the `--cpus` flag:** SC-7's file (`one-command-prints-the-agents-resource-budget.bats`, 34th in the plan)
+starts a throwaway with the same `--cpus 1.5`, and passed in all three parallel lanes. Other files' throwaways
+(the snapshot-recreate file, 8th) also passed. I did not find why this one start took longer than its neighbours'.
+
+**What changed:** the start is test plumbing that no criterion times, as the git-log fixture was. `sc8_prepare`
+(the setup that starts both throwaways and reads their limits back) now has its own bound, `local RUN_TIMEOUT=300`,
+which is the git-log fixture's figure. The cells, and their own bounds, are unchanged. If the start still fails, its
+reason now names the 300 s bound. **Not marked serial:** the file changes nothing that a neighbour reads, and its
+cells measure no time.
+
+### Item 6 · `test_lane_run_sh.py::test_a_parallel_lane_runs_files_side_by_side_in_lane_conf_s_order` (par1, gw7)
+
+**What it shared:** the fake `docker`'s log, `$LOG/docker.log`, between two processes of *one* lane under test. It
+did not share anything between workers. tests/run.sh starts gounit beside e2e before the e2e sweep, so the fake
+`docker` runs twice at once. The fake logged each call in two appends: its arguments, then a newline. gounit's `run`
+landed between `rm -f stale-1` and its newline, so the line no longer read as `rm -f stale-1`. The fixture's
+`'FAKE_STALE': ''` in the failure is the fixture's dict before `run_lane` adds `FAKE_STALE=stale-1`, not the
+environment the lane ran with.
+
+**Reproduced on this host:** the one test, 32 runs at a time: 1 failure in 64 runs, then 1 in 128. The kept log of
+the second shows `rm|-f|stale-1|run|--rm|-u|…` on one line.
+
+**What changed:** the fake builds the line first and appends it in one write (the longest line it writes is about
+1.6 KB). The whole file, 32 runs at a time: **384 of 384 passed, 19 tests each.** The test is not marked `timed` and
+still runs in the spread part.
+
+### Group C — written by the code instance
+
+**delegations:** none in this addendum.
+
+**criteria_reestablished:** none (a maintenance send carries no acceptance criteria). `tests/unit/test_lane_run_sh.py`
+(19 tests): `executed`, serially and under `-n 8` (Host lane, below), and in the stress runs above.
+
+**reconcile_mode:** scoped (items 5 and 6).
+
+**not_verified:**
+- **Nothing has run in Docker,** including SC-8's 300 s setup bound.
+- **Why SC-8's start was slower than its neighbours':** inferred from the plan's order, not shown.
+- **That 300 s is enough:** no lane has measured the start under that load. It is a bound, not a wait.
+
+**changed_other_features:** none. Test files only: `tests/e2e/container-derived-defaults.bats` (the image's
+feature) and the lane unit.
+
+**process_failures_recorded:** Addendum 1 added three lane units, but I did not run them concurrently or under
+`-n 8` on this host. The race needed both.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host` on timelike's CPython 3.14.8 in a scratch venv (`venv-xdist`, with pytest 8.4.2 and pytest-xdist
+3.8.0, the pins), over this tree, 2026-10-15T15:54:16Z–16:06:04Z (read from the clock): **rc 0**. pytest tests/unit,
+serially: **2529 passed, 13 skipped** (634 s); `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57;
+`test_command_not_found.sh` 33 of 33.
+
+Then the Docker lane's two unit parts on the same venv, 16:06:04Z–16:09:04Z: `-n 8 -m "not timed"`: **rc 0, 2513
+passed, 13 skipped** (135 s); `-m timed`: **rc 0, 16 passed** (44 s). Together, the serial run's 2529.
+
+Other checks: ruff check and ruff format over the changed unit file, and shellcheck 0.11.0 over the changed e2e
+file: clean. The deny-list over the tree and the commit message: below the commit, in the reply.
+
+#### For the mentor
+
+- **The rerun, on one HEAD:** as the feedback says.
+- **If SC-8 fails again:** its reason now ends `(bound 300s)`. A start that does not finish inside 300 s is no
+  longer load alone, and would be worth a lane that keeps `docker events` for the window.
