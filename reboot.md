@@ -5,10 +5,28 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
+
+- **`maint/lane-speed`** (from `master` `5b9a347` = `public/main`, **`v0.20.0` pushed 2026-10-15**: object `f3c50fa`;
+  02 slice 1 merged and discharged): send `bridge/sends/maint-lane-speed-20261015-062546.md`, built by hand, no
+  specswarm command. Report: `.specswarm/maintenance/lane/cycle-report.md`.
+  - **What was built:** a parallel Docker lane (`E2E_JOBS`, default 8; `UNIT_JOBS`, default 8; `1` and `1` is the old
+    serial lane exactly) and `make test-partial E2E_FILES="…"` (`scope: partial` first, refuses an empty or unknown
+    list). Also item 3: `BENCH_MODEL=… make bench-live` now honours the environment, and the plan names each value's
+    source.
+  - **e2e:** files run side by side under `tests/e2e/lane.bash`'s file lock (shared; exclusive for the 13 `serial`
+    files of `tests/e2e/lane.conf`, which run alone at the end). In a parallel lane only, the helpers' container-wide
+    pager checks are scoped to the file (`TL_E2E_FILE` in each exec's environment), and the throwaway sweep runs once
+    in run.sh.
+  - **unit:** pytest-xdist 3.8.0 and execnet 2.1.2 (pins.env). The 16 tests marked `timed` run after the rest,
+    serially. The unit step never runs beside e2e: its bench units' 2 s call limit failed under host load.
+  - **gounit** runs beside e2e when the host has flock.
+  - **No lane has run on it.** The defaults come from host measurements and an estimate from lane 02s1-d's per-file
+    times (about 752 s for e2e, capped by `git-log-…` at 362 s plus 390 s of serial files). The mentor runs the proof
+    lanes: one serial, three parallel, two partial.
 
 - **`modify/002-slice-1`** (from `master` `8dbddc7` = `public/main`, **`v0.19.0` pushed 2026-10-13**: object `278d1a7`):
   **002 Cycle 4 = 02 slice 1** (natural), send `bridge/sends/02-rev8-20261013-064725.md`, specswarm **2.44.0**,
