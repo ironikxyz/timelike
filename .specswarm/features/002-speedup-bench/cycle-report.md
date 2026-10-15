@@ -1319,3 +1319,166 @@ Commit everything, and report done. No commit after that until the mentor says l
 - **The lane (02s1-c, full, sign-off):** `make test` (it builds the driver image with the new §1; the SC-5 file's
   seventh cell is the TLS one), `make bench-images`, `make scan` with the deny-list read, and `make lint`.
 - **After it:** live run 2.
+
+### Addendum 3 — live run 2: D11 shown; the report's "Why" lines; goals that state their checks
+
+**Written:** 2026-10-15T01:56:51Z (read from the clock), on `modify/002-slice-1`. Same send, same cycle. Instructed by the
+operator, relaying `../bridge/feedback/02-20261014-165148-live-run-2-d11-shown-why-lines-and-git-inspect-goal.md`
+(read in full). Lane 02s1-c had passed on `96a3cac`, and live run 2 had ended (`bridge/history.md`, rows of
+2026-10-14T16:52:04Z); nothing was edited while either ran. **Nothing was pushed or merged.** None of this addendum's
+work has run in Docker: lane 02s1-d and the short live run 3 decide it.
+
+**Status in one line:** D11 was shown and observed by the operator. A catalog note is now printed only for a
+fake-agent trace that took exactly the path it describes, never on a live run. Every task's goal states what its
+check requires; three tasks' goals changed, and their versions moved.
+
+| Task | Commit | What |
+|---|---|---|
+| T062 to T064 | this commit | item 1 in `catalog.py`, `report.py`, `bin/timelike-bench`; item 2 in `catalog.py` and `report.py`; their units; the relay's settle-before-answer fix (process failure 4) and `test_validate_bench.py`'s fixture; the spec, the CLI contract, the data model, this addendum, `tasks.md`, `decisions.md`, `reboot.md` |
+
+#### D11, as observed
+
+Live run 2 on `96a3cac` (2026-10-14T05:27:05Z–05:55:57Z; model `deepseek/deepseek-v4-flash-0731`, the operator's
+choice for the test; 30 of 30 runs reached the model; spend $0.0938, OpenRouter's figure). The demo transcript is
+`bridge/.d11-demo-20261014T055701Z.txt`. Its section 2 is the report's adoption table per arm and harness:
+- **Codex:** told 2 timelike calls (`edit` 2), not told 0;
+- **OpenCode:** told 0, not told 0.
+
+The operator read it and answered, on 2026-10-14: *"Yes, D11 is shown"*, and of the comparison, *"Clear enough"*.
+n = 1: the figures show that the comparison works, and say nothing yet about timelike.
+
+#### Item 1: "What happened … Why:" could state what did not happen
+
+- **The cause:** the `Why:` lines are the catalog's fixed `notes`, keyed by environment and ending. They were written
+  for the fake agent, whose path is scripted, and the report printed one for any trace that ended that way. Live run
+  2 printed two that did not happen (`codex · git-commit-hook-rejects · vanilla`, `codex · git-rebase-continue ·
+  vanilla`).
+- **Chosen: on live runs, dropped.** Not moved under a label: each task block already prints the task's design on
+  its `Tests:` line, and a design line under each arm would still read as commentary on its calls. On stand-in runs
+  they are dropped too: their path is the stand-in's script, not the fake agent's.
+- **On fake runs, kept, and only on their path.** Each note now carries the commands of the path it describes, in
+  order. The report prints it only for a fake-agent trace that ended that way and ran exactly those commands
+  (`report.note_for`). The check is cheap and exact, since the fake agent's commands are fixed strings.
+- **Tests:**
+  - `test_a_live_trace_whose_calls_contradict_a_note_never_prints_it`, under both harnesses: live run 2's case, the
+    TODO line removed before the only commit;
+  - `test_a_live_trace_is_never_given_a_note_even_on_the_scripted_path`;
+  - `test_a_fake_trace_gets_its_note_only_on_the_path_the_note_describes`;
+  - `test_item1_each_note_names_the_commands_of_the_path_it_describes`: each task under both emulations, real git.
+    The fake agent's actual path must equal each note's commands, so a policy edit that moves the path fails it.
+
+#### Item 2: every goal states what its check requires
+
+The sweep, per task: each check's distinct failure reasons against its goal.
+
+| Task | The check requires | Was it in the goal? | Now |
+|---|---|---|---|
+| `git-inspect` | `out/log.txt` and `out/diff.txt`, non-empty | no file named | "Write the last five log entries to out/log.txt and the unstaged diff to out/diff.txt." **v2 → v3** |
+| `git-rebase-continue` | no rebase in progress; `side` checked out; `main` an ancestor of `side`; `f` exactly `main` then `side`; nothing uncommitted | the rebase and `f`'s order only | "Rebase side onto main and finish the rebase, resolving the conflict in f as the two lines 'main' then 'side'; leave side checked out with nothing uncommitted." **v2 → v3** |
+| `git-commit-hook-hangs` | the subject; `HEAD:f` carries the change; nothing left staged | yes ("Commit the staged change to f with the message …") | unchanged, v2 |
+| `git-commit-hook-rejects` | the subject; the `feature` line kept; no TODO line | yes, the last by reference ("within the repository's policy"): the repository's own pre-commit hook states the policy and enforces it | unchanged, v2 (see below) |
+| `python-missing-module` | `out/totals.txt` non-empty; lines `apples 3` and `pears 5` | the separator was not stated | "… to out/totals.txt, each on its own line as the name, a space, then the count (for example `apples 3`)." **v1 → v2** |
+
+- **`git-commit-hook-rejects` is left as it is, and that is a judgment** (confidence medium). Naming the TODO rule
+  in the goal would tell the agent what the hook says, and the task tests that hooks run. If the mentor reads "by
+  reference" as not stated, the fix is one goal line and a bump to v3.
+- **What a bump does to older traces:**
+  - every trace records `task_version`, and one invocation runs every arm at the catalog's version, so a comparison
+    never mixes versions;
+  - older traces stay valid under the schema, but they measured a different task and are not comparable with newer
+    ones;
+  - re-reported from disk, an older directory would be shown under today's goal. The task block now says so:
+    `Task version: measured at v2; the goal and notes shown here are v3's, so they may not be what these runs were
+    given.`
+- **No check changed,** so the fake agent's outcomes are as before (`test_outcome_matches_rb4`).
+- **Tests:**
+  - `test_item2_the_goal_states_every_requirement_of_the_check`, all five tasks: each check's distinct failure
+    reasons are mapped to the goal's words, and every `out/` path the check reads must be in the goal;
+  - `test_versions_and_prerequisites`;
+  - `test_item2_a_trace_from_an_older_task_version_is_named_under_the_newer_goal`.
+
+### Group C — Addendum 3
+
+**delegations:** `[]`.
+
+**criteria_reestablished** (the same seven citations):
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` _(slice 0)_ — **observed by the
+  mentor** on `96a3cac` (lane 02s1-c: `speedup-bench.bats`, SC-1 cells, in e2e 689 of 689); not yet on this commit.
+- `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` _(slice 0)_ —
+  **observed by the mentor** on `96a3cac` (lane 02s1-c: SC-2 cells, and the units); not yet on this commit, which
+  changes the fake report's `Why:` lines and three goals.
+- `02 · "Each run is labelled told or not-told, and the report counts timelike tool invocations per arm"` _(slice 1)_
+  — **observed by the mentor** on `96a3cac` (lane 02s1-c: SC-4, and the SC-5 file's adoption recounts); live run 2
+  showed it with a model. Not yet on this commit.
+- `02 · "The same task catalog runs under two harnesses and the report shows results per harness"` _(slice 1)_ —
+  **observed by the mentor** on `96a3cac` (lane 02s1-c: the SC-5 file's seven cells, the TLS cell among them; live run
+  2: both harnesses reached the model, one report section each). Not yet on this commit.
+- `02 · "Two arms that end the same way in the same number of turns are ranked by hangs, then by failed commands"`
+  _(slice 1; revision 8)_ — **observed by the mentor** on `96a3cac` (lane 02s1-c: SC-6, the validator's `verdicts`);
+  not yet on this commit.
+- `02 · "Failed commands are grouped into categories including command not found"` _(slice 1)_ — **observed by the
+  mentor** on `96a3cac` (lane 02s1-c: the SC-7 probe file); not yet on this commit.
+- `02 · "DEMO: the Adopting developer compares timelike tool adoption between a told arm and a not-told arm"` _(slice 1;
+  D11, Manual)_ — **observed by the operator**: the mentor's live run 2 on `96a3cac`, transcript
+  `bridge/.d11-demo-20261014T055701Z.txt`; *"Yes, D11 is shown"*, and *"Clear enough"* (2026-10-14). n = 1.
+
+**reconcile_mode:** `scoped` (unchanged; no revision moved, and `audited_against` stays `[1, 8]`).
+
+**not_verified** (Addendum 2's list stands, with these changes):
+- **Resolved by live run 2:** OpenRouter's real certificate chain against the driver's store (the relay verified it);
+  `make scan` with `ca-certificates` and `openssl` (lane 02s1-c passed).
+- **Added, item 2:** whether the new goals change what live agents do. Live run 3 is where git-inspect should
+  complete.
+- **Added, item 1:** on a live run, no `Why:` line is printed at all, so a live reader gets only the calls and the
+  ending, plus the task's design on its `Tests:` line. Whether that is enough to read a live block is for the
+  operator's next reading.
+- **Unchanged:** an agent's command can spend through the relay, within the caps; Codex's fallback model metadata;
+  OpenRouter's protocol details, as listed in Addendum 1.
+
+**changed_other_features:** none. Only 002's catalog, report and CLI changed.
+
+**process_failures_recorded:**
+1. **The notes were written as observations of the scripted path and kept when live runs arrived.** Slice 1 added
+   live traces to a report whose notes assumed one known path. Nothing tested a note against a trace's calls, so a
+   live run printed a story that had not happened.
+2. **A goal that did not name the files its check reads** passed every lane, because the fake agent's script names
+   them itself. Only a live model, reading the goal alone, could fail it. The new unit checks the goal against the
+   check, not against the script.
+3. **A unit draft used a wrong attribute name** (`Step.name`; the field is `id`) and a fail-line count that the
+   rebase check's two identical reasons broke. Both were fixed before any commit.
+4. **Addendum 2's relay change had a race, and this cycle's first host lane found it.** That lane ran
+   2026-10-15T01:34:59Z–01:43:50Z: rc 1. Two failures, `test_error_statuses_pass_through_and_are_counted[429]` and
+   `[500]`, got `unanswered` 0 against 1. There were also 33 setup errors in `test_validate_bench.py`, whose fixture
+   still built the old notes shape, which this cycle's change broke.
+   - **The race:** the relay counted a turn or an unanswered request in its `finally`, after the answer had already
+     gone back. A caller reading the accounting as soon as it had its answer could find the request uncounted.
+   - **History:** it passed Addendum 2's host lane and lane 02s1-c by chance. A live run reads the accounting only
+     after the harness exits, so it was unlikely to change a recorded figure there, but nothing guaranteed that.
+   - **Fixed:** the request is now settled under the lock as soon as its status is known (or the upstream fails),
+     before any answer goes back. The fixture builds the new shape. The relay units then passed 30 times running.
+
+**retired_prompts_seen:** none.
+
+#### Host lane
+
+`make test-host`, timelike's CPython 3.14.8 in a scratch venv, over this commit's code and tests,
+2026-10-15T01:47:40Z–01:56:30Z (read from the clock): **rc 0**. One comment in `relay.py` was rewrapped for ruff
+during the run, and nothing else changed.
+- pytest tests/unit: **2505 passed, 12 skipped** (496 s);
+- `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57; `test_command_not_found.sh` 33 of 33.
+
+The first run, 2026-10-15T01:34:59Z–01:43:50Z, had **rc 1** (process failure 4).
+
+Other checks:
+- ruff check and format: clean;
+- mypy `--strict`: clean (39 files);
+- shellcheck: unchanged files (no shell file changed in this addendum);
+- `scripts/readme_reference.py --check`: current, 14 tools;
+- the deny-list: run over the working tree and the commit message before the commit.
+
+#### Then
+
+Commit everything, and report done. No commit after that until the mentor says lane 02s1-d has ended.
+- **The lane (02s1-d, full):** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
+- **After it:** the short live run 3 (flash, about $0.10), to see git-inspect complete and "What happened" match the
+  calls. Then sign-off.

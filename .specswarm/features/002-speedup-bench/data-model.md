@@ -8,7 +8,7 @@ All types are stdlib `dataclasses` (frozen where possible) in `bench/benchlib/`.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | str | kebab-case, unique. Part of each trace's file name |
-| `version` | int | Bumped whenever the setup, policy or check changes. Recorded in every trace |
+| `version` | int | Bumped whenever the goal, setup, policy or check changes (*Cycle 4 addendum 3:* the goal too, since it must state everything the check requires). Recorded in every trace. A report showing traces at another version than the catalog's says so in the task block |
 | `capability` | str | The feature-001 capability it exercises |
 | `goal` | str | One line, shown in the report |
 | `prerequisites` | tuple[str, ...] | OS packages. **Each must be present in both images** (RB1). Slice 0: `("git",)` |

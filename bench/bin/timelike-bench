@@ -166,7 +166,12 @@ def do_categories(probe: bool) -> agentio.Result:
 
 def task_texts() -> dict[str, report.TaskText]:
     """The catalog's words for the report (send …-080659, F002)."""
-    return {t.id: report.TaskText(t.goal, t.capability, t.difference, dict(t.notes)) for t in catalog.CATALOG}
+    return {
+        t.id: report.TaskText(
+            t.goal, t.capability, t.difference, {k: (n, path) for k, n, path in t.notes}, t.version
+        )
+        for t in catalog.CATALOG
+    }
 
 
 def _build_report(directory: Path, reproduce: str, gate: keyfile.Gate | None = None) -> list[str]:

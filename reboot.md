@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -35,8 +35,13 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
   `ca-certificates` (the relay is an HTTPS client of OpenRouter; verification never off), with an SC-5 cell proving the
   relay verifies against the system store with no network (`tests/e2e/fixtures/relay_tls.py`, a throwaway CA); a relay
   turn is now a tool-offering request answered 200, the rest `unanswered`, and `turns_counted` labels it as a count
-  apart from the trace's `totals.turns`. **Next: lane 02s1-c (full, sign-off), then live run 2. No commit until the
-  mentor says the lane has ended.**
+  apart from the trace's `totals.turns`. Lane 02s1-c passed on `96a3cac`; live run 2 reached the model in 30 of 30 runs,
+  and **D11 was observed by the operator** (*"Yes, D11 is shown"*). **Cycle 4 addendum 3** (`cycle-report.md`
+  § Addendum 3; T062–T064, `bridge/feedback/02-20261014-165148-…`): a catalog note is printed only for a fake-agent
+  trace on exactly the path it names, never on a live run (`report.note_for`); every goal states what its check
+  requires (git-inspect v3 names `out/log.txt` and `out/diff.txt`; git-rebase-continue v3; python-missing-module v2),
+  and a report names a task-version mismatch. **Next: lane 02s1-d (full), then the short live run 3, then sign-off.
+  No commit until the mentor says the lane has ended.**
 - **`013-package-guard`** (from `master` `50dd84d` = `public/main`, **`v0.18.0` pushed 2026-10-12**: `main` and the
   tag, object `6dc8ca9`): **013 Cycle 1 = 15 slice 1 (first build)**, send `bridge/sends/15-rev2-20261012-001145.md`,
   specswarm 2.44.0. **FOR-MENTOR Item 24 raised first** (`5740354`): how the bare `pip`/`npm`/`uv`/`npx`/`pnpm` reach the

@@ -96,12 +96,13 @@ What happened in vanilla:
   2. `<command>` → hung: killed at the 120 s limit
   3. `<command>` → exit 0
   Ended: completed — the check confirmed the goal.
-  Why: <a note written with the task, printed only when this arm ended this way>.
+  Why: <a note written with the task: fake-agent traces only, printed only when this arm ended this way through
+       exactly the commands the note names; never on a live or stand-in run (Cycle 4 addendum 3)>.
 
 What happened in timelike:
   1. `<command>` → exit 0
   Ended: failed — check failed: <the check's reason>.
-  Why: <note, if one matches "timelike:failed">.
+  Why: <note, if one matches "timelike:failed" and the calls match its path; fake-agent traces only>.
 
 ## Ties (N)
 ...

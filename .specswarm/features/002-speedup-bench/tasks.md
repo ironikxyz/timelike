@@ -444,3 +444,21 @@ on `ec6f626`: 30 of 30 runs `stopped (api-unreachable)`). Same send, same cycle.
   relay's turns are not the trace's `totals.turns`. `relay.py`; units in `test_bench_relay.py`.
 - [X] T061 Records: spec (FR-26, edge cases), contracts, data model, the cycle report's Addendum 2, `tasks.md`,
   `decisions.md`, `reboot.md`; the host lane; the deny-list; commit.
+
+## Phase 14: Cycle 4 addendum 3 (live run 2)
+
+Instructed through `../bridge/feedback/02-20261014-165148-live-run-2-d11-shown-why-lines-and-git-inspect-goal.md` (live
+run 2 on `96a3cac`: D11 shown, observed by the operator; two defects to fix before sign-off). Same send, same cycle.
+
+- [X] T062 [US5] Item 1, "What happened … Why:" stated what did not happen: each catalog note names the commands of the
+  fake agent's path it describes (`catalog.py`); the report prints a note only for a fake-agent trace that ended that
+  way through exactly those commands, never on a live or stand-in run (`report.py` `note_for`; `bin/timelike-bench`).
+  Units: a live trace contradicting a note never prints it; a live trace on the scripted path gets none; a fake trace
+  only on its path; each note's path is the fake agent's real path under both emulations.
+- [X] T063 [US5] Item 2, goals that state their checks: git-inspect names `out/log.txt` and `out/diff.txt` (v3);
+  the sweep tightens git-rebase-continue (v3) and python-missing-module (v2), and leaves the two hook tasks; a unit
+  maps every distinct failure reason of each check to the goal's words; the report names a task-version mismatch.
+- [X] T064 Records: spec (the report's notes; goals state their checks), the CLI contract, the data model, the cycle
+  report's Addendum 3 (D11 observed by the operator), `tasks.md`, `decisions.md`, `reboot.md`; the host lane, whose
+  first run found T060's relay race (settled before answering now) and a fixture on the old notes shape; the
+  deny-list; commit.

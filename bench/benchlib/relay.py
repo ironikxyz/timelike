@@ -400,7 +400,20 @@ class _Handler(BaseHTTPRequestHandler):
         with relay.lock:
             acct = relay.run
             acct.waiting += 1
-        answered = False
+        settled = not turn
+
+        def settle(answered: bool) -> None:
+            # Called under the lock, before any answer goes back: a caller that reads the accounting as soon
+            # as it has its answer must find this request already counted as a turn or as unanswered.
+            nonlocal settled
+            if not settled:
+                settled = True
+                acct.turns_waiting -= 1
+                if answered:
+                    acct.turns += 1
+                else:
+                    acct.unanswered += 1
+
         conn = relay.connection()
         try:
             try:
@@ -410,25 +423,21 @@ class _Handler(BaseHTTPRequestHandler):
                 with relay.lock:
                     acct.statuses["unreachable"] = acct.statuses.get("unreachable", 0) + 1
                     acct.last_status = "unreachable"
+                    settle(False)
                 msg = f"timelike-bench relay: the upstream did not answer ({type(e).__name__}: {e})"
                 self._send_json(502, json.dumps({"error": {"message": msg, "code": 502}}).encode())
                 return
             status = str(resp.status)
-            answered = resp.status == 200
             with relay.lock:
                 acct.statuses[status] = acct.statuses.get(status, 0) + 1
                 acct.last_status = status
+                settle(resp.status == 200)
             self._relay_answer(resp, acct, accounted=self.command == "POST")
         finally:
             conn.close()
             with relay.lock:
                 acct.waiting -= 1
-                if turn:
-                    acct.turns_waiting -= 1
-                    if answered:
-                        acct.turns += 1
-                    else:
-                        acct.unanswered += 1
+                settle(False)  # only if nothing above settled it: an error before any status
 
     def _relay_answer(self, resp: http.client.HTTPResponse, acct: Accounting, accounted: bool) -> None:
         relay = self.server.relay

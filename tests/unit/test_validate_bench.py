@@ -75,7 +75,10 @@ def out(tmp_path: Path) -> Path:
     for arm in ARMS:
         trace.write_trace(good_trace(arm), runner.trace_path(tmp_path, TASK, "fake", arm))
     texts = {
-        t.id: report.TaskText(t.goal, t.capability, t.difference, dict(t.notes)) for t in catalog.CATALOG
+        t.id: report.TaskText(
+            t.goal, t.capability, t.difference, {k: (n, path) for k, n, path in t.notes}, t.version
+        )
+        for t in catalog.CATALOG
     }
     report.build_report(tmp_path, tasks=texts, not_benchable=catalog.NOT_BENCHABLE, reproduce="make bench")
     return tmp_path

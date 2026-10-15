@@ -103,12 +103,23 @@ def test_ids_unique_and_kebab() -> None:
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", i) for i in ids)
 
 
+# 2: checks print their reason (send …-080659, F003). 3, and the Python task's 2: the goal names everything
+# its check requires (Cycle 4 addendum 3, live run 2, item 2).
+VERSIONS = {
+    "git-inspect": 3,
+    "git-rebase-continue": 3,
+    "git-commit-hook-hangs": 2,
+    "git-commit-hook-rejects": 2,
+    "python-missing-module": 2,
+}
+
+
 def test_versions_and_prerequisites() -> None:
+    assert {t.id: t.version for t in catalog.CATALOG} == VERSIONS
     for task in GIT_TASKS:
-        assert task.version == 2  # 2: checks print their reason (send …-080659, F003)
         assert task.prerequisites == ("git",)
     py = catalog.by_id("python-missing-module")
-    assert (py.version, py.prerequisites) == (1, ("python3",))
+    assert py.prerequisites == ("python3",)
     for task in catalog.CATALOG:
         assert task.capability and task.goal and task.expected
 
@@ -365,11 +376,11 @@ def test_hang_is_the_hook_and_leaves_no_lock(runs: dict[tuple[str, str], Run]) -
 def test_every_task_says_what_differs_and_notes_are_keyed_by_an_arm_and_an_ending() -> None:
     for task in catalog.CATALOG:
         assert task.difference.strip(), task.id
-        assert "token" not in (task.difference + " ".join(n for _, n in task.notes)).lower()
-        for key, note in task.notes:
+        assert "token" not in (task.difference + " ".join(n for _, n, _ in task.notes)).lower()
+        for key, note, path in task.notes:
             env, _, kind = key.partition(":")
             assert env in ("vanilla", "timelike") and kind in ("completed", "escalated", "failed", "hung")
-            assert note.strip()
+            assert note.strip() and path
 
 
 @pytest.mark.parametrize("task", catalog.CATALOG, ids=lambda t: t.id)
@@ -409,3 +420,62 @@ def test_python_task_meets_a_missing_module_then_a_failed_install(runs: dict[tup
         # in the images vanilla's pip refuses (externally managed) and timelike's guard finds no registry
         # (the Docker lane checks each, speedup-bench.bats).
         assert run.outcome.nonzero == 2
+
+
+# --- live run 2 (Cycle 4 addendum 3) ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("task", [t for t in catalog.CATALOG if t.notes], ids=lambda t: t.id)
+def test_item1_each_note_names_the_commands_of_the_path_it_describes(
+    runs: dict[tuple[str, str], Run], task: catalog.Task
+) -> None:
+    # The report prints a note only for a fake trace that ran exactly these commands, so they must be the
+    # fake agent's real path through the task: run here under both emulations.
+    steps = {s.id: s.command for s in task.policy.steps}
+    for key, _, path in task.notes:
+        env, _, kind = key.partition(":")
+        got = runs[(task.id, env)]
+        assert got.outcome.ending == kind, (task.id, key)
+        assert tuple(steps[name] for name in got.path[:-1]) == path, (task.id, key, got.path)
+
+
+# What each check requires, and the words of the goal that state it (item 2: a goal states everything its
+# check requires). Per task, so a check that gains a requirement fails here until its goal states it.
+GOAL_STATES = {
+    "git-inspect": {
+        "out/log.txt holds something": "the last five log entries to out/log.txt",
+        "out/diff.txt holds something": "the unstaged diff to out/diff.txt",
+    },
+    "git-rebase-continue": {
+        "no rebase in progress": "finish the rebase",
+        "side checked out": "leave side checked out",
+        "main is an ancestor of side": "Rebase side onto main",
+        "side:f is 'main' then 'side'": "resolving the conflict in f as the two lines 'main' then 'side'",
+        "nothing uncommitted": "with nothing uncommitted",
+    },
+    "git-commit-hook-hangs": {
+        "the last commit's subject": "with the message 'bench: update f'",
+        "HEAD:f carries the change": "Commit the staged change to f",
+        "nothing left staged": "Commit the staged change",
+    },
+    "git-commit-hook-rejects": {
+        "the last commit's subject": "with the message 'bench: update f'",
+        "HEAD:f carries the feature line": "Commit the staged change to f",
+        "no TODO line in the commit": "within the repository's policy",
+    },
+    "python-missing-module": {
+        "out/totals.txt holds something": "write its totals to out/totals.txt",
+        "a line 'apples 3'": "each on its own line as the name, a space, then the count",
+        "a line 'pears 5'": "each on its own line as the name, a space, then the count",
+    },
+}
+
+
+@pytest.mark.parametrize("task", catalog.CATALOG, ids=lambda t: t.id)
+def test_item2_the_goal_states_every_requirement_of_the_check(task: catalog.Task) -> None:
+    states = GOAL_STATES[task.id]
+    assert all(words in task.goal for words in states.values()), (task.id, task.goal)
+    # One distinct failure reason per requirement listed above, so the list cannot fall behind the check.
+    assert len(set(re.findall(r'fail "([^"]*)"', task.check))) == len(states), task.id
+    for path in re.findall(r"out/[\w.]+", task.check):
+        assert path in task.goal, (task.id, path)

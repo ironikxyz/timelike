@@ -663,3 +663,40 @@ INHERITED: T059, T060 — (confidence: high)
 ABSENT: no FOR-MENTOR item: the items were raised by the mentor in its feedback file, which is answered there by the mentor; the answers are in the cycle report's Addendum 2
 ABSENT: the Codex model-metadata note is recorded under not_verified, as asked; nothing built for it
 SCOPE: in
+
+### T062: live run 2, item 1 — a note is printed only on the path it describes
+**Started:** 2026-10-15T01:28:41Z | **Completed:** 2026-10-15T01:35:45Z
+
+INHERITED: the report's per-arm "What happened" and the catalog's notes keyed by environment and ending — from the send …-080659 cycle (F002) (confidence: high)
+FLAGGED: on live (and stand-in) runs the notes are dropped, not moved under a label such as "The task expects:". Chose dropping because each task block already prints its design on the "Tests:" line (capability and difference), and a second design line under each arm would sit beside the calls and still read as commentary on them (confidence: high)
+FLAGGED: on fake runs a note is printed only when the trace's commands equal, in order, the commands the note names, which the catalog now carries with each note. That check is cheap, and exact: the fake agent's commands are fixed strings. A unit runs each task under both emulations and asserts the fake agent's real path equals each note's commands, so a policy edit that moves the path fails the unit (confidence: high)
+ASSUMED: harness_name equal to the fake agent's name is what marks a fake trace; the report already tells fake runs by it for its first line (confidence: high)
+ABSENT: no change to the "Tests:" line or the verdict; nothing else under "What happened" is written ahead of the run
+SCOPE: in
+Verification: test_bench_report.py and test_bench_catalog.py pass (new: a live trace contradicting a note, both harnesses; a live trace on the scripted path; a fake trace on and off its path; each note's path under both emulations)
+
+### T063: live run 2, item 2 — every goal states what its check requires
+**Started:** 2026-10-15T01:28:41Z | **Completed:** 2026-10-15T01:35:45Z
+
+INHERITED: the five tasks and their checks as T048 and slice 0 left them (confidence: high)
+FLAGGED: the sweep, per task (each check's distinct failure reasons against the goal):
+- git-inspect — out/log.txt and out/diff.txt non-empty; the goal named neither file. Fixed: "Write the last five log entries to out/log.txt and the unstaged diff to out/diff.txt." v2 → v3
+- git-rebase-continue — no rebase in progress, side checked out, main an ancestor of side, f exactly 'main' then 'side', nothing uncommitted; the goal stated the rebase and f's order only. Fixed: "Rebase side onto main and finish the rebase, resolving the conflict in f as the two lines 'main' then 'side'; leave side checked out with nothing uncommitted." v2 → v3
+- git-commit-hook-hangs — the subject, HEAD:f carrying the change, nothing staged; all stated by "Commit the staged change to f with the message …". Unchanged, v2
+- git-commit-hook-rejects — the subject, the feature line kept, no TODO line; the last is stated by reference ("within the repository's policy"), and the policy is the repository's own pre-commit hook, which the agent can read and which rejects the commit itself. Unchanged, v2: naming the hook or the TODO rule in the goal would tell the agent what the hook says, and the task tests that hooks run (confidence: medium)
+- python-missing-module — out/totals.txt non-empty, lines 'apples 3' and 'pears 5' (whitespace-normalised); "one name and count a line" did not say how they are separated. Fixed: "… to out/totals.txt, each on its own line as the name, a space, then the count (for example `apples 3`)." v1 → v2
+(confidence: high, except where marked)
+FLAGGED: what a bump does to older traces: each trace records task_version, and an invocation runs every arm at the catalog's version, so a comparison never mixes versions. Re-reported from disk, an older directory is shown under today's goal; the task block now says so ("Task version: measured at v2; the goal and notes shown here are v3's …") rather than mislabel it. Older traces stay valid under the schema; they are not comparable with newer ones (confidence: high)
+ABSENT: no check changed: only goals, so the fake agent's outcomes are as before, and test_outcome_matches_rb4 still holds them
+SCOPE: in
+Verification: test_item2_the_goal_states_every_requirement_of_the_check (five tasks), test_versions_and_prerequisites, test_item2_a_trace_from_an_older_task_version_is_named_under_the_newer_goal
+
+### T064: the records; the host lane
+**Started:** 2026-10-15T01:35:45Z | **Completed:** 2026-10-15T01:56:51Z
+
+INHERITED: T062, T063 — (confidence: high)
+ASSUMED: D11 is cited as the mentor's feedback file states it, observed by the operator on live run 2 (confidence: high)
+FLAGGED: the first host lane (01:34:59Z–01:43:50Z) failed rc 1: two relay units were flaky, because Addendum 2 counted a turn or an unanswered request after the answer had gone back, and test_validate_bench.py's fixture built the old notes shape (33 errors). Fixed in this commit: the relay settles each tool-offering request under the lock as soon as its status is known, before answering; the fixture builds the new shape. Chose to fix the race here rather than defer it, since it was this cycle's own code and its fix is local (confidence: high)
+ABSENT: no README change: its bench passage names no goal and quotes no note
+SCOPE: in (relay.py is 002's own file; T060's change, corrected)
+Verification: the relay's affected units passed 30 times running; host lane rc 0 (pytest 2505 passed, 12 skipped; 60/60, 57/57, 33/33), 2026-10-15T01:47:40Z–01:56:30Z; ruff, mypy --strict clean; readme reference current

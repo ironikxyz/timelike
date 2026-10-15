@@ -180,7 +180,14 @@ builds neither test, but it records how each run ended, which keeps P1's test an
     that way (a failing check states its reason)
   - for a loss, why it is a loss
 
-  An interpretation written with a task is printed only when the run ended the way it describes.
+  ~~An interpretation written with a task is printed only when the run ended the way it describes.~~ Under "What
+  happened", only what the trace shows is printed (P6). An interpretation written with a task describes the fake
+  agent's scripted path, so it is printed only for a **fake-agent** trace that ended the way it describes **through
+  exactly the commands it names**. It is never printed for a live or stand-in run, whose path nobody wrote in advance.
+  *(Cycle 4 addendum 3, live run 2, item 1: `bridge/feedback/02-20261014-165148-live-run-2-d11-shown-why-lines-and-git-inspect-goal.md`. Two live notes described what had not happened.)*
+- **A task's goal states everything its check requires** *(Cycle 4 addendum 3, live run 2, item 2)*: every file it
+  reads, every state it tests. A changed goal is a changed task, so its `task_version` is bumped. When a report shows
+  traces measured at another version than the catalog's, the task block says so.
 - **The verdict order** *(Added revision 8; copied from prompt 02's constraints by modify Cycle 2, send
   `…-095251`.)* "A task's verdict compares, in order: ending, turns, hangs, failed commands. Each call is
   counted once per row (a hung call is one failed command and one hang, and hangs are compared first).

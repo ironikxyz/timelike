@@ -357,7 +357,10 @@ def test_a_partly_stopped_task_is_placed_by_the_comparison_that_was_made() -> No
 
 def test_a_task_block_explains_itself_across_three_arms() -> None:
     text = r.TaskText(
-        "Commit it.", "Hooks off (the cost)", "Timelike skips hooks.", {"timelike:completed": "fine"}
+        "Commit it.",
+        "Hooks off (the cost)",
+        "Timelike skips hooks.",
+        {"timelike:completed": ("fine", ("step 1",))},
     )
     block = section(render(three("a-task"), tasks={"a-task": text}), "Ties")
     assert block[0] == "### a-task — Commit it."
@@ -446,3 +449,56 @@ def test_the_report_goes_through_the_key_gate(tmp_path: Path) -> None:
 
 def test_fake_agent_name_matches_the_fake_agent() -> None:
     assert r.FAKE_AGENT_NAME == fakeagent.FAKE_AGENT_NAME
+
+
+# --- live run 2, item 1: under "What happened", only what the trace shows ----------------------------
+
+REJECT_NOTE = "The hook rejected the first commit; the agent removed the TODO line and committed again"
+REJECT_PATH = (
+    "git commit -m 'bench: update f'",
+    "sed -i '/TODO/d' f",
+    "git add f",
+    "git commit -m 'bench: update f'",
+)
+REJECT_TEXT = r.TaskText("Commit it.", notes={"vanilla:completed": (REJECT_NOTE, REJECT_PATH)})
+
+
+def _why_lines(trace: t.Trace) -> list[str]:
+    lines = render([trace], tasks={"a-task": REJECT_TEXT})
+    return [x for x in lines if x.startswith("  Why:")]
+
+
+@pytest.mark.parametrize("harness", ["opencode", "codex"])
+def test_a_live_trace_whose_calls_contradict_a_note_never_prints_it(harness: str) -> None:
+    # Live run 2, codex · git-commit-hook-rejects · vanilla: the TODO line removed before the only commit,
+    # which nothing rejected. The note's story did not happen, so it is not printed as what happened.
+    live = run("a-task", "vanilla", harness=harness, exits=(0, 0, 0),
+               commands=("sed -i '/TODO/d' f", "git add f", "git commit -m 'bench: update f'"))  # fmt: skip
+    assert _why_lines(live) == []
+    assert all(REJECT_NOTE not in x for x in render([live], tasks={"a-task": REJECT_TEXT}))
+
+
+def test_a_live_trace_is_never_given_a_note_even_on_the_scripted_path() -> None:
+    live = run("a-task", "vanilla", harness="codex", exits=(1, 0, 0, 0), commands=REJECT_PATH)
+    assert _why_lines(live) == []
+
+
+def test_a_fake_trace_gets_its_note_only_on_the_path_the_note_describes() -> None:
+    scripted = run("a-task", "vanilla", exits=(1, 0, 0, 0), commands=REJECT_PATH)
+    assert _why_lines(scripted) == [f"  Why: {REJECT_NOTE}."]
+    other = run("a-task", "vanilla", exits=(0,), commands=("git commit -m 'bench: update f'",))
+    assert _why_lines(other) == []
+    failed = run("a-task", "vanilla", exits=(1, 0, 0, 0), commands=REJECT_PATH, kind="failed", reason="no")
+    assert _why_lines(failed) == []  # keyed by ending, as before
+
+
+def test_item2_a_trace_from_an_older_task_version_is_named_under_the_newer_goal() -> None:
+    # A changed goal is a changed task (live run 2, item 2): re-reported from disk, an older run's traces are
+    # shown under today's goal, and the block says that the runs were measured at another version.
+    text = r.TaskText("Write it to out/log.txt.", version=3)
+    old = render(three("a-task"), tasks={"a-task": text})  # run() records task_version 1
+    assert any(
+        x.startswith("Task version: measured at v1; the goal and notes shown here are v3's") for x in old
+    )
+    current = r.TaskText("Write it to out/log.txt.", version=1)
+    assert not any(x.startswith("Task version:") for x in render(three("a-task"), tasks={"a-task": current}))

@@ -20,9 +20,12 @@ then failed commands, each call counted once per row. Wall-clock and tool calls 
 The sentence quotes only counts in the table. A task is listed under the worse of its two verdicts (FR-49).
 
 Every task block explains itself (send …-080659, F002): what it tests and what differs between the images,
-the verdicts in words, the metrics, then what happened in each arm call by call. A note written with a task is
-printed only when that arm ended the way it describes. Token and spend figures appear only under the appendix
-heading. The catalog is not imported: the report depends on the trace schema alone. Stdlib only (H5).
+the verdicts in words, the metrics, then what happened in each arm call by call. Under "What happened"
+only what the trace shows is printed (P6). A note written with a task describes the fake agent's scripted
+path, so it is printed only for a fake-agent trace that ended the way it describes through exactly the
+commands it names, and never for a live or stand-in run, whose path nobody wrote in advance (Cycle 4
+addendum 3, live run 2, item 1). Token and spend figures appear only under the appendix heading. The
+catalog is not imported: the report depends on the trace schema alone. Stdlib only (H5).
 """
 
 from __future__ import annotations
@@ -74,14 +77,24 @@ Verdict = Literal["loses", "tie", "wins", "incomplete", "not-compared"]
 class TaskText:
     """What the report says about a task beyond its traces: the catalog's words, passed in by the caller.
 
-    `notes` maps "<environment>:<ending kind>" to an interpretation; it is printed under an arm of that
-    environment only when the arm ended that way.
+    `notes` maps "<environment>:<ending kind>" to an interpretation of the fake agent's scripted path and that
+    path's commands. It is printed under an arm of that environment only when the trace is the fake agent's,
+    ended that way, and ran exactly those commands (`note_for`).
     """
 
     goal: str
     capability: str = ""
     difference: str = ""
-    notes: Mapping[str, str] = field(default_factory=dict)
+    notes: Mapping[str, tuple[str, tuple[str, ...]]] = field(default_factory=dict)
+    version: int = 0  # the catalog's task version these words belong to; 0: not given
+
+
+def note_for(trace: Trace, text: TaskText) -> str:
+    """The task's note for this arm, or "" — never for a live run, whose path nobody wrote in advance."""
+    if trace.identity.harness_name != FAKE_AGENT_NAME:
+        return ""
+    note, path = text.notes.get(f"{trace.identity.environment}:{trace.ending.kind}", ("", ()))
+    return note if note and tuple(c.command for c in trace.calls) == path else ""
 
 
 _NO_TEXT = TaskText(goal="(no goal given)")
@@ -391,7 +404,7 @@ def _arm(arm: str, trace: Trace | None, text: TaskText) -> list[str]:
         lines.append(f"  Ended: stopped ({trace.ending.cause}) — {trace.ending.reason}.")
     else:
         lines.append(f"  Ended: {trace.ending.kind} — {trace.ending.reason}.")
-    note = text.notes.get(f"{trace.identity.environment}:{trace.ending.kind}")
+    note = note_for(trace, text)
     if note:
         lines.append(f"  Why: {note}.")
     return lines
@@ -405,6 +418,14 @@ def _task_block(task_id: str, text: TaskText, cells: Cells) -> list[str]:
     elif not timelike_arms:
         heading += " (incomplete: no timelike trace)"
     lines = [heading]
+    measured = sorted({t.identity.task_version for t in cells.values()})
+    if text.version and measured and measured != [text.version]:
+        # A changed goal is a changed task (live run 2, item 2): these words may not be what the runs had.
+        at = ", ".join(f"v{v}" for v in measured)
+        lines.append(
+            f"Task version: measured at {at}; the goal and notes shown here are v{text.version}'s, "
+            "so they may not be what these runs were given."
+        )
     if text.capability or text.difference:
         tests = ". ".join(x.rstrip(".") for x in (text.capability, text.difference) if x)
         lines.append(f"Tests: {tests}.")
