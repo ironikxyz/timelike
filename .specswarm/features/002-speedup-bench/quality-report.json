@@ -1,8 +1,14 @@
 {
-  "overall_score": 90,
-  "overall_state": "scored",
-  "set": "average of 8 module(s) scored, 0 unscored",
-  "modules_scored": 8,
-  "generated_at": "2026-09-29T09:23:46+00:00",
-  "generated_by": "/specswarm:analyze-quality"
+  "overall_score": null,
+  "overall_state": "unknown",
+  "unknown_is": "unresolvable",
+  "unknown_why": "no component of this Python project could be measured: pytest is declared but could not be run on this machine",
+  "set": "no module could be scored (8 unscored)",
+  "modules_scored": 0,
+  "modules_total": 8,
+  "coverage_pct": null,
+  "coverage_state": "unknown",
+  "generated_at": "2026-10-15T06:12:51+00:00",
+  "generated_by": "/specswarm:analyze-quality",
+  "generated_by_version": "4.0.1-botbaubble.2.44.0"
 }

@@ -1528,3 +1528,98 @@ git-inspect (6 of 6). Whether a live block without `Why:` lines reads well enoug
 
 **Sign-off:** the operator's instruction in the code session to ship `modify/002-slice-1` (2026-10-15). At the time of
 writing, `bridge/history.md` carries no sign-off row; the merge is of the commit that adds this section.
+
+### Cycle 4 ship — `/specswarm:ship` under specswarm 2.44.0, 2026-10-15
+
+Run on `modify/002-slice-1` at **`bf04c67`**, with a clean tree, at the operator's instruction to ship. `c09f94a..bf04c67`
+changes only this file (Addendum 4), so the code shipped is the code lane 02s1-d and live run 3 ran on.
+
+**How it ran: the 005 and 006 recipe.**
+- analyze-quality's blocks (`analysis-context`, `component-applicability`, `tests-agnostic-score`,
+  `unknown-resolvability`, `module-score`, `overall-score`, `quality-report`), extracted from the installed
+  `…/specswarm/4.0.1-botbaubble.2.44.0/commands/analyze-quality.md`, with `MODULES` set to 001's eight.
+- Then ship's `quality-source` with `FEATURE_DIR` **unset**, `quality-threshold`, the threshold echo lines and
+  `quality-gate`. `CLAUDE_PLUGIN_ROOT` was the 2.44.0 cache path.
+- **Step 4 (`/specswarm:complete`) was not run**; it needs stdin. The merge is `--no-ff` by hand, of this section's
+  commit, so Step 5's summary did not run either.
+
+A first run wrote `quality-report.json` with the `unknown_why` line unindented. The cause was my block extractor,
+which dedented a string-literal line, not the plugin. It was fixed and the blocks run again; the run below is the
+second.
+
+The output is verbatim, except for lines of mine marked `==`, the `KEY=value` and module lines (the script's echoes of
+the blocks' variables, as at 001's ship), and the checkout's absolute path, written `<repo>/` (P2).
+
+```
+== analyze-quality (2.44.0 blocks) ==
+🔤 Language: Python
+AQ_TESTS_LINE=tests|25|?|measured:pytest
+AQ_TESTS_SCORE=unavailable:pytest is declared but could not be run on this machine
+tools/agentio|unknown
+tools/bin|unknown
+scan|unknown
+image|unknown
+scripts|unknown
+bench/benchlib|unknown
+bench/bin|unknown
+bench/images+run.sh|unknown
+Overall Quality: unknown (no module could be scored (8 unscored))
+📄 Wrote <repo>/.specswarm/features/002-speedup-bench/quality-report.json (overall_state: unknown, coverage_state: unknown, written by 4.0.1-botbaubble.2.44.0)
+== ship (2.44.0 blocks) ==
+📍 Current branch: modify/002-slice-1 @ bf04c67
+NOTE: <repo>/.specswarm/features/002-speedup-bench/quality-report.json reports overall_state='unknown' - the score is not a measurement
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/002-speedup-bench/quality-report.json says overall_state='unknown'
+   (no module could be scored (8 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+== QUALITY_STATE=unknown ==
+```
+
+`quality-report.json` as written (`.specswarm/features/002-speedup-bench/quality-report.json`, committed with this
+section; it replaces the 2026-09-29 report, whose 90% was judgment-filled under 2.15.0, as § Cycle 1's correction
+note says):
+
+```
+{
+  "overall_score": null,
+  "overall_state": "unknown",
+  "unknown_is": "unresolvable",
+  "unknown_why": "no component of this Python project could be measured: pytest is declared but could not be run on this machine",
+  "set": "no module could be scored (8 unscored)",
+  "modules_scored": 0,
+  "modules_total": 8,
+  "coverage_pct": null,
+  "coverage_state": "unknown",
+  "generated_at": "2026-10-15T06:12:51+00:00",
+  "generated_by": "/specswarm:analyze-quality",
+  "generated_by_version": "4.0.1-botbaubble.2.44.0"
+}
+```
+
+**Field results:**
+- **D77 held:** `quality-source` resolved the report from the `modify/` branch, with no hand-set `FEATURE_DIR`.
+- **D85 and D72 held:** the gate said *the analysis reported no number*, named the report's state and set, printed
+  its `unknown_why`, and said re-running will not change the result.
+- **D120:** `coverage_pct: null`, `coverage_state: unknown`. The gate's `partial` state is reached only from a pass,
+  so it did not apply.
+- **The gate is UNKNOWN and warns** (`min_quality_score: 0`, `enforce_gates: false`). No number was produced, and none
+  was filled in by hand. The project's evidence is its own lanes: lane 02s1-d, live run 3, and the host lane.
+
+**Merged by hand, not pushed.** Next: a push to `public/main` and a status tag, on the mentor's discharge and the
+operator's OK, after the deny-list and identity checks (CLAUDE.md rule 5).
