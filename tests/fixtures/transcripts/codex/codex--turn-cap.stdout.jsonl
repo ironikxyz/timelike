@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a13434-f349-76d3-97d4-51ea7c3f63be"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `deepseek/deepseek-v4-pro-0813` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'echo one'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'echo one'","aggregated_output":"one\n","exit_code":0,"status":"completed"}}
+{"type":"error","message":"{\"error\": {\"message\": \"timelike-bench: turn-cap reached (1 turns per run)\", \"code\": 400}}"}
+{"type":"turn.failed","error":{"message":"{\"error\": {\"message\": \"timelike-bench: turn-cap reached (1 turns per run)\", \"code\": 400}}"}}

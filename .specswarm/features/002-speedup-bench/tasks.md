@@ -314,3 +314,151 @@ runs).
   recorded it, the block's inputs and outputs, and the version that ran. Then `reboot.md`.
 
 **Parallel:** none. T033 cites T032's output.
+
+## Phase 11: Cycle 4 — 02 slice 1 (send `bridge/sends/02-rev8-20261013-064725.md`, via `/specswarm:modify`)
+
+<!-- Tech Stack Validation (cycle 4): PASSED. plan.md § Tech Stack Compliance Report (Cycle 4): two auto-added
+harnesses (OpenCode, Codex CLI; tech-stack 1.7.0), no conflict, no prohibition. -->
+
+Spec § Slice 1 (FR-17 to FR-50), SC-4 to SC-8. Tests are requested (one per criterion, named after its text; units
+first). FOR-MENTOR Item 25 is raised and **not built** (the relay holding the key). Everything below follows the
+send's route.
+
+### Phase 11a: Foundational (pure modules, host lane)
+
+- [X] T034 [US6] Revision 8's verdict order in `bench/benchlib/report.py` (`verdict`, `_verdict_line`, the table's row
+  order): ending, turns, hangs, failed commands; the sentence quotes table counts only. Units in
+  `tests/unit/test_bench_report.py` with rows that differ in exactly one column at a time, and one where the summed
+  tiebreak and the new order disagree. Annotate decisions T016 (already done in Cycle 2; add the Cycle 4 line).
+  `data-model.md` step 3 was corrected at plan.
+- [X] T035 [P] [US7] `bench/benchlib/categories.py`: `categorize(exit_code, hung, output, oom_rose)` → one category or
+  `""` (FR-40), with the patterns of research RB16; `CATEGORIES`, `describe()` for `timelike-bench categories`. Units
+  in `tests/unit/test_bench_categories.py`, on real outputs captured from the host where possible (bash 127, python's
+  traceback, node's error, git's DNS failure), and on 003's, 007's and 013's own texts read from their files.
+- [X] T036 [P] [US4] `bench/benchlib/adoption.py`: `command_words`, `timelike_tools_in`, `through_timelike` (FR-19).
+  Units in `tests/unit/test_bench_adoption.py` (wrappers, assignments, pipelines, quoting, `echo run` not counted,
+  `rm -r`/`rm -rf`/`rm -fr`, `git -C x reset --hard`, `git push -f`).
+- [X] T037 [P] `bench/benchlib/keyfile.py`: `read_key(path)` (FR-29) and `Gate` (FR-31: `check(text, name)`,
+  `write_text(path, text)`, atomic). Units in `tests/unit/test_bench_keyfile.py`: mode 0644 and 0640 refused, a
+  symlink refused, another owner refused (simulated with `os.stat` injected), empty or multi-line refused, a match
+  refused naming the file and not the value, nothing written on refusal.
+- [X] T038 `bench/benchlib/trace.py` schema 2 (contracts/trace-schema.md): list and float fields; arm, placement and
+  category rules; derived totals; `stopped` and `cause`; `spend`; schema 1 refused with its message; `write_trace`
+  through the gate. Update `tests/unit/test_bench_trace.py`, `test_validate_bench.py` and
+  `tests/e2e/fixtures/validate_bench.py` (the independent validator, its own code) to schema 2.
+
+### Phase 11b: The live path's parts (host lane, loopback only)
+
+- [X] T039 [P] [US5] `bench/benchlib/standin.py`: the model stand-in (FR-47; chat completions and Responses, streamed
+  and not, `usage.cost`, scripted per task from the fake policy's happy path, and a categories script). Units start it
+  on loopback.
+- [X] T040 [US5] `bench/benchlib/relay.py` (FR-26): forwarding, streaming, accounting, caps, never a header in any
+  record. Units: relay → stand-in on loopback (turns count only tool-offering requests; the turn cap and the spend cap
+  answer 400 naming the cap; 429 and 500 recorded; `last_asked_tools`; a header value is never in the accounting).
+- [X] T041 [US5] Record transcripts with the pinned harnesses against `standin.py` (host, scratchpad, no key, no
+  network but loopback), for: a passing task, the categories script, an empty run. Store them in
+  `tests/fixtures/transcripts/{opencode,codex}/` with a `README.md` saying how they were made (versions, sha512,
+  date). Deny-list them.
+- [X] T042 [US5] `bench/benchlib/transcripts.py`: `parse_opencode(stdout)`, `parse_codex(rollout, stdout)` (FR-44),
+  each raising `TranscriptUnreadable(what)` rather than returning zero calls. Units in
+  `tests/unit/test_bench_transcripts.py` on T041's recordings, and on truncated or foreign input.
+- [X] T043 [P] `bench/benchlib/plan.py`: the plan text and the estimate (FR-34, RB18), and the model-id rule (FR-27).
+  Units.
+
+### Phase 11c: Runs, the CLI, the image
+
+- [X] T044 [US4] [US5] `bench/benchlib/harness.py` and `runner.py`: arms, the told placement (FR-18), the fake path
+  with categories and adoption, the live path (version check, exec with the key in the docker CLI's env only,
+  transcripts, parse, check, ending per data-model § Live run result). `docker.py`: start options (network,
+  `--volumes-from`, memory), network and harness-container lifecycle, `oom_kills`. Units through the fake docker.
+- [X] T045 [US5] [US7] `bench/bin/timelike-bench`: `--harness`, `--arm`, `--dry-run`, `--standin`, caps, the key-file
+  rule, `categories [--probe]`, the report per harness. `tests/unit/test_bench_cli.py` (conform, the plan, the
+  refusals, a full fake run in three arms, a stand-in run through the fake docker).
+- [X] T046 [US4] [US5] [US6] [US7] `report.py` render for schema 2 (contracts/bench-cli.md § Slice 1): harness
+  sections, adoption, categories, three arms, two verdicts, `stopped` section, appendix with spend.
+- [X] T047 [US5] `bench/harness/Dockerfile`, `pins.env` (harness versions and integrity, model price), `Makefile`
+  (`bench-images` builds it; `bench-live`; `scan` covers it), `bench/run.sh` (the key file, the pass-through
+  variables, the new flags). `tests/unit/test_bench_run_sh.py` for the key-file refusals and the forwarded names.
+- [X] T048 [US6] The catalog: plain-word goals checked; `python-missing-module` added with its fake policy and check
+  (FR-38, FR-39). `tests/unit/test_bench_catalog.py`.
+
+### Phase 11d: The Docker lane (e2e; the operator runs it)
+
+- [X] T049 `tests/e2e/speedup-bench.bats`: SC-1 and SC-2 re-established on schema 2, in three arms. SC-4 cells: each
+  trace labelled, adoption counted per arm. SC-6: the report's verdict lines against the validator's own
+  recomputation. A set `BENCH_KEY_FILE` refuses a fake run.
+- [X] T050 New e2e `tests/e2e/the-same-task-catalog-runs-under-two-harnesses-and-the-report-shows-results-per-harness.bats`
+  (SC-5): `--standin` with both harnesses on two tasks; per-harness sections; transcripts present; the key gate
+  shown to fire with a planted stand-in "key".
+- [X] T051 New e2e `tests/e2e/failed-commands-are-grouped-into-categories-including-command-not-found-module-not-found-timeout-memory-kill-and-network-denial.bats`
+  (SC-7): `categories --probe` in both images, every category produced and matched.
+
+### Phase 11e: Records
+
+- [X] T052 README (the send's block, only if the four Automated criteria are built; command reference regenerated;
+  previous marks cleared, changed passages marked). `reboot.md`. The cycle report § Cycle 4. The `audit-log.md` row
+  (row 4, record-only: revision 8's work is done this cycle, superseding Cycle 3's `carried`). Lint, host lane,
+  deny-list, commit.
+
+**Dependencies:** T034–T038 first (T038 before T044–T046). T039 → T040, T041 → T042. T044 needs T035–T043. T045
+needs T044 and T046. T047 and T048 are independent. T049–T051 need everything above. T052 last.
+**Parallel:** T035, T036, T037 and T043 touch separate files.
+
+## Phase 12: Cycle 4 addendum (lane 02s1-a; Item 25 ruled (b))
+
+Instructed through `../bridge/feedback/02-20261013-102310-lane-02s1-a-item-25-not-built-told-arm-trace-sbom-empty.md`
+(the lane's four items) and `../bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md` (the ruling).
+Same send, same cycle.
+
+- [X] T053 [US5] Item 25 (b), the relay holds the key: `relay.py` (drops every incoming credential header and adds
+  its own; `ROUTES` and the pinned model only, refusals `route-not-allowed`, `no-model`, `other-model` named, counted
+  and never forwarded; every request counted; `senders`), `harness.py` (`KEY_PLACEHOLDER` in every harness's exec
+  environment), `runner.py` (no key to the harness exec; `model-refused` ending), `executor.py` (`pass_env` removed),
+  `trace.py` (the cause), `bin/timelike-bench` (the relay is given the key and the model). A unit per condition in
+  `test_bench_relay.py`, `test_bench_live.py`, `test_bench_executor.py`, `test_bench_cli.py`; an e2e cell that no
+  harness request is refused in the containers.
+- [X] T054 The plan's estimate states its basis (the ruling's addition): `plan.py`, `BENCH_MODEL_PRICE_READ` in
+  `pins.env`, forwarded by `run.sh`; units.
+- [X] T055 Lane item 2: a told run whose setup fails records `not placed`; setup and check under `Limits.step_s`; the
+  refused trace named, not an internal error. `runner.py`, `bin/timelike-bench`, `fakedocker.py`; units.
+- [X] T056 Lane item 3: the key-file cell for "inside the repository" uses a throwaway repository.
+  `test_bench_run_sh.py`.
+- [X] T057 Lane item 4: an empty SBOM fails, naming the image; the harness image's SBOM takes its pins.
+  `scan/evaluate.py` (`pinned`), `scan/scan.sh` (`pinned_packages_of`); units, `scan.sh` over the stand-in docker.
+- [X] T058 Records: spec (FR-16, FR-25, FR-26, FR-28, FR-30, FR-31, FR-32, FR-36, edge cases), contracts, data
+  model, plan, research, quickstart, README, FOR-MENTOR Item 25 closed, the cycle report's addendum, `reboot.md`;
+  the host lane; the deny-list; commit.
+
+## Phase 13: Cycle 4 addendum 2 (live run 1)
+
+Instructed through `../bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md` (live run 1
+on `ec6f626`: 30 of 30 runs `stopped (api-unreachable)`). Same send, same cycle.
+
+- [X] T059 [US5] Item 1, the driver has no CA certificates: `bench/driver/Dockerfile` §1 installs `ca-certificates`
+  (its comment says why now) and checks the store at build time; the relay's HTTPS client is unchanged, verifying with
+  the default context. The SC-5 cell "the relay verifies an HTTPS upstream against the driver's system store, and
+  refuses one it cannot verify" (`tests/e2e/fixtures/relay_tls.py`, no network, a throwaway CA); its steps as a host
+  unit in `test_bench_relay.py`.
+- [X] T060 [US5] Item 2, failed requests counted as turns: a relay turn is a tool-offering request the upstream
+  answered (200); the rest are `unanswered`; the cap counts answered and waiting turns; `turns_counted` says the
+  relay's turns are not the trace's `totals.turns`. `relay.py`; units in `test_bench_relay.py`.
+- [X] T061 Records: spec (FR-26, edge cases), contracts, data model, the cycle report's Addendum 2, `tasks.md`,
+  `decisions.md`, `reboot.md`; the host lane; the deny-list; commit.
+
+## Phase 14: Cycle 4 addendum 3 (live run 2)
+
+Instructed through `../bridge/feedback/02-20261014-165148-live-run-2-d11-shown-why-lines-and-git-inspect-goal.md` (live
+run 2 on `96a3cac`: D11 shown, observed by the operator; two defects to fix before sign-off). Same send, same cycle.
+
+- [X] T062 [US5] Item 1, "What happened … Why:" stated what did not happen: each catalog note names the commands of the
+  fake agent's path it describes (`catalog.py`); the report prints a note only for a fake-agent trace that ended that
+  way through exactly those commands, never on a live or stand-in run (`report.py` `note_for`; `bin/timelike-bench`).
+  Units: a live trace contradicting a note never prints it; a live trace on the scripted path gets none; a fake trace
+  only on its path; each note's path is the fake agent's real path under both emulations.
+- [X] T063 [US5] Item 2, goals that state their checks: git-inspect names `out/log.txt` and `out/diff.txt` (v3);
+  the sweep tightens git-rebase-continue (v3) and python-missing-module (v2), and leaves the two hook tasks; a unit
+  maps every distinct failure reason of each check to the goal's words; the report names a task-version mismatch.
+- [X] T064 Records: spec (the report's notes; goals state their checks), the CLI contract, the data model, the cycle
+  report's Addendum 3 (D11 observed by the operator), `tasks.md`, `decisions.md`, `reboot.md`; the host lane, whose
+  first run found T060's relay race (settled before answering now) and a fixture on the old notes shape; the
+  deny-list; commit.

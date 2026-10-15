@@ -141,6 +141,7 @@ ASSUMED: with no traces, line 1 is "NO TRACES — nothing was measured"; neither
 ASSUMED: one fake-agent trace anywhere makes line 1 the fake-agent line (FR-9 "any fake-agent run") — (confidence: high)
 ASSUMED: nonzero_exits + hangs as the failure tiebreak counts a hung call twice (it is also non-zero), as data-model reads literally — (confidence: medium)
   ↳ *Superseded by discovery revision 8 (ruling (b), `bridge/feedback/02-20260930-060406-hang-counted-twice.md`): hangs are compared on their own after turns and before failed commands, each call counted once. Code change carried to 02 s1; slice 0's `report.py:119`, `:227` and `data-model.md` step 3 are unchanged. Annotated 2026-10-08 by modify Cycle 2 (T029); the line above is kept as written.*
+  ↳ *Done in 02 slice 1 (Cycle 4, T034, 2026-10-13): `report.verdict` compares ending, turns, hangs, failed commands; the sentence quotes only table counts; `data-model.md` step 3 corrected at plan. Both lines above are kept as written.*
 FLAGGED: catalog.NOT_BENCHABLE said "token-shaped", which put "token" before the appendix against FR-9; the delegate reported it rather than rewriting text in render; the coordinator changed it to "key-shaped" (FR-12's term) in catalog.py — (confidence: high)
 FLAGGED: the appendix lists one line per trace, not the contract sample's single collapsed line — chose per-trace so a mixed live/fake set can't hide a recorded count (confidence: medium)
 FLAGGED: pair() raises on two traces for one task and environment, rather than letting file order decide a verdict; slice 2's repetitions will change this — (confidence: medium)
@@ -374,3 +375,328 @@ FLAGGED: the Automated criteria cite lane 007s1-c at 3eba335, not re-run — cho
 ASSUMED: D2's mode stays "observed by the operator", as Cycle 2 recorded and the send says — (confidence: high)
 ABSENT: no demo_points_reached (the mentor derives them); no .implement-complete (not dispatch); no .specswarm/metrics.json entry (outside the feature directory, as in Cycle 2); no host or Docker lane
 SCOPE: in (1 changed files)
+
+---
+
+## Cycle 4 — 02 slice 1 (send `bridge/sends/02-rev8-20261013-064725.md`), attended, specswarm 4.0.1-botbaubble.2.44.0
+
+### T034: revision 8's verdict order in report.py (SC-6)
+**Started:** 2026-10-13T07:18:36Z | **Completed:** 2026-10-13T07:20:44Z
+
+INHERITED: (none — first task of the cycle; the order is the spec's FR-48 and data-model step 3 as corrected at plan) — (confidence: high)
+FLAGGED: the order goes into slice 0's renderer now, in its own commit, before T046 rewrites the renderer for schema 2 — chose a separate revision-8 commit over folding it into the rewrite, so the carried fix is reviewable on its own (confidence: high)
+ASSUMED: "failed commands" in the sentence and the table means non-zero exits, a hung call included (the table's label says so), so a hung call is one hang and one failed command, never two of either — (confidence: high)
+ABSENT: the arms, harness sections and `stopped` rows (T046); the contract's slice-0 sample table keeps the old row order, under its slice-0 heading, and the slice-1 section shows the new one
+Verification: tests/unit/test_bench_report.py 52 passed (rows differing in one column at a time, the pair on which the summed tiebreak and the new order disagree, the sentence quoting only table counts); ruff clean
+SCOPE: in (2 changed files)
+
+### T035: benchlib/categories.py — one category per failed call (SC-7, FR-40)
+**Started:** 2026-10-13T07:20:44Z | **Completed:** 2026-10-13T07:22:21Z
+
+INHERITED: research RB16's texts and order; the trace's exit code, hang flag and output head as the inputs — from plan (confidence: high)
+FLAGGED: Adele's denial is matched by agentio's grant-envelope verdict ("nothing performed; the operator extends it"), not a word from adele's own file — chose the text the agent actually sees (the envelope agentio prints for every grant refusal) over adele's malformed-reply message, which only appears when her answer is broken (confidence: medium: this envelope is shared with any future grant-checked tool, which would also be read as network denial)
+ASSUMED: exit 124 is a timeout even when it ran quickly — GNU timeout and 003's run both use 124 for their own limit, and a command exiting 124 by itself is rare — (confidence: medium)
+ASSUMED: a 137 without OOM evidence is "other", not "timeout": the bench's hang flag already covers its own kill, so a bare 137 is someone else's kill -9 — (confidence: high)
+ABSENT: no live-harness wording for a harness's own call timeout yet (OpenCode, Codex): added when T041's recordings show it, so the pattern is the harness's real text, not a guess
+Verification: tests/unit/test_bench_categories.py 21 passed — command not found, module not found (python3, node), timeout (GNU timeout), refused and DNS failure (bash /dev/tcp, git on .invalid), a kill -9, an ls error, all produced on this host; 003's, 007's, 013's and agentio's texts read from their files; ruff clean
+SCOPE: in (2 changed files)
+
+### T036: benchlib/adoption.py — command words, timelike tools, through timelike (SC-4, FR-19)
+**Started:** 2026-10-13T07:22:21Z | **Completed:** 2026-10-13T07:23:36Z
+
+INHERITED: FR-19's rule; the shimmed names from 013 (/opt/timelike/shims) and the guarded forms from 005 — from spec and plan (confidence: high)
+FLAGGED: a command inside a string (`bash -c 'run x'`) is not looked into — chose command words only, as the spec says, over parsing nested shells, because a nested string can be anything (a heredoc, a python -c) and a guess there would count calls nobody made; the report says counts come from command words (confidence: medium)
+ASSUMED: `git push --force-with-lease` counts as the guarded force push — 005's guard reads any --force* (confidence: medium)
+ASSUMED: `python3 -m pip` is not through timelike: it is the escape 013's announcement names, which the shim does not see — (confidence: high)
+ABSENT: no detection of a tool run through `xargs`, `find -exec` or a variable (`$TOOL x`); each would need a guess
+Verification: tests/unit/test_bench_adoption.py 37 passed; ruff clean; mypy --strict clean (33 files)
+SCOPE: in (2 changed files)
+
+### T037: benchlib/keyfile.py — the key file's rule and the write gate (FR-29, FR-31)
+**Started:** 2026-10-13T07:23:36Z | **Completed:** 2026-10-13T07:24:35Z
+
+INHERITED: FR-29's properties (regular, 0600, the bench user's, outside the repository, one line) and FR-31's gate — from spec (confidence: high)
+FLAGGED: mode must be exactly 0600 (0400 is refused too) — chose the send's literal "mode 0600" over "no group or other bits", so the rule is one a person can check by eye (confidence: medium: 0400 is as safe, and an operator who uses it is told exactly what to change)
+ASSUMED: an absolute BENCH_KEY_FILE only — a relative path would resolve against whichever process reads it (cross-stack P002), and run.sh and the driver are two processes — (confidence: high)
+ASSUMED: the gate matches the raw value only; JSON escaping cannot change an OpenRouter key (letters, digits, '-' and '_') — (confidence: medium)
+ABSENT: no check of the value's shape (sk-or-…): a key OpenRouter rejects ends its run stopped (key-rejected, FR-37), which is the provider's answer and not a guess
+Verification: tests/unit/test_bench_keyfile.py 20 passed (every refusal checked for the value); ruff clean; mypy --strict clean (34 files)
+SCOPE: in (2 changed files)
+
+### T043: benchlib/plan.py — the plan before any request, the estimate, the dated-model rule (FR-27, FR-34)
+**Started:** 2026-10-13T07:24:35Z | **Completed:** 2026-10-13T07:25:18Z
+
+INHERITED: RB18's per-turn figures (20 000 in, 1 000 out) and the base prices OpenRouter lists (.32, .96) — from research (confidence: medium: the figures are an assumption about two harnesses' prompts, stated as one in the plan)
+FLAGGED: the estimate uses the base price, not the cheaper listed UTC hours — chose the higher, so the printed figure is an upper bound on price (confidence: high)
+ASSUMED: a dated id ends in 4 or 8 digits after its last '-'; OpenRouter's own ids use both (`-0813`, the canonical `-20260813`) — (confidence: medium)
+ABSENT: no live price lookup — the plan needs neither the network nor a key (--dry-run), so the price comes from pins.env
+Verification: tests/unit/test_bench_plan.py 11 passed; ruff clean; mypy --strict clean (35 files)
+SCOPE: in (2 changed files)
+
+### T038: trace schema 2 (contracts/trace-schema.md) and the validators
+**Started:** 2026-10-13T07:25:18Z | **Completed:** 2026-10-13T07:33:06Z
+
+INHERITED: categories (T035) and the gate (T037) are used by the trace module itself: category values are checked against categories.CATEGORIES, and write_trace writes through a Gate — (confidence: high)
+FLAGGED: schema 1 is refused, not read — chose a refusal naming the revision that re-reports it over a v1 reader, because a v1 trace has no arm and no categories and a report that guessed them would present a guess as measured (confidence: medium: an operator with an old bench/out run must check out slice 0 to re-report it)
+FLAGGED: field kinds are explicit tables per object, replacing slice 0's derivation from dataclass annotations — that derivation knew str/int/bool only, and lists, a float and an int map would each have needed a special case in it (confidence: high)
+ASSUMED: models_answered may be empty (a run that ended before any answer, and every fake run) while every other identity string stays non-empty — (confidence: high)
+ASSUMED: the runner's fake path writes arm "not-told" for the timelike environment until T044 adds the told arm; nothing has been placed for it, so "not told" is the truth of those runs — (confidence: high)
+DEFERRED: the e2e validator's file naming (<task>--<harness>--<arm>.json) and its three-arm count — moved with the runner's naming in T044, so the validator never expects files the runner does not yet write
+ABSENT: the report does not yet show categories, arms or spend (T046); the runner's live path is T044
+Verification: tests/unit -k bench 550 passed (trace 135: every schema-2 rule one violation at a time, spend recorded or absent, the gate on write; the validator's new mutations: schema 1, arm vs environment, a category on a success, a stopped ending without a cause); ruff clean; mypy --strict clean (35 files)
+SCOPE: in (6 changed files)
+
+### T039: benchlib/standin.py — the model stand-in (FR-47); fakeagent.happy_path; categories.PROBES
+**Started:** 2026-10-13T07:33:06Z | **Completed:** 2026-10-13T07:35:26Z
+
+INHERITED: the protocol shapes each harness was seen to send in research RB12/RB17 (chat completions for OpenCode, Responses for Codex; OpenCode's title request offers no tools) — (confidence: high: observed, not documented)
+FLAGGED: progress through the script is read from the request (the count of tool results it carries), not kept per connection — chose stateless over a session table, because both harnesses resend the whole conversation and a retry then lands on the same step (confidence: high)
+FLAGGED: the stand-in's script is the task's happy path (fakeagent.happy_path), not a walk that branches on outcomes — OpenCode sends the model a call's output but not its exit code (RB17), so branching would work under one harness and not the other (confidence: high)
+ASSUMED: every answer reports usage.cost, as OpenRouter's always does (its usage-accounting page), defaulting to 0.0 so a stand-in run's spend is a real zero, labelled as the stand-in's — (confidence: high)
+ABSENT: no Anthropic messages route: no harness the bench runs speaks it (Claude Code is excluded, FR-21)
+ABSENT: the probe commands (categories.PROBES) are data here; they run in T045's `categories --probe` and in e2e
+Verification: tests/unit/test_bench_standin.py 8 passed (each protocol, streamed and not, over real HTTP on loopback; faults; the happy path of every catalog task); fakeagent and categories units still pass (59 with the stand-in's); ruff clean; mypy --strict clean (36 files)
+SCOPE: out — bench/benchlib/fakeagent.py (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T040: benchlib/relay.py — forwarding, streaming, accounting, caps (FR-25, FR-26, FR-33, FR-36)
+**Started:** 2026-10-13T07:35:26Z | **Completed:** 2026-10-13T07:37:47Z
+
+INHERITED: the stand-in (T039) as the upstream in every unit; OpenRouter's usage shape (always present, cost in it) from research RB15 — (confidence: high)
+FLAGGED: Authorization is forwarded unchanged and never recorded (the send's route); the alternative, the relay adding it, is FOR-MENTOR Item 25 and not built — (confidence: high)
+FLAGGED: a cap answers 400 and keeps answering 400 for the rest of the run without reaching upstream — chose a hard stop over relying on how each harness reacts to the 400, which is not yet verified against the real binaries (recorded as T041's check) (confidence: medium)
+ASSUMED: a cost that is missing, negative or not a number is named as unknown (cost_unknown) and never counted as 0 or estimated — (confidence: high)
+ASSUMED: one run at a time per relay (runs are sequential, FR-1's order); accounting for a request still in flight when a run ends stays with that run's object — (confidence: high)
+ABSENT: the generation-stats lookup is a function (generation_cost) the driver calls after a run; its live behaviour is not testable without a key (not_verified)
+ABSENT: no TLS between harness and relay: the internal network has no other member (FR-25)
+Verification: tests/unit/test_bench_relay.py 15 passed (stream and plain, chat and Responses; turns only for requests offering tools; the turn cap and the spend cap across runs; 429/500/401 passed through and counted; an unreachable upstream as 502 'unreachable'; a missing cost named; the key's header reaches upstream and appears in no accounting); ruff clean; mypy --strict clean (37 files)
+SCOPE: in (2 changed files)
+
+### T041: transcripts recorded from the pinned harnesses (tests/fixtures/transcripts/)
+**Started:** 2026-10-13T07:37:47Z | **Completed:** 2026-10-13T07:42:27Z
+
+INHERITED: the stand-in (T039) and the relay (T040) as the path the harness talked to; the harness binaries from research RB12, checked against npm's sha512 — (confidence: high)
+FLAGGED: the recordings' scratch paths were rewritten to /home/agent/task and /home/agent, and the README says so — chose a stated, single rewrite over committing the host's paths, which name the host user and would also have been checked against the deny-list (confidence: high)
+FLAGGED: two texts added to the categories from what the harnesses really printed: OpenCode's own call timeout ("shell tool terminated command after exceeding timeout") and git's "Failed to connect to … Couldn't connect to server" — chose to match the recorded text over guessing harness wording earlier (T035's ABSENT) (confidence: high)
+ASSUMED: Codex stopping at the first 429 is Codex's own behaviour, measured as it is; no retry setting is added for it (each harness runs with its defaults, so the two arms of a harness see the same retries) — (confidence: medium: live, Codex rows may stop on a 429 more often than OpenCode's; each is named)
+ABSENT: no recording against OpenRouter itself (no key on this side); the mentor's first live run is that tier (llm-apis Q001)
+ABSENT: no memory-kill recording: the host run has no memory limit; the probe produces it in the lane
+Verification: record.py ran both harnesses through four scenarios (exits: pass 0/0, failures 0/0, turn-cap 1/1, rate-limit 0/1); deny-list PASS over the 29 files (P1–P7 0/0); no host path left; categories 23 passed with the two recorded texts
+SCOPE: in (32 changed files)
+
+### T042: benchlib/transcripts.py — the OpenCode and Codex parsers (FR-44)
+**Started:** 2026-10-13T07:42:27Z | **Completed:** 2026-10-13T07:44:07Z
+
+INHERITED: T041's recordings, and research RB17's reading of each harness's output — (confidence: high: the tests run on the harnesses' own files)
+FLAGGED: Codex is read from its rollout file, not from exec --json — chose the file with model-response boundaries (token_usage_record) so a Codex turn is a model response, as OpenCode's step is; stdout is read only for the errors Codex printed (confidence: high)
+FLAGGED: a non-shell tool call (an edit, a read, Codex's update_goal) is a call in the trace, with command "[tool] …" — chose to count every tool call the harness made, as the "tool calls" row says, over counting only shell commands; adoption still counts command words only (confidence: medium)
+ASSUMED: an exit code the harness did not report is -1 (NO_EXIT), never 0, and the call is failed; OpenCode's own-timeout text marks the call hung — (confidence: high)
+ASSUMED: both harnesses merge stdout and stderr; the merged size goes in stderr_bytes beside the merged head, and stdout_bytes is 0 (Assumption 11, output_streams: merged) — applied in T044 — (confidence: medium)
+ABSENT: no parser for Claude Code (excluded, FR-21)
+Verification: tests/unit/test_bench_transcripts.py 17 passed on the recorded transcripts (pass, failures with exits and categories per call, OpenCode's own timeout, both harnesses' cap error, Codex's 429, turns from response records) and on empty, non-JSON, truncated and foreign input; ruff clean; mypy --strict clean (38 files) — after a fix: the first commit of this task went in before mypy's result was read, with 31 narrowing errors; amended before anything else was built on it
+SCOPE: in (2 changed files)
+
+### T044–T046: the runner's cells and live path, the CLI, the report for schema 2 (one integration)
+**Started:** 2026-10-13T07:44:23Z | **Completed:** 2026-10-13T08:08:30Z
+
+INHERITED: the parsers (T042), relay and stand-in (T039–T040), categories, adoption and the gate (T035–T037), trace schema 2 (T038) — (confidence: high)
+FLAGGED: T044, T045 and T046 are built and committed together — chose one integration over three commits because the told and not-told traces share an environment, so the runner's cells broke slice 0's report pairing and the CLI's call at once; three separate commits would each have left the suite red (confidence: high)
+FLAGGED: BENCH_KEY_FILE is itself key-shaped under FR-12's rule (it has a KEY part), so every live run refused itself; a live run now accepts exactly that one name, and a fake run refuses it with its own message — recorded in spec FR-32 and the CLI contract, declared (confidence: high)
+FLAGGED: the tool is declared destructive, so agentio adds --dry-run ("show the plan, change nothing") and conform's C2 holds; it starts and removes containers and, live, spends money (confidence: high)
+FLAGGED: the plan printed before any request goes to stderr — stdout carries the output contract, and a plan line there would break --json; the same lines head the final result (confidence: high)
+FLAGGED: a live run's ending follows data-model § Live run result in that order, with one deliberate exception: a passing check makes the run completed even if the harness exited non-zero or the provider's last answer was an error, because the goal was reached (confidence: medium)
+ASSUMED: Codex's own per-call limit is not known (none was observed), so its traces record the run limit as the call limit; OpenCode's is 120 s, as its transcript reported — (confidence: medium)
+ASSUMED: the relay's port is fixed (8417) inside the per-invocation network; nothing else listens there — (confidence: high)
+DEFERRED: the CLI's live path end to end (network, harness container, relay, real harness binaries) runs only in the Docker lane (T050); on the host it is driven at the runner level with the real relay and stand-in and a recorded transcript (tests/unit/test_bench_live.py)
+ABSENT: no unit for `categories --probe` on the host: the fake docker runs commands locally, where the memory probe would allocate 512 MiB for real; the probe is T051's, in the lane
+ABSENT: the e2e validator gained `verdicts` (revision 8's ranking recomputed independently) and `adoption` (recounted per arm) here rather than in T049, because its unit fixture broke with the file naming
+Verification: tests/unit -k bench 612 passed (runner 26, live 19, report 33, CLI 34 incl. conform, validator 43); ruff and format clean; mypy --strict clean (39 files)
+SCOPE: out — bench/benchlib/executor.py, tests/unit/fakedocker.py, tests/unit/test_bench_runner.py, tests/unit/test_bench_live.py (4 of 13 changed files) (task has FLAGGED: yes)
+
+### T047: the harness image, the pins, make bench-images and bench-live, the scan, run.sh
+**Started:** 2026-10-13T08:08:30Z | **Completed:** 2026-10-13T08:10:50Z
+
+INHERITED: research RB14's design (FROM scratch, VOLUME /opt/bench-harness, --volumes-from), the npm integrity values checked in T041 — (confidence: high)
+FLAGGED: each harness's native binary is run directly, not through its npm launcher script — chose no Node dependency (Codex's launcher is codex.js) over the launcher's PATH additions; Codex's bundled rg (codex-path/) is therefore not on its PATH, which affects only its own file-search tool (confidence: medium; in not_verified)
+FLAGGED: the harness image is added to make scan's list, scanned when present, with no reviewed baseline yet — chose the gate as written (an unbaselined High or Critical fails until the operator reviews one) over pre-writing a baseline nobody reviewed (confidence: high; a lane risk, named)
+ASSUMED: the image's build checks each binary's own --version against the pin, as the driver checks it again at run time (FR-23) — (confidence: high)
+ASSUMED: make bench-live builds the images first, as make bench does, so DRY_RUN=1 also builds them — (confidence: medium)
+ABSENT: the image is not built here (no Docker on this host); its build, its scan and its mount are the lane's
+Verification: tests/unit/test_bench_run_sh.py 16 passed (live flags through, bench-live in the reproduce command, configuration forwarded by name and value, a good key file mounted read-only with its value on no argv, five bad key files refused on the host with exit 4); bash -n and shellcheck clean on run.sh
+SCOPE: out — scan/scan.sh (1 of 6 changed files) (task has FLAGGED: yes)
+
+### T048: the catalog — python-missing-module (FR-38, FR-39)
+**Started:** 2026-10-13T08:10:50Z | **Completed:** 2026-10-13T08:15:40Z
+
+INHERITED: FR-39's purpose (live, it can produce module not found and network denial, which no git task can) — (confidence: high)
+FLAGGED: the module is tabulate (absent from both images and from this host), not yaml, which this host has — chose a module the host lane can also miss, so the unit sees the same failure the images give (confidence: high)
+FLAGGED: slice 0's rule "no interpreter in a task script" now binds the git tasks only, and the Python task may use python3 and pip and nothing that fetches — chose a declared, scoped rule over adding python3 to every task; both images have carried python3 and pip since 007 slice 1 (the vanilla Dockerfile's FR-30), so RB1's "both images contain it" holds (confidence: high)
+ASSUMED: the existing goals are plain words a live agent can act on; only the new task's goal is new — (confidence: medium)
+ASSUMED: in the host emulation pip gets a dead index with one retry; one retry is what makes pip print the connection error, as its default five do in a container — (confidence: high)
+ABSENT: no live verification that a model meets the missing module before trying anything else; the fake agent's path does, and the live run will show what a model does
+Verification: tests/unit/test_bench_catalog.py 33 passed (the new task's path run, install, rewrite, rerun under both emulations, its first failure categorised module not found and its second network denial); tests/unit -k bench 625 passed; ruff clean; mypy --strict clean
+SCOPE: in (2 changed files)
+
+### T049–T051: the Docker lane's tests (and two fixes they found)
+**Started:** 2026-10-13T08:15:40Z | **Completed:** 2026-10-13T08:22:02Z
+
+INHERITED: the validator's verdicts and adoption commands (T044–T046), the probe's commands (T039), the harness image (T047), the new task (T048) — (confidence: high)
+FLAGGED (a defect found and fixed): in the timelike image `bash -c` reads BASH_ENV, whose secret strip (001 SC-9) removes key-shaped variables — so the wrapper's `bash -c` would have started the live harness WITHOUT its key in the timelike arms only, while vanilla's had one. The harness is now started by dash (`sh -c`, WRAPPER_SCRIPT_SH); the agent's own commands, which the harness runs with bash, still get the strip, as in the product. Found by reading the live exec end to end; units pin the argv and that the inner shell is dash (confidence: high)
+FLAGGED (a design fix): the stand-in's script was the task's happy path, which for the Python task is its first command alone, so the live path would never have reached the install or network denial; it is now every step's command once, in policy order (fakeagent.every_command). research RB17 amended, declared (confidence: high)
+FLAGGED: an e2e test that wrote a key file under bench/out/e2e to see run.sh refuse it was removed before it ran — inside the runner the repository is /code while bench/out keeps its host path, so the file would not count as inside the repository and the run would have reached the provider from the lane; the refusals stay as host units (confidence: high)
+ASSUMED: the memory probe writes every page (b"x" * n), because bytearray(n) need not — (confidence: medium)
+ASSUMED: tests/run.sh runs every file in tests/e2e, so the two new files need no wiring; they are added to the Makefile's shellcheck list as the later features' files are — (confidence: high)
+ABSENT: none of these ran here: they are the Docker lane's (the operator's); bash -n and shellcheck are what was checked
+Verification: shellcheck 0.11.0 clean over the three bats files and run.sh; tests/unit -k 'bench or executor' 628 passed; ruff clean repo-wide; mypy --strict clean (39 files)
+SCOPE: out — bench/benchlib/executor.py, bench/benchlib/fakeagent.py, tests/unit/test_bench_executor.py, tests/unit/test_bench_standin.py, tests/unit/test_bench_live.py (5 of 14 changed files) (task has FLAGGED: yes)
+
+### T052: README, reboot.md, the cycle report, the audit-log row; the full host lane
+**Started:** 2026-10-13T08:22:03Z | **Completed:** 2026-10-13T08:43:56Z
+
+INHERITED: every task above; the send's README block and cycle-report block — (confidence: high)
+FLAGGED: the full host lane found two failures the per-task runs had not (a scan unit counting four images; `--break-system-packages` in the new task, which 007's FR-28 forbids repo-wide) — chose a plain `pip install`, so the install fails as each image makes it fail (vanilla: externally managed, `other`; timelike: the guard, `network denial`), over a venv detour that would hide that difference; FR-39 amended, declared; e2e cells adjusted (confidence: high)
+FLAGGED: the README's Status and row 02 are applied from the send's block, marked, because all four slice-1 Automated criteria are built (the send's condition) — their confirmation is the lane's (confidence: medium: built is not executed)
+ASSUMED: the audit-log row is a record-only `scoped` correction (row 4), superseding Cycle 3's `carried`; the block's own output is quoted — (confidence: high)
+ABSENT: no Docker lane, no live run, no D11 observation: the mentor's, after this report
+Verification: host lane rc 0 (pytest 2452 passed, 12 skipped; 60/60, 57/57, 33/33); ruff and format clean (120 files); mypy --strict clean (39 files); shellcheck 0.11.0 clean over the Makefile's 91 files; readme_reference drift test passing (reference unchanged)
+SCOPE: out — tests/unit/test_scan_report.py (1 of 7 changed files) (task has FLAGGED: yes)
+
+## Cycle 4 addendum — lane 02s1-a, and Item 25 ruled (b)
+
+Times: the addendum began at 2026-10-13T16:32:55Z (read from the clock when the two feedback files were read).
+Per-task start times were not taken, so each task below gives that start, and its completion as read.
+
+### T053: Item 25 (b) — the relay holds the key, seven conditions
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:01:09Z
+
+INHERITED: the ruling's seven conditions, read from the ruling file itself, not the lane's summary — (confidence: high)
+FLAGGED: the placeholder is `placeholder-the-bench-relay-adds-the-key`, words with no provider prefix — chose a phrase a reader takes for what it is over a random token, which could look like a key (condition 2) (confidence: high)
+FLAGGED: condition 4's "another host" is built as refusing a request whose target is absolute-form (`http://…`) or a `CONNECT`; the relay only ever connects to its one upstream, and the Host header is not checked, because the harnesses send the relay's own name and nothing is forwarded by it — chose that over a Host allow-list, which would refuse nothing a harness sends (confidence: medium)
+FLAGGED: condition 5, "counts toward the turn and spend caps": every request is counted by the same rules whoever sent it. A request that offers tools is a turn and every answer's cost is spend, as before; a request without tools spends within the spend cap but is not a turn. Chose not to redefine a turn, which FR-26 fixes the same for both harnesses (OpenCode's title request offers none) (confidence: medium)
+FLAGGED: the relay cannot tell a harness's request from an agent command's: same container, same address, and any token given to the harness the agent could read. So nothing is attributed, and every live trace's relay summary carries `senders` saying so — chose saying it in the data over a User-Agent guess (confidence: high)
+FLAGGED: a request for another model ends the run `stopped`, cause `model-refused`, checked right after the caps; route and no-model refusals are recorded only — the ruling names a stopped cause for the model alone (confidence: high)
+ASSUMED: the relay drops `X-Api-Key`, `Api-Key` and `Cookie` as well as `Authorization`, since condition 1's point is that no incoming credential is forwarded — (confidence: high)
+ASSUMED: generation stats stay a direct call from the driver with the key in memory (FR-35); the relay's route is there for a harness that asks — (confidence: high)
+ABSENT: no live request; whether OpenRouter honours the relay's header is the live run's
+Verification: both pinned harness binaries, run on this host through the new relay against the stand-in with the dead-proxy recording setup (`tests/fixtures/transcripts/record.py`), all four scenarios each: `refused` empty, and the request, turn and status counts equal to the recordings'; units: test_bench_relay.py 33, test_bench_live.py and test_bench_executor.py 41 passed
+SCOPE: in
+
+### T054: the plan's basis (the ruling's addition)
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:01:09Z
+
+INHERITED: RB18's figures and the prices in pins.env, whose comment already said they were read on 2026-10-13 — (confidence: high)
+FLAGGED: the date becomes a pin, `BENCH_MODEL_PRICE_READ`, forwarded by run.sh like the prices — chose data the plan can print over a comment it cannot (confidence: high)
+ABSENT: the prices were not re-read; the date is when they were read
+Verification: test_bench_plan.py and test_bench_run_sh.py 28 passed
+SCOPE: in
+
+### T055: lane item 2 — the told arm's setup failure, the step limit, the refusal's wording
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:01:09Z
+
+INHERITED: the lane's log: five CLI units, one error, `identity.placement: non-empty exactly when the arm is told`, with vanilla's and not-told's traces written — (confidence: high)
+FLAGGED: the cause is run_task's setup-failure path, which built the told trace with no placement. It is reachable only when setup fails, so in the runner container the timelike setup failed: under the unit's `--call-limit 2`, setup ran under the agent's call limit, and the timelike setup runs every git hook through the dispatcher (0.31 s on this host, against vanilla's 0.06 s). That is inferred, not observed: the runner's traceback file is gone. The new CLI unit reproduces the lane's exact error on the old runner and passes on the new (confidence: medium)
+FLAGGED: the invariant is kept, and the trace is made true: the placement comes after setup, so a failed setup records `not placed`, as the live path already did (confidence: high)
+FLAGGED: setup and check are the bench's own steps, not the agent's calls, so they run under `Limits.step_s` (120 s), not the call limit; the agent's calls keep the call limit, and the trace's `call_limit_s` is unchanged (confidence: high)
+ASSUMED: a trace that breaks the schema is a bench defect, so the CLI says what was refused and that it is not a result, with the trace file named — (confidence: high)
+ABSENT: not run in the runner container here; the lane's repeat is the test
+Verification: test_bench_runner.py and test_bench_cli.py 66 passed, among them the two new CLI cells (a failing setup, a slow one under --call-limit 1)
+SCOPE: in
+
+### T056: lane item 3 — the key-file cell writes no file into the checkout
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:01:09Z
+
+INHERITED: run.sh takes the repository from its own location — (confidence: high)
+FLAGGED: the cell runs a copy of run.sh inside a throwaway repository in its temp directory, with the key file there — chose that over a test-only override of the repository path in run.sh (confidence: high)
+ABSENT: the file still holds `x`, never a key-shaped value
+Verification: test_bench_run_sh.py 16 passed; no file under bench/out after the run
+SCOPE: in
+
+### T057: lane item 4 — an empty SBOM fails; the harness image's SBOM from its pins
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:01:09Z
+
+INHERITED: the lane's scan line: 0 packages catalogued, Grype 0 matches — (confidence: high)
+FLAGGED: the scan builds the harness SBOM's two entries from the pins, named by the packages their advisories are filed under (`opencode-ai@OPENCODE_VERSION`, `@openai/codex@CODEX_VERSION`), not the platform packages the image holds (`opencode-linux-x64`, `@openai/codex@…-linux-x64`). Read from the npm registry: each umbrella lists its platform build at the same version among its optionalDependencies; and Codex's platform version (`0.162.1-linux-x64`) would compare as a pre-release of 0.162.1 (confidence: medium)
+FLAGGED: chose the pins over keeping each package.json in the image, because Syft would then catalogue the platform packages, which carry no advisories, and Grype's 0 would again say nothing (confidence: medium)
+FLAGGED: an empty SBOM fails for every image the scan knows, since all five hold software — chose no per-image exemption (confidence: high)
+ASSUMED: Grype reads the added entries (syft JSON artifacts with type npm, language javascript and a purl) as it reads Syft's own — (confidence: medium; the lane decides)
+ABSENT: no baseline entry was written; an unfixable High or Critical goes to the operator first
+Verification: test_scan_report.py 56 passed (an empty SBOM fails naming the image; `pinned` adds once with the right purls; scan.sh over the stand-in docker gives the harness its two packages before Grype runs, and fails an image whose SBOM is empty); shellcheck clean on scan.sh
+SCOPE: in
+
+### T058: the records; the host lane
+**Started:** 2026-10-13T16:32:55Z | **Completed:** 2026-10-13T17:11:10Z
+
+INHERITED: every task above — (confidence: high)
+FLAGGED: the README's bench passage, already marked in this cycle's T052, is amended inside its mark; the cycle's other marks are kept, because this addendum is part of the same update, not a new one (confidence: medium)
+ABSENT: no Docker lane and no live run; lane 02s1-b and the mentor's live run, after this report
+SCOPE: in
+Verification: host lane rc 0 (pytest 2489 passed, 12 skipped; 60/60, 57/57, 33/33); ruff, mypy --strict, shellcheck (91 files) clean; deny-list PASS
+
+### T059: live run 1, item 1 — the driver's CA store, and a cell that would have caught it
+**Started:** 2026-10-14T03:28:29Z | **Completed:** 2026-10-14T03:36:37Z
+
+INHERITED: the relay as T053 left it; its HTTPS client is http.client's HTTPSConnection with no context, so the interpreter's default context — from T039 (confidence: high)
+ASSUMED: Debian trixie's ca-certificates depends on openssl, as Ubuntu 24.04's does here (apt-cache depends), so the image gains the openssl CLI the cell uses to make its CA; the build-time check fails loudly on the store, and the cell fails loudly if openssl is absent (confidence: medium)
+FLAGGED: the cell — chose the stronger of the two the mentor offered: the relay's own client against the stand-in over TLS, with a throwaway CA, refused while the CA is not trusted and forwarded once update-ca-certificates adds it, all with --network none; over the minimum alone (cert_store_stats()['x509_ca'] > 0) because that minimum cannot pass here: the pinned interpreter's default context has no cafile on Debian (it looks for /etc/ssl/cert.pem) and reads /etc/ssl/certs lazily, so its count is 0 with the store installed (measured on this host: 147 hashed entries, x509_ca 0). The cell's 'store' step counts the bundle instead, loaded on its own (confidence: high)
+FLAGGED: the CA and keys are made at test time and never kept, so no key material is in the tree; the PEM labels in the fixture were checked against the deny-list first (pass) (confidence: high)
+ABSENT: no SSL_CERT_FILE in the image's environment and no context given to the relay: the system store is what a live run uses, and the cell refuses to run with either variable set
+ABSENT: the image was not built here (no Docker); lane 02s1-c builds it, and make scan reports what ca-certificates and openssl bring
+SCOPE: in
+Verification: host probes of relay_tls.py — store (147 hashed entries; 146 CAs in the bundle), make, check refused (502, CERTIFICATE_VERIFY_FAILED, nothing forwarded), check verified with the CA trusted through SSL_CERT_FILE, and again through a rehashed SSL_CERT_DIR with no cafile (the image's arrangement); test_live_run_1_item1_the_relay_s_https_client_verifies_its_peer passes
+
+### T060: live run 1, item 2 — what a relay turn is
+**Started:** 2026-10-14T03:28:29Z | **Completed:** 2026-10-14T03:36:37Z
+
+INHERITED: FR-26's turn (a request offering tools) and FR-33's cap — from T039, T053 (confidence: high)
+FLAGGED: the answer — an unanswered request does not count toward the turn cap. A turn is a model turn, and a request the upstream never answered, or answered with an error, produced none; counting it let a harness's retries of an unreachable provider spend the cap (live run 1: 30 retries, 30 'turns', 0 answers). Chose answered (HTTP 200) over 'any answer', since a 429 or 5xx is no turn either. The cap now counts answered turns plus those still waiting, so concurrent requests cannot pass it; the refusal still comes on the next tool-offering request once the cap is reached (confidence: high)
+FLAGGED: the two figures are labelled, not made equal: the relay's turns (answered tool-offering requests, including the final answer) and the trace's totals.turns (the harness's own last turn that issued a tool call, spec § Assumptions (slice 1), item 10) measure different things, and a run normally has one more of the first. The summary carries unanswered and a fixed sentence, turns_counted, saying so (confidence: high)
+ASSUMED: live run 1's stopped_by was right under the old rule too: the cap refused only a turn beyond 30, and the run made exactly 30 (confidence: high)
+ABSENT: the recorded transcripts' meta.json relay counts (tests/fixtures/transcripts) are left as recorded under the old rule; nothing reads them, and re-recording is not this addendum's work
+ABSENT: a flaky provider's retries are now bounded by the run limit and the harness's own retry policy, not the turn cap; that is the intent, and it is said in the edge cases
+SCOPE: in
+Verification: test_bench_relay.py 36 passed (new: unanswered requests are not turns and do not reach the cap; answered turns reach it after errors; error statuses counted as unanswered; c5's count now 2)
+
+### T061: the records; the host lane
+**Started:** 2026-10-14T03:36:37Z | **Completed:** 2026-10-14T03:45:57Z
+Verification: host lane rc 0 (pytest 2492 passed, 12 skipped; 60/60, 57/57, 33/33), 2026-10-14T03:36:43Z–03:45:42Z; ruff, mypy --strict, shellcheck (91 files) clean; readme reference current
+
+INHERITED: T059, T060 — (confidence: high)
+ABSENT: no FOR-MENTOR item: the items were raised by the mentor in its feedback file, which is answered there by the mentor; the answers are in the cycle report's Addendum 2
+ABSENT: the Codex model-metadata note is recorded under not_verified, as asked; nothing built for it
+SCOPE: in
+
+### T062: live run 2, item 1 — a note is printed only on the path it describes
+**Started:** 2026-10-15T01:28:41Z | **Completed:** 2026-10-15T01:35:45Z
+
+INHERITED: the report's per-arm "What happened" and the catalog's notes keyed by environment and ending — from the send …-080659 cycle (F002) (confidence: high)
+FLAGGED: on live (and stand-in) runs the notes are dropped, not moved under a label such as "The task expects:". Chose dropping because each task block already prints its design on the "Tests:" line (capability and difference), and a second design line under each arm would sit beside the calls and still read as commentary on them (confidence: high)
+FLAGGED: on fake runs a note is printed only when the trace's commands equal, in order, the commands the note names, which the catalog now carries with each note. That check is cheap, and exact: the fake agent's commands are fixed strings. A unit runs each task under both emulations and asserts the fake agent's real path equals each note's commands, so a policy edit that moves the path fails the unit (confidence: high)
+ASSUMED: harness_name equal to the fake agent's name is what marks a fake trace; the report already tells fake runs by it for its first line (confidence: high)
+ABSENT: no change to the "Tests:" line or the verdict; nothing else under "What happened" is written ahead of the run
+SCOPE: in
+Verification: test_bench_report.py and test_bench_catalog.py pass (new: a live trace contradicting a note, both harnesses; a live trace on the scripted path; a fake trace on and off its path; each note's path under both emulations)
+
+### T063: live run 2, item 2 — every goal states what its check requires
+**Started:** 2026-10-15T01:28:41Z | **Completed:** 2026-10-15T01:35:45Z
+
+INHERITED: the five tasks and their checks as T048 and slice 0 left them (confidence: high)
+FLAGGED: the sweep, per task (each check's distinct failure reasons against the goal):
+- git-inspect — out/log.txt and out/diff.txt non-empty; the goal named neither file. Fixed: "Write the last five log entries to out/log.txt and the unstaged diff to out/diff.txt." v2 → v3
+- git-rebase-continue — no rebase in progress, side checked out, main an ancestor of side, f exactly 'main' then 'side', nothing uncommitted; the goal stated the rebase and f's order only. Fixed: "Rebase side onto main and finish the rebase, resolving the conflict in f as the two lines 'main' then 'side'; leave side checked out with nothing uncommitted." v2 → v3
+- git-commit-hook-hangs — the subject, HEAD:f carrying the change, nothing staged; all stated by "Commit the staged change to f with the message …". Unchanged, v2
+- git-commit-hook-rejects — the subject, the feature line kept, no TODO line; the last is stated by reference ("within the repository's policy"), and the policy is the repository's own pre-commit hook, which the agent can read and which rejects the commit itself. Unchanged, v2: naming the hook or the TODO rule in the goal would tell the agent what the hook says, and the task tests that hooks run (confidence: medium)
+- python-missing-module — out/totals.txt non-empty, lines 'apples 3' and 'pears 5' (whitespace-normalised); "one name and count a line" did not say how they are separated. Fixed: "… to out/totals.txt, each on its own line as the name, a space, then the count (for example `apples 3`)." v1 → v2
+(confidence: high, except where marked)
+FLAGGED: what a bump does to older traces: each trace records task_version, and an invocation runs every arm at the catalog's version, so a comparison never mixes versions. Re-reported from disk, an older directory is shown under today's goal; the task block now says so ("Task version: measured at v2; the goal and notes shown here are v3's …") rather than mislabel it. Older traces stay valid under the schema; they are not comparable with newer ones (confidence: high)
+ABSENT: no check changed: only goals, so the fake agent's outcomes are as before, and test_outcome_matches_rb4 still holds them
+SCOPE: in
+Verification: test_item2_the_goal_states_every_requirement_of_the_check (five tasks), test_versions_and_prerequisites, test_item2_a_trace_from_an_older_task_version_is_named_under_the_newer_goal
+
+### T064: the records; the host lane
+**Started:** 2026-10-15T01:35:45Z | **Completed:** 2026-10-15T01:56:51Z
+
+INHERITED: T062, T063 — (confidence: high)
+ASSUMED: D11 is cited as the mentor's feedback file states it, observed by the operator on live run 2 (confidence: high)
+FLAGGED: the first host lane (01:34:59Z–01:43:50Z) failed rc 1: two relay units were flaky, because Addendum 2 counted a turn or an unanswered request after the answer had gone back, and test_validate_bench.py's fixture built the old notes shape (33 errors). Fixed in this commit: the relay settles each tool-offering request under the lock as soon as its status is known, before answering; the fixture builds the new shape. Chose to fix the race here rather than defer it, since it was this cycle's own code and its fix is local (confidence: high)
+ABSENT: no README change: its bench passage names no goal and quotes no note
+SCOPE: in (relay.py is 002's own file; T060's change, corrected)
+Verification: the relay's affected units passed 30 times running; host lane rc 0 (pytest 2505 passed, 12 skipped; 60/60, 57/57, 33/33), 2026-10-15T01:47:40Z–01:56:30Z; ruff, mypy --strict clean; readme reference current

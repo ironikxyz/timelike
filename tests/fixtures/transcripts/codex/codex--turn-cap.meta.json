@@ -1,0 +1,21 @@
+{
+  "exit": 1,
+  "relay": {
+    "generations": 1,
+    "models": [
+      "deepseek/deepseek-v4-pro-0813"
+    ],
+    "requests": 2,
+    "statuses": {
+      "200": 1,
+      "400 cap": 1
+    },
+    "stopped_by": "turn-cap",
+    "turns": 2
+  },
+  "script": [
+    "echo one",
+    "echo two",
+    "echo three"
+  ]
+}

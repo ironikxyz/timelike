@@ -32,37 +32,70 @@ def _load() -> ModuleType:
 vb = _load()
 
 
-def good_trace(env: str) -> trace.Trace:
+def good_trace(arm: str) -> trace.Trace:
+    env = "vanilla" if arm == "vanilla" else "timelike"
+    tools = ("run",) if arm == "told" else ()
     ident = trace.Identity(
-        SHA, env, "sha256:" + "1" * 64, SHA, "debian:trixie-slim@sha256:" + "2" * 64, "timelike-fake-agent",
-        "1", "none (deterministic fake agent)", "bash -c", TASK, 1, 30, 300, "make bench",
-    )  # fmt: skip
-    call = trace.ToolCall(1, 1, "git log", 0, 10, False, 5, 0, 5, False, "")
+        bench_revision=SHA,
+        environment=env,
+        arm=arm,
+        image_id="sha256:" + "1" * 64,
+        image_revision=SHA,
+        base_digest="debian:trixie-slim@sha256:" + "2" * 64,
+        harness_name="timelike-fake-agent",
+        harness_version="1",
+        harness_reported_version="1",
+        model_id="none (deterministic fake agent)",
+        models_answered=(),
+        invocation="bash -c",
+        output_streams="separate",
+        placement="codex: placed" if arm == "told" else "",
+        task_id=TASK,
+        task_version=1,
+        call_limit_s=30,
+        run_limit_s=300,
+        turn_cap=0,
+        timelike_tools=("run", "view"),
+        reproduce="make bench",
+    )
+    call = trace.ToolCall(
+        1, 1, "run git log" if tools else "git log", 0, 10, False, 5, 0, 5, False, "", "", tools
+    )
     ending = trace.Ending("completed", "check passed")
-    return trace.Trace(ident, (call,), trace.derive_totals([call], 10), ending, runner.NO_TOKENS)
+    return trace.Trace(
+        ident, (call,), trace.derive_totals([call], 10), ending, runner.NO_TOKENS, trace.NO_SPEND
+    )
+
+
+ARMS = ("vanilla", "not-told", "told")
 
 
 @pytest.fixture
 def out(tmp_path: Path) -> Path:
-    for env in ("vanilla", "timelike"):
-        trace.write_trace(good_trace(env), runner.trace_path(tmp_path, TASK, env))
+    for arm in ARMS:
+        trace.write_trace(good_trace(arm), runner.trace_path(tmp_path, TASK, "fake", arm))
     texts = {
-        t.id: report.TaskText(t.goal, t.capability, t.difference, dict(t.notes)) for t in catalog.CATALOG
+        t.id: report.TaskText(
+            t.goal, t.capability, t.difference, {k: (n, path) for k, n, path in t.notes}, t.version
+        )
+        for t in catalog.CATALOG
     }
     report.build_report(tmp_path, tasks=texts, not_benchable=catalog.NOT_BENCHABLE, reproduce="make bench")
     return tmp_path
 
 
-def mutate(out: Path, env: str, change: Any) -> None:
-    path = runner.trace_path(out, TASK, env)
+def mutate(out: Path, arm: str, change: Any) -> None:
+    path = runner.trace_path(out, TASK, "fake", arm)
     doc = json.loads(path.read_text())
     change(doc)
     path.write_text(json.dumps(doc))
 
 
 def test_accepts_what_benchlib_writes(out: Path) -> None:
-    assert vb.main(["traces", str(out), SHA, TASK]) == 0
+    assert vb.main(["traces", str(out), SHA, "fake", TASK]) == 0
     assert vb.main(["report", str(out)]) == 0
+    assert vb.main(["verdicts", str(out), "fake"]) == 0
+    assert vb.main(["adoption", str(out), "fake"]) == 0
 
 
 @pytest.mark.parametrize(
@@ -70,13 +103,18 @@ def test_accepts_what_benchlib_writes(out: Path) -> None:
     [
         (lambda d: d["identity"].update(model_id=""), "identity.model_id is empty"),
         (lambda d: d["identity"].update(image_revision="f" * 40), "are not"),
-        (lambda d: d["identity"].update(environment="timelike"), "identity names"),
+        (lambda d: d["identity"].update(arm="told"), "identity names"),
+        (lambda d: d["identity"].update(harness_name="opencode"), "harness_name is 'opencode'"),
         (lambda d: d["identity"].update(base_digest="debian:latest"), "no @sha256:"),
         (lambda d: d["totals"].update(hangs=1), "totals.hangs"),
         (lambda d: d["totals"].pop("wall_clock_ms"), "wall_clock_ms missing"),
         (lambda d: d.update(ending={"kind": "done", "reason": "x"}), "not a known kind"),
         (lambda d: d.update(tokens={"recorded": False, "reason": "r", "input": 0}), "counts present"),
-        (lambda d: d.update(schema_version=2), "schema_version"),
+        (lambda d: d.update(schema_version=1), "schema_version"),
+        (lambda d: d["identity"].update(environment="timelike"), "does not match environment"),
+        (lambda d: d["calls"][0].update(category="other"), "has category 'other' (failed: False)"),
+        (lambda d: d["calls"][0].update(timelike_tools=["run"]), "counts timelike tools in the vanilla arm"),
+        (lambda d: d.update(ending={"kind": "stopped", "reason": "429", "cause": ""}), "a cause exactly"),
         (lambda d: d.update(calls={}), "calls is not a list"),
     ],
 )
@@ -84,14 +122,14 @@ def test_rejects_each_trace_fault(
     out: Path, change: Any, text: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     mutate(out, "vanilla", change)
-    assert vb.main(["traces", str(out), SHA, TASK]) == 1
+    assert vb.main(["traces", str(out), SHA, "fake", TASK]) == 1
     assert text in capsys.readouterr().out
 
 
 def test_rejects_a_missing_trace_and_a_non_object(out: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    runner.trace_path(out, TASK, "timelike").unlink()
-    runner.trace_path(out, TASK, "vanilla").write_text("[]")
-    assert vb.main(["traces", str(out), SHA, TASK]) == 1
+    runner.trace_path(out, TASK, "fake", "told").unlink()
+    runner.trace_path(out, TASK, "fake", "vanilla").write_text("[]")
+    assert vb.main(["traces", str(out), SHA, "fake", TASK]) == 1
     printed = capsys.readouterr().out
     assert "wanted" in printed and "not a JSON object" in printed
 
@@ -99,15 +137,16 @@ def test_rejects_a_missing_trace_and_a_non_object(out: Path, capsys: pytest.Capt
 @pytest.mark.parametrize(
     ("edit", "text"),
     [
-        (lambda ls: ["LIVE RUN — x", *ls[1:]], "fake-agent statement"),
+        (lambda ls: ["LIVE RUN — x", *ls[1:]], "fake statement"),
         (lambda ls: [ls[0], "Measured by someone", *ls[2:]], "maintainer"),
         (lambda ls: [ls[0], ls[1], "one token here", *ls[2:]], "before the appendix"),
-        (lambda ls: [x for x in ls if x != "## Appendix: tokens"], "no '## Appendix"),
+        (lambda ls: [ls[0], ls[1], "it cost $3", *ls[2:]], "before the appendix"),
+        (lambda ls: [x for x in ls if x != "# Appendix: tokens and spend"], "no '# Appendix"),
         (lambda ls: [x for x in ls if not x.startswith("## Ties")], "out of order"),
-        (lambda ls: [ls[0] + " (reworded)", *ls[1:]], "fake-agent statement"),
+        (lambda ls: [ls[0] + " (reworded)", *ls[1:]], "fake statement"),
         (lambda ls: [x for x in ls if not x.startswith("Tests: ")], "no line starting 'Tests:'"),
-        (lambda ls: [x for x in ls if not x.startswith("Verdict: ")], "no line starting 'Verdict:'"),
-        (lambda ls: [x for x in ls if x != "What happened in timelike:"], "What happened in timelike:"),
+        (lambda ls: [x for x in ls if " vs vanilla: " not in x], "no verdict line"),
+        (lambda ls: [x for x in ls if not x.startswith("# Harness: ")], "no '# Harness: ' section"),
     ],
 )
 def test_rejects_each_report_fault(
@@ -117,6 +156,25 @@ def test_rejects_each_report_fault(
     path.write_text("\n".join(edit(path.read_text().splitlines())) + "\n")
     assert vb.main(["report", str(out)]) == 1
     assert text in capsys.readouterr().out
+
+
+def test_a_verdict_line_that_disagrees_with_the_traces_is_caught(
+    out: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = out / "report.txt"
+    path.write_text(
+        path.read_text().replace("Told vs vanilla: Verdict: Tie", "Told vs vanilla: Verdict: Timelike wins")
+    )
+    assert vb.main(["verdicts", str(out), "fake"]) == 1
+    assert "recomputed 'Verdict: Tie'" in capsys.readouterr().out
+
+
+def test_an_adoption_row_that_disagrees_with_the_traces_is_caught(
+    out: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mutate(out, "told", lambda d: d["calls"][0].update(timelike_tools=[]))
+    assert vb.main(["adoption", str(out), "fake"]) == 1
+    assert "recounted 0 timelike tool calls" in capsys.readouterr().out
 
 
 def test_report_missing(tmp_path: Path) -> None:
@@ -136,11 +194,17 @@ def test_env(tmp_path: Path, name: str, shaped: bool) -> None:
 
 def test_usage() -> None:
     assert vb.main(["nonsense"]) == 2
+    assert vb.main(["traces", "o", SHA, "claude", TASK]) == 2
 
 
 def hang_trace(out: Path, duration_ms: int, hung: bool = True) -> None:
     def change(d: Any) -> None:
-        d["calls"][0].update(hung=hung, duration_ms=duration_ms, exit_code=124 if hung else 0)
+        d["calls"][0].update(
+            hung=hung,
+            duration_ms=duration_ms,
+            exit_code=124 if hung else 0,
+            category="timeout" if hung else "",
+        )
         d["totals"].update(hangs=int(hung), nonzero_exits=int(hung))
 
     mutate(out, "vanilla", change)

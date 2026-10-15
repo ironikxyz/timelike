@@ -39,6 +39,13 @@ from typing import IO, Protocol
 WRAPPER_SCRIPT = (
     'timeout -s TERM -k 2 "$0" bash -c "$1" & t=$!; wait $t; rc=$?; kill -KILL -$t 2>/dev/null; exit $rc'
 )
+# The same wrapper with dash as the inner shell. A live harness is started with it (feature 002 slice 1): in
+# the timelike image `bash -c` reads BASH_ENV, whose secret strip (001 SC-9) removes key-shaped variables, so
+# it would remove the harness's key variable in the timelike arms only. That variable holds only the
+# placeholder now (Item 25 (b)), but both harnesses refuse to start without it. dash reads no startup file, so
+# the harness keeps it, and the agent's own commands, which the harness runs with bash, still get the strip,
+# as in the product.
+WRAPPER_SCRIPT_SH = WRAPPER_SCRIPT.replace('bash -c "$1"', 'sh -c "$1"')
 HANG_EXIT_CODES = frozenset({124, 137})  # timeout's TERM verdict, and the KILL that follows it
 BACKSTOP_GRACE_S = 10.0
 HEAD_CAP = 4096  # bytes kept per stream; everything is still counted
@@ -62,10 +69,12 @@ class Executor(Protocol):
     def run(self, command: str, limit_s: int) -> CallResult: ...
 
 
-def wrapper_argv(command: str, limit_s: int) -> list[str]:
+def wrapper_argv(command: str, limit_s: int, inner: str = "bash") -> list[str]:
     if limit_s <= 0:
         raise ValueError(f"limit must be positive, got {limit_s}")
-    return ["sh", "-c", WRAPPER_SCRIPT, str(limit_s), command]
+    if inner not in ("bash", "sh"):
+        raise ValueError(f"inner shell must be bash or sh, got {inner!r}")
+    return ["sh", "-c", WRAPPER_SCRIPT if inner == "bash" else WRAPPER_SCRIPT_SH, str(limit_s), command]
 
 
 def is_hang(exit_code: int, duration_ms: int, limit_s: int) -> bool:
@@ -173,16 +182,25 @@ class DockerExecutor:
         user: str = TASK_USER,
         workdir: str = TASK_DIR,
         env: Mapping[str, str] | None = None,
+        exec_env: Mapping[str, str] | None = None,
+        inner: str = "bash",
     ) -> None:
         self.container_id = container_id
         self.docker = docker
         self.user = user
         self.workdir = workdir
         self.env = dict(env) if env is not None else None  # the docker CLI's own env; never forwarded
+        # Set inside the exec (`-e NAME=value`): configuration, never a secret, because argv is visible. No
+        # exec carries the key: the relay holds it, and a harness's key variable is the placeholder (Item 25
+        # (b)).
+        self.exec_env = dict(exec_env or {})
+        self.inner = inner  # "sh" for a live harness's own exec (WRAPPER_SCRIPT_SH)
 
     def argv(self, command: str, limit_s: int) -> list[str]:
-        prefix = [self.docker, "exec", "-u", self.user, "-w", self.workdir, self.container_id]
-        return prefix + wrapper_argv(command, limit_s)
+        prefix = [self.docker, "exec", "-u", self.user, "-w", self.workdir]
+        for name, value in sorted(self.exec_env.items()):
+            prefix += ["-e", f"{name}={value}"]
+        return [*prefix, self.container_id, *wrapper_argv(command, limit_s, self.inner)]
 
     def run(self, command: str, limit_s: int) -> CallResult:
         return capture(self.argv(command, limit_s), limit_s, env=self.env)

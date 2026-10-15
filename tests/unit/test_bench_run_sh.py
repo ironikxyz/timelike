@@ -10,6 +10,7 @@ tool gets the bench/out base to stamp under.
 
 from __future__ import annotations
 
+import shutil
 import socket
 import subprocess
 from collections.abc import Iterator
@@ -42,11 +43,13 @@ def harness(tmp_path: Path) -> Iterator[dict[str, object]]:
     sock.close()
 
 
-def run_sh(h: dict[str, object], *args: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+def run_sh(
+    h: dict[str, object], *args: str, script: Path = RUN_SH
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     env = h["env"]
     assert isinstance(env, dict)
     p = subprocess.run(
-        [str(RUN_SH), *args], env=env, capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL
+        [str(script), *args], env=env, capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL
     )
     argv_file = h["argv"]
     assert isinstance(argv_file, Path)
@@ -110,4 +113,112 @@ def test_refusals(
     env.update(extra)
     p, argv = run_sh(harness, *args)
     assert p.returncode == code and text in p.stderr
+    assert argv == []
+
+
+# --- slice 1: the live run's flags, the key file, the forwarded configuration (FR-29, FR-50) --------
+
+
+def test_live_flags_pass_through_and_reproduce_names_bench_live(harness: dict[str, object]) -> None:
+    p, argv = run_sh(
+        harness, "--harness", "opencode", "--harness", "codex", "--arm", "told", "--dry-run", "--standin"
+    )
+    assert p.returncode == 0, p.stderr
+    driver_args = argv[argv.index("timelike-bench-driver:local") + 1 :]
+    assert driver_args == [
+        "run",
+        "--harness",
+        "opencode",
+        "--harness",
+        "codex",
+        "--arm",
+        "told",
+        "--dry-run",
+        "--standin",
+    ]
+    assert "BENCH_REPRODUCE=make bench-live" in after(argv, "-e")
+
+
+def test_the_bench_configuration_is_forwarded_by_name_and_value(harness: dict[str, object]) -> None:
+    env = harness["env"]
+    assert isinstance(env, dict)
+    env.update(
+        BENCH_MODEL="deepseek/deepseek-v4-pro-0813",
+        BENCH_TURN_CAP="12",
+        BENCH_SPEND_CAP_USD="2.50",
+        OPENCODE_VERSION="1.19.0",
+        CODEX_VERSION="0.162.1",
+        BENCH_MODEL_PRICE_READ="2026-10-13",
+    )
+    p, argv = run_sh(harness, "--harness", "opencode")
+    assert p.returncode == 0, p.stderr
+    e = after(argv, "-e")
+    for want in (
+        "BENCH_MODEL=deepseek/deepseek-v4-pro-0813",
+        "BENCH_TURN_CAP=12",
+        "BENCH_SPEND_CAP_USD=2.50",
+        "BENCH_OPENCODE_VERSION=1.19.0",
+        "BENCH_CODEX_VERSION=0.162.1",
+        "BENCH_MODEL_PRICE_READ=2026-10-13",
+    ):
+        assert want in e
+
+
+def test_a_good_key_file_is_mounted_read_only_and_its_value_never_travels(harness: dict[str, object]) -> None:
+    tmp = harness["tmp"]
+    env = harness["env"]
+    assert isinstance(tmp, Path) and isinstance(env, dict)
+    key = tmp / "secrets" / "or.key"
+    key.parent.mkdir()
+    key.write_text("value-that-must-not-travel\n")
+    key.chmod(0o600)
+    env["BENCH_KEY_FILE"] = str(key)
+    p, argv = run_sh(harness, "--harness", "opencode")
+    assert p.returncode == 0, p.stderr
+    assert f"{key.resolve()}:/run/timelike-bench/key:ro" in after(argv, "-v")
+    assert "BENCH_KEY_FILE=/run/timelike-bench/key" in after(argv, "-e")
+    assert not any("value-that-must-not-travel" in a for a in argv)
+
+
+@pytest.mark.parametrize(
+    ("setup", "text"),
+    [
+        ("mode", "mode is 0644, must be 0600"),
+        ("link", "is a symbolic link"),
+        ("missing", "is not a regular file"),
+        ("relative", "is not an absolute path"),
+        ("inside", "is inside the repository"),
+    ],
+)
+def test_a_bad_key_file_is_refused_on_the_host(harness: dict[str, object], setup: str, text: str) -> None:
+    tmp = harness["tmp"]
+    env = harness["env"]
+    assert isinstance(tmp, Path) and isinstance(env, dict)
+    key = tmp / "or.key"
+    key.write_text("x\n")
+    key.chmod(0o644 if setup == "mode" else 0o600)
+    path, script = str(key), RUN_SH
+    if setup == "link":
+        (tmp / "link").symlink_to(key)
+        path = str(tmp / "link")
+    elif setup == "missing":
+        path = str(tmp / "absent")
+    elif setup == "relative":
+        path = "or.key"
+    elif setup == "inside":
+        # run.sh takes the repository from its own location, so a copy in a throwaway repository is checked
+        # against that one, and nothing is written into the real checkout (read-only in the runner, lane
+        # 02s1-a).
+        throwaway = tmp.resolve() / "repo"
+        script = throwaway / "bench" / "run.sh"
+        script.parent.mkdir(parents=True)
+        shutil.copy2(RUN_SH, script)
+        inside = throwaway / "secrets" / "or.key"
+        inside.parent.mkdir()
+        inside.write_text("x\n")
+        inside.chmod(0o600)
+        path = str(inside)
+    env["BENCH_KEY_FILE"] = path
+    p, argv = run_sh(harness, "--harness", "opencode", script=script)
+    assert p.returncode == 4 and text in p.stderr, p.stderr
     assert argv == []

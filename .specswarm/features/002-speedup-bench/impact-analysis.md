@@ -137,3 +137,66 @@ prompt 02, which is still at revision 8.
 
 **Impact:** none on code, contracts or other features. Records only: one `audit-log.md` row, the cycle report and
 this feature's cycle artifacts. `spec.md` is unchanged, including `audited_against`. Risk: low.
+
+# Cycle 4: 02 slice 1 (send `bridge/sends/02-rev8-20261013-064725.md`, discovery revision 15)
+
+**Analysis date:** 2026-10-13T07:08:58Z. specswarm **4.0.1-botbaubble.2.44.0** loaded (`claude plugin list`, and the
+`PLUGIN_DIR` the modify text expanded). Branch `modify/002-slice-1` from `master` `8dbddc7`.
+
+**Provenance:** modify **row 4**, computed by executing `provenance-inputs` and `provenance-row`. `source_prompt` and
+the send's `> Source:` agree (`plan/.discover/prompts/02-speedup-bench.md`). N=8, `prompt_revision` 1,
+`audited_against` `[1, 8]`. Nothing is new upstream: prompt 02 is still at revision 8. This cycle is **added work on
+a body that stays true** (the send: do not re-specify, do not regenerate), and it does revision 8's code work, which
+Cycle 3 recorded as `carried` here.
+
+## Proposed changes
+
+Slice 1 of prompt 02: four Automated criteria and D11 (Manual), plus revision 8's four places.
+- **Functional:** told and not-told timelike arms beside vanilla; a live harness path (OpenCode and a second
+  harness) beside the fake agent; failure categories per failed call; timelike tool invocations counted per arm;
+  the verdict order of revision 8; caps, a dry-run plan and spend accounting for live runs; a key file read by the
+  bench and passed to the harness process only.
+- **Data:** trace schema **2** (an arm, per-call category and tool names, a `stopped` ending for infrastructure
+  causes, spend). Schema 1 traces are refused by the new reader, naming the revision that can re-report them.
+- **Contracts:** `contracts/trace-schema.md` and `contracts/bench-cli.md` (this feature's own). No other feature's
+  contract changes: the told arm runs `timelike announce --install` exactly as the agent image's entrypoint does
+  (007's placement, unchanged).
+- **Images:** a new bench image, `timelike-bench-harness:local`, holding the pinned harness binaries and mounted
+  read-only into task containers at run time. **Neither the agent image nor the vanilla image changes.**
+
+## Affected components
+
+| Component | Type | Impact | Notes |
+|---|---|---|---|
+| `bench/benchlib/report.py` | report | High | verdict order (revision 8), arms, harnesses, categories, adoption, `stopped` rows |
+| `bench/benchlib/trace.py` | schema | High | schema 2; list and float fields; derived adoption and category totals |
+| `bench/benchlib/runner.py` | runs | High | arms; the told placement; live runs through a harness adapter |
+| `bench/bin/timelike-bench` | CLI | High | `--harness`, `--arm`, `--dry-run`, caps, the key file, `categories --probe` |
+| `bench/run.sh` | host side | Medium | `BENCH_KEY_FILE` (checked on the host, mounted read-only), the harness image, the network |
+| `bench/benchlib/catalog.py` | catalog | Medium | one task added (`python-missing-module`); goals as plain words for a live agent |
+| new: `categories.py`, `harness.py`, `relay.py`, `secrets.py`, `standin.py`, `transcripts.py` | bench | New | categories, adapters, the model relay, the write gate, the stand-in, the parsers |
+| `bench/harness/Dockerfile`, `pins.env`, `Makefile` | images | Medium | the harness image, pinned by version and npm integrity |
+| `tests/e2e/speedup-bench.bats`, `tests/e2e/fixtures/validate_bench.py` | tests | Medium | schema 2; arms; the live path against the stand-in; categories in both images |
+| `README.md` | docs | Low | the send's README block, if all four Automated criteria are met |
+
+**Other features:** none changed. 001's `agentio` and output contract are used as they are; 003's `run` verdict, 004's
+Adele denial, 007's command-not-found handler and 013's guard and shims are **read** (their texts are matched by the
+categories), never changed.
+
+## Breaking changes
+
+- **Trace schema 1 → 2.** A slice-0 trace set is not re-reported by this build; the refusal names the reason and
+  that slice 0's revision re-reports it (FR-10 holds per revision). Nothing outside the bench reads traces.
+- **`timelike-bench run`'s default** still runs the fake agent, now in three arms instead of two. CI keeps its key-free
+  path (FR-12 unchanged, and widened: a set `BENCH_KEY_FILE` also refuses a fake-agent run).
+
+## Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| OpenRouter rejects a request shape a harness sends (Codex's `namespace` tool) | Medium | A harness's live cells end `stopped` | named per row; the first live run is its own test tier (llm-apis Q001) |
+| The scan gate flags the harness binaries | Medium | `make scan` fails | the image is scanned like every bench image; findings go through the operator's baseline rule |
+| The `--volumes-from` copy of ~480 MB slows a run | Low | minutes per invocation | one harness container per invocation, not per run |
+| The model stand-in proves only the harness parses what timelike wrote (P005) | Certain | parser trusted too far | transcripts are the harnesses' own output; the live run is a tier of its own |
+
+**Proceed:** yes, with one item raised as FOR-MENTOR Item 25 (the key's route), not built.

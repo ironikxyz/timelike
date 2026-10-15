@@ -27,10 +27,16 @@ FROM ${DEBIAN_IMAGE}
 # Build-time shell only; it does not affect the running container's shells.
 SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
 
-# --- 1. OS packages: none installed; three upgraded ---------------------------------------------------
-# No package is installed. The driver talks only to the local socket (no TLS, so no ca-certificates),
-# needs no git (RB8: bench/run.sh passes GIT_SHA), and the base image already has coreutils and dash.
-# Every package added here would be one more thing for the scan gate (RB10) to report.
+# --- 1. OS packages: ca-certificates installed; three upgraded -----------------------------------------
+# One package is installed: ca-certificates (and the openssl it depends on). Since slice 1 the driver's relay is
+# an HTTPS client of OpenRouter, and it holds the key, so it must verify the peer it sends the key to. Slice 0's
+# driver talked only to the local socket and installed nothing; live run 1 (2026-10-14) failed every request on
+# CERTIFICATE_VERIFY_FAILED because this step was not changed when the relay was added
+# (bridge/feedback/02-20261014-031353-live-run-1-the-driver-has-no-ca-certificates.md, item 1). Verification is
+# never turned off, and the relay is given no context of its own: it uses the interpreter's default one, which
+# reads /etc/ssl/certs. The driver still needs no git (RB8: bench/run.sh passes GIT_SHA), and the base image
+# already has coreutils and dash. Every package added here is one more thing for the scan gate (RB10) to report.
+# The SC-5 cell "the relay verifies an HTTPS upstream against the system store" proves the store works.
 # Targeted upgrade (operator, 2026-10-01; FOR-MENTOR Item 12): Debian fixed OpenSSL (CVE-2026-54873,
 # -72897, -84782, -84784 in 3.5.7-1~deb13u3) and PCRE2 (CVE-2026-103111 in 10.46-1~deb13u3) in packages
 # the base image already has, and no published trixie-slim carries them yet (the pinned digest is the
@@ -38,10 +44,15 @@ SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
 # trixie-slim newer than a99cfc517144 ships OpenSSL 3.5.7-1~deb13u3 and PCRE2 10.46-1~deb13u3 or later
 # (watch item).
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --only-upgrade \
       libssl3t64 openssl-provider-legacy libpcre2-8-0 \
  && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && { test -s /etc/ssl/certs/ca-certificates.crt \
+      || { echo "error: /etc/ssl/certs/ca-certificates.crt is missing or empty after installing ca-certificates (code 1)" >&2; exit 1; }; } \
+ && { find /etc/ssl/certs -maxdepth 1 -name '*.0' -print -quit | grep -q . \
+      || { echo "error: /etc/ssl/certs holds no hashed certificate (code 1) — the relay's default context reads it" >&2; exit 1; }; }
 
 # --- 2. Pinned interpreter at a fixed path (as image/Dockerfile §2; 001 R6) ---------------------------
 # The same path as the agent image, because the tools' shebang is #!/opt/timelike/python/bin/python3 -I.

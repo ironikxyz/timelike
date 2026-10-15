@@ -8,7 +8,7 @@ All types are stdlib `dataclasses` (frozen where possible) in `bench/benchlib/`.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | str | kebab-case, unique. Part of each trace's file name |
-| `version` | int | Bumped whenever the setup, policy or check changes. Recorded in every trace |
+| `version` | int | Bumped whenever the goal, setup, policy or check changes (*Cycle 4 addendum 3:* the goal too, since it must state everything the check requires). Recorded in every trace. A report showing traces at another version than the catalog's says so in the task block |
 | `capability` | str | The feature-001 capability it exercises |
 | `goal` | str | One line, shown in the report |
 | `prerequisites` | tuple[str, ...] | OS packages. **Each must be present in both images** (RB1). Slice 0: `("git",)` |
@@ -122,8 +122,13 @@ For each task, the report pairs the vanilla and timelike traces.
 **The verdict is from timelike's side:**
 1. Compare the endings, ranked `completed` > `escalated` > `failed` > `hung`.
 2. If they are equal, compare turns (fewer wins).
-3. If still equal, compare `nonzero_exits + hangs` (fewer wins).
-4. If still equal, the task is a **tie**.
+3. If still equal, compare `hangs` (fewer wins).
+4. If still equal, compare `nonzero_exits`, the failed commands, a hung call included (fewer wins).
+5. If still equal, the task is a **tie**.
+
+*(Amended in Cycle 4, declared, for revision 8: slice 0's step 3 compared `nonzero_exits + hangs` as one figure, so a
+hung call counted twice and hangs were not compared first. Each call now counts once per row, and hangs come first.
+The verdict sentence quotes only counts that appear in the table.)*
 
 Wall-clock time is shown but never decides a verdict: it is noise in a single run, and slice 2 brings
 repetitions.
@@ -139,3 +144,53 @@ repetitions.
 
 A missing pair (only one trace for a task) is listed under the losing section as `incomplete`, never
 dropped.
+
+---
+
+# Slice 1 (Cycle 4, send `bridge/sends/02-rev8-20261013-064725.md`)
+
+## Arm
+`vanilla` | `not-told` | `told`. The environment follows from it (vanilla → the vanilla image; the others → the
+timelike image). `told` adds the placement step (FR-18) after setup. *(Cycle 4 addendum, lane 02s1-a item 2: a told
+run whose setup fails records `placement: "not placed"`. Setup and check run under the bench's step limit,
+`Limits.step_s`, 120 s, not the agent's call limit.)* Order of runs per task and harness: vanilla,
+not-told, told.
+
+## Harness (`harness.py`)
+A name (`fake`, `opencode`, `codex`), a pinned version, the binary's path under `/opt/bench-harness`, how to ask its
+version, how to build its exec (argv, environment names, config), where its transcript is (stdout, and Codex's rollout
+file), and its parser. The fake harness is slice 0's walker, unchanged.
+
+## Category (`categories.py`)
+One of `timeout`, `memory-kill`, `command-not-found`, `module-not-found`, `network-denial`, `other`, decided in that
+order (spec FR-40) from: exit code, hung, the output head (stdout and stderr heads, or the merged head), and whether
+the container's `oom_kill` count rose during the run.
+
+## Command words (`adoption.py`)
+A command is split on `;`, `&&`, `||`, `|`, `&` and newlines (outside quotes, by `shlex` in punctuation mode). In each
+segment, leading `NAME=value` words and the wrappers `command`, `exec`, `env`, `nohup`, `time`, `timeout <n>` are
+skipped; the next word is the command word. Its base name is matched against the timelike tool list (adoption), the
+shimmed installers, and the guarded forms (through timelike).
+
+## Relay accounting (`relay.py`), per run
+requests; turns (requests offering tools that the upstream answered 200; *(Cycle 4 addendum 2)* the tool-offering
+requests it did not, under unanswered); statuses; generation ids; models answered; tokens; cost (sum of
+`usage.cost`) and the ids without one; whether the last answer asked for tool calls; whether a request is waiting on
+upstream; which cap, if any, stopped it. Per invocation: the spend so far, against the spend cap. *(Cycle 4
+addendum, Item 25 (b):)* the requests it refused, by verdict (`route-not-allowed`, `no-model`, `other-model`), and
+the first model id it refused as not the pin. No sender is recorded: the relay cannot tell a harness from an agent's
+command. The relay holds the key in memory; the accounting never does.
+
+## Live run result
+The parsed calls (turn, command, exit code, merged output head and size, duration), the parser's errors, the
+harness's exit code, the relay's accounting, the check's result. From these the runner derives the ending:
+- the relay stopped it for a cap → `stopped` (`turn-cap`, `spend-cap`);
+- *(Cycle 4 addendum, Item 25 (b))* the relay refused a request for another model → `stopped` (`model-refused`);
+- the run limit fired: a call in flight → `hung`; a request waiting upstream → `stopped` (`api-unreachable`);
+  otherwise `stopped` (`harness-unresponsive`);
+- the transcript did not parse → `stopped` (`transcript-unreadable`) *(Cycle 4 addendum: listed above the run limit
+  until now, though the runner has always checked the run limit first; this is the order it runs)*;
+- the relay's last status was 401 or 403 → `stopped` (`key-rejected`); 429 → `api-rate-limit`; 5xx or no answer →
+  `api-error`, when the check also failed;
+- the harness exited non-zero and the check failed → `stopped` (`harness-exit`);
+- otherwise the check decides: `completed` or `failed`.

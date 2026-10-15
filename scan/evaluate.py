@@ -32,9 +32,14 @@ It reads the scanners' JSON results, never their exit messages (H3), and applies
   code reaches is treated as High, so with a fix it blocks; one only imported or only required is
   recorded below High and never blocks
 
+- an SBOM that catalogues no packages fails its step, naming the image (lane 02s1-a, item 4): every image
+  the scan knows holds software, so a Grype pass over nothing is a pass that could not have failed
+- a package Syft cannot see (a binary carrying no metadata it reads, like the bench harness image's two
+  harnesses) is added to the SBOM from its pin by `pinned`, before Grype runs, marked as found in the pins
+
 Subcommands: `dists` lists the interpreter's installed distributions (and, with --requirements, writes
-them as exact pins for pip-audit -r); `releases` runs the bundled-class release check (the one subcommand
-that uses the network); `report` writes the verdict.
+them as exact pins for pip-audit -r); `pinned` adds pinned packages to a Syft SBOM; `releases` runs the
+bundled-class release check (the one subcommand that uses the network); `report` writes the verdict.
 One file on purpose: scan.sh runs it with `-I`, which keeps the script directory off sys.path, so a
 second module could not be imported. That puts it over max_file_lines (300), which quality-standards
 allows for a single-file tool when the feature plan justifies it.
@@ -971,13 +976,23 @@ class Collected:
     releases: Releases | None = None  # None: the release check did not run, so bundled entries block
 
 
-def _read_step(name: str, out: Path, image_id: str, got: Collected) -> None:
+def _read_step(name: str, out: Path, image_id: str, got: Collected, image: str = "") -> None:
     if name == "sbom":
         sbom = _load(out / "sbom.syft.json")
         seen = str(sbom["source"]["metadata"].get("imageID", ""))
         if seen != image_id:
             raise ParseError(f"SBOM describes image {seen or '(none)'}, expected {image_id} (H3)")
-        got.details[name] = f"{len(sbom['artifacts'])} packages catalogued from {image_id[:19]}"
+        arts = sbom["artifacts"]
+        if not arts:
+            raise ParseError(
+                f"the SBOM of {image or image_id[:19]} catalogues no packages, though the image holds "
+                "software: "
+                "Grype had nothing to match, so its result says nothing (a pass on nothing cannot fail)"
+            )
+        pinned_names = [f"{a['name']} {a['version']}" for a in arts if a.get("foundBy") == PINS_FOUND_BY]
+        got.details[name] = f"{len(arts)} packages catalogued from {image_id[:19]}" + (
+            f" ({len(pinned_names)} from the pins: {', '.join(pinned_names)})" if pinned_names else ""
+        )
         got.origins = origins_from_sbom(sbom)
     elif name == "release-check":
         doc = _load(out / "release-check.json")
@@ -1006,7 +1021,7 @@ def _read_step(name: str, out: Path, image_id: str, got: Collected) -> None:
         got.details[name] += f"; {len(found)} matches"
 
 
-def collect(out: Path, image_id: str) -> Collected:
+def collect(out: Path, image_id: str, image: str = "") -> Collected:
     """Reads scan/out/steps.tsv (`step<TAB>ran|none|error<TAB>detail`, from scan.sh), then each JSON."""
     steps: dict[str, list[str]] = {}
     for row in (out / "steps.tsv").read_text(encoding="utf-8").splitlines():
@@ -1020,7 +1035,7 @@ def collect(out: Path, image_id: str) -> Collected:
             got.errors[name] = detail or "the step failed"
         elif state == "ran":
             try:
-                _read_step(name, out, image_id, got)
+                _read_step(name, out, image_id, got, image)
             except ParseError as exc:
                 got.errors[name] = str(exc)
             except (AttributeError, KeyError, TypeError, IndexError) as exc:
@@ -1063,7 +1078,7 @@ def _rows(got: Collected, verdict: Verdict, b: Baseline, error: str) -> list[tup
 
 
 def report(out: Path, target: Target, today: dt.date) -> int:
-    got = collect(out, target.image_id)
+    got = collect(out, target.image_id, target.image)
     try:
         b, error = load_baseline(target.baseline, target.label), ""
     except ParseError as exc:
@@ -1115,6 +1130,50 @@ def dists(out: Path, requirements: Path | None = None) -> int:
     return 0
 
 
+PINS_FOUND_BY = "pins.env (scan/scan.sh pinned_packages_of)"
+_PINNED_RE = re.compile(
+    r"^(?P<name>(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*)@(?P<version>\d+\.\d+\.\d+)=(?P<path>/\S+)$"
+)
+
+
+def pinned(sbom_path: Path, packages: list[str]) -> int:
+    """Adds each `NAME@VERSION=PATH` (npm) to a Syft SBOM as an artifact found in the pins, located at PATH.
+
+    For packages Syft cannot catalogue from the image itself: the bench harness image holds two binaries
+    whose npm metadata it does not keep, so Syft finds nothing and Grype would match nothing (lane 02s1-a,
+    item 4). Each is named here by the package its advisories are filed under, at its pinned version.
+    Prints the number added; an SBOM that already holds the package is left as it is."""
+    sbom = _load(sbom_path)
+    arts = sbom["artifacts"]
+    have = {(a.get("type"), a.get("name"), a.get("version")) for a in arts}
+    added = 0
+    for spec in packages:
+        m = _PINNED_RE.match(spec)
+        if m is None:
+            raise ValueError(f"{spec!r} is not NAME@X.Y.Z=/PATH")
+        name, version, path = m["name"], m["version"], m["path"]
+        if ("npm", name, version) in have:
+            continue
+        arts.append(
+            {
+                "id": "pinned-" + hashlib.sha256(f"npm:{name}@{version}".encode()).hexdigest()[:16],
+                "name": name,
+                "version": version,
+                "type": "npm",
+                "foundBy": PINS_FOUND_BY,
+                "locations": [{"path": path}],
+                "licenses": [],
+                "language": "javascript",
+                "cpes": [],
+                "purl": f"pkg:npm/{name.replace('@', '%40', 1)}@{version}",
+            }
+        )
+        added += 1
+    sbom_path.write_text(json.dumps(sbom) + "\n", encoding="utf-8")
+    print(added)
+    return 0
+
+
 def _digest(value: str) -> str:
     if not DIGEST_RE.match(value):
         raise argparse.ArgumentTypeError(f"{value!r} is not a sha256:<64 hex> digest")
@@ -1127,6 +1186,9 @@ def main(argv: list[str]) -> int:
     dis = sub.add_parser("dists")
     dis.add_argument("--out", type=Path, required=True)
     dis.add_argument("--requirements", type=Path, help="also write the list as name==version lines here")
+    pin = sub.add_parser("pinned", help="add pinned packages Syft cannot see to its SBOM")
+    pin.add_argument("--sbom", type=Path, required=True)
+    pin.add_argument("--package", action="append", required=True, help="NAME@X.Y.Z=/PATH, npm")
     rel = sub.add_parser("releases", help="the bundled-class release check (uses the network)")
     rel.add_argument("--baseline", type=Path, required=True)
     rel.add_argument("--out", type=Path, required=True, help="where to write release-check.json")
@@ -1146,6 +1208,8 @@ def main(argv: list[str]) -> int:
     try:
         if args.cmd == "dists":
             return dists(args.out, args.requirements)
+        if args.cmd == "pinned":
+            return pinned(args.sbom, args.package)
         if args.cmd == "releases":
             return releases(args.baseline, args.out, args.node_version, args.registry)
         label = args.baseline_label or f"scan/baseline/{args.baseline.name}"

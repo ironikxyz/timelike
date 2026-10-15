@@ -1,4 +1,4 @@
-"""catalog — the slice-0 task catalog: four git tasks where timelike's defaults can change the outcome.
+"""catalog — the bench's tasks: slice 0's four git tasks, and slice 1's one Python task (FR-38, FR-39).
 
 Each task is identical in both images (RB4). Its setup and check are bash, run in the task directory
 outside the counted run; its policy is fake-agent data interpreted by `fakeagent.next_step`, which
@@ -7,8 +7,13 @@ so the catalog shows where a difference can occur, not how often one does.
 
 Rules every script here obeys, and tests/unit/test_bench_catalog.py enforces:
 - Only what **both** images contain (RB1): bash, coreutils, git, and Debian's Essential tools (sed,
-  grep). No interpreter, no build tool, no process tools, no network — a task that needed one would
-  rig the result, so `prerequisites` declares the OS packages and slice 0 declares only git.
+  grep). The git tasks use no interpreter, no build tool, no process tools and no network — a task that
+  needed one would rig the result, so `prerequisites` declares what a task needs. *(Slice 1, declared:
+  both images have carried the agent runtimes, python3 and pip, since 007 slice 1 (vanilla's FR-30), so
+  the one Python task may use them, and only them; it declares `python3`. Its install fails in both images,
+  differently: vanilla's interpreter is externally managed, so its pip refuses; timelike's pip goes through
+  the package guard, which finds the registry unreachable. No script here ever passes pip the flag that
+  overrides an externally managed interpreter (007's FR-28).)*
 - The identity is repo-local. Neither image sets one, and a global identity would be a difference
   between the bench's own setup and the environment under test.
 - Setup commits carry fixed dates, so the same setup gives the same object ids in both images.
@@ -16,7 +21,9 @@ Rules every script here obeys, and tests/unit/test_bench_catalog.py enforces:
 - Hooks are `#!/bin/sh` and executable, and are installed after the setup's own commits, so the setup
   never runs its own hook.
 
-`version` is bumped whenever a task's setup, policy or check changes; it is recorded in every trace.
+`version` is bumped whenever a task's goal, setup, policy or check changes; it is recorded in every trace.
+*(Cycle 4 addendum 3, live run 2, item 2: a goal states everything its check requires, so a changed goal is a
+changed task.)*
 `expected` is research RB4's prediction, verbatim in substance. It is shown in `--verbose` and never
 used for scoring.
 
@@ -46,9 +53,11 @@ class Task:
     # What differs between the two images for this task: a fact about the environments, never a claim
     # about the outcome. Printed under the task in every report (send …-080659, F002).
     difference: str = ""
-    # Interpretations written with the task, keyed "<environment>:<ending kind>". The report prints one
-    # only when that arm actually ended that way, so a note can never describe a run that didn't happen.
-    notes: tuple[tuple[str, str], ...] = ()
+    # Interpretations of the fake agent's scripted path: (key "<environment>:<ending kind>", the note, the
+    # commands of the path it describes, in order). The report prints one only for a fake-agent trace that
+    # ended that way through exactly those commands; never for a live run, whose path nobody wrote in
+    # advance (live run 2, item 1).
+    notes: tuple[tuple[str, str, tuple[str, ...]], ...] = ()
 
 
 # Shared by every setup: strict mode, a repo on `main`, a repo-local identity, fixed commit dates.
@@ -76,9 +85,9 @@ fail() { printf '%s\\n' "$1" >&3; exit 1; }
 
 _INSPECT = Task(
     id="git-inspect",
-    version=2,
+    version=3,
     capability="Pager defaults (control)",
-    goal="Write the last five log entries and the unstaged diff to out/.",
+    goal="Write the last five log entries to out/log.txt and the unstaged diff to out/diff.txt.",
     prerequisites=("git",),
     setup=_PRELUDE
     + """\
@@ -130,9 +139,12 @@ _RESOLVED = "main\\nside\\n"  # printf format; the check compares against the sa
 
 _REBASE = Task(
     id="git-rebase-continue",
-    version=2,
+    version=3,
     capability="Editor defaults",
-    goal="Rebase side onto main, resolving the conflict in f as 'main' then 'side'.",
+    goal=(
+        "Rebase side onto main and finish the rebase, resolving the conflict in f as the two lines "
+        "'main' then 'side'; leave side checked out with nothing uncommitted."
+    ),
     prerequisites=("git",),
     setup=_PRELUDE
     + """\
@@ -207,6 +219,13 @@ git diff --quiet HEAD || fail "uncommitted changes are left behind"
             "vanilla:completed",
             "git rebase --continue failed because vanilla has no editor to confirm the commit message; the "
             "agent retried with an editor named on the command line (-c core.editor=true), which cost a turn",
+            (
+                "git rebase main",
+                f"printf '{_RESOLVED}' > f",
+                "git add f",
+                "git rebase --continue",
+                "git -c core.editor=true rebase --continue",
+            ),
         ),
     ),
 )
@@ -272,12 +291,14 @@ git diff --cached --quiet || fail "the change is still staged, not committed"
             "vanilla:completed",
             "The pre-commit hook ran and never finished; the bench killed the commit at its call limit, and "
             "the agent committed again with --no-verify, skipping the hook itself",
+            (f"git commit -m '{_COMMIT_MSG}'", f"git commit --no-verify -m '{_COMMIT_MSG}'"),
         ),
         (
             "timelike:completed",
             "The pre-commit hook ran under timelike's limit and was stopped with a verdict, so the commit "
             "failed instead of hanging; the agent then chose to commit with --no-verify, which the verdict "
             "does not suggest",
+            (f"git commit -m '{_COMMIT_MSG}'", f"git commit --no-verify -m '{_COMMIT_MSG}'"),
         ),
     ),
 )
@@ -292,6 +313,14 @@ if git diff --cached | grep -q '^+.*TODO'; then
 fi
 exit 0
 """
+
+# The fake agent's path through git-commit-hook-rejects when the hook rejects the first commit.
+_REJECT_PATH = (
+    f"git commit -m '{_COMMIT_MSG}'",
+    "sed -i '/TODO/d' f",
+    "git add f",
+    f"git commit -m '{_COMMIT_MSG}'",
+)
 
 _HOOK_REJECTS = Task(
     id="git-commit-hook-rejects",
@@ -373,18 +402,108 @@ fi
             "vanilla:completed",
             "The hook rejected the first commit; the agent removed the TODO line and committed again, within "
             "the policy",
+            _REJECT_PATH,
         ),
         (
             "timelike:completed",
             "The hook rejected the first commit; the agent removed the TODO line and committed again, within "
             "the policy",
+            _REJECT_PATH,
         ),
     ),
 )
 
 
-# RB4's order. The report, not the catalog, puts losing cases first (P6).
-CATALOG: tuple[Task, ...] = (_INSPECT, _REBASE, _HOOK_HANGS, _HOOK_REJECTS)
+# --- python-missing-module: a module neither image has (slice 1, FR-39) ---------------------------
+
+_REPORT_PY = """\
+import json
+
+from tabulate import tabulate
+
+with open("data.json") as f:
+    data = json.load(f)
+print(tabulate(sorted(data.items()), tablefmt="plain"))
+"""
+
+# The fake agent's rewrite: the same report without the module, one name and number a line.
+_REWRITE = (
+    'printf \'import json\\n\\nwith open("data.json") as f:\\n    data = json.load(f)\\n'
+    "for name, count in sorted(data.items()):\\n    print(name, count)\\n' > report.py"
+)
+
+_MISSING_MODULE = Task(
+    id="python-missing-module",
+    version=2,
+    capability="Missing modules and installs without a network",
+    goal=(
+        "Make `python3 report.py` write its totals to out/totals.txt, each on its own line as the name, a "
+        "space, then the count (for example `apples 3`)."
+    ),
+    prerequisites=("python3",),
+    setup=f"""\
+set -eu
+mkdir out
+printf '{{"pears": 5, "apples": 3}}\\n' > data.json
+cat > report.py <<'PY'
+{_REPORT_PY}PY
+""",
+    policy=Policy(
+        start="run",
+        steps=(
+            Step(
+                "run",
+                "python3 report.py > out/totals.txt",
+                on_ok=DONE,
+                on_fail="install",
+                on_hang=give_up("the report hung"),
+            ),
+            Step(
+                "install",
+                "pip install tabulate",
+                on_ok="rerun",
+                on_fail="rewrite",
+                on_hang="rewrite",
+            ),
+            Step(
+                "rewrite",
+                _REWRITE,
+                on_ok="rerun",
+                on_fail=give_up("could not rewrite report.py"),
+                on_hang=give_up("rewriting report.py hung"),
+            ),
+            Step(
+                "rerun",
+                "python3 report.py > out/totals.txt",
+                on_ok=DONE,
+                on_fail=give_up("the report still fails"),
+                on_hang=give_up("the report hung"),
+            ),
+        ),
+    ),
+    check=_CHECK_PRELUDE
+    + """\
+test -s out/totals.txt || fail "out/totals.txt is missing or empty: the report was not written"
+norm="$(tr -s ' \\t' ' ' < out/totals.txt | sed 's/ *$//')"
+printf '%s\\n' "$norm" | grep -qx 'apples 3' || fail "out/totals.txt does not list apples 3"
+printf '%s\\n' "$norm" | grep -qx 'pears 5' || fail "out/totals.txt does not list pears 5"
+""",
+    expected=(
+        "vanilla: 4 calls, 2 non-zero (module not found, then pip refusing an externally managed "
+        "interpreter), completed / timelike: the same count, the install refused by the package guard "
+        "(registry unreachable). Tie"
+    ),
+    difference=(
+        "Both images have the same python3 and pip, and neither has the module the script imports. "
+        "Neither has a network in the bench. Vanilla's interpreter is externally managed, so its pip "
+        "refuses to install; timelike's pip goes through the package guard, which checks the registry "
+        "first and reports it unreachable"
+    ),
+)
+
+
+# RB4's order, then slice 1's task. The report, not the catalog, puts losing cases first (P6).
+CATALOG: tuple[Task, ...] = (_INSPECT, _REBASE, _HOOK_HANGS, _HOOK_REJECTS, _MISSING_MODULE)
 
 NOT_BENCHABLE: tuple[tuple[str, str], ...] = (
     (

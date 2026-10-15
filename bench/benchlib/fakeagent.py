@@ -203,3 +203,36 @@ def reachable_terminals(policy: Policy, start: str | None = None) -> frozenset[s
             else:
                 todo.append(target)
     return frozenset(found)
+
+
+def happy_path(policy: Policy) -> tuple[str, ...]:
+    """The commands of the walk on which every call succeeds: the start, then each `on_ok`, up to a terminal.
+
+    The model stand-in's script for a task (feature 002 slice 1, FR-47): a live harness then runs the same
+    commands the fake agent would on its best path, so the live path in the lane exercises the task's own
+    commands. The stand-in cannot branch on outcomes the way this policy does (OpenCode tells the model a
+    call's output but not its exit code), so it does not try. A cycle ends at the loop guard's bound.
+    """
+    commands: list[str] = []
+    current = policy.start
+    visits: Counter[str] = Counter()
+    while not is_terminal(current):
+        visits[current] += 1
+        if visits[current] > MAX_VISITS:
+            break
+        step = policy.step(current)
+        commands.append(step.command)
+        current = step.on_ok
+    return tuple(commands)
+
+
+def every_command(policy: Policy) -> tuple[str, ...]:
+    """Each step's command once, in the order the policy lists its steps: the model stand-in's script.
+
+    A live harness in the lane then runs every command the fake agent can run for the task, its recovery
+    steps included (the Python task's install and rewrite), so the live path meets the same failures the
+    fake path does. The stand-in cannot branch on outcomes (OpenCode tells the model a call's output but not
+    its exit code), so it does not try; a task whose steps only make sense on one branch may end failed
+    under the stand-in, which is a fact about the script, not about timelike.
+    """
+    return tuple(step.command for step in policy.steps)

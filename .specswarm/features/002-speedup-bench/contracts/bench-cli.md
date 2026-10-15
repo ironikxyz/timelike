@@ -96,12 +96,13 @@ What happened in vanilla:
   2. `<command>` → hung: killed at the 120 s limit
   3. `<command>` → exit 0
   Ended: completed — the check confirmed the goal.
-  Why: <a note written with the task, printed only when this arm ended this way>.
+  Why: <a note written with the task: fake-agent traces only, printed only when this arm ended this way through
+       exactly the commands the note names; never on a live or stand-in run (Cycle 4 addendum 3)>.
 
 What happened in timelike:
   1. `<command>` → exit 0
   Ended: failed — check failed: <the check's reason>.
-  Why: <note, if one matches "timelike:failed">.
+  Why: <note, if one matches "timelike:failed" and the calls match its path; fake-agent traces only>.
 
 ## Ties (N)
 ...
@@ -115,5 +116,169 @@ What happened in timelike:
 ```
 
 The verdict line names what decided it: the endings when they differ, else turns, else failed or hung
-commands; a tie says all three are equal. For a live run (not in slice 0), the first line is instead
+commands; a tie says all three are equal. *(Slice 0's rule. Superseded in Cycle 4 by revision 8's order; see the
+Slice 1 section below.)* For a live run (not in slice 0), the first line is instead
 `LIVE RUN — <harness> <version>, model <id>; a single repetition, no spread (slice 2)`.
+
+---
+
+# Slice 1 (Cycle 4, send `bridge/sends/02-rev8-20261013-064725.md`), declared
+
+Everything above holds except where this section says otherwise. Above, "vanilla, then timelike" becomes "each arm",
+and the verdict line's "failed or hung commands" is replaced by the order below (revision 8).
+
+## `timelike-bench`
+
+```
+timelike-bench run [--harness fake|opencode|codex ...] [--arm vanilla|not-told|told ...] [--task ID ...]
+                   [--out DIR] [--call-limit S] [--run-limit S] [--turn-cap N] [--spend-cap USD]
+                   [--dry-run] [--standin]
+timelike-bench report DIR
+timelike-bench catalog
+timelike-bench categories [--probe]
+```
+
+- **`run`**, in order:
+  1. Refuses an API-key-shaped variable in its own environment, as before (exit 4), for every harness: the key is
+     never in the environment, only in a file. One name is accepted, by a live run only: `BENCH_KEY_FILE`, which is
+     key-shaped by FR-12's rule but holds a path.
+  2. With the fake agent only (the default): refuses a set `BENCH_KEY_FILE` (exit 4, FR-32).
+  3. With a live harness: refuses an undated `BENCH_MODEL` (exit 2); unless `--standin`, reads `BENCH_KEY_FILE` (a
+     regular file, mode `0600`, owned by this user, one line; otherwise exit 4, naming the path and the property).
+  4. **Prints the plan** (FR-34). `--dry-run` stops here, exit 0, with no Docker and no key.
+  5. Checks the images' identity, as before, plus `timelike-bench-harness:local` for a live run.
+  6. Reads the timelike tool list once (`timelike tools --json` in a throwaway container of the agent image).
+  7. Live: creates the network, connects itself, starts the relay (and the stand-in, with `--standin`), creates the
+     harness container. The relay is given the key read in step 3, in memory, and the pinned model (Cycle 4 addendum,
+     Item 25 (b)).
+  8a. *(Cycle 4 addendum, lane 02s1-a item 2.)* A trace that breaks the trace schema is refused before it is written,
+     and the run stops with exit 1 and `a run's trace broke the trace schema and was refused, so it was not written:
+     <trace file>: <violation>`, not an internal error.
+  8. Runs each task × harness × arm, vanilla first, then not-told, then told; writes each trace as it ends; for a
+     live run, also `transcripts/<task>--<harness>--<arm>.{jsonl,rollout.jsonl,stderr.txt}`.
+  9. Writes `report.txt`; removes the harness container and the network.
+
+  Exit 0 when every trace was written, whatever the endings (as before), `stopped` rows included. Exit 1 when the
+  write gate refuses a file (FR-31), naming it.
+- **`--arm`** defaults to all three; **`--harness`** defaults to `fake`. Live and fake harnesses are not mixed in
+  one invocation (exit 2): a report is either a pipeline demo or a live run, never both.
+- **`--standin`** runs the live harnesses against `benchlib.standin`, in the driver, with no key. The report's
+  first line then says so: `STAND-IN MODEL RUN -- live harnesses drove a scripted model stand-in, not a model; this
+  tests the bench's live path, not timelike.`
+- **`categories`** lists the categories and their rules (no Docker). **`categories --probe`** starts one task
+  container of each image (`--network none`, `--memory 64m`), runs one real failing command per category, prints
+  `<image> · <category expected> · <category given> · <command> · <evidence>`, and exits 1 if any differ.
+- **Environment, added:** `BENCH_KEY_FILE`, `BENCH_MODEL` (default `deepseek/deepseek-v4-pro-0813`),
+  `BENCH_UPSTREAM` (default `https://openrouter.ai`), `BENCH_TURN_CAP` (30), `BENCH_SPEND_CAP_USD` (10.00),
+  `BENCH_MODEL_PRICE_IN` and `BENCH_MODEL_PRICE_OUT` (USD per million tokens), `BENCH_MODEL_PRICE_READ` (the date
+  those were read, printed in the plan's `basis:` line; Cycle 4 addendum), `BENCH_OPENCODE_VERSION` and
+  `BENCH_CODEX_VERSION` (the pins). All are passed by `bench/run.sh` from `pins.env` or the operator's shell.
+- **First line** (rule 12) scope: `FAKE-AGENT BENCH PIPELINE DEMO RUN -- not a test of timelike`, `STAND-IN MODEL
+  RUN -- not a test of timelike`, or `LIVE RUN n=1`.
+
+## `bench/run.sh`, added
+
+```
+bench/run.sh [--out DIR] [--task ID ...] [--harness H ...] [--arm A ...] [--dry-run] [--standin]
+             [--turn-cap N] [--spend-cap USD]
+```
+
+- With `BENCH_KEY_FILE` set: refuses it on the host unless it is a regular file outside the repository, mode
+  `0600`, owned by the user running the script (exit 4, naming the path and the property, never the value). Mounts
+  it read-only at `/run/timelike-bench/key` and passes `-e BENCH_KEY_FILE=/run/timelike-bench/key`.
+- Passes, by name and value from its own environment, only: `BENCH_MODEL`, `BENCH_UPSTREAM`, `BENCH_TURN_CAP`,
+  `BENCH_SPEND_CAP_USD`, `BENCH_MODEL_PRICE_IN`, `BENCH_MODEL_PRICE_OUT`, `BENCH_MODEL_PRICE_READ`,
+  `BENCH_OPENCODE_VERSION`,
+  `BENCH_CODEX_VERSION`. None is key-shaped, and nothing else is forwarded (RB9).
+- `make bench-live` = `bench/run.sh --harness opencode --harness codex`; `make bench-live DRY_RUN=1` adds `--dry-run`.
+
+## The live exec (`harness.py`), identical for every arm
+
+```
+docker exec -u agent -w /home/agent/task -e CODEX_HOME=/home/agent/.codex -e HOME=/home/agent \
+  -e OPENROUTER_API_KEY=placeholder-the-bench-relay-adds-the-key \
+  [-e OPENCODE_CONFIG_CONTENT -e OPENCODE_DISABLE_…] <container> \
+  sh -c '<the wrapper>' <run limit> '<harness argv, quoted> > ~/.bench/stdout.jsonl 2> ~/.bench/stderr.txt'
+```
+
+*(Cycle 4 addendum: FOR-MENTOR Item 25, ruled (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`.)* Every `-e` carries its value on argv, and
+none is a secret: `OPENROUTER_API_KEY` holds the fixed placeholder for every harness and run, and the docker CLI runs
+in the driver's environment unchanged. No exec carries the key. The relay drops whatever `Authorization` a request
+arrives with and adds its own.
+
+## The relay (`relay.py`), Cycle 4 addendum
+
+| Method and path (under the relay) | Forwarded when | Otherwise |
+|---|---|---|
+| `POST /api/v1/chat/completions` | the body's `model` is the pin | 403, `no-model` or `other-model` |
+| `POST /api/v1/responses` | the body's `model` is the pin | 403, `no-model` or `other-model` |
+| `GET /api/v1/generation?id=…` | always | — |
+| anything else, or a target naming another host | never | 403, `route-not-allowed` |
+
+A refusal's body is `{"error": {"message": "timelike-bench relay: refused (<verdict>): <why>", "code": 403}}`. Each
+is counted under the run's `extensions.relay.refused`. The caps answer 400 as before. `other-model` ends the run
+`stopped` (`model-refused`).
+
+*(Cycle 4 addendum 2, live run 1.)* A **turn** is a tool-offering request the upstream answered with HTTP 200; one it
+did not answer, or answered with an error, is counted under `extensions.relay.unanswered` and does not count toward
+the turn cap (item 2). Against an `https` upstream the relay verifies the certificate against the driver image's
+system store; one that does not verify is answered 502 (`unreachable`) and nothing is forwarded (item 1).
+
+## Report layout, schema 2
+
+```
+<first line>
+Measured by the project's own maintainer. Reproduce: <command>
+Timelike <revision> · vanilla <image_id> (base <digest>; same base, user and git, without timelike's layers) · model <pin> · arms: vanilla, timelike not told, timelike told
+
+# Harness: <name> <version> (reported <version>) · answered by <model ids> · invocation <…>
+
+## Adoption: timelike tool calls per arm
+arm                  runs   tool calls   timelike tool calls   tools used         through timelike
+vanilla              5      31           —                     —                  —
+timelike, not told   5      29           1                     run 1              2
+timelike, told       5      24           7                     run 4, view 3      2
+
+## Failure categories per arm (where the failed call ran: the task container)
+category            vanilla   timelike, not told   timelike, told
+command not found   0         0                    0
+…
+other               1         0                    0
+
+## Timelike loses (N)
+### <task-id> — <goal>
+Tests: <capability>. <difference>.
+Not told vs vanilla: Verdict: Timelike loses — both completed in 4 turns; timelike, not told had 1 hang to vanilla's 0.
+Told vs vanilla: Verdict: Tie — both completed, in 4 turns, with 0 hangs and 1 failed command.
+metric                            vanilla     timelike, not told   timelike, told
+ending                            completed   completed            completed
+turns                             4           4                    4
+hangs                             0           1                    0
+failed commands (hung included)   1           1                    1
+tool calls                        4           4                    4
+wall-clock                        3.1 s       9.4 s                3.0 s
+
+What happened in vanilla:
+  1. `<command>` → exit 127 [command not found]: <first output line>
+  …
+## Ties (N)
+## Timelike wins (N)
+## Not compared: infrastructure (N)
+- <task-id> · timelike, told: stopped (api-rate-limit) — OpenRouter answered 429 to the last request
+
+# Not benchable on this path
+- <capability>: <reason>
+
+# Appendix: tokens and spend
+- <harness> · <task> · <arm>: input 81234, output 2210; spend $0.1159 (openrouter usage)
+Total spend: $<sum> over <n> runs (OpenRouter's figures; <k> generations not reported)
+```
+
+- **The verdict order (revision 8, FR-48):** ending, turns, hangs, failed commands. The sentence names what decided it
+  and quotes only counts in the table. A tie quotes the turns, hangs and failed commands. The table's rows run in
+  that order.
+- **Placement in sections:** a task goes under the worse of its two verdicts (`incomplete` counts as a loss). A
+  comparison with a `stopped` side is not made, and that run is listed under "Not compared".
+- **Fake agent:** the adoption table carries one more line: `The fake agent cannot read a placement: its told and
+  not-told arms run the same policy.`
+- Token and spend figures appear only under the appendix heading.

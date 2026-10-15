@@ -1,78 +1,110 @@
 #!/opt/timelike/python/bin/python3 -I
-"""timelike-bench — the speedup bench: vanilla vs timelike, one task at a time (feature 002, slice 0).
+"""timelike-bench — the speedup bench: vanilla vs timelike, not told and told, per harness (feature 002).
 
-Runs in the bench driver container (bench/driver/Dockerfile), never in an environment under test; it
-holds the Docker socket, and the task containers it starts do not (H1). Bound by the output contract
-(rules 1–16) and checked by timelike-conform, like every timelike tool (FR-15).
+Runs in the bench driver container (bench/driver/Dockerfile), never in an environment under test; it holds the
+Docker socket, and the task containers it starts do not (H1). Bound by the output contract (rules 1–16) and
+checked by timelike-conform, like every timelike tool (FR-15).
 
-  timelike-bench run [--task ID ...] [--out DIR] [--call-limit S] [--run-limit S]
-      --out DIR writes exactly DIR/traces and DIR/report.txt (refused if DIR already holds traces);
-      without it, $BENCH_OUT/<UTC stamp>/
+  timelike-bench run [--harness fake|opencode|codex ...] [--arm vanilla|not-told|told ...] [--task ID ...]
+                     [--out DIR] [--call-limit S] [--run-limit S] [--turn-cap N] [--spend-cap USD]
+                     [--dry-run] [--standin]
   timelike-bench report DIR
   timelike-bench catalog
+  timelike-bench categories [--probe]
 
-`run` refuses before anything else if an API-key-shaped variable is present (FR-12, exit 4): a
-fake-agent run needs no key, and a key present by accident would reach a harness process. It then
-refuses stale or unstamped images (FR-2, FR-8, exit 1), runs each task in vanilla then timelike, writes
-one trace per run and the report, and exits 0 whatever the tasks' endings: a timelike loss is data.
+`run` refuses an API-key-shaped variable in its own environment, whatever the harness (FR-12, exit 4): a key
+only ever arrives in a file. With the fake agent (the default) it also refuses a set BENCH_KEY_FILE (FR-32).
+With a live harness it needs a dated model id and, unless --standin, the key file (FR-27, FR-29); it prints
+its plan before any request (FR-34), and --dry-run stops there. It then refuses stale or unstamped images
+(FR-2, FR-8, exit 1), runs each task under each harness in each arm, writes one trace per run and the report,
+and exits 0 whatever the endings: a timelike loss, and an infrastructure stop, are data.
 
-Every report from a fake-agent run opens with the operator's statement of what it is — a demo run of the
-bench pipeline, not a test of timelike — and every header's scope says so (FR-9; send …-080659, F001).
+Every report from a fake-agent run opens with the operator's statement of what it is — a demo run of the bench
+pipeline, not a test of timelike — and every header's scope says so (FR-9; send …-080659, F001).
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import os
+import socket
+import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import agentio
-from benchlib import catalog, keys, report, runner
+from benchlib import catalog, categories, keyfile, keys, plan, report, runner
 from benchlib import docker as dk
 from benchlib import fakeagent as fa
+from benchlib import harness as hz
 from benchlib import trace as tr
 from benchlib.executor import DockerExecutor, Executor
+from benchlib.relay import ALIAS, PORT, Relay
+from benchlib.standin import StandIn
 
 AGENT_IMAGE = "timelike-agent:local"
 VANILLA_IMAGE = "timelike-vanilla:local"
 DRIVER_IMAGE = "timelike-bench-driver:local"
+HARNESS_IMAGE = "timelike-bench-harness:local"
 # Follows the report's first line (send …-080659, F001), shortened to fit the rule-12 header.
 FAKE_SCOPE = "FAKE-AGENT BENCH PIPELINE DEMO RUN -- not a test of timelike"
+STANDIN_SCOPE = "STAND-IN MODEL RUN -- not a test of timelike"
+LIVE_SCOPE = "LIVE RUN n=1"
 DEFAULT_OUT = "bench/out"
+LIVE_HARNESSES = ("opencode", "codex")
+TIMELIKE_TOOL = "/opt/timelike/bin/timelike"
+KEY_MOUNT = "/run/timelike-bench/key"
 
 TOOL = agentio.Tool(
     name="timelike-bench",
     target="bench",
-    summary="Speedup bench: runs catalog tasks in a vanilla and the timelike image; traces and report",
+    summary="Speedup bench: tasks in vanilla and timelike (told, not told), per harness; traces and report",
     usage=[
-        "timelike-bench run [--task ID ...] [--out DIR] [--call-limit S] [--run-limit S]",
+        "timelike-bench run [--harness H ...] [--arm A ...] [--task ID ...] [--out DIR] [--dry-run]",
         "timelike-bench report DIR      rebuild DIR/report.txt from DIR/traces alone",
         "timelike-bench catalog         the tasks, and the capabilities not benchable on this path",
+        "timelike-bench categories      the failure categories; --probe produces each in both images",
     ],
     probe=["catalog"],
+    # It starts and removes containers and, live, spends money: --dry-run (agentio's, rule 8) prints the plan.
+    destructive=True,
     exit_codes={
         agentio.EXIT_OK: "ok (whatever the tasks' endings)",
-        agentio.EXIT_FAILURE: "failure: stale or unstamped image, docker error, invalid trace",
-        agentio.EXIT_USAGE: "usage",
+        agentio.EXIT_FAILURE: "failure: stale image, docker error, invalid trace, or the key gate refused",
+        agentio.EXIT_USAGE: "usage (an undated model id included)",
         agentio.EXIT_NOT_FOUND: "not found: unknown task, or no traces in DIR",
-        agentio.EXIT_CONFIRM: "grant required: an API-key-shaped variable is present",
+        agentio.EXIT_CONFIRM: "grant required: a key-shaped variable, or the key file refused",
     },
 )
 
 
 def configure(p: argparse.ArgumentParser) -> None:
     # Optional to argparse, required by main: a required positional would make `--help` a usage error.
-    p.add_argument("action", nargs="?", choices=["run", "report", "catalog"], help="what to do")
+    p.add_argument("action", nargs="?", choices=["run", "report", "catalog", "categories"], help="what to do")
     p.add_argument("dir", nargs="?", help="report: the run directory holding traces/")
     p.add_argument("--task", action="append", default=[], metavar="ID", help="run: this task (repeatable)")
+    p.add_argument(
+        "--harness", action="append", default=[], choices=["fake", *LIVE_HARNESSES], help="run: repeatable"
+    )
+    p.add_argument("--arm", action="append", default=[], choices=list(runner.ARMS), help="run: repeatable")
     p.add_argument("--out", help="run: exactly this directory (default $BENCH_OUT/<UTC stamp>)")
-    p.add_argument("--call-limit", type=int, default=runner.Limits.call_s, metavar="S", help="per call, s")
-    p.add_argument("--run-limit", type=int, default=runner.Limits.run_s, metavar="S", help="per run, s")
+    p.add_argument(
+        "--call-limit", type=int, default=runner.Limits.call_s, metavar="S", help="fake: per call, s"
+    )
+    p.add_argument("--run-limit", type=int, default=None, metavar="S", help="per run, s (fake 300, live 900)")
+    p.add_argument("--turn-cap", type=int, default=None, metavar="N", help="live: turns per run (30)")
+    p.add_argument(
+        "--spend-cap", type=float, default=None, metavar="USD", help="live: per invocation (10.00)"
+    )
+    p.add_argument("--standin", action="store_true", help="run: live harnesses against the model stand-in")
+    p.add_argument(
+        "--probe", action="store_true", help="categories: one real failure per category, both images"
+    )
 
 
-# ── catalog ────────────────────────────────────────────────────────────────────────────────────
+# ── catalog and categories ─────────────────────────────────────────────────────────────────────
 
 
 def do_catalog() -> agentio.Result:
@@ -82,7 +114,51 @@ def do_catalog() -> agentio.Result:
         "tasks": [{"id": t.id, "version": t.version, "capability": t.capability} for t in catalog.CATALOG],
         "not_benchable": [{"capability": c, "reason": r} for c, r in catalog.NOT_BENCHABLE],
     }
-    return agentio.Result("catalog", "slice 0", f"ok: {len(catalog.CATALOG)} tasks", lines, data=data)
+    return agentio.Result("catalog", "slice 1", f"ok: {len(catalog.CATALOG)} tasks", lines, data=data)
+
+
+def do_categories(probe: bool) -> agentio.Result:
+    if not probe:
+        rules = categories.describe()
+        data = {"categories": list(categories.CATEGORIES)}
+        return agentio.Result(
+            "categories", "rules", f"ok: {len(categories.CATEGORIES)} categories", rules, data=data
+        )
+    _refuse_keys()
+    docker, run = _docker()
+    images = _images(run, [VANILLA_IMAGE, AGENT_IMAGE])
+    rows: list[dict[str, object]] = []
+    lines: list[str] = []
+    for name, img in (("vanilla", images[0]), ("timelike", images[1])):
+        cid = dk.start_container(img.image_id, run, memory=categories.PROBE_MEMORY)
+        try:
+            dk.prepare_task_dir(cid, run)
+            ex = DockerExecutor(cid, docker=docker)
+            for p in categories.PROBES:
+                before = dk.oom_kills(cid, run)
+                r = ex.run(p.command, categories.PROBE_CALL_LIMIT_S)
+                after = dk.oom_kills(cid, run)
+                rose = before is not None and after is not None and after > before
+                output = (r.stdout_head + b"\n" + r.stderr_head).decode("utf-8", "replace")
+                got = categories.categorize(r.exit_code, r.hung, output, rose)
+                evidence = (
+                    f"exit {r.exit_code}" + (", hung" if r.hung else "") + (", oom_kill rose" if rose else "")
+                )
+                ok = got == p.expect
+                rows.append({"image": name, "expect": p.expect, "got": got, "command": p.command, "ok": ok})
+                lines.append(
+                    f"{name} · {p.expect} · {got} · `{p.command}` · {evidence}{'' if ok else ' · MISMATCH'}"
+                )
+        finally:
+            dk.remove_container(cid, run)
+    bad = [r for r in rows if not r["ok"]]
+    verdict = (
+        f"ok: {len(rows)} probes, every category produced in both images"
+        if not bad
+        else (f"{len(bad)} of {len(rows)} probes categorised wrongly")
+    )
+    exit_code = agentio.EXIT_FAILURE if bad else agentio.EXIT_OK
+    return agentio.Result("categories", "probe", verdict, lines, data={"probes": rows}, exit=exit_code)
 
 
 # ── report ─────────────────────────────────────────────────────────────────────────────────────
@@ -90,17 +166,26 @@ def do_catalog() -> agentio.Result:
 
 def task_texts() -> dict[str, report.TaskText]:
     """The catalog's words for the report (send …-080659, F002)."""
-    return {t.id: report.TaskText(t.goal, t.capability, t.difference, dict(t.notes)) for t in catalog.CATALOG}
+    return {
+        t.id: report.TaskText(
+            t.goal, t.capability, t.difference, {k: (n, path) for k, n, path in t.notes}, t.version
+        )
+        for t in catalog.CATALOG
+    }
 
 
-def _build_report(directory: Path, reproduce: str) -> list[str]:
+def _build_report(directory: Path, reproduce: str, gate: keyfile.Gate | None = None) -> list[str]:
     return report.build_report(
-        directory, tasks=task_texts(), not_benchable=catalog.NOT_BENCHABLE, reproduce=reproduce
+        directory, tasks=task_texts(), not_benchable=catalog.NOT_BENCHABLE, reproduce=reproduce, gate=gate
     )
 
 
 def _scope(traces: Sequence[tr.Trace]) -> str:
-    return FAKE_SCOPE if any(t.identity.harness_name == fa.FAKE_AGENT_NAME for t in traces) else "live run"
+    if any(t.identity.harness_name == fa.FAKE_AGENT_NAME for t in traces):
+        return FAKE_SCOPE
+    if any(t.extensions.get("standin") for t in traces):
+        return STANDIN_SCOPE
+    return LIVE_SCOPE
 
 
 def do_report(directory: str | None) -> agentio.Result:
@@ -134,9 +219,12 @@ def do_report(directory: str | None) -> agentio.Result:
 class DockerSession:
     """One fresh task container per run (RB5), refused if it carries a key or a TERM (RB2, RB9)."""
 
-    def __init__(self, image_id: str, run: dk.Runner, docker: str) -> None:
+    def __init__(
+        self, image_id: str, run: dk.Runner, docker: str, network: str = "none", volumes_from: str = ""
+    ) -> None:
         self.run = run
-        self.container_id = dk.start_container(image_id, run)
+        self.docker = docker
+        self.container_id = dk.start_container(image_id, run, network=network, volumes_from=volumes_from)
         try:
             dk.prepare_task_dir(self.container_id, run)
             found = keys.key_shaped(dk.container_env(self.container_id, run))
@@ -145,7 +233,8 @@ class DockerSession:
                     agentio.EXIT_CONFIRM,
                     f"task container {self.container_id[:12]} carries API-key-shaped variables: "
                     + ", ".join(found),
-                    "remove them from the image; live runs are not part of slice 0 (FR-12)",
+                    "remove them from the image; no container holds the key, which only the driver's relay "
+                    "adds (FR-30)",
                 )
             term = dk.exec_term(self.container_id, run)
             if term:
@@ -162,18 +251,56 @@ class DockerSession:
     def close(self) -> None:
         dk.remove_container(self.container_id, self.run)
 
+    def place(self) -> str:
+        """007's placement, as the agent image's entrypoint runs it on start (FR-18)."""
+        env = [f"HOME={hz.HOME}", f"CODEX_HOME={hz.CODEX_HOME}"]
+        done = dk.exec_out(
+            self.container_id, [TIMELIKE_TOOL, "announce", "--install", "--json"], self.run, env
+        )
+        try:
+            entries = json.loads(done.stdout).get("placements") or []
+        except (json.JSONDecodeError, AttributeError):
+            raise runner.PlacementFailed(
+                f"timelike announce --install exited {done.returncode}: "
+                f"{done.stderr.strip()[:200] or 'no output'}"
+            ) from None
+        return "; ".join(f"{e.get('harness')}: {e.get('state')}" for e in entries if isinstance(e, dict))
 
-def _session_factory(image_id: str, run: dk.Runner, docker: str) -> Callable[[], runner.Session]:
-    return lambda: DockerSession(image_id, run, docker)
+    def oom_kills(self) -> int | None:
+        return dk.oom_kills(self.container_id, self.run)
+
+    def read(self, argv: Sequence[str]) -> tuple[int, str]:
+        done = dk.exec_out(self.container_id, argv, self.run)
+        return done.returncode, done.stdout
+
+    def harness_executor(self, exec_env: dict[str, str]) -> Executor:
+        """The harness's exec. It carries no key: its key variable holds the placeholder (Item 25)."""
+        return DockerExecutor(
+            self.container_id,
+            docker=self.docker,
+            exec_env=exec_env,
+            # dash: the timelike image's BASH_ENV strip would remove the placeholder, and both harnesses
+            # refuse to start without the variable.
+            inner="sh",
+        )
 
 
-def _refuse_keys() -> None:
-    found = keys.key_shaped(os.environ)
+def _session_factory(
+    image_id: str, run: dk.Runner, docker: str, network: str = "none", volumes_from: str = ""
+) -> Callable[[], runner.Session]:
+    return lambda: DockerSession(image_id, run, docker, network, volumes_from)
+
+
+KEY_FILE_VAR = "BENCH_KEY_FILE"  # key-shaped by FR-12's rule (it has a KEY part), but its value is a path
+
+
+def _refuse_keys(allow: Sequence[str] = ()) -> None:
+    found = [n for n in keys.key_shaped(os.environ) if n not in allow]
     if found:
         raise agentio.ToolError(
             agentio.EXIT_CONFIRM,
             f"API-key-shaped variables present: {', '.join(found)}",
-            "unset them; a fake-agent run needs no key, and live runs are not part of slice 0 (FR-12)",
+            "unset them; a key only ever arrives in the file BENCH_KEY_FILE names (FR-12, FR-29)",
         )
 
 
@@ -193,20 +320,157 @@ def _required_env(name: str, remedy: str) -> str:
     return value
 
 
+def _number(name: str, given: float | None, default: float, kind: type[int] | type[float]) -> float:
+    if given is not None:
+        value: float = given
+    else:
+        raw = os.environ.get(name, "").strip()
+        try:
+            value = kind(raw) if raw else default
+        except ValueError:
+            raise agentio.UsageError(f"{name}={raw!r} is not a number", f"set {name} to a number") from None
+    if value <= 0:
+        raise agentio.UsageError(f"{name} must be positive, got {value}", "timelike-bench --help")
+    return value
+
+
+def _docker() -> tuple[str, dk.Runner]:
+    docker = os.environ.get("TIMELIKE_BENCH_DOCKER") or "docker"  # a test stand-in only
+    return docker, dk.subprocess_runner(docker)
+
+
+def _images(run: dk.Runner, refs: Sequence[str]) -> list[dk.ImageIdentity]:
+    try:
+        return [dk.image_identity(ref, run) for ref in refs]
+    except dk.DockerError as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), "build the images with make bench-images"
+        ) from None
+
+
+def _timelike_tools(image_id: str, run: dk.Runner) -> tuple[str, ...]:
+    """The timelike tool list (FR-19), from the timelike image itself, read once per invocation."""
+    done = run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--entrypoint",
+            TIMELIKE_TOOL,
+            image_id,
+            "tools",
+            "--json",
+        ]
+    )
+    try:
+        entries = json.loads(done.stdout).get("tools") or []
+        names = sorted(
+            {str(e["name"]) for e in entries if e.get("kind") == "timelike" and e.get("installed")}
+        )
+    except (json.JSONDecodeError, AttributeError, KeyError, TypeError):
+        names = []
+    if done.returncode != 0 or not names:
+        why = done.stderr.strip().splitlines()[:1] or [f"exit {done.returncode}, no timelike tools listed"]
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"cannot read the timelike tool list from {image_id[:19]}: {why[0]}",
+            "rebuild with make bench-images; `timelike tools --json` must list the image's tools",
+        )
+    return tuple(names)
+
+
+def _plan(
+    args: argparse.Namespace,
+    tasks: Sequence[catalog.Task],
+    harnesses: Sequence[str],
+    arms: Sequence[str],
+    model: str,
+    turn_cap: int,
+    run_limit: int,
+    spend_cap: float,
+) -> plan.Plan:
+    pins = {
+        "opencode": os.environ.get("BENCH_OPENCODE_VERSION", ""),
+        "codex": os.environ.get("BENCH_CODEX_VERSION", ""),
+    }
+    return plan.Plan(
+        tasks=[t.id for t in tasks],
+        harnesses=[(h, pins.get(h, "") or "unpinned") for h in harnesses],
+        arms=list(arms),
+        model=model,
+        caps=plan.Caps(turns=turn_cap, run_s=run_limit, spend_usd=spend_cap),
+        price_in=float(os.environ.get("BENCH_MODEL_PRICE_IN") or 0),
+        price_out=float(os.environ.get("BENCH_MODEL_PRICE_OUT") or 0),
+        price_read=os.environ.get("BENCH_MODEL_PRICE_READ", "").strip(),
+        standin=args.standin,
+    )
+
+
 def do_run(args: argparse.Namespace) -> agentio.Result:
-    _refuse_keys()
-    for name, value in (("--call-limit", args.call_limit), ("--run-limit", args.run_limit)):
-        if value <= 0:
-            raise agentio.UsageError(f"{name} must be positive, got {value}", "timelike-bench --help")
+    harnesses = list(dict.fromkeys(args.harness or ["fake"]))
+    live = harnesses != ["fake"]
+    if not live and os.environ.get(KEY_FILE_VAR, "").strip():
+        raise agentio.ToolError(
+            agentio.EXIT_CONFIRM,
+            f"{KEY_FILE_VAR} is set for a fake-agent run",
+            "unset it: the fake agent uses no model, and CI never has a key (FR-12, FR-32)",
+        )
+    # The key file's own variable is the one key-shaped name a live run accepts: it holds a path (FR-29).
+    _refuse_keys(allow=(KEY_FILE_VAR,) if live else ())
+    if live and "fake" in harnesses:
+        raise agentio.UsageError(
+            "the fake agent and live harnesses are not mixed in one run", "run them as two invocations"
+        )
+    arms = [a for a in runner.ARMS if a in (args.arm or runner.ARMS)]
+    if args.standin and not live:
+        raise agentio.UsageError(
+            "--standin drives live harnesses", "add --harness opencode or --harness codex"
+        )
+    if args.call_limit <= 0:
+        raise agentio.UsageError(
+            f"--call-limit must be positive, got {args.call_limit}", "timelike-bench --help"
+        )
+    run_limit = int(
+        _number("--run-limit", args.run_limit, runner.LIVE_RUN_S if live else runner.Limits.run_s, int)
+    )
     tasks = _tasks(args.task)
+
+    model, turn_cap, spend_cap, key = fa.MODEL_ID, 0, 0.0, None
+    plan_lines: list[str] = []
+    if live:
+        model = os.environ.get("BENCH_MODEL", "").strip() or plan.DEFAULT_MODEL
+        problem = plan.model_problem(model)
+        if problem:
+            raise agentio.UsageError(problem, "set BENCH_MODEL to a dated id (FR-27)")
+        turn_cap = int(_number("BENCH_TURN_CAP", args.turn_cap, 30, int))
+        spend_cap = float(_number("BENCH_SPEND_CAP_USD", args.spend_cap, 10.0, float))
+        if not args.standin:
+            try:
+                key = keyfile.read_key(os.environ.get(KEY_FILE_VAR, ""))
+            except keyfile.KeyFileError as e:
+                raise agentio.ToolError(
+                    agentio.EXIT_CONFIRM, str(e), "fix the key file: one line, mode 0600, yours (FR-29)"
+                ) from None
+        plan_lines = _plan(args, tasks, harnesses, arms, model, turn_cap, run_limit, spend_cap).lines()
+        # Before any request (FR-34); on stderr, because stdout carries the output contract (JSON, --json).
+        print("\n".join(f"timelike-bench: {line}" for line in plan_lines), file=sys.stderr, flush=True)
+    if args.dry_run:
+        if not plan_lines:
+            n = len(tasks) * len(arms)
+            plan_lines = [f"plan: {len(tasks)} tasks × fake agent × {len(arms)} arms = {n} runs, n = 1 each"]
+        return agentio.Result(
+            "plan", _scope_for(live, args.standin), "ok: dry run, nothing was run", plan_lines
+        )
+
     expected = _required_env("BENCH_GIT_SHA", "run through make bench, which passes the checkout's revision")
     base = _required_env(
         "BENCH_BASE_DIGEST", "run through make bench, which passes DEBIAN_IMAGE from pins.env"
     )
-    reproduce = os.environ.get("BENCH_REPRODUCE", "").strip() or "make bench"
+    reproduce = os.environ.get("BENCH_REPRODUCE", "").strip() or ("make bench-live" if live else "make bench")
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     out = Path(args.out) if args.out else Path(os.environ.get("BENCH_OUT") or DEFAULT_OUT) / stamp
-
     if args.out and any((out / "traces").glob("*.json")):
         raise agentio.ToolError(
             agentio.EXIT_FAILURE,
@@ -214,14 +478,9 @@ def do_run(args: argparse.Namespace) -> agentio.Result:
             "give --out an empty directory, or omit --out for $BENCH_OUT/<UTC stamp>",
         )
 
-    docker = os.environ.get("TIMELIKE_BENCH_DOCKER") or "docker"  # a test stand-in only
-    run = dk.subprocess_runner(docker)
-    try:
-        images = [dk.image_identity(ref, run) for ref in (VANILLA_IMAGE, AGENT_IMAGE, DRIVER_IMAGE)]
-    except dk.DockerError as e:
-        raise agentio.ToolError(
-            agentio.EXIT_FAILURE, str(e), "build the images with make bench-images"
-        ) from None
+    docker, run = _docker()
+    refs = [VANILLA_IMAGE, AGENT_IMAGE, DRIVER_IMAGE] + ([HARNESS_IMAGE] if live else [])
+    images = _images(run, refs)
     problems = dk.check_identity(expected, images)
     for img in images:
         baked = keys.key_shaped(img.env)
@@ -232,50 +491,135 @@ def do_run(args: argparse.Namespace) -> agentio.Result:
         raise agentio.ToolError(
             code, "; ".join(problems), "rebuild with make bench-images from a clean checkout"
         )
+    vanilla_img, timelike_img = images[0], images[1]
+    tools = _timelike_tools(timelike_img.image_id, run)
+    limits = runner.Limits(args.call_limit, run_limit if not live else runner.Limits.run_s)
+    ctx = runner.RunContext(expected, base, reproduce, limits, tools)
+    gate = keyfile.Gate([key] if key else [])
 
-    vanilla, timelike = images[0], images[1]
-    ctx = runner.RunContext(expected, base, reproduce, runner.Limits(args.call_limit, args.run_limit))
-    envs = [
-        runner.Environment(name, img.image_id, img.revision, _session_factory(img.image_id, run, docker))
-        for name, img in (("vanilla", vanilla), ("timelike", timelike))
-    ]
+    network = holder = ""
+    relay: Relay | None = None
+    standin: StandIn | None = None
     try:
-        traces = runner.run_bench(tasks, envs, ctx, out)
+        if live:
+            suffix = f"{stamp.lower()}-{os.getpid()}"
+            network, holder = f"timelike-bench-{suffix}", f"timelike-bench-harness-{suffix}"
+            dk.create_network(network, run)
+            dk.connect_network(network, socket.gethostname(), ALIAS, run)
+            dk.create_holder(images[3].image_id, holder, run)
+            if args.standin:
+                standin = StandIn().start()
+            upstream = (
+                standin.url
+                if standin
+                else (os.environ.get("BENCH_UPSTREAM", "").strip() or "https://openrouter.ai")
+            )
+            # The key lives here, in the driver's memory: the relay adds it to what it forwards (Item 25 (b)).
+            relay = Relay(
+                upstream, turn_cap=turn_cap, spend_cap_usd=spend_cap, model=model, key=key, port=PORT
+            ).start()
+        envs = {
+            name: runner.Environment(
+                name,
+                img.image_id,
+                img.revision,
+                _session_factory(img.image_id, run, docker, network or "none", holder),
+            )
+            for name, img in (("vanilla", vanilla_img), ("timelike", timelike_img))
+        }
+        cells = runner.cells(envs["vanilla"], envs["timelike"], arms)
+        lives: list[runner.Live] = []
+        if live and relay is not None:
+            specs = hz.specs(
+                os.environ.get("BENCH_OPENCODE_VERSION", ""), os.environ.get("BENCH_CODEX_VERSION", "")
+            )
+            for h in harnesses:
+                lives.append(
+                    runner.Live(
+                        spec=specs[h],
+                        relay=relay,
+                        relay_url=f"http://{ALIAS}:{PORT}/api/v1",
+                        model=model,
+                        turn_cap=turn_cap,
+                        run_limit_s=run_limit,
+                        gate=gate,
+                        key=key,
+                        upstream=relay.upstream.geturl(),
+                        standin=standin,
+                    )
+                )
+        traces = runner.run_bench(tasks, cells, ctx, out, lives=lives, gate=gate)
     except dk.DockerError as e:
         raise agentio.ToolError(
             agentio.EXIT_FAILURE, str(e), f"partial traces, if any, are in {out}"
         ) from None
-    _build_report(out, reproduce)
+    except runner.HarnessMismatch as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), "make bench-images rebuilds the harness image"
+        ) from None
+    except keyfile.GateRefused as e:
+        raise agentio.ToolError(agentio.EXIT_FAILURE, str(e), "nothing holding the key was written") from None
+    except tr.TraceInvalid as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            "a run's trace broke the trace schema and was refused, so it was not written: "
+            + "; ".join(e.violations),
+            f"the run stopped there; traces written before it are in {out / 'traces'}. The bench recorded "
+            "something its own schema forbids, which is a bench defect, not a result",
+        ) from None
+    finally:
+        if relay is not None:
+            relay.stop()
+        if standin is not None:
+            standin.stop()
+        if holder:
+            dk.remove_holder(holder, run)
+        if network:
+            dk.remove_network(network, socket.gethostname(), run)
+    try:
+        _build_report(out, reproduce, gate)
+    except keyfile.GateRefused as e:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE, str(e), "the traces are kept; the report was not"
+        ) from None
 
-    by_task = report.pair(traces)
-    lines = []
-    for task in tasks:
-        pair = by_task.get(task.id, {})
-        v, t = pair.get("vanilla"), pair.get("timelike")
-        lines.append(f"{task.id}: {report.verdict(v, t)} — {_brief(v)} | {_brief(t)}")
-    lines += [f"traces: {out / 'traces'}", f"report: {out / 'report.txt'}"]
-    verdicts = {}
-    for task in tasks:
-        pair = by_task.get(task.id, {})
-        verdicts[task.id] = report.verdict(pair.get("vanilla"), pair.get("timelike"))
+    by_harness = report.pair(traces)
+    lines: list[str] = []
+    verdicts: dict[str, dict[str, dict[str, str]]] = {}
+    for h, tasks_of in by_harness.items():
+        for task in tasks:
+            cells_of = tasks_of.get(task.id, {})
+            v = report.task_verdicts(cells_of)
+            verdicts.setdefault(h, {})[task.id] = dict(v)
+            said = ", ".join(f"{arm} {verdict}" for arm, verdict in v.items()) or "no comparison"
+            lines.append(
+                f"{task.id} · {h}: {said} — "
+                + " | ".join(_brief(cells_of.get(a)) for a in runner.ARMS if a in cells_of)
+            )
+    lines = [*plan_lines, *lines, f"traces: {out / 'traces'}", f"report: {out / 'report.txt'}"]
     data = {"out": str(out), "report": str(out / "report.txt"), "verdicts": verdicts}
     return agentio.Result(str(out), _scope(traces), f"ok: {len(traces)} traces written", lines, data=data)
+
+
+def _scope_for(live: bool, standin: bool) -> str:
+    return (STANDIN_SCOPE if standin else LIVE_SCOPE) if live else FAKE_SCOPE
 
 
 def _brief(t: tr.Trace | None) -> str:
     if t is None:
         return "no trace"
     s = t.totals
-    return (
-        f"{t.identity.environment} {t.ending.kind}, {s.turns} turns, {s.nonzero_exits} failed, {s.hangs} hung"
-    )
+    ending = t.ending.kind if t.ending.kind != "stopped" else f"stopped ({t.ending.cause})"
+    return f"{t.identity.arm} {ending}, {s.turns} turns, {s.hangs} hung, {s.nonzero_exits} failed"
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if args.action is None:
-        raise agentio.UsageError("no action given", "timelike-bench run | report DIR | catalog")
+        raise agentio.UsageError("no action given", "timelike-bench run | report DIR | catalog | categories")
     if args.action == "catalog":
         return do_catalog()
+    if args.action == "categories":
+        return do_categories(args.probe)
     if args.action == "report":
         return do_report(args.dir)
     if args.dir:

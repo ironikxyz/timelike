@@ -125,12 +125,27 @@ def check_identity(expected_revision: str, images: Sequence[ImageIdentity]) -> l
     return problems
 
 
-def start_container(image_id: str, run: Runner) -> str:
-    """A fresh task container, started by image ID, with flags identical for every image (RB5)."""
-    argv = [
-        "docker", "run", "-d", "--init", "--network", "none", "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges", "--entrypoint", "sleep", image_id, "infinity",
-    ]  # fmt: skip
+def start_container(
+    image_id: str,
+    run: Runner,
+    *,
+    network: str = "none",
+    volumes_from: str = "",
+    memory: str = "",
+) -> str:
+    """A fresh task container, started by image ID, with flags identical for every image (RB5).
+
+    Slice 1 adds three options, each the same for every arm of an invocation: a live run's internal network
+    (FR-25) instead of none, the harness volume read-only (FR-24), and the category probe's memory limit
+    (FR-43). The image under test is never changed by any of them.
+    """
+    argv = ["docker", "run", "-d", "--init", "--network", network, "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges"]  # fmt: skip
+    if volumes_from:
+        argv += ["--volumes-from", f"{volumes_from}:ro"]
+    if memory:
+        argv += ["--memory", memory, "--memory-swap", memory]
+    argv += ["--entrypoint", "sleep", image_id, "infinity"]
     cid = _call(run, argv).strip()
     if not cid:
         raise DockerError(f"docker run {image_id}: printed no container id")
@@ -156,3 +171,54 @@ def exec_term(container_id: str, run: Runner) -> str:
     """TERM as a tool call sees it (RB2: must be empty — moby sets it only for a TTY exec)."""
     out = _call(run, ["docker", "exec", "-u", "agent", container_id, "sh", "-c", 'printf %s "${TERM-}"'])
     return out.strip()
+
+
+# --- slice 1: the live run's network and harness volume, the told placement, OOM evidence ------------
+
+
+def create_network(name: str, run: Runner) -> None:
+    """A per-invocation network with no route out (FR-25): only its members reach each other."""
+    _call(run, ["docker", "network", "create", "--internal", name])
+
+
+def connect_network(name: str, container: str, alias: str, run: Runner) -> None:
+    _call(run, ["docker", "network", "connect", "--alias", alias, name, container])
+
+
+def remove_network(name: str, container: str, run: Runner) -> None:
+    """Best effort, always attempted, like remove_container."""
+    run(["docker", "network", "disconnect", "-f", name, container])
+    run(["docker", "network", "rm", name])
+
+
+def create_holder(image_id: str, name: str, run: Runner) -> str:
+    """The harness container (FR-24): created from the harness image, never started; its volume is the mount.
+
+    `docker create` fills the image's VOLUME from the image once, and every task container then takes it with
+    `--volumes-from <name>:ro`. The command given is never run.
+    """
+    return _call(run, ["docker", "create", "--name", name, image_id, "none"]).strip()
+
+
+def remove_holder(name: str, run: Runner) -> None:
+    run(["docker", "rm", "-f", "-v", name])
+
+
+def exec_out(container_id: str, argv: Sequence[str], run: Runner, env: Sequence[str] = ()) -> Completed:
+    """One exec as the agent, outside the counted run (placement, version, reading a transcript file)."""
+    flags: list[str] = []
+    for item in env:
+        flags += ["-e", item]
+    return run(["docker", "exec", "-u", "agent", "-w", TASK_HOME, *flags, container_id, *argv])
+
+
+def oom_kills(container_id: str, run: Runner) -> int | None:
+    """The cgroup memory.events oom_kill count (003 reads the same, R16), or None if unreadable."""
+    done = run(["docker", "exec", container_id, "cat", "/sys/fs/cgroup/memory.events"])
+    if done.returncode != 0:
+        return None
+    for line in done.stdout.splitlines():
+        key, _, value = line.partition(" ")
+        if key == "oom_kill" and value.strip().isdigit():
+            return int(value)
+    return None

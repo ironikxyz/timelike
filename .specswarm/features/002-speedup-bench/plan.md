@@ -269,3 +269,81 @@ None.
 
 ### ❌ Prohibited Technologies (cannot use)
 None.
+
+# Cycle 4 plan: 02 slice 1 (send `bridge/sends/02-rev8-20261013-064725.md`)
+
+**Branch:** `modify/002-slice-1` · **Spec:** `spec.md` § Slice 1 (FR-17 to FR-50) · **Intensity:** natural.
+
+## Summary
+
+The bench gains three arms, two live harnesses beside the fake agent, failure categories and adoption counts, and
+revision 8's verdict order. A live harness runs inside the task container, mounted read-only from a bench harness image.
+It reaches the model only through a relay in the driver, which counts turns, reads spend and enforces caps. The key
+comes from a file and is passed to the harness exec alone, and every artifact is gated against it. The model stand-in
+lets the lane run the whole live path with no key. The mentor's live run is one `make bench-live`.
+
+## Technical Context
+
+- **Language:** Python 3.14.8 in the driver (stdlib only, H5), as slice 0. Bash for `run.sh`.
+- **New modules** in `bench/benchlib/`: `categories.py`, `adoption.py`, `keyfile.py` (the key file and the write gate),
+  `relay.py`, `standin.py`, `transcripts.py` (parsers), `harness.py` (live adapters), `plan.py` (the plan and the
+  estimate).
+- **Changed:** `trace.py` (schema 2), `report.py`, `runner.py`, `catalog.py`, `docker.py`, `executor.py` (an exec
+  environment for one call), `bin/timelike-bench`, `run.sh`, `Makefile`, `pins.env`, `tests/e2e/fixtures/
+  validate_bench.py`.
+- **New image:** `bench/harness/Dockerfile` → `timelike-bench-harness:local` (`FROM scratch`, `VOLUME
+  /opt/bench-harness`), built by `make bench-images` and scanned by `make scan`.
+- **Third-party binaries:** OpenCode 1.19.0 and Codex CLI 0.162.1, pinned by npm `sha512` (tech-stack 1.7.0).
+- **Testing:** pytest units on the host lane (pure modules, the relay and stand-in on loopback, parsers on recorded
+  transcripts, the CLI through the fake docker); bats e2e in the Docker lane (the fake-agent run in three arms, the
+  live path against the stand-in, the category probe in both images, key-file refusals).
+
+## Constitution Check
+
+- **H1** (no socket in an image under test): the driver alone holds it; task containers get the harness volume and,
+  live, an internal network. ✓
+- **H3 / P004** (artifacts, not messages): completion is the driver's check; e2e validates traces and the report with
+  the independent validator. ✓
+- **H5** (stdlib first): no new Python dependency. ✓
+- **H8** (stamps): the harness image is stamped and checked like the others; each trace records the harness's
+  reported version against its pin. ✓
+- **H9** (supply chain): the harness image goes through `make scan`; the harness tarballs are pinned by integrity. ✓
+- **P4:** key in a 0600 file, passed to the harness exec only, write gate; caps; plan before spend. Item 25 asks
+  whether to go further. ✓ *(Cycle 4 addendum: Item 25 was ruled (b), `bridge/feedback/02-20261013-071257-item-25-the-relay-holds-the-key.md`. The relay holds the key;
+  every harness gets a placeholder; the relay forwards only the harnesses' routes for the pinned model. P4's "use but
+  never read" now holds in every arm.)*
+- **P6:** the vanilla image and the agent image are unchanged; spend and tokens only in the appendix; n = 1 labelled. ✓
+- **P7:** two harnesses; nothing works only through one. ✓
+
+## Phase 0: Research
+
+`research.md` RB12 to RB18: the second harness, offline running, where a harness runs, the relay and the key,
+categories, parsing and the stand-in, the estimate.
+
+## Phase 1: Design
+
+`data-model.md` § Slice 1; `contracts/trace-schema.md` (schema 2); `contracts/bench-cli.md` § Slice 1;
+`quickstart.md` § slice 1.
+
+## Phase 2: Task approach
+
+Pure modules first, each with units (categories, adoption, keyfile, trace 2, the verdict order, report). Then the
+stand-in and relay on loopback, then the parsers on recorded transcripts, then the harness adapters and the runner,
+then the CLI, `run.sh`, Make and the image, then e2e. Revision 8's four places go in the verdict task.
+
+## Tech Stack Compliance Report (Cycle 4)
+
+### ✅ Approved Technologies (already in stack)
+Python (stdlib), Bash, Docker, bats-core, pytest, Node (the agent runtimes, used by neither harness).
+
+### ➕ New Technologies (auto-added)
+- **OpenCode** 1.19.0: bench harness, measured, not used. No conflict. Added to: End-to-End Testing. Version updated:
+  1.6.0 → 1.7.0.
+- **Codex CLI** 0.162.1: bench harness, measured, not used. No conflict. Added to: End-to-End Testing (same bump).
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None. Checked against the prohibited list (`mattn/go-sqlite3`, cgo, MCP, pyright): no harness configuration enables
+MCP, and Codex's MCP features are not configured.

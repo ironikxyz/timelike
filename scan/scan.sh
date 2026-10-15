@@ -3,7 +3,8 @@
 # which has already checked that a Docker daemon answers. Every scanner runs from its pinned image in
 # pins.env; nothing is installed on the host.
 #
-#   1. SBOM        Syft over `docker save` of each image
+#   1. SBOM        Syft over `docker save` of each image, plus any package the image holds that Syft cannot
+#                  see, added from its pin (pinned_packages_of, below). An SBOM with no packages fails
 #   2. grype       Grype over that SBOM, JSON only
 #   3. pip-audit   over timelike's interpreter's installed distributions, via uv inside the image. An
 #                  image without timelike's interpreter (vanilla; Adele's scratch stage) records none.
@@ -31,7 +32,7 @@
 #   does not fail: nothing was checked, so it is never a pass. It scans the tree, not history: history
 #   keeps these strings until the publishing step starts a new root, and gitleaks already reads history
 #
-# Four images (feature 002, FR-16: every image the bench adds goes through the same gate; feature 004,
+# Five images (feature 002, FR-16: every image the bench adds goes through the same gate; feature 004,
 # research R5: Adele's too):
 #   timelike-agent:local          → scan/out/                       required (unchanged since 001)
 #   timelike-adele:local          → scan/out/timelike-adele/        required. FROM scratch: no interpreter,
@@ -42,6 +43,11 @@
 #   timelike-bench-driver:local   → scan/out/timelike-bench-driver/ (holds the docker CLI, a Go binary:
 #                                    grype may report fixable Go-stdlib Highs that block until
 #                                    DOCKER_CLI_IMAGE is bumped, research RB10)
+#   timelike-bench-harness:local  → scan/out/timelike-bench-harness/ (002 slice 1: FROM scratch, the two
+#                                    pinned harness binaries only; no interpreter, so pip-audit records
+#                                    none; its base digest is DEBIAN_IMAGE's, the stage that fetched them.
+#                                    Syft catalogues nothing in it, so its SBOM takes both harnesses from
+#                                    their pins, and Grype matches over those)
 # Each image is judged against its own reviewed baseline, scan/baseline/<image>.json. An image with no
 # baseline accepts nothing: its proposed baseline is written for a person to review, never adopted
 # from another image's review. The two required images (make build) must exist, or the scan fails
@@ -99,6 +105,20 @@ base_digest_of() {
   esac
 }
 
+# pinned_packages_of IMAGE — packages IMAGE holds that Syft cannot catalogue, as NAME@VERSION=PATH (npm), one
+# per line; nothing for an image Syft reads whole. The bench harness image keeps each harness's binary and no
+# npm metadata, so Syft finds nothing in it (lane 02s1-a, item 4). Each binary is named by the package its
+# advisories are filed under: opencode-ai, whose opencode-linux-x64 build the image holds, and @openai/codex,
+# whose linux-x64 build it holds (both list those builds as their optionalDependencies, at the same version).
+pinned_packages_of() {
+  case $1 in
+    timelike-bench-harness:local)
+      printf '%s\n' "opencode-ai@${OPENCODE_VERSION}=/opt/bench-harness/opencode/bin/opencode" \
+        "@openai/codex@${CODEX_VERSION}=/opt/bench-harness/codex/bin/codex"
+      ;;
+  esac
+}
+
 # Required images: a missing one fails the scan before anything runs (research R5: Adele is required,
 # like the agent; a skip would pass a gate that never looked at it).
 for image in "$agent" "$adele"; do
@@ -129,11 +149,27 @@ if docker save --output "$out/agent-image.tar" "$image" 2>"$out/sbom.err" \
     -v "$root/$out:/in:ro" "$SYFT_IMAGE" \
     docker-archive:/in/agent-image.tar -o syft-json >"$out/sbom.syft.json" 2>>"$out/sbom.err"; then
   sbom_ok=1
-  record sbom ran "syft ${SYFT_IMAGE%%@*}"
 else
   record sbom error "could not produce an SBOM (exit $?): $(reason "$out/sbom.err")"
 fi
 rm -f "$out/agent-image.tar"
+# The packages Syft cannot see go into the same SBOM before Grype reads it, on the agent image's interpreter
+# with no network. A failure here leaves the SBOM incomplete, so it is the step's error, never a pass (H3).
+mapfile -t pinned < <(pinned_packages_of "$image")
+if [ -n "$sbom_ok" ] && [ "${#pinned[@]}" -eq 0 ]; then
+  record sbom ran "syft ${SYFT_IMAGE%%@*}"
+elif [ -n "$sbom_ok" ]; then
+  pin_args=()
+  for p in "${pinned[@]}"; do pin_args+=(--package "$p"); done
+  if added=$(docker run --rm --network none "${as_me[@]}" --entrypoint "$py" -v "$root/scan:/scan:ro" \
+    -v "$root/$out:/out" "$agent" -I /scan/evaluate.py pinned --sbom /out/sbom.syft.json "${pin_args[@]}" \
+    2>>"$out/sbom.err"); then
+    record sbom ran "syft ${SYFT_IMAGE%%@*}; ${added} packages added from pins.env, which Syft cannot see"
+  else
+    sbom_ok=
+    record sbom error "could not add the pinned packages Syft cannot see: $(reason "$out/sbom.err")"
+  fi
+fi
 
 # --- 2. Grype over the SBOM. No --fail-on and no --only-fixed: grype lists every match and
 # evaluate.py decides (fixable High/Critical blocks; unfixable needs the baseline). A non-zero exit
@@ -327,7 +363,7 @@ gitleaks_line=$(grep "^gitleaks$(printf '\t')" "$top/steps.tsv" || true)
 : >"$top/steps.tsv"
 
 final=0
-for img in "$agent" "$adele" timelike-vanilla:local timelike-bench-driver:local; do
+for img in "$agent" "$adele" timelike-vanilla:local timelike-bench-driver:local timelike-bench-harness:local; do
   dir=$top
   [ "$img" = "$agent" ] || dir=$top/${img%%:*}
   if ! docker image inspect "$img" >/dev/null 2>&1; then

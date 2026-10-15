@@ -1,0 +1,16 @@
+{
+  "exit": 1,
+  "relay": {
+    "generations": 0,
+    "models": [],
+    "requests": 1,
+    "statuses": {
+      "429": 1
+    },
+    "stopped_by": "",
+    "turns": 1
+  },
+  "script": [
+    "echo after-the-429s"
+  ]
+}

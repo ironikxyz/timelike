@@ -116,10 +116,16 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 > audit, so `governance_audited_against` is unchanged. Changed: four Python packages under Approved Libraries (tree-sitter's
 > binding and three grammars), for `edit`'s syntax check, in timelike's interpreter only. Unchanged: everything else.
 
+> **Amended 2026-10-13 (1.6.0 → 1.7.0, an addition)** by `/specswarm:plan` for 002 Cycle 4 (send
+> `bridge/sends/02-rev8-20261013-064725.md`; justification in `features/002-speedup-bench/research.md` RB12). This is not a
+> discovery audit, so `governance_audited_against` is unchanged. Changed: two bench harnesses under End-to-End Testing
+> (OpenCode, Codex CLI): third-party programs the bench **measures**, mounted read-only into bench task containers at run
+> time and installed in no image under test, nor used by timelike's tools. Unchanged: everything else.
+
 # Tech Stack - Timelike
 
-**Version**: 1.6.0
-**Last Updated**: 2026-10-09
+**Version**: 1.7.0
+**Last Updated**: 2026-10-13
 **Auto-Generated**: No. Derived from `../bridge/governance-context.md` (stack option A, discovery
 revision 2; audited against revisions 3 to 11, per the notes above)
 
@@ -246,6 +252,12 @@ to reach coverage.
 - **bats-core** (run inside the image)
   - Notes: one test per acceptance criterion, named after its distinguishing text. Each
     environment default is tested under `bash -c`, `bash -lc` and an interactive shell
+- **OpenCode** 1.19.0 (bench harness, measured, not used) <!-- Auto-added: Feature 002, 2026-10-13 -->
+  - Notes: the speedup bench's first live harness (feature 02 slice 1). Pinned in `pins.env` by version and the
+    npm registry's `sha512` of `opencode-linux-x64`; held in the bench's harness image and mounted read-only into bench
+    task containers. Never in the agent or vanilla image
+- **Codex CLI** 0.162.1 (bench harness, measured, not used) <!-- Auto-added: Feature 002, 2026-10-13 -->
+  - Notes: the bench's second live harness, over OpenRouter's Responses API. Pinned and held as OpenCode is
 
 ---
 
