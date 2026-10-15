@@ -1482,3 +1482,49 @@ Commit everything, and report done. No commit after that until the mentor says l
 - **The lane (02s1-d, full):** `make test`, `make bench-images`, `make scan` with the deny-list read, and `make lint`.
 - **After it:** the short live run 3 (flash, about $0.10), to see git-inspect complete and "What happened" match the
   calls. Then sign-off.
+
+### Addendum 4 — lane 02s1-d and live run 3 on `c09f94a` (record only; no code changed)
+
+Recorded from `bridge/history.md` (rows 2026-10-15T05:15Z and 2026-10-15T05:36:05Z), before the merge that closes
+this cycle. Nothing in the tree changed but this section.
+- **Lane 02s1-d** on `c09f94a` (full): test, bench-images, scan and lint all rc 0; e2e 689 of 689; unit 2511 passed,
+  6 skipped; the deny-list 0 on P1–P7.
+- **Live run 3** on `c09f94a` (2026-10-15T05:14:57Z–05:35:03Z), flash model, 2.00 USD cap: 30 of 30 runs reached the
+  model, 0 not compared; spend 0.1303 USD by OpenRouter against 0.1304 in the report; the key in 0 files, and the key
+  file removed. git-inspect completed in 6 of 6 runs; no `Why:` line on a live block. Feedback
+  `02-20261014-165148` resolved.
+- **Carried to slice 2, not blocking** (the mentor's note in that feedback file): one relay `BrokenPipeError`
+  traceback per run in live runs 2 and 3, in `_relay_answer`, when a harness hangs up while its answer is written.
+  Accounting was unaffected. A client that hangs up should be logged as one line naming the run and the turn.
+
+### Group C — Addendum 4
+
+**delegations:** `[]`.
+
+**criteria_reestablished:** the seven citations of Addendum 3, with their modes moved to this commit:
+- `02 · "One command runs a task in both a vanilla image and the timelike image"` _(slice 0)_,
+  `02 · "The bench runs end to end in CI against a deterministic fake agent without any API key"` _(slice 0)_,
+  `02 · "Two arms that end the same way in the same number of turns are ranked by hangs, then by failed commands"`
+  _(slice 1; revision 8)_ and `02 · "Failed commands are grouped into categories including command not found"`
+  _(slice 1)_ — **observed by the mentor** on `c09f94a` (lane 02s1-d: e2e 689 of 689, unit 2511 passed).
+- `02 · "Each run is labelled told or not-told, and the report counts timelike tool invocations per arm"` _(slice 1)_
+  and `02 · "The same task catalog runs under two harnesses and the report shows results per harness"` _(slice 1)_ —
+  **observed by the mentor** on `c09f94a` (lane 02s1-d, and live run 3: 30 of 30 runs reached the model under both
+  harnesses).
+- `02 · "DEMO: the Adopting developer compares timelike tool adoption between a told arm and a not-told arm"` _(slice 1;
+  D11, Manual)_ — **observed by the operator** on `96a3cac` (live run 2), as cited in Addendum 3; not re-observed on
+  `c09f94a`.
+
+**reconcile_mode:** `scoped` (unchanged; `audited_against` stays `[1, 8]`).
+
+**not_verified:** Addendum 3's list, less one item resolved by live run 3: the new goals let live agents complete
+git-inspect (6 of 6). Whether a live block without `Why:` lines reads well enough is still the operator's to judge.
+
+**changed_other_features:** none.
+
+**process_failures_recorded:** none new.
+
+**retired_prompts_seen:** none.
+
+**Sign-off:** the operator's instruction in the code session to ship `modify/002-slice-1` (2026-10-15). At the time of
+writing, `bridge/history.md` carries no sign-off row; the merge is of the commit that adds this section.
