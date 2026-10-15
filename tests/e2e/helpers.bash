@@ -47,6 +47,10 @@
 
 bats_require_minimum_version 1.5.0
 
+# The parallel lane's file lock (maint-lane-speed): a no-op unless tests/run.sh runs files side by side.
+# shellcheck source=tests/e2e/lane.bash
+source "${BATS_TEST_DIRNAME}/lane.bash"
+
 AGENT_CONTAINER="${AGENT_CONTAINER:-timelike-agent}"
 # shellcheck disable=SC2034 # used by the .bats files that load this
 AGENT_PY=/opt/timelike/python/bin/python3
@@ -115,6 +119,9 @@ exec_in() {
   # harness turns it off unless a cell sets TIMELIKE_SNAPSHOT_INTERVAL itself; the scheduled snapshot's
   # own cells set it, the default interval included (a-directory-removed-by-a-script-*.bats).
   [[ "$sched" == given ]] || envs=(-e TIMELIKE_SNAPSHOT_INTERVAL=off "${envs[@]}")
+  # In a parallel lane only (lane.bash): the file's name travels with every command it runs, so the
+  # whole-container checks below can tell this file's processes from its neighbours'. A serial lane adds nothing.
+  [[ -z "${TL_E2E_FILE_ID:-}" ]] || envs=(-e "TL_E2E_FILE=${TL_E2E_FILE_ID}" "${envs[@]}")
   local style="$1" tty="$2" cmd="$3"
   local -a shell docker_args
   mapfile -t shell < <(_shell_argv "$style") || return 2
@@ -262,17 +269,42 @@ assert_value() {
 # command line that carries it.
 assert_no_pager_or_editor() {
   local procs
-  procs="$(exec_plain pgrep -a -x "$PAGER_EDITOR_NAMES")" || true
+  procs="$(pager_editor_procs)" || true
   if [[ -n "$procs" ]]; then
     printf 'pager/editor processes left running in the container:\n%s\n' "$procs" >&2
     return 1
   fi
 }
 
+# pager_editor_procs — `pgrep -a -x` over the pager and editor names. In a parallel lane, only the processes
+# this file started: those whose environment carries its TL_E2E_FILE (exec_in sets it). Other files run beside
+# it there, and timelike's own `view` tool is a script, so its process is named `view`, which is on the list.
+# Reading /proc/PID/environ needs the same uid, and every cell runs as the agent.
+pager_editor_procs() {
+  if [[ -z "${TL_E2E_FILE_ID:-}" ]]; then
+    exec_plain pgrep -a -x "$PAGER_EDITOR_NAMES"
+    return
+  fi
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c 'for p in $(pgrep -x "$1"); do
+    if grep -qzx "TL_E2E_FILE=$2" "/proc/$p/environ" 2>/dev/null; then
+      printf "%s %s\n" "$p" "$(tr "\0" " " <"/proc/$p/cmdline" 2>/dev/null)"
+    fi
+  done' s "$PAGER_EDITOR_NAMES" "$TL_E2E_FILE_ID"
+}
+
 # kill_strays — best effort: kill any pager/editor left by a hung command, so one failure does not
-# cascade into every later test.
+# cascade into every later test. In a parallel lane, only this file's own (pager_editor_procs).
 kill_strays() {
-  exec_plain pkill -KILL -x "$PAGER_EDITOR_NAMES" >/dev/null 2>&1 || true
+  if [[ -z "${TL_E2E_FILE_ID:-}" ]]; then
+    exec_plain pkill -KILL -x "$PAGER_EDITOR_NAMES" >/dev/null 2>&1 || true
+    return 0
+  fi
+  local procs p
+  procs="$(pager_editor_procs 2>/dev/null)" || true
+  for p in $(printf '%s\n' "$procs" | cut -d' ' -f1); do
+    exec_plain kill -KILL "$p" >/dev/null 2>&1 || true
+  done
 }
 
 # container_tmpdir PREFIX — make a fresh directory under /tmp in the container (owned by the agent
@@ -320,6 +352,15 @@ container_rm() {
 copy_into_container() {
   local src="$1" dest="$2" mode="${3:-0644}"
   [[ -f "$src" ]] || { echo "copy_into_container: no such file $src" >&2; return 1; }
+  # In a parallel lane, written beside DEST and renamed into place, so a file reading DEST at the same moment
+  # (two files copy the same fixture to one /tmp path; maint-lane-speed) sees the old copy or the new one,
+  # never a partial one. A serial lane writes in place, as it always has.
+  if [[ -n "${TL_E2E_FILE_ID:-}" ]]; then
+    # shellcheck disable=SC2016 # expanded in the container
+    timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" \
+      sh -c 't="$1.tl-copy.$$" && cat > "$t" && chmod "$2" "$t" && mv -f "$t" "$1"' copy "$dest" "$mode" <"$src"
+    return
+  fi
   # shellcheck disable=SC2016 # expanded in the container
   timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" \
     sh -c 'cat > "$1" && chmod "$2" "$1"' copy "$dest" "$mode" <"$src"
@@ -391,7 +432,10 @@ remove_throwaway() {
 }
 
 # remove_stale_throwaways — remove every container a previous run left behind (by label).
+# In a parallel lane, no-op: other files' throwaways (pyq's included) carry the same label and are in use, so
+# tests/run.sh removes the stale ones once, before the first file starts (maint-lane-speed).
 remove_stale_throwaways() {
+  [[ -z "${TL_E2E_LOCK:-}" ]] || return 0
   local ids
   ids="$(timeout "$RUN_TIMEOUT" docker ps -aq --filter "label=${THROWAWAY_LABEL}" </dev/null 2>/dev/null)" || return 0
   # shellcheck disable=SC2086 # one id per word, on purpose

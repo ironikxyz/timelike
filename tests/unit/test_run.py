@@ -207,6 +207,7 @@ def kill_quietly(pids: list[int]) -> None:
         ("sleep 30 & echo $! > {m}; echo hi", "sleep"),
     ],
 )
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_backgrounded_child_verdict_within_2_seconds_names_its_pid(
     py: str, scratch: Path, tmp_path: Path, script: str, name: str | None
 ) -> None:
@@ -291,6 +292,7 @@ def heartbeats(d: Path) -> dict[str, int]:
     return {p.name: p.stat().st_size for p in sorted(d.iterdir())}
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_timeout_exits_124_and_no_process_of_the_tree_survives(
     py: str, scratch: Path, tmp_path: Path
 ) -> None:

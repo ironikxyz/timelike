@@ -96,6 +96,7 @@ def test_refused_connection_and_unresolvable_host(tmp_path: Path, reg: Standin) 
     assert c.result == "unreachable" and "not resolved" in c.detail
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_a_hung_registry_is_bounded_by_one_time_limit(reg: Standin, tmp_path: Path) -> None:
     start = time.monotonic()
     p = plan(reg, ["pip", "install", "tl-slow", "tl-old"], tmp_path, TIMELIKE_PACKAGE_TIMEOUT="1")

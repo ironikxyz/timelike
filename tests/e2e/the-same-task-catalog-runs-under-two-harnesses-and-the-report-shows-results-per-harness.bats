@@ -16,6 +16,9 @@ DRIVER=timelike-bench-driver:local
 TASKS=(git-inspect python-missing-module)
 PY=/opt/timelike/python/bin/python3
 
+# The parallel lane's file lock (maint-lane-speed); this file loads no helpers.bash, which would source it.
+load lane
+
 setup_file() {
   : "${GIT_SHA:?}" "${DEBIAN_IMAGE:?}" "${REPO_HOST:?}" "${BENCH_E2E_OUT:?}"
   # The harness pins, as make passes them (bench/run.sh forwards OPENCODE_VERSION and CODEX_VERSION).

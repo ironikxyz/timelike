@@ -26,6 +26,9 @@ DRIVER=timelike-bench-driver:local
 TASKS=(git-inspect git-rebase-continue git-commit-hook-hangs git-commit-hook-rejects python-missing-module)
 PY=/opt/timelike/python/bin/python3
 
+# The parallel lane's file lock (maint-lane-speed); this file loads no helpers.bash, which would source it.
+load lane
+
 setup_file() {
   : "${GIT_SHA:?}" "${DEBIAN_IMAGE:?}" "${REPO_HOST:?}" "${BENCH_E2E_OUT:?}"
   export RUN_OUT="${BENCH_E2E_OUT}/run-${GIT_SHA:0:12}-$$"

@@ -26,3 +26,6 @@ scripts_are_modules = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
+# `timed`: the test measures elapsed time against a bound tight enough that neighbours could move it. With
+# UNIT_JOBS > 1 the Docker lane runs these after the rest, alone and serially (tests/run.sh; maint-lane-speed).
+markers = ["timed: measures elapsed time against a tight bound; run alone in a parallel lane"]

@@ -28,7 +28,7 @@ Whether it works is a measured claim: see Status.
 | # | Feature | What it does | Status |
 |---|---|---|---|
 | 01 | Shell baseline & output contract | The container, an unprivileged `agent` user, non-interactive defaults, and one contract every tool speaks: verdict first, bounded output, JSON when piped, and `timelike-conform` to check it | complete (0, 1) |
-| 02 | Speedup bench | Runs the same tasks in a vanilla and a timelike container and reports turns, failed commands and hangs, losing cases first | <mark>slices 0–1 of 0–2</mark> |
+| 02 | Speedup bench | Runs the same tasks in a vanilla and a timelike container and reports turns, failed commands and hangs, losing cases first | slices 0–1 of 0–2 |
 | 03 | `run` | Every command ends with a verdict: the whole process tree is stopped at its limit, memory kills and full disks are named, and secrets are redacted | slices 0, 1 of 0–2 |
 | 04 | Announcements & discovery | Tells each harness (Claude Code, Codex CLI, OpenCode) which tools exist, generated from their manifests; `timelike` lists them all; a missing command names how to get it, package installs need no privilege, and `timelike budget` shows the resource budget | complete (0, 1) |
 | 05 | `view`, `search` | Bounded reads and searches, each ending with the next command; a directory overview within a budget | complete (0, 1) |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-<mark>**20 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
+**20 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.
 Features 13, 14, 16 and 17 are not started.
 
-<mark>**Next:** 12 slice 1.</mark>
+**Next:** 12 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -594,8 +594,8 @@ in the session's timeline, by session and time:
 docker exec timelike-adele adeled ledger --json | docker exec -i timelike-agent journal --session <s> --all --ledger -
 ```
 
-**The scan.** `make scan` is the supply-chain gate over the agent, Adele, vanilla, bench-driver <mark>and
-bench-harness</mark> images: Syft and Grype, pip-audit, govulncheck (Adele) and gitleaks. Each image is judged against a
+**The scan.** `make scan` is the supply-chain gate over the agent, Adele, vanilla, bench-driver and
+bench-harness images: Syft and Grype, pip-audit, govulncheck (Adele) and gitleaks. Each image is judged against a
 reviewed baseline in `scan/baseline/`; its verdict is in `scan/out/verdict.json`.
 
 ## Command reference
@@ -986,6 +986,7 @@ exit codes: 0 ok, 1 the file could not be read, 2 usage, 3 no such file
 ```bash
 make build        # stamps the image with `git rev-parse HEAD`; refuses an empty stamp or a dirty tree
 make test         # Docker lane (authoritative): bats end-to-end from outside the container + unit tests
+make test-partial E2E_FILES="a.bats b.bats"   # a rework lane: only those e2e files, all the units; says scope: partial
 make test-host    # host lane (advisory): agentio/conform unit tests + a check of the env-layer files
 make lint         # shellcheck, ruff, mypy --strict; gofmt, go vet, staticcheck (Adele)
 make up           # agent + Adele + the stand-in, on the operator's adele/grants.conf
@@ -997,6 +998,12 @@ make bench        # the speedup bench (feature 002): vanilla vs timelike; traces
 `make test` writes its results to `tests/out/`: `summary.json`, the bats TAP and JUnit output, and
 the full log. `make test` starts Adele on the lane's own grant file and clears her volumes first, so
 every run starts from an empty ledger. Run `make up` afterwards for the operator's own grants.
+
+<mark>The Docker lane runs its e2e files side by side and its unit tests on several workers: `E2E_JOBS` and
+`UNIT_JOBS` set how many, and `E2E_JOBS=1 UNIT_JOBS=1 make test` is the serial lane. Files whose cells
+measure time, or read state any neighbour could change, run alone after the rest (`tests/e2e/lane.conf`
+names each, and why). A partial lane's first line and `summary.json` say `scope: partial`, and it is never
+a lane anything is signed off on.</mark>
 
 ### Two verification lanes
 
@@ -1015,20 +1022,20 @@ make bench TASKS=git-rebase-continue    # one task (space-separated for several)
 less bench/out/<run-id>/report.txt      # the report
 ```
 
-<mark>`make bench` builds four images from the pinned base, all stamped with the checkout's revision:</mark>
+`make bench` builds four images from the pinned base, all stamped with the checkout's revision:
 - the agent image
 - a **vanilla** baseline: the same base, the same unprivileged user and git, and the same agent
   runtimes (Python and Node) with their stock behaviour, without any of timelike's layers
 - the bench **driver**, the only container that holds the Docker socket
-- <mark>the **harness** image: the two pinned live harnesses (below), mounted read-only into the task
-  containers when a live run needs them, and never part of either image under test</mark>
+- the **harness** image: the two pinned live harnesses (below), mounted read-only into the task
+  containers when a live run needs them, and never part of either image under test
 
 The driver refuses any image whose revision label differs from the checkout, and refuses to start if
-an API-key-shaped variable is present. <mark>It runs each task in a fresh container in three **arms**:
+an API-key-shaped variable is present. It runs each task in a fresh container in three **arms**:
 vanilla; timelike **not told** (the tools are on PATH, nothing announces them); and timelike **told** (the
 announcement placed where each harness reads its context, as the agent image does on start). The fake
 agent's every tool call is a non-interactive `bash -c` with no terminal; a live harness runs inside the
-task container and starts its own shell there.</mark> It writes one trace per run to
+task container and starts its own shell there. It writes one trace per run to
 `bench/out/<run-id>/traces/` and a report to `bench/out/<run-id>/report.txt`. `timelike-bench report
 <dir>` rebuilds the report from the traces alone.
 
@@ -1041,10 +1048,10 @@ report it produces begins:
 
 The fake agent's policy, the task selection and the recoveries it takes were all chosen by the people
 who built timelike, so a fake-agent report shows that the bench runs, traces and reports. It is not
-evidence that timelike helps. <mark>It cannot read an announcement either, so its told and not-told arms
-run the same policy.</mark>
+evidence that timelike helps. It cannot read an announcement either, so its told and not-told arms
+run the same policy.
 
-<mark>The report has one section per harness. Each section opens with the **adoption** table (the calls in
+The report has one section per harness. Each section opens with the **adoption** table (the calls in
 each arm that ran a timelike tool by name, and, apart, the calls that went through timelike's shims or
 guards, which are not adoption) and the **failure categories** of every failed call (command not found,
 module not found, timeout, memory kill, network denial, other). Then come the tasks, those where timelike
@@ -1052,18 +1059,20 @@ module not found, timeout, memory kill, network denial, other). Then come the ta
 how the run ended, then turns, then hangs, then failed commands. Each task says what it tests, gives both
 verdicts in words, shows the metrics, and tells what happened in each arm call by call. Runs that stopped
 for an infrastructure reason (the provider's rate limit, a cap) are listed apart and never counted as a
-loss. Tokens and spend appear only in an appendix.</mark>
+loss. Tokens and spend appear only in an appendix.
 
-<mark>**A live run.** The same catalog can run under two real harnesses, OpenCode and Codex CLI, pinned by
+**A live run.** The same catalog can run under two real harnesses, OpenCode and Codex CLI, pinned by
 version and checksum in `pins.env`, both driving one model, also pinned there (`BENCH_MODEL`, a dated id).
-A live run **spends money**: it calls the model through OpenRouter on a key you supply.</mark>
+<mark>`BENCH_MODEL=… make bench-live` drives another dated model; the plan names where the model and its prices came
+from (`pins.env`, the environment or the make command line).</mark>
+A live run **spends money**: it calls the model through OpenRouter on a key you supply.
 
 ```bash
 BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live DRY_RUN=1   # the plan only: nothing is called
 BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live             # every task, both harnesses, three arms
 ```
 
-<mark>- **The key** is read only from the file `BENCH_KEY_FILE` names: one line, mode `0600`, yours, outside
+- **The key** is read only from the file `BENCH_KEY_FILE` names: one line, mode `0600`, yours, outside
   the repository. Only the bench driver holds it: its relay adds the key to each request it forwards, so
   neither harness and no command the agent runs ever holds it. The relay forwards only the harnesses' own
   requests, for the pinned model. An agent's command can still reach the relay, so it can spend within the
@@ -1073,7 +1082,7 @@ BENCH_KEY_FILE=/path/outside/the/repo/key make bench-live             # every ta
 - **Before any request** the run prints its plan: the runs, the harnesses, the model, the caps and an
   estimate of the spend. The spend it records is OpenRouter's own figure.
 - A live run is **one repetition**, and its report says so. Publishing results is a later slice, so this
-  README cites none.</mark>
+  README cites none.
 
 ### Layout
 
@@ -1082,8 +1091,8 @@ image/        Dockerfile and the fallback config layer (/etc/gitconfig, /etc/pro
 tools/        agentio (the contract) and the tools on PATH in the image
 tests/        unit (pytest), e2e (bats, driven from outside), host (advisory), fixtures, runner
 adele/        Adele (Go, FROM scratch): adeled, the test-only stand-in, grants.example.conf
-scan/         the supply-chain gate (the agent, Adele, vanilla, driver <mark>and harness</mark> images)
-bench/        the speedup bench: benchlib, timelike-bench, the vanilla, driver <mark>and harness</mark> images, run.sh
+scan/         the supply-chain gate (the agent, Adele, vanilla, driver and harness images)
+bench/        the speedup bench: benchlib, timelike-bench, the vanilla, driver and harness images, run.sh
 scripts/      the manual demo, and the README's command-reference generator
 compose.yaml  the agent (no capabilities, no-new-privileges, no Docker socket), Adele, the stand-in
 pins.env      every pinned image and version

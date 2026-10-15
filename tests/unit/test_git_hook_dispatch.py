@@ -159,6 +159,7 @@ def test_a_non_executable_hook_is_ignored_with_gits_own_hint(repo: tuple[Path, d
     assert "hook was ignored because it's not set as executable" in p.stderr
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_no_recursion_when_the_repository_points_at_the_dispatchers(
     repo: tuple[Path, dict[str, str]],
 ) -> None:
@@ -213,6 +214,7 @@ def assert_verdict(stderr: str, limit: str, source: str) -> None:
     assert not [w for w in SKIP_WORDS if w.lower() in lowered], line
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_a_hang_is_stopped_within_the_limit_with_a_verdict(repo: tuple[Path, dict[str, str]]) -> None:
     r, env = repo
     hanging(r)
@@ -239,6 +241,7 @@ def test_the_repository_setting_sets_the_limit(repo: tuple[Path, dict[str, str]]
     assert_verdict(p.stderr, "1", "git config timelike.hookTimeout")
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_the_environment_beats_the_repository_setting(repo: tuple[Path, dict[str, str]]) -> None:
     r, env = repo
     hanging(r)

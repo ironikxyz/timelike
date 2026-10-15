@@ -794,6 +794,7 @@ def generated_module(p: int, f: int) -> str:
     return "".join(out)
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_def_is_under_2_seconds_warm_on_1000_files(lab: Lab) -> None:
     files = {f"pkg{p:02d}/mod{f:02d}.py": generated_module(p, f) for p in range(20) for f in range(50)}
     assert len(files) == 1000

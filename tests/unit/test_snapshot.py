@@ -878,6 +878,7 @@ def test_take_over_the_limit_cuts_with_a_sed_more_never_a_rerun(lab: Lab, mode: 
 # ── FR-24: the lock ───────────────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_take_waits_for_the_lock_then_exits_1_naming_the_holder(lab: Lab) -> None:
     """Slow by design (the contract's 10 s wait)."""
     write(lab.ws / "f.txt", "x\n")

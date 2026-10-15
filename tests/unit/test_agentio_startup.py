@@ -38,6 +38,7 @@ agentio.run(agentio.Tool(name="probe", target="startup", summary="start-up probe
     "COVERAGE_PROCESS_START" in os.environ or sys.gettrace() is not None,
     reason="coverage tracing inflates start-up; the budget is measured without it",
 )
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_tool_startup_p95_under_budget(tmp_path: Path) -> None:
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TIMELIKE_SCRATCH_ROOT": str(tmp_path)}
     samples: list[float] = []

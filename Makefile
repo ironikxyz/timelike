@@ -1,7 +1,11 @@
 # timelike — build, test, lint and scan. Everything that needs Docker runs in pinned containers;
 # nothing is installed on the host. Two verification lanes (research.md R10):
 #   make test       Docker lane — authoritative for the acceptance criteria
+#   make test-partial E2E_FILES="a.bats b.bats"
+#                   a rework lane: build, up, runner, benchimg, ONLY the named e2e files, all of unit and
+#                   gounit. It says `scope: partial` first, and nothing is signed off on it (maint-lane-speed)
 #   make test-host  host lane — advisory: agentio/conform units and the env-layer files
+# E2E_JOBS and UNIT_JOBS set the Docker lane's parallelism (tests/run.sh); 1 and 1 is the serial lane.
 
 # The bench's operator-set values (02 slice 1's live run, maint-lane-speed item 3): pins.env holds their
 # defaults, and an assignment in an included file overrides the environment, so `BENCH_MODEL=… make
@@ -28,7 +32,7 @@ DIRTY := $(shell git status --porcelain 2>/dev/null | grep -v '^?? tests/out/' |
 PYTHON ?= python3
 COMPOSE := docker compose
 
-.PHONY: build up down test test-host lint lint-host scan demo docker-check stamp-check bench bench-images bench-live grants
+.PHONY: build up down test test-partial test-host lint lint-host scan demo docker-check stamp-check bench bench-images bench-live grants
 
 docker-check:
 	@docker info >/dev/null 2>&1 || { \
@@ -59,8 +63,12 @@ up: build
 down:
 	$(COMPOSE) --profile standin down --remove-orphans
 
+# `@`, so the lane's own first line (its scope) is the first line printed.
 test: docker-check stamp-check
-	tests/run.sh
+	@tests/run.sh
+
+test-partial: docker-check stamp-check
+	@LANE_SCOPE=partial tests/run.sh
 
 test-host:
 	PYTHON="$(PYTHON)" tests/host/run.sh
@@ -108,7 +116,7 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \
   tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats \
   tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats \
-  tests/host/test_env_layer.sh tests/e2e/helpers.bash scan/scan.sh scripts/demo.sh \
+  tests/host/test_env_layer.sh tests/e2e/helpers.bash tests/e2e/lane.bash scan/scan.sh scripts/demo.sh \
   image/rootfs/etc/profile.d/10-timelike-shell-env.sh image/rootfs/etc/timelike/shell-env.bash \
   tests/host/test_shell_env_hook.sh tests/e2e/container-derived-defaults.bats \
   tests/e2e/hooks-a-repository-configures-run.bats tests/e2e/hook-past-its-time-limit-is-killed.bats \
