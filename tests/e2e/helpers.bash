@@ -593,6 +593,76 @@ pyq() {
   return "$rc"
 }
 
+# ── Adele's reaper (feature 004 slice 1; spec FR-24 to FR-28) ─────────────────────────────────────
+# Waits on a reap are bounded by PLUMBING_TIMEOUT and assert no time: a reap waits for a ttl and an
+# interval, so a bound on it would measure the machine (lane.conf's rule; the send).
+
+# box_request STYLE SESSION AGENT GRANT NAME — ask Adele, from the agent container, for a box with the
+# grant file's shortest lifetime (1m). Prints the performed row's ledger id. AGENT "-" sets no
+# TIMELIKE_AGENT.
+box_request() {
+  local style="$1" session="$2" agent="$3" grant="$4" name="$5" out id
+  local -a envs=(-e "TIMELIKE_SESSION=${session}")
+  [[ "$agent" == - ]] || envs+=(-e "TIMELIKE_AGENT=${agent}")
+  out="$(RUN_TIMEOUT="$PLUMBING_TIMEOUT" exec_in "${envs[@]}" "$style" notty \
+    "adele --json request standin.box create --grant ${grant} --name ${name} --ttl 1m")" ||
+    { echo "box_request ${name}: adele exited $?: ${out}" >&2; return 1; }
+  id="$(printf '%s' "$out" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[0-9]+' | head -1)"
+  [[ -n "$id" ]] || { echo "box_request ${name}: no ledger_id in: ${out}" >&2; return 1; }
+  printf '%s\n' "$id"
+}
+
+# standin_cmd ARG... — the stand-in's own command in its container: `delete NAME` (a provider's console)
+# and `fault NAME error|drop|clear` (FR-42). The agent cannot reach the stand-in.
+standin_cmd() {
+  timeout "$PLUMBING_TIMEOUT" docker exec "$STANDIN_CONTAINER" /usr/local/bin/adele-standin "$@" </dev/null
+}
+
+# reap_rows REF — Adele's reap rows for the performed row REF, oldest first, one per line:
+#   outcome<TAB>session<TAB>agent<TAB>attempts<TAB>cause    (agent "-" when none)
+# Read from the ledger the operator reads (`adeled ledger --json`), parsed by pyq.
+reap_rows() {
+  local ref="$1" json
+  [[ "$ref" =~ ^[0-9]+$ ]] || { echo "reap_rows: '${ref}' is not a ledger id" >&2; return 2; }
+  json="$(adeled ledger --json)" || { echo "reap_rows: adeled ledger failed: ${json}" >&2; return 1; }
+  printf '%s' "$json" | pyq "
+import json, sys
+for r in json.load(sys.stdin):
+    if r.get('ref') == ${ref} and r.get('outcome') in ('reaped', 'gone', 'reap-failed'):
+        print('\t'.join([r['outcome'], r.get('session') or '', r.get('agent') or '-',
+                         str(r.get('attempts')), (r.get('cause') or '').replace('\t', ' ')]))"
+}
+
+# wait_reap REF OUTCOME... — wait until REF has a reap row whose outcome is one of OUTCOME, bounded by
+# PLUMBING_TIMEOUT. Sets REAP_ROWS (every reap row of REF, as reap_rows prints them) and REAP_ROW (the
+# first matching row). On expiry it says what was recorded so far.
+wait_reap() {
+  local ref="$1" deadline=$((SECONDS + PLUMBING_TIMEOUT)) want row
+  shift
+  REAP_ROWS="" REAP_ROW=""
+  while :; do
+    REAP_ROWS="$(reap_rows "$ref")" || return 1
+    while IFS= read -r row; do
+      [[ -n "$row" ]] || continue
+      for want in "$@"; do
+        if [[ "${row%%$'\t'*}" == "$want" ]]; then
+          REAP_ROW="$row"
+          return 0
+        fi
+      done
+    done <<<"$REAP_ROWS"
+    if ((SECONDS >= deadline)); then
+      echo "wait_reap: no '$*' row for ledger #${ref} within ${PLUMBING_TIMEOUT}s; recorded so far:" >&2
+      printf '%s\n' "${REAP_ROWS:-(none)}" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+# reap_field N — field N (1 outcome, 2 session, 3 agent, 4 attempts, 5 cause) of REAP_ROW.
+reap_field() { printf '%s' "$REAP_ROW" | cut -f "$1"; }
+
 # ── Real pytest, ruff and mypy in the agent container (feature 012, research R1) ───────────────────
 # install_uv_tool_wrappers DIR — write executable wrappers DIR/pytest, DIR/ruff and DIR/mypy inside the
 # agent container (DIR must be under /tmp, e.g. from container_tmpdir), then warm them once.

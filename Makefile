@@ -148,6 +148,9 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/
   tests/e2e/search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats \
   tests/e2e/search-zero-matches-exits-0-and-1-only-in-strict-mode.bats \
   tests/e2e/view-and-search-resolve-once-and-pass-conform.bats \
+  tests/e2e/adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats \
+  tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats \
+  tests/e2e/adele-status-explains-recent-denials-by-host-and-exit-4-text-line.bats \
   bench/run.sh
 PY_IN_IMAGE := docker run --rm -v "$(CURDIR)":/src:ro -w /src -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv \
   -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint bash timelike-agent:local -c

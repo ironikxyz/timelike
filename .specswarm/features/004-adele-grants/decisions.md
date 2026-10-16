@@ -416,3 +416,14 @@ ASSUMED: the journal labels a ledger row with its agent when the row names one a
 ABSENT: README prose is T035's; only the generated reference changed here (`scripts/readme_reference.py --write`, `--check` current), because `adele --help` changed in this task
 ABSENT: the denial lines say "only the operator allows it" for every denial; under Item 26's answer a different source may need a different "allows" (none is built)
 Verification: ruff check + format, mypy --strict (agentio; adele and journal as scripts) clean; pytest journal, adele CLI, readme reference, agentio — pass (line above)
+SCOPE: out — tests/unit/test_journal.py, tools/agentio/agentio.py (2 of 6 changed files) (task has FLAGGED: yes)
+
+### T031: e2e `adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats` (SC-7; spread)
+**Started:** 2026-10-16T09:48:01+00:00 | **Completed:** 2026-10-16T09:55:48Z
+
+INHERITED: the reaper's outcomes and causes (T027), the stand-in's `delete` and `fault` (T025), the ledger's text and JSON (T028), `adele --json request`'s `ledger_id` (T030) (confidence: high)
+FLAGGED: "after the requesting agent's container has stopped" is a THROWAWAY agent container on `timelike_adele-request`, removed before the expiry, never the compose agent — chose a throwaway because stopping the shared agent would fail every neighbour in a parallel lane (lore docker-compose Q004) (confidence: high)
+FLAGGED: spread, not serial: the cells wait on the ledger with PLUMBING_TIMEOUT and assert no time; their grant `reap` and box names are their own; the stand-in and Adele are never stopped here (that is T032's serial file). A slow lane can reach the serving reaper's give-up bound before a fault cell clears its fault; the cell then runs the operator's `adeled reap` and says so on fd 3, rather than failing on the machine's speed (confidence: medium)
+ASSUMED: three new grants in the lane's grant file (`reap`, `reap-serial`, `deny`), so no other cell's counts move (confidence: high)
+ABSENT: not run in the image (no Docker in this session): the same flows were run on the host against the real adeled and adele-standin binaries and the real client (scratchpad hostint/run.sh): reaped with session and agent, reap-failed with the 500's cause then reaped, live back to 0
+Verification: shellcheck -x clean (file and helpers.bash); the file is added to the Makefile's SHELLCHECK_FILES
