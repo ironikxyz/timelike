@@ -218,7 +218,7 @@ def test_status_reachable_json(py: str, scratch: Path, adele: FakeAdele) -> None
     # slice 1: then the recent denials, read-only (FR-37); the fake has none, so they are unknown, not none
     assert [(s.method, s.path) for s in adele.received()] == [("GET", "/v1/health"), ("GET", "/v1/denials")]
     assert doc["denials"] is None and "HTTP 404" in doc["denials_unknown"]
-    assert "recent denials unknown (HTTP 404" in doc["verdict"]
+    assert "denials unknown (HTTP 404" in doc["verdict"]
 
 
 def test_status_reachable_text(py: str, scratch: Path, adele: FakeAdele) -> None:
@@ -652,8 +652,20 @@ def test_status_with_no_recent_denial_says_so(py: str, scratch: Path, adele: Fak
     r = go(py, scratch, adele.url, "--json", "status", "adele-standin:8481")
     assert r.returncode == 0, r.stderr
     doc = doc_of(r)
-    assert doc["verdict"].endswith(" · no denial of adele-standin:8481 in the last 24 h")
+    assert doc["verdict"].endswith(" · no denial of adele-standin:8481 in 24 h · record: adeled ledger")
+    assert doc["record"].startswith("Adele's ledger")  # Item 26 Q2: where the record lives, whole
+    assert "docker exec timelike-adele adeled ledger" in doc["record"]
     assert doc["denials"] == [] and doc["denial_host"] == "adele-standin:8481"
+
+
+def test_status_verdict_fits_rule_13_with_the_standins_host() -> None:
+    """The longest verdict the lane can print with the stand-in's host (a 40-character revision, 20 denials)
+    fits COLUMNS' default, so rule 13 cuts neither the count nor the record (Item 26 Q2)."""
+    verdict = (
+        f"verdict: Adele reachable at http://adele:8480 from the agent container · revision {'a' * 40}"
+        " · 20 denials of adele-standin:8481 in 24 h (≤20/host) · record: adeled ledger"
+    )
+    assert len(verdict) <= 200, len(verdict)
 
 
 def test_status_explains_each_denial_newest_first(py: str, scratch: Path, adele: FakeAdele) -> None:
@@ -662,7 +674,7 @@ def test_status_explains_each_denial_newest_first(py: str, scratch: Path, adele:
     r = go(py, scratch, adele.url, "--text", "status")
     assert r.returncode == 0, r.stderr
     out = r.stdout.splitlines()
-    assert out[1].endswith(" · 2 denials in the last 24 h (newest first, at most 20 per host)"), out[1]
+    assert out[1].endswith(" · 2 denials in 24 h (≤20/host) · record: adeled ledger"), out[1]
     assert out[2] == (
         "#46 2026-10-16T10:00:00Z adele-standin:8481: grant demo, ports allows 8080, needed 22"
         f" — only the operator allows it: {EXTEND} (session s-1, agent agent-b)"
@@ -682,7 +694,7 @@ def test_status_denials_unanswered_is_unknown_not_none(py: str, scratch: Path, a
     r = go(py, scratch, adele.url, "--json", "status")
     doc = doc_of(r)
     assert r.returncode == 0 and doc["denials"] is None
-    assert "recent denials unknown (no answer within 3 s)" in doc["verdict"]
+    assert "denials unknown (no answer within 3 s)" in doc["verdict"]
 
 
 @pytest.mark.parametrize(("agent", "sent"), [("agent-a", "agent-a"), ("bad agent!", None), ("", None)])

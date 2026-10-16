@@ -35,7 +35,8 @@ ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[
 @test "status 004 the agent's adele status HOST says so when HOST has no recent denial [bash -c]" {
   run_in c notty 'adele --json status nobody.invalid:1'
   [[ "$status" -eq 0 ]] || { echo "adele status exited $status: $output" >&2; return 1; }
-  assert_output_has "no denial of nobody.invalid:1 in the last 24 h"
+  assert_output_has "no denial of nobody.invalid:1 in 24 h · record: adeled ledger"
+  assert_output_has "Adele's ledger, which the operator reads with: docker exec timelike-adele adeled ledger"
   assert_output_has "\"denials\": []"
 }
 
@@ -52,7 +53,7 @@ ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[
   run_in lc notty "adele --text status ${HOST}"
   [[ "$status" -eq 0 ]] || { echo "adele status exited $status: $output" >&2; return 1; }
   [[ "${lines[0]}" == "adele: adele [status]" ]] || { echo "header: ${lines[0]}" >&2; return 1; }
-  assert_output_has "denials of ${HOST} in the last 24 h (newest first, at most 20 per host)"
+  assert_output_has "denials of ${HOST} in 24 h (≤20/host) · record: adeled ledger"
   local a b i
   for i in "${!lines[@]}"; do
     [[ "${lines[$i]}" == "#${first} "* ]] && a=$i
@@ -71,7 +72,7 @@ ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[
   id="$(ledger_id_of "$output")"
   run adeled status "$HOST"
   [[ "$status" -eq 0 ]] || { echo "adeled status exited $status: $output" >&2; return 1; }
-  [[ "${lines[0]}" == "Adele revision ${GIT_SHA} · reaper: "* ]] || { echo "verdict: ${lines[0]}" >&2; return 1; }
+  [[ "${lines[0]}" == "Adele revision ${GIT_SHA} · reaper: "*" · the record: adeled ledger" ]] || { echo "verdict: ${lines[0]}" >&2; return 1; }
   assert_output_has "#${id} "
   assert_output_has "${HOST}: grant ${GRANT}, ports allows 8080, needed 24 — the operator allows it: docker exec timelike-adele adeled extend ${GRANT} ports 24 (session sc8-status, agent agent-s)"
 }

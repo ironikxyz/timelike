@@ -124,7 +124,7 @@ func TestStatusCommandExplainsDenialsByHost(t *testing.T) {
 	code, out, errs := f.run("status")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if code != exitOK || errs != "" || len(lines) != 4 ||
-		lines[0] != "Adele revision rev-2 · reaper: 0 due, 0 given up · 3 denials in the last 24 h (newest first, at most 20 per host)" ||
+		lines[0] != "Adele revision rev-2 · reaper: 0 due, 0 given up · 3 denials in the last 24 h (newest first, at most 20 per host) · the record: adeled ledger" ||
 		!strings.HasPrefix(lines[1], "#3 ") || !strings.Contains(lines[1], "other.invalid:443: grant demo, ports allows 8080, needed 22 — the operator allows it: docker exec timelike-adele adeled extend demo ports 22 (session sess-9, agent agent-z)") {
 		t.Fatalf("status: %d %q %q", code, out, errs)
 	}
@@ -133,7 +133,7 @@ func TestStatusCommandExplainsDenialsByHost(t *testing.T) {
 		t.Fatalf("status HOST: %q", out)
 	}
 	code, out, _ = f.run("status", "nobody.invalid:1")
-	if code != exitOK || strings.TrimSpace(out) != "Adele revision rev-2 · reaper: 0 due, 0 given up · no denial of nobody.invalid:1 in the last 24 h" {
+	if code != exitOK || strings.TrimSpace(out) != "Adele revision rev-2 · reaper: 0 due, 0 given up · no denial of nobody.invalid:1 in the last 24 h · the record: adeled ledger" {
 		t.Fatalf("status, no denial: %q", out)
 	}
 	code, out, _ = f.run("status", "--json")

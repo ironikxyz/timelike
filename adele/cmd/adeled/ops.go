@@ -341,7 +341,9 @@ func statusVerdict(rev string, due, givenUp int, doc map[string]any) string {
 		denials = fmt.Sprintf("%d denial%s%s in the last %d h (newest first, at most %d per host)",
 			n, plural(n), where, doc["window_hours"], doc["per_host"])
 	}
-	return fmt.Sprintf("Adele revision %s · reaper: %d due, %d given up · %s", rev, due, givenUp, denials)
+	// Where the record lives (Item 26 Q2, the mentor's addition): the operator's own command reads it.
+	return fmt.Sprintf("Adele revision %s · reaper: %d due, %d given up · %s · the record: adeled ledger",
+		rev, due, givenUp, denials)
 }
 
 // denialLines explains each denial: when, where, the policy that denied it, and the operator's command.

@@ -35,6 +35,12 @@ URL_ENV = "TIMELIKE_ADELE_URL"
 DEFAULT_TIMEOUT_S = 30.0
 STATUS_TIMEOUT_S = 3.0  # the conformance probe must conclude well inside conform's 10 s (R8)
 VANTAGE = "from the agent container"  # H3: a reachability claim names where it was made
+# Where the record lives, named in status's verdict (Item 26 Q2, the mentor: the D8 interview found the
+# operator did not know). The agent cannot run the command; it is named so a person reading it can. The
+# verdict keeps it short, so that with the stand-in's host and both of status's figures it fits rule 13's
+# 200 columns; the data says it whole.
+RECORD = "record: adeled ledger"
+RECORD_WHOLE = "Adele's ledger, which the operator reads with: docker exec timelike-adele adeled ledger"
 UNBLOCK = "the operator starts her: make up (docker compose up -d) on the host"
 _TTL_RE = re.compile(r"^([0-9]+h)?([0-9]+m)?$")
 
@@ -157,7 +163,8 @@ def status(ctx: agentio.Context, host: str | None = None) -> agentio.Result:
         data: dict[str, Any] = {"reachable": True, "url": base_url(), "revision": rev, "grants": grants}
         said, lines, extra = denials(host)
         data.update(extra)
-        return agentio.Result("adele", "status", f"{verdict} · {said}", lines=lines, data=data)
+        data["record"] = RECORD_WHOLE
+        return agentio.Result("adele", "status", f"{verdict} · {said} · {RECORD}", lines=lines, data=data)
     if reply.status == 0:
         why = reply.reason
         verdict = f"unreachable: {base_url()} {VANTAGE} ({why}) — {UNBLOCK}"
@@ -178,14 +185,14 @@ def denials(host: str | None) -> tuple[str, list[str], dict[str, Any]]:
     where = f" of {host}" if host else ""
     if reply.status != 200 or not isinstance(reply.body.get("denials"), list):
         why = reply.reason or f"HTTP {reply.status}: {reply.body.get('error', 'no denials in the answer')}"
-        return f"recent denials{where} unknown ({why})", [], {"denials": None, "denials_unknown": why}
+        return f"denials{where} unknown ({why})", [], {"denials": None, "denials_unknown": why}
     items = [d for d in reply.body["denials"] if isinstance(d, dict)]
     hours, per_host = reply.body.get("window_hours", 24), reply.body.get("per_host", 20)
     data = {"denials": items, "denial_window_hours": hours, "denial_host": host}
     if not items:
-        return f"no denial{where} in the last {hours} h", [], data
+        return f"no denial{where} in {hours} h", [], data
     s = "s" if len(items) != 1 else ""
-    said = f"{len(items)} denial{s}{where} in the last {hours} h (newest first, at most {per_host} per host)"
+    said = f"{len(items)} denial{s}{where} in {hours} h (≤{per_host}/host)"  # newest first, below
     return said, [_denial_line(d) for d in items], data
 
 

@@ -459,3 +459,13 @@ INHERITED: T024's createFresh (confidence: high)
 ASSUMED: the coverage pass found createFresh at 38.5% (its "ledger table already there" branches untested) while Adele's total was 94.0%; one test now covers both shapes: v1 adopted and upgraded, v2 adopted and kept (confidence: high)
 ABSENT: no change to the code; the paths behaved as designed
 Verification: ledger 89.8% (was 87.0%); Adele total over the 90% bar (94.0% before this test)
+SCOPE: in (1 changed files)
+
+### T030/T028 follow-up: status names where the record lives (Item 26 Q2, the mentor's addition)
+**Started:** 2026-10-16T10:13:00Z | **Completed:** 2026-10-16T10:19:01Z
+
+INHERITED: the mentor's answer to Q2, `bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md` (10:05:40Z): confirmed as specified, plus "the verdict names where the record lives (Adele's ledger, and which command reads it)" (confidence: high)
+FLAGGED: the agent's verdict names it as `record: adeled ledger`, and its JSON `record` says it whole ("Adele's ledger, which the operator reads with: docker exec timelike-adele adeled ledger") — chose the short form because the first wording pushed the by-host verdict to 297 columns and rule 13 cut the pointer itself off (seen on the host integration). The denials phrase was tightened with it ("in 24 h (≤20/host)"), so both of status's figures and the record fit 200 columns with the stand-in's host and a 40-character revision; a unit pins that bound (confidence: medium — a host longer than the stand-in's is still cut, with rule 13's marker, and is whole in JSON)
+ASSUMED: the operator's `adeled status` is not agentio and is not cut, so it keeps the longer phrasing and ends "· the record: adeled ledger" (confidence: high)
+ABSENT: Q1 (what counts as a denied connection) is with plan; T034 and the README block still wait on it
+Verification: ruff, mypy (39 files), shellcheck clean; adele CLI and readme-reference units pass; Go adeled units pass; host integration prints the verdicts above
