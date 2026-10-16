@@ -736,3 +736,206 @@ Go: `go vet ./internal/broker/` and `go test -count=1 ./...` over adele/ with th
 cache, so it fetched modules): every package `ok`; `gofmt -l internal/` empty. shellcheck 0.11.0 over helpers.bash,
 lane.bash, tests/run.sh and all 86 e2e files, and ruff check and ruff format over `test_budget.py`: clean. The
 deny-list over the tree and the commit messages: in the reply.
+
+## Cycle 1, Addendum 4 — bridge/feedback/maint-20261015-115635-lane-speed-proof-parallel-lanes-fail.md
+
+The mentor's fourth proof chain, on `280659f` (2026-10-15T22:08:43Z–2026-10-16T01:21:00Z), appended to the same
+feedback file ("Rerun on `280659f`"). Serial, par1 and par2 passed (689 of 689), as did the scan and lint, and the
+partial rerun. par3 and the first partial lane were ruined by the host's own scheduled Docker cleanup at 23:50Z (no
+action for code/). par3b, on a heavily loaded host, failed twice from load: items 11 and 12. Items 7 to 10 held.
+Read from `bridge/.make-*-ls4*.log` (read only). Nothing here has run in Docker. **No criterion's budget was raised,
+no cell's assertion changed, no unit was marked, and `E2E_JOBS` is unchanged.** Five files join lane.conf's serial
+group (item 11).
+
+### Group B — copied from the send
+
+Unchanged: `source_send` `bridge/sends/maint-lane-speed-20261015-062546.md`; no prompt, no feature, no discovery
+revision of its own; no slice. The instruction is the feedback file named in the heading.
+
+### Item 11 · time budgets in the spread part, as a class
+
+**The measurement this needed did not exist.** A cell's time in the TAP stream is mostly its setup: the git-log
+cells take up to 101 s in par3b and pass their 20 s budgets, because `prepare` builds a fixture repository first.
+The time the budget is about is the one `run_in` records in `ELAPSED_MS`, and no lane printed it for a passing cell.
+So:
+
+- **`assert_within` now records it.** With `TL_WITHIN_LOG` set, each call appends one line (file, budget s, measured
+  ms, cell) in one write, passing or not, before its verdict, which it does not change. `tests/run.sh` sets
+  `TL_WITHIN_LOG=/out/within.tsv` in every lane, serial included (the one addition to the serial lane's command;
+  the bats arguments are unchanged), clears the file before the lane, and after it prints the count and the five
+  timed commands that used the most of their budgets (`within_account`; it fails nothing). The next proof's
+  `tests/out/within.tsv` gives every budget's headroom exactly, in every lane.
+- **Until then, a bound.** For each of the 588 `assert_within` cells I matched (by name, all 588 in all four lanes)
+  its time in proof 4's serial, par1, par2 and par3b TAP. The quietest of the first three is an upper bound on its
+  timed command's use, so `budget − quietest cell` is a lower bound on its headroom. Survey script:
+  every `@test`, the `assert_within` calls in its body and in the file's functions it calls.
+
+**The rule (now in lane.conf's header):** a file goes in the serial group when a budget it asserts has less than
+15 s of headroom over what its timed command takes on a quiet host. 15 s is what par3b put on one command: cell 176
+took 0.5–1.2 s in the other lanes and 15.6 s there (`took 15.220s, limit 10s`). par3b's load was bursty rather
+than even: the median cell ran at 0.88 times its serial time, the 90th percentile at 1.70 (cells of 200 ms or more), so a factor would not
+describe it; a stall of about 15 s on one command does.
+
+**The spread and `first` files, tightest timed cell each** (the 13 files already serial are not listed; all 469
+spread cells and 64 `first` cells are covered):
+
+| File (part in proof 4) | Timed cells | Tightest budget | Its quietest cell | Headroom (bound) | par3b, slowest timed cell | Now |
+|---|---|---|---|---|---|---|
+| `services-start-exits-before-ready-non-zero-died-last-log-lines.bats` (spread) | 4 | 10 s | 1.9 s | 8.1 s | 1.9 s | **serial** |
+| `credentials-fail-fast.bats` (spread) | 26 | 10 s | 0.9 s | 9.1 s | 15.6 s (not ok) | **serial** |
+| `journal-last-20-entries-of-current-session-bounded.bats` (spread) | 2 | 20 s | 9.0 s | 11.0 s | 9.4 s | **serial** |
+| `git-log-diff-commit-rebase-exit-within-20-seconds.bats` (first) | 50 | 20 s | 6.8 s | 13.2 s | 101.3 s | first; within.tsv decides |
+| `journal-concurrent-agents-separable-by-agent-and-session.bats` (spread) | 2 | 20 s | 5.9 s | 14.1 s | 5.8 s | **serial** |
+| `timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats` (spread) | 4 | 20 s | 5.7 s | 14.3 s | 5.7 s | **serial** |
+| `restore-returns-captured-content-and-removes-files-created-after.bats` (spread) | 10 | 20 s | 4.9 s | 15.1 s | 5.5 s | spread |
+| `announcement-generated-from-manifests-missing-tool-fails.bats` (spread) | 6 | 20 s | 4.6 s | 15.4 s | 5.0 s | spread |
+| `version-control-history-index-and-stash-unchanged-by-snapshot-and-restore.bats` (spread) | 4 | 20 s | 4.3 s | 15.7 s | 4.5 s | spread |
+| `services-list-state-port-uptime-marks-died.bats` (spread) | 4 | 20 s | 4.2 s | 15.8 s | 4.2 s | spread |
+| `view-directory-overview-dependency-directory-collapsed-within-budget.bats` (spread) | 6 | 20 s | 3.9 s | 16.1 s | 203.9 s | spread |
+| `one-command-prints-the-agents-resource-budget.bats` (spread) | 10 | 20 s | 3.5 s | 16.5 s | 3.5 s | spread |
+| `snapshot-over-the-size-cap-is-partial-and-names-what-was-excluded.bats` (spread) | 10 | 20 s | 3.5 s | 16.5 s | 3.4 s | spread |
+| `services-start-with-port-readiness-returns-after-port-accepts.bats` (spread) | 4 | 20 s | 3.4 s | 16.6 s | 3.4 s | spread |
+| `symbols-stale-cache-rebuilt-answers-from-new-content.bats` (spread) | 4 | 20 s | 3.4 s | 16.6 s | 3.3 s | spread |
+| `journal-lists-every-tool-invocation-in-order-with-pointer.bats` (spread) | 4 | 20 s | 3.2 s | 16.8 s | 3.3 s | spread |
+| `view-and-search-slice-1-carried-items.bats` (spread) | 10 | 20 s | 2.9 s | 17.1 s | 3.5 s | spread |
+| `edit-anchored-lines-unchanged-applies-changed-lines-refused-naming-them.bats` (spread) | 12 | 20 s | 2.8 s | 17.2 s | 217.7 s | spread |
+| `search-262-matches-shows-50-grouped-with-212-omitted-and-narrowing.bats` (spread) | 10 | 20 s | 2.7 s | 17.3 s | 2.8 s | spread |
+| `snapshot-records-tracked-untracked-and-ignored-files.bats` (spread) | 4 | 20 s | 2.4 s | 17.6 s | 2.4 s | spread |
+| `edit-dry-run-prints-unified-diff-file-byte-identical.bats` (spread) | 6 | 20 s | 2.4 s | 17.6 s | 195.9 s | spread |
+| `view-range-context-missing-file-and-binary.bats` (spread) | 16 | 20 s | 2.3 s | 17.7 s | 143.2 s | spread |
+| `journal-shell-commands-outside-tools-with-exit-codes.bats` (spread) | 4 | 20 s | 2.3 s | 17.7 s | 2.4 s | spread |
+| `services-start-port-held-by-registered-service-refused-naming-holder.bats` (spread) | 4 | 20 s | 2.3 s | 17.7 s | 2.3 s | spread |
+| `view-412-line-file-shows-lines-1-120-with-header-and-next-range.bats` (spread) | 8 | 20 s | 2.3 s | 17.7 s | 2.3 s | spread |
+| `view-anchor-mode-short-stable-anchor-changes-with-content.bats` (spread) | 12 | 20 s | 2.1 s | 17.9 s | 2.6 s | spread |
+| `edit-replacing-text-appearing-once-changes-only-that-text-prints-edited-region.bats` (spread) | 4 | 20 s | 2.1 s | 17.9 s | 2.1 s | spread |
+| `edit-would-fail-syntax-check-refused-with-checker-error-file-byte-identical.bats` (spread) | 30 | 20 s | 2.0 s | 18.0 s | 2.1 s | spread |
+| `edit-matches-nowhere-refused-exit-3-nearest-candidates.bats` (spread) | 4 | 20 s | 2.0 s | 18.0 s | 2.1 s | spread |
+| `edit-crlf-tab-indented-file-given-lf-and-spaces-preserves-crlf-and-tabs.bats` (spread) | 4 | 20 s | 1.9 s | 18.1 s | 118.4 s | spread |
+| `snapshot-refuses-home-root-and-their-ancestors.bats` (spread) | 16 | 20 s | 1.9 s | 18.1 s | 2.4 s | spread |
+| `symbols-dependents-of-changed-file-ranked.bats` (spread) | 4 | 20 s | 1.9 s | 18.1 s | 1.9 s | spread |
+| `services-stop-terminates-every-process-in-its-tree.bats` (spread) | 2 | 20 s | 1.7 s | 18.3 s | 1.8 s | spread |
+| `search-zero-matches-exits-0-and-1-only-in-strict-mode.bats` (spread) | 14 | 20 s | 1.7 s | 18.3 s | 1.8 s | spread |
+| `edit-name-and-manifest.bats` (spread) | 6 | 20 s | 1.6 s | 18.4 s | 1.6 s | spread |
+| `edit-matches-more-than-once-refused-exit-3-listing-line-numbers.bats` (spread) | 4 | 20 s | 1.6 s | 18.4 s | 86.9 s | spread |
+| `edit-slice-0-carried-items.bats` (spread) | 4 | 20 s | 1.6 s | 18.4 s | 1.7 s | spread |
+| `run-secrets-redacted-in-shown-output-and-saved-log.bats` (spread) | 8 | 20 s | 1.5 s | 18.5 s | 1.5 s | spread |
+| `run-5000-lines-verdict-first-head-first-errors-tail-more-command.bats` (spread) | 2 | 20 s | 1.3 s | 18.7 s | 1.3 s | spread |
+| `agent-cannot-run-as-root-change-firewall-or-read-adele.bats` (spread) | 8 | 20 s | 1.1 s | 18.9 s | 1.1 s | spread |
+| `symbols-callers-3-call-sites-grouped-text-based-header.bats` (spread) | 4 | 20 s | 1.1 s | 18.9 s | 1.2 s | spread |
+| `services-name-and-manifest.bats` (spread) | 4 | 20 s | 1.0 s | 19.0 s | 1.4 s | spread |
+| `symbols-outline-fixture-14-definitions-line-ranges-no-bodies.bats` (spread) | 4 | 20 s | 1.0 s | 19.0 s | 1.0 s | spread |
+| `run-output-within-head-and-tail-printed-in-full.bats` (spread) | 2 | 20 s | 1.0 s | 19.0 s | 1.1 s | spread |
+| `view-and-search-resolve-once-and-pass-conform.bats` (spread) | 12 | 20 s | 0.9 s | 19.1 s | 127.5 s | spread |
+| `symbols-name-and-manifest.bats` (spread) | 4 | 20 s | 0.9 s | 19.1 s | 0.9 s | spread |
+| `run-full-scratch-or-workspace-names-filesystem-and-free-space.bats` (spread) | 4 | 20 s | 0.8 s | 19.2 s | 0.8 s | spread |
+| `journal-name-and-manifest.bats` (spread) | 4 | 20 s | 0.8 s | 19.2 s | 0.9 s | spread |
+| `container-derived-defaults.bats` (spread) | 16 | 20 s | 0.7 s | 19.3 s | 1.0 s | spread |
+| `conformance-check-over-every-timelike-tool-on-path.bats` (first) | 14 | 20 s | 0.6 s | 19.4 s | 32.0 s | first |
+| `run-killed-by-memory-limit-names-limit-and-peak.bats` (spread) | 4 | 20 s | 0.6 s | 19.4 s | 0.6 s | spread |
+| `run-exit-equals-the-wrapped-commands-exit-code.bats` (spread) | 18 | 20 s | 0.6 s | 19.4 s | 0.6 s | spread |
+| `hooks-a-repository-configures-run.bats` (spread) | 7 | 20 s | 0.5 s | 19.5 s | 0.6 s | spread |
+| `bash-c-and-bash-lc-defaults-in-effect.bats` (spread) | 16 | 20 s | 0.3 s | 19.7 s | 0.7 s | spread |
+| `verify-name-and-manifest.bats` (spread) | 6 | 20 s | 0.1 s | 19.9 s | 1.0 s | spread |
+| `verify-changed-one-source-file-runs-importing-tests-lints-changed-states-why.bats` (spread) | 4 | 25 s | 3.3 s | 21.7 s | 3.5 s | spread |
+| `verify-pytest-3-failed-409-passed-file-line-name-assertion-lines.bats` (spread) | 4 | 25 s | 2.9 s | 22.1 s | 3.0 s | spread |
+| `verify-parses-pytest-jest-vitest-go-cargo-unknown-format-falls-back.bats` (spread) | 18 | 25 s | 2.8 s | 22.2 s | 141.7 s | spread |
+| `verify-changed-no-changes-exits-0-nothing-selected.bats` (spread) | 6 | 25 s | 1.7 s | 23.3 s | 1.7 s | spread |
+| `a-directory-removed-by-a-script-is-restorable-from-the-most-recent-scheduled-snapshot.bats` (spread) | 4 | 30 s | 2.3 s | 27.7 s | 26.5 s | spread |
+| `a-restore-first-snapshots-the-workspace-so-the-restore-can-be-undone.bats` (spread) | 2 | 30 s | 2.2 s | 27.8 s | 26.4 s | spread |
+| `a-snapshot-taken-in-one-session-is-listed-and-restorable-from-a-new-session-and-after-recreate.bats` (spread) | 2 | 30 s | 2.2 s | 27.8 s | 26.3 s | spread |
+| `deleted-files-trash-restorable-and-purged-by-age-and-size.bats` (spread) | 4 | 30 s | 1.6 s | 28.4 s | 7.1 s | spread |
+| `re-running-a-refused-install-with-the-confirm-flag-proceeds-and-records-the-override.bats` (spread) | 6 | 60 s | 2.7 s | 57.3 s | 2.9 s | spread |
+| `a-recursive-delete-hard-reset-force-push-and-clean-each-take-an-automatic-snapshot.bats` (spread) | 12 | 60 s | 2.6 s | 57.4 s | 26.2 s | spread |
+| `installing-packages-already-pinned-in-the-projects-lockfile-proceeds-without-registry-checks.bats` (spread) | 6 | 120 s | 3.1 s | 116.9 s | 3.2 s | spread |
+
+**Moved to serial (five files, each with its reason in lane.conf):** `credentials-fail-fast.bats` (10 s budgets,
+par3b's failure), `services-start-exits-before-ready-non-zero-died-last-log-lines.bats` (10 s),
+`journal-last-20-entries-of-current-session-bounded.bats`, `journal-concurrent-agents-separable-by-agent-and-session.bats`
+and `timelike-tools-manifest-json-interactivity-risk-safer-alternative.bats` (20 s, with 11.0–14.3 s of headroom by
+the bound). Their bound overstates what the timed command uses, so some may not need it; within.tsv will say, and a
+file can move back on that evidence.
+
+**Stays `first`: `git-log-diff-commit-rebase-exit-within-20-seconds.bats`.** By the bound it has 13.2 s, under the
+rule. But its cells' time is mostly `prepare` (a fixture repository, under `PLUMBING_TIMEOUT`), so the git
+command's own share is unknown, and the bound is the least informative for this file of any. Moving it costs most:
+507 s of cells in proof 4's serial lane, run alone in the serial tail, about 55% on top of par1's and par2's e2e
+875–954 s. I left it in place, said so on its lane.conf line, and the next proof's within.tsv decides: if its git
+commands use more than 5 s of their 20, it moves.
+
+**Stay spread: every other file.** Each has at least 15.1 s of headroom by the bound (the table), which is more
+than par3b's stall. The closest are `restore-returns-…` (15.1 s), `announcement-generated-…` (15.4 s) and
+`version-control-…` (15.7 s); within.tsv will show whether the bound or the rule is the tighter.
+
+**The serial group's own files** were not re-examined against this rule; they are serial already. Two of them
+assert near their budgets even alone (`hook-past-its-time-limit-is-killed.bats`: 7.7 s quiet cells on an 8 s
+budget, `hooks-under-env-i-…`: 4.4 s on 7 s), but that is how those criteria are written (a 3 s or 2 s limit plus
+5 s grace, timed from the runner), not a scheduling question.
+
+**What the move costs:** the five files' cells took 77 s in proof 4's serial lane (6.6 s, 11.6 s, 22.0 s, 14.5 s,
+22.3 s), plus their `setup_file`s, which the TAP stream does not time. They now run alone, after the rest, instead
+of beside it: roughly 1.5 minutes on the parallel lane's e2e, about 8% of par1's and par2's 875–954 s. Not measured.
+
+### Item 12 · the unit fixtures' bounds
+
+`full_run` (`tests/unit/test_bench_cli.py`) is plumbing: the whole fake bench pipeline, run for each of the six
+tests that read its output, whose time no test asserts. It took 18.3–18.5 s a time on this host, serially
+(`--durations`), so 120 s was about 6.5 times that, and par3b's unit step ran at 2.6 times proof 4's other lanes
+(507 s against 197 s), more at its peaks.
+
+- **One bound for unit-side setup:** `PLUMBING_TIMEOUT_S = 300.0` in `tests/unit/conftest.py`, documented as the
+  unit side of item 7: a subprocess that only sets a test up, whose time no test asserts. The bound on the command
+  a test is about stays where the test sets it.
+- **Where it applies:** every pytest fixture's subprocess bound, found by walking each fixture's calls (AST, all
+  of tests/unit):
+  - `test_bench_cli.py` `full_run`: `bench_run(…, timeout=PLUMBING_TIMEOUT_S)` (was the helper's default 120 s);
+  - `test_verify.py` `projects` and `repo`: the project generator (was 60 s), and the module's `git` helper, which
+    only builds the repositories the tests read (was 30 s);
+  - `test_git_hook_dispatch.py` `repo`: its two `git` calls (were the helper's 30 s), and its `git init`, which
+    had no bound at all.
+- **Left as they are, with the reason:**
+  - two teardown waits: `test_adele_cli.py` `adele` (`thread.join(timeout=5)`) and `test_services.py` `lab`
+    (`p.wait(timeout=5)` under `suppress(TimeoutExpired)`, `wait_until(…, timeout=2)` in a three-round kill loop).
+    Neither fails when it expires; each is a best-effort wait before the next cleanup step.
+  - the bounds inside test bodies (about 70 sites): they bound the command the test is about, or a tool's own
+    limit the test checks (exit 124 within a time), or the `timed` tests. They are the unit side of `RUN_TIMEOUT`.
+    None failed in any proof-4 lane. A test-body bound that fails under load later is that class's question.
+- **Not marked `timed`.** No bench test asserts a time.
+
+Seen and not changed: `full_run` is function-scoped, so the pipeline runs six times (about 110 s of a serial unit
+step). A module-scoped run would cut that, but two of its tests change its output directory (one deletes the report, one runs into it again), so that is a change to
+the tests' independence, not to a bound.
+
+### Group C — written by the code instance
+
+**delegations:** none. The survey (every `assert_within` cell against proof 4's four TAP streams, and every unit
+fixture's bounds) was mine, by script, in scratch.
+
+**criteria_reestablished:** none (a maintenance send carries no acceptance criteria). Units: the host lane below,
+`executed`; `test_lane_run_sh.py` 20 `executed` (one new test: the headroom summary; and the serial lane test checks its one new
+variable).
+
+**reconcile_mode:** scoped (items 11 and 12).
+
+**not_verified:**
+- **Nothing has run in Docker.** That `assert_within` writes within.tsv from inside the runner, that the lane prints
+  its summary, and the moves' cost in time, are for the mentor's proof.
+- **The headroom figures are bounds**, from cell times; within.tsv replaces them.
+- **15 s** is par3b's one observed stall. A host worse than par3b would need more, and no rule here would catch it.
+
+**changed_other_features:** test code only: tests/e2e (helpers.bash, lane.conf), tests/run.sh, and five unit
+files. No production code.
+
+**process_failures_recorded:** item 11 was the class lane.conf already named ("cells measure the machine"), applied
+one file at a time when the send built lane.conf; the rule should have been stated with a measurement then.
+
+**retired_prompts_seen:** none.
+
+#### Host lane (Addendum 4, one tree)
+
+`make test-host` on timelike's CPython 3.14.8 in the scratch venv (`venv-xdist`: pytest 8.4.2, pytest-xdist 3.8.0,
+the pins), over this tree, 2026-10-16T03:59:35Z–04:09:03Z (read from the clock): **rc 0**. pytest tests/unit,
+serially: **2530 passed, 13 skipped** (534 s); `test_env_layer.sh` 60 of 60; `test_shell_env_hook.sh` 57 of 57;
+`test_command_not_found.sh` 33 of 33. Then the Docker lane's two unit parts, 04:09:03Z–04:12:04Z:
+`-n 8 -m "not timed"` **rc 0, 2514 passed, 13 skipped** (136 s); `-m timed` **rc 0, 16 passed** (44 s).
+shellcheck 0.11.0 over helpers.bash, lane.bash, tests/run.sh and all 86 e2e files, and ruff check and ruff format
+over the five changed unit files: clean. The deny-list over the tree and the commit message: in the reply.

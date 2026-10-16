@@ -25,6 +25,7 @@
 #   tests/out/latest.log      a copy of the newest run log
 #   tests/out/e2e.tap         the bats TAP stream
 #   tests/out/report.xml      bats JUnit report
+#   tests/out/within.tsv      one line per assert_within: file, budget s, measured ms, cell (item 11's headroom)
 #   tests/out/unit.txt        pytest output (with -rP, so the start-up test's figure is shown)
 #   tests/out/startup.json    the in-image start-up p95 from that line (quality-standards C2), or
 #                             {"measured": false, "reason": ...} when the test did not print it
@@ -283,7 +284,7 @@ run_e2e() {
   local rc
   local -a endpoint
   mapfile -t endpoint < <(docker_endpoint_args)
-  rm -f "${out}/e2e.tap" "${out}/report.xml"
+  rm -f "${out}/e2e.tap" "${out}/report.xml" "${out}/within.tsv"
   # The speedup bench (feature 002) writes here; mounted at the SAME absolute path, because the bench
   # driver bind-mounts it again by that path from the Docker host (research RB7, lore P001/P002).
   # One directory per lane, named by the lane's stamp: the files' own names end in the runner's pid,
@@ -295,7 +296,8 @@ run_e2e() {
   # The parallel lane (E2E_JOBS > 1; maint-lane-speed part 1a): files side by side, each file's own cells in
   # sequence, under lane.bash's file lock (shared; exclusive for lane.conf's serial files). The throwaway
   # sweep that six files did in setup_file is done here once instead, because beside other files it would
-  # remove their throwaways in use. E2E_JOBS=1 adds nothing to the serial lane's command.
+  # remove their throwaways in use. E2E_JOBS=1 adds nothing to the serial lane's command but TL_WITHIN_LOG,
+  # which every lane sets: assert_within's record of each timed command against its budget (within_account).
   local -a lane_env=() lane_args=()
   if ((E2E_JOBS > 1)); then
     echo "e2e: ${#E2E_TARGETS[@]} files, ${E2E_JOBS} at a time; serial after the rest: ${E2E_SERIAL[*]:-none}"
@@ -322,6 +324,7 @@ run_e2e() {
     -e "REPO_HOST=${repo}" \
     -e "BENCH_E2E_OUT=${bench_out}" \
     -e "RUN_TIMEOUT=${RUN_TIMEOUT:-30}" \
+    -e TL_WITHIN_LOG=/out/within.tsv \
     -e "ADELE_CONTAINER=${ADELE_CONTAINER}" \
     -e "STANDIN_CONTAINER=${STANDIN_CONTAINER}" \
     ${lane_env[@]+"${lane_env[@]}"} \
@@ -330,7 +333,21 @@ run_e2e() {
     --formatter tap --report-formatter junit --output /out --timing \
     "${E2E_TARGETS[@]}" | tee "${out}/e2e.tap" && rc=0 || rc=$?
   e2e_account "${out}/e2e.tap" || ((rc != 0)) || rc=1
+  within_account "${out}/within.tsv"
   return "${rc}"
+}
+
+# within_account TSV — how much of its budget each timed command used, from assert_within's records (file,
+# budget s, measured ms, cell): the count, and the five that used the most of theirs. A cell's own time in the
+# TAP stream is mostly its setup, so this is where a budget's headroom is read (feedback maint-20261015-115635,
+# item 11). It reports; it fails nothing.
+# shellcheck disable=SC2329 # invoked from run_e2e, itself invoked indirectly by step
+within_account() {
+  [[ -s "$1" ]] || { echo "e2e headroom: no assert_within records in ${1##*/}"; return 0; }
+  echo "e2e headroom: $(wc -l <"$1" | tr -d ' ') timed commands against their budgets (${1##*/}); the five tightest:"
+  awk -F'\t' '$2 > 0 && $3 != "" { printf "%.4f\t%s\t%s\t%s\n", $3 / ($2 * 1000), $3, $2, $1 }' "$1" |
+    sort -t "$(printf '\t')" -k1,1gr | head -n 5 |
+    awk -F'\t' '{ printf "  %5.1f%%  %6d ms of %ss  %s\n", $1 * 100, $2, $3, $4 }'
 }
 
 # e2e_account TAP — the cells the TAP stream reports against its plan. A file whose setup_file fails prints
@@ -664,7 +681,7 @@ main() {
   for i in "${!STEP_NAMES[@]}"; do
     printf '  %-9s %-8s rc=%-4s %s\n' "${STEP_NAMES[$i]}" "${STEP_STATUS[$i]}" "${STEP_RCS[$i]}" "${STEP_NOTES[$i]}"
   done
-  echo "  results: tests/out/summary.json, tests/out/e2e.tap, tests/out/report.xml, tests/out/unit.txt, tests/out/go-unit.txt"
+  echo "  results: tests/out/summary.json, tests/out/e2e.tap, tests/out/report.xml, tests/out/within.tsv, tests/out/unit.txt, tests/out/go-unit.txt"
   echo "  the ${AGENT_CONTAINER} container is left running (make demo; make down to stop it)"
   if [[ ${exit_rc} -eq 0 ]]; then
     echo "Docker lane: PASSED"

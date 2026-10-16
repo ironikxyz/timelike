@@ -38,8 +38,10 @@ case "$1" in
   run)
     for a in "$@"; do
       case "$a" in
+        *:/out) out="${a%:/out}" ;;
         timelike-test-runner:local)
           [ -z "$FAKE_E2E_SLEEP" ] || sleep "$FAKE_E2E_SLEEP"
+          [ -z "$FAKE_WITHIN" ] || printf "$FAKE_WITHIN" > "$out/within.tsv"
           printf "${FAKE_TAP:-1..1\\nok 1 cell # in 1 ms\\n}"; exit 0 ;;
         timelike-agent:local) echo "1 passed"; exit 0 ;;
       esac
@@ -77,6 +79,7 @@ def lane(tmp_path: Path) -> dict[str, object]:
         "DOCKER_HOST": "tcp://stand-in:2375",
         "FAKE_STALE": "",
         "FAKE_E2E_SLEEP": "",
+        "FAKE_WITHIN": "",
     }
     return {"root": root, "env": env, "logs": logs}
 
@@ -134,6 +137,8 @@ def test_a_serial_lane_is_the_old_command_exactly(lane: dict[str, object]) -> No
         "--formatter", "tap", "--report-formatter", "junit", "--output", "/out", "--timing", "tests/e2e",
     ]  # fmt: skip
     assert not any(a.startswith("TL_E2E_") for a in runner)
+    # The one addition every lane makes: assert_within's record of each budget's use (item 11).
+    assert "TL_WITHIN_LOG=/out/within.tsv" in runner
     (unit,) = unit_calls(lane)
     assert after_image(unit, "timelike-agent:local") == [
         "uv", "run", "--no-project", "--python", "/opt/timelike/python/bin/python3",
@@ -294,6 +299,34 @@ def test_a_tap_stream_short_of_its_plan_fails_e2e_and_says_why(lane: dict[str, o
     p, summary = run_lane(lane, FAKE_TAP="1..2\\nok 1 a\\nok 2 b\\n")
     assert p.returncode == 0, p.stdout + p.stderr
     assert "e2e: 2 of 2 cells reported, 0 not ok" in p.stdout
+
+
+def test_the_e2e_step_prints_the_timed_commands_nearest_their_budget(lane: dict[str, object]) -> None:
+    # A cell's time is mostly its setup, so a budget's headroom is read from assert_within's own records
+    # (feedback maint-20261015-115635, item 11). They report; they fail nothing.
+    records = "".join(
+        f"{f}\\t{b}\\t{ms}\\t{cell}\\n"
+        for f, b, ms, cell in [
+            ("a.bats", 20, 1000, "five per cent"),
+            ("b-long.bats", 10, 9100, "ninety-one per cent"),
+            ("c.bats", 20, 2000, "ten per cent"),
+            ("c.bats", 60, 3000, "five per cent of 60"),
+            ("e.bats", 20, 15000, "seventy-five per cent"),
+            ("e.bats", 10, 500, "five per cent of 10"),
+        ]
+    )
+    p, _ = run_lane(lane, FAKE_WITHIN=records)
+    assert p.returncode == 0, p.stdout + p.stderr
+    lines = p.stdout.splitlines()
+    i = lines.index("e2e headroom: 6 timed commands against their budgets (within.tsv); the five tightest:")
+    assert lines[i + 1 : i + 4] == [
+        "   91.0%    9100 ms of 10s  b-long.bats",
+        "   75.0%   15000 ms of 20s  e.bats",
+        "   10.0%    2000 ms of 20s  c.bats",
+    ]
+    assert len([ln for ln in lines[i + 1 : i + 7] if ln.startswith("  ") and "ms of" in ln]) == 5
+    p, _ = run_lane(lane)
+    assert "e2e headroom: no assert_within records in within.tsv" in p.stdout
 
 
 def test_gounit_beside_e2e_prints_its_own_seconds_and_when_it_was_collected(lane: dict[str, object]) -> None:

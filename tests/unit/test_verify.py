@@ -64,7 +64,7 @@ from typing import Any
 
 import pytest
 import schema
-from conftest import FIXTURES, TOOLS_DIR, base_env, events
+from conftest import FIXTURES, PLUMBING_TIMEOUT_S, TOOLS_DIR, base_env, events
 
 VERIFY = TOOLS_DIR / "verify"
 SESSION = "verify-t001"
@@ -86,7 +86,7 @@ def projects(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("projects")
     out = {}
     for kind in ("pytest", "jest", "vitest", "go", "cargo", "lint"):
-        subprocess.run(["bash", str(GEN), kind, str(root / kind)], check=True, timeout=60)
+        subprocess.run(["bash", str(GEN), kind, str(root / kind)], check=True, timeout=PLUMBING_TIMEOUT_S)
         out[kind] = root / kind
     return out
 
@@ -548,8 +548,9 @@ def git(lab: Lab, *args: str) -> str:
         "GIT_COMMITTER_EMAIL": "t@example.invalid",
     }
     r = subprocess.run(
-        ["git", *args], cwd=lab.ws, env=lab.env(**who), capture_output=True, text=True, timeout=30
-    )
+        ["git", *args], cwd=lab.ws, env=lab.env(**who), capture_output=True, text=True,
+        timeout=PLUMBING_TIMEOUT_S,
+    )  # fmt: skip
     assert r.returncode == 0, (args, r.stderr)
     return r.stdout
 
@@ -557,7 +558,7 @@ def git(lab: Lab, *args: str) -> str:
 @pytest.fixture
 def repo(lab: Lab) -> Lab:
     """The generator's pytest project, committed: app/{models,orders,cli}.py and their tests."""
-    subprocess.run(["bash", str(GEN), "pytest", str(lab.ws)], check=True, timeout=60)
+    subprocess.run(["bash", str(GEN), "pytest", str(lab.ws)], check=True, timeout=PLUMBING_TIMEOUT_S)
     (lab.ws / ".gitignore").write_text(GITIGNORE)
     git(lab, "init", "-q", "-b", "main")
     git(lab, "add", "-A")

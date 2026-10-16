@@ -223,8 +223,16 @@ exec_plain() {
 }
 
 # assert_within LIMIT_S — the last run_in concluded in under LIMIT_S seconds and did not time out.
+# With TL_WITHIN_LOG set (tests/run.sh sets it in every lane), each call also appends the file, the budget,
+# the measured time and the cell to that file, passing or not, in one write: a cell's own time is mostly its
+# setup, so this is the only record of how much of a budget the timed command used (feedback
+# maint-20261015-115635, item 11). It changes no verdict.
 assert_within() {
   local limit_s="$1"
+  if [[ -n "${TL_WITHIN_LOG:-}" ]]; then
+    printf '%s\t%s\t%s\t%s\n' "${BATS_TEST_FILENAME##*/}" "$limit_s" "${ELAPSED_MS:-}" \
+      "${BATS_TEST_DESCRIPTION:-}" >>"$TL_WITHIN_LOG" 2>/dev/null || true
+  fi
   if [[ "$status" == 124 ]]; then
     echo "timed out after ${ELAPSED_S}s (runner limit ${RUN_TIMEOUT}s): the command waited on something" >&2
     return 1

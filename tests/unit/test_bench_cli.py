@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 import test_bench_catalog as cat_t
-from conftest import AGENTIO_DIR, REPO, run
+from conftest import AGENTIO_DIR, PLUMBING_TIMEOUT_S, REPO, run
 from test_conform import install
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -102,7 +102,11 @@ def test_timelike_conform_passes_over_the_bench_tool(bench: dict[str, Any], tmp_
 
 @pytest.fixture
 def full_run(bench: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-    p = bench_run(bench, "run", "--out", str(bench["out"]), "--call-limit", "2", "--text", "--limit", "0")
+    # The whole fake pipeline, about 18 s on a quiet host; plumbing for the tests that read it (item 12).
+    p = bench_run(
+        bench, "run", "--out", str(bench["out"]), "--call-limit", "2", "--text", "--limit", "0",
+        timeout=PLUMBING_TIMEOUT_S,
+    )  # fmt: skip
     return bench, p
 
 

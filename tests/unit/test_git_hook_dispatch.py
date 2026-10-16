@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import REPO
+from conftest import PLUMBING_TIMEOUT_S, REPO
 
 DISPATCH_DIR = REPO / "image" / "rootfs" / "opt" / "timelike" / "git-hooks"
 SKIP_WORDS = ("--no-verify", " -n ", "hooksPath", "skip", "bypass", "disable")
@@ -68,10 +68,13 @@ def repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     home.mkdir()
     env = env_for(home)
     r = tmp_path / "r"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(r)], env=env, check=True, stdin=subprocess.DEVNULL)
+    subprocess.run(
+        ["git", "init", "-q", "-b", "main", str(r)], env=env, check=True, stdin=subprocess.DEVNULL,
+        timeout=PLUMBING_TIMEOUT_S,
+    )  # fmt: skip
     (r / "f").write_text("base\n")
-    assert git(r, env, "add", "f").returncode == 0
-    assert git(r, env, "commit", "-qm", "base").returncode == 0
+    assert git(r, env, "add", "f", timeout=PLUMBING_TIMEOUT_S).returncode == 0
+    assert git(r, env, "commit", "-qm", "base", timeout=PLUMBING_TIMEOUT_S).returncode == 0
     return r, env
 
 
