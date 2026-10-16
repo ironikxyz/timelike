@@ -113,9 +113,8 @@ func (s *Store) Delete(name string) error {
 	return nil
 }
 
-// write replaces the record file atomically: a temp file in the same
-// directory, fsynced, then renamed over the record.
-func (s *Store) write(boxes []Box) (err error) {
+// write replaces the record file atomically (writeAtomic).
+func (s *Store) write(boxes []Box) error {
 	if boxes == nil {
 		boxes = []Box{}
 	}
@@ -123,9 +122,13 @@ func (s *Store) write(boxes []Box) (err error) {
 	if err != nil {
 		return fmt.Errorf("standin: encode record: %w", err)
 	}
-	data = append(data, '\n')
-	dir := filepath.Dir(s.path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(s.path)+".tmp-*")
+	return writeAtomic(s.path, append(data, '\n'))
+}
+
+// writeAtomic replaces path with data: a temp file in the same directory, fsynced, then renamed.
+func writeAtomic(path string, data []byte) (err error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("standin: write record: %w", err)
 	}
@@ -144,7 +147,7 @@ func (s *Store) write(boxes []Box) (err error) {
 	if err = tmp.Close(); err != nil {
 		return fmt.Errorf("standin: close record: %w", err)
 	}
-	if err = os.Rename(tmp.Name(), s.path); err != nil {
+	if err = os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("standin: replace record: %w", err)
 	}
 	syncDir(dir)

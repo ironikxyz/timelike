@@ -3,9 +3,14 @@
 // refuses every request without Adele's canary credential. It proves the grant path and credential
 // isolation; it proves nothing about any real provider (spec, "What the stand-in proves").
 //
-//	adele-standin serve   the container's entrypoint
-//	adele-standin list    print its own record (tests read it: "performed" / "nothing performed")
-//	adele-standin health  exit 0 if this container's stand-in answers (the healthcheck)
+//	adele-standin serve              the container's entrypoint
+//	adele-standin list               print its own record (tests read it: "performed" / "nothing performed")
+//	adele-standin health             exit 0 if this container's stand-in answers (the healthcheck)
+//	adele-standin delete NAME        delete a box as a provider's console would (a test: "already gone")
+//	adele-standin fault NAME MODE    make deleting NAME fail: error (HTTP 500), drop (no answer), clear
+//
+// delete and fault are for tests of Adele's reaper against a provider that fails (slice 1, FR-42;
+// cross-stack P005). They are run inside this container (docker exec), which the agent cannot reach.
 package main
 
 import (
@@ -61,8 +66,19 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer, re
 		return list(e, stdout, stderr)
 	case "health":
 		return health(e, stdout, stderr)
+	case "delete":
+		if len(args) != 2 {
+			break
+		}
+		return deleteBox(e, args[1], stdout, stderr)
+	case "fault":
+		if len(args) != 3 {
+			break
+		}
+		return setFault(e, args[1], args[2], stdout, stderr)
 	}
-	fmt.Fprintln(stderr, "usage: adele-standin serve | list | health  (a stand-in for tests and the demo; not a provider)")
+	fmt.Fprintln(stderr, "usage: adele-standin serve | list | health | delete NAME | fault NAME error|drop|clear"+
+		"  (a stand-in for tests and the demo; not a provider)")
 	return exitUsage
 }
 
@@ -87,8 +103,9 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		return exitFailure
 	}
 	srv := &http.Server{
-		Handler: standin.Handler(canary, store, nil), ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second,
+		Handler:           standin.HandlerWithFaults(canary, store, nil, faults(e)),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second, WriteTimeout: 30 * time.Second,
 	}
 	fmt.Fprintf(stderr, "adele-standin: STAND-IN, not a provider · serving on %s · %d boxes on record\n",
 		ln.Addr(), len(store.List()))
@@ -153,4 +170,56 @@ func writable(dir string) error {
 	name := f.Name()
 	_ = f.Close()
 	return os.Remove(name)
+}
+
+// faults lives beside the record, in the stand-in's own state volume.
+func faults(e env) *standin.Faults {
+	return standin.NewFaults(filepath.Join(filepath.Dir(e.get("STANDIN_RECORD")), "faults.json"))
+}
+
+func setFault(e env, name, mode string, stdout, stderr io.Writer) int {
+	if err := faults(e).Set(name, mode); err != nil {
+		fmt.Fprintf(stderr, "adele-standin: %v\n", err)
+		return exitUsage
+	}
+	fmt.Fprintf(stdout, "fault %s: %s\n", name, mode)
+	return exitOK
+}
+
+// deleteBox deletes through the serving stand-in's own HTTP interface, with the canary, so the serving
+// process's record and the file stay one account.
+func deleteBox(e env, name string, stdout, stderr io.Writer) int {
+	canary, err := standin.ReadCanary(e.get("ADELE_CANARY_FILE"))
+	if err != nil {
+		fmt.Fprintf(stderr, "adele-standin: credential: %v\n", err)
+		return exitUsage
+	}
+	_, port, err := net.SplitHostPort(e.get("STANDIN_LISTEN"))
+	if err != nil {
+		fmt.Fprintf(stderr, "adele-standin: STANDIN_LISTEN: %v\n", err)
+		return exitFailure
+	}
+	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:"+port+"/v1/boxes/"+name, nil)
+	if err != nil {
+		fmt.Fprintf(stderr, "adele-standin: %v\n", err)
+		return exitUsage
+	}
+	req.Header.Set("Authorization", "Bearer "+canary)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		fmt.Fprintf(stderr, "adele-standin: delete %s: the stand-in did not answer: %v\n", name, err)
+		return exitFailure
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNoContent:
+		fmt.Fprintf(stdout, "deleted %s\n", name)
+		return exitOK
+	case http.StatusNotFound:
+		fmt.Fprintf(stderr, "adele-standin: no box named %s\n", name)
+		return 3
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	fmt.Fprintf(stderr, "adele-standin: delete %s: HTTP %d: %s\n", name, resp.StatusCode, body)
+	return exitFailure
 }

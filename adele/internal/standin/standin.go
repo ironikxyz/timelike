@@ -14,6 +14,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -71,6 +72,77 @@ type server struct {
 	canary []byte
 	store  *Store
 	now    func() time.Time
+	faults *Faults
+}
+
+// Faults are the stand-in's test-only failures (spec FR-42, cross-stack P005): a delete of a named box
+// answers 500, or drops the connection unanswered, until cleared. They are read from a file in the
+// stand-in's own state directory on every delete, so `adele-standin fault` (another process in the same
+// container) sets them while the stand-in serves. The agent cannot reach the stand-in (FR-3).
+type Faults struct {
+	path string
+	mu   sync.Mutex
+}
+
+// Fault modes.
+const (
+	FaultError = "error"
+	FaultDrop  = "drop"
+	FaultClear = "clear"
+)
+
+// NewFaults keeps its file at path.
+func NewFaults(path string) *Faults { return &Faults{path: path} }
+
+// For returns the fault set for name, or "".
+func (f *Faults) For(name string) string {
+	if f == nil {
+		return ""
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	m, _ := f.read()
+	return m[name]
+}
+
+// Set sets (or, with FaultClear, removes) name's fault, rewriting the file atomically.
+func (f *Faults) Set(name, mode string) error {
+	if !nameRe.MatchString(name) {
+		return fmt.Errorf("standin: name must match ^[a-z][a-z0-9-]{0,62}$")
+	}
+	switch mode {
+	case FaultError, FaultDrop, FaultClear:
+	default:
+		return fmt.Errorf("standin: fault is one of error, drop, clear")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	m, err := f.read()
+	if err != nil {
+		return err
+	}
+	if mode == FaultClear {
+		delete(m, name)
+	} else {
+		m[name] = mode
+	}
+	data, _ := json.MarshalIndent(m, "", "  ")
+	return writeAtomic(f.path, append(data, '\n'))
+}
+
+func (f *Faults) read() (map[string]string, error) {
+	m := map[string]string{}
+	data, err := os.ReadFile(f.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return m, nil
+	}
+	if err != nil {
+		return m, fmt.Errorf("standin: read faults: %w", err)
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]string{}, fmt.Errorf("standin: parse faults %s: %w", f.path, err)
+	}
+	return m, nil
 }
 
 // Handler serves the stand-in's HTTP interface (contract adele-http.md § The
@@ -78,10 +150,15 @@ type server struct {
 // empty canary refuses every request rather than run open. A nil now uses
 // time.Now.
 func Handler(canary string, store *Store, now func() time.Time) http.Handler {
+	return HandlerWithFaults(canary, store, now, nil)
+}
+
+// HandlerWithFaults is Handler with test faults read from faults (nil: none).
+func HandlerWithFaults(canary string, store *Store, now func() time.Time, faults *Faults) http.Handler {
 	if now == nil {
 		now = time.Now
 	}
-	return &server{canary: []byte(canary), store: store, now: now}
+	return &server{canary: []byte(canary), store: store, now: now, faults: faults}
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +259,20 @@ func (s *server) delete(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/v1/boxes/")
 	if !nameRe.MatchString(name) {
 		writeError(w, http.StatusBadRequest, "name must match ^[a-z][a-z0-9-]{0,62}$")
+		return
+	}
+	switch s.faults.For(name) {
+	case FaultError:
+		writeError(w, http.StatusInternalServerError, "injected fault: the stand-in is set to fail deleting "+name)
+		return
+	case FaultDrop:
+		if hj, ok := w.(http.Hijacker); ok {
+			if conn, _, err := hj.Hijack(); err == nil {
+				_ = conn.Close() // no answer at all: the caller sees the connection end
+				return
+			}
+		}
+		writeError(w, http.StatusInternalServerError, "injected fault: drop is not possible on this connection")
 		return
 	}
 	switch err := s.store.Delete(name); {

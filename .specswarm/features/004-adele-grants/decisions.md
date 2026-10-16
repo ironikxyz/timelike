@@ -339,3 +339,15 @@ ASSUMED: the upgrade carries AUTOINCREMENT's sequence through RENAME; tested: th
 ABSENT: no down-migration: a schema-2 file is refused by a schema-1 Adele (slice 0's rule, ErrNewerSchema), which is the same stance slice 0 took for any newer file
 ABSENT: Denials has no index on (outcome, at); the ledger is small (hundreds of rows on the live stack) and every query is per request, not per row
 Verification: go vet, gofmt, `go test -cover ./internal/ledger` ok, coverage 87.0% (host toolchain go1.27.1; the lane's is GO_IMAGE 1.27.2)
+SCOPE: in (5 changed files)
+
+### T025: the stand-in's test faults and its delete command (FR-42)
+**Started:** 2026-10-16T09:27:21+00:00 | **Completed:** 2026-10-16T09:29:17Z
+
+INHERITED: nothing from T024 (disjoint package)
+FLAGGED: `adele-standin delete NAME` goes through the serving stand-in's own HTTP with the canary, not straight to the record file — chose HTTP over a file edit because the serving process holds the record in memory and a second writer would make its next write undo the delete (confidence: high)
+ASSUMED: faults are read from `faults.json` beside the record on every delete, so `fault` from another `docker exec` takes effect at once; a corrupt faults file means no fault and refuses Set (confidence: high)
+ASSUMED: `drop` hijacks and closes the connection, which Adele's client sees as a transport error ("EOF"), the nearest thing to an unreachable provider that can be set per box; the stand-in stopped is the whole-provider case (T032) (confidence: medium)
+ABSENT: no hang fault: a hang would be bounded by Adele's 10 s upstream timeout, which the transport-error path already exercises, and it would cost 10 s per attempt in every lane
+ABSENT: faults apply to delete only; quote and create are slice 0's, already tested against a missing canary
+Verification: go vet, gofmt; standin 94.5%, cmd/adele-standin 92.1%
