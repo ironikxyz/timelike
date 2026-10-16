@@ -963,3 +963,75 @@ Also: ruff check and format, mypy (39 files), shellcheck over the Makefile's 96 
 helpers, gofmt, go vet, staticcheck: clean. Adele's Go coverage 94.0% (90% bar). Earlier runs this cycle: on
 `a2a00a3`, serial 2544 passed, `-n 8` 2528, timed 16 (10:00:18Z–10:12:51Z); on `9d45b72`, serial 2545 passed, `-n 8`
 2529, **timed 1 failed** (the start-up budget under load, above).
+
+### Cycle 4 lane addendum 1 — the mentor's Docker lane on `df52dbf` (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`)
+
+**Written:** 2026-10-16, from the mentor's log `bridge/.make-test-12s1a.log`, `bridge/.within-12s1a.tsv` and this
+checkout's `tests/out/` from that lane. § Cycle 4 above is not edited. The lane: e2e 689 of 703 ok, 14 not ok; unit 1
+failed; gounit `adele-standin` failed; scan and lint passed. Each cause, and its fix (tasks T041–T047; `decisions.md`
+§ Cycle 4, addendum 1):
+
+- **A (11 cells: 265, 313–320, 323–324). Cause: the cells, not a tool.** Each cell captured stderr into a temp
+  file and removed both temp files with `rm -f` inside the captured command. In the agent shell `rm` is a function
+  (`image/rootfs/etc/timelike/shell-env.bash`) that calls the guard, so 005's trash notice joined the capture, after
+  `cat "$e"` in every failing cell. Before this cycle the cells checked `stderr_bytes=0` as a substring, so the
+  trailing line passed unseen; counting rule 14's one line exposed it. The host has no such function, which is why
+  the host lane passed. **Fix:** `command rm -f`, as the snapshot cell already does, in the three files that capture
+  this way. The rule-14 line itself was right in all 11.
+- **B (cell 446). Cause: the denial line's length, not the login shell.** The lane's denial line was 207 columns,
+  and rule 13 cut it at 200. **The lane's width is 200 in both shells**: docker exec without a tty sets no `COLUMNS`,
+  nothing in the image or the helpers sets it, and agentio defaults to 200. The `bash -c` cell lists no denial, so only
+  `-lc` showed it. **Fix:** the line says `· operator: <command>` in place of `— only the operator allows it: <command>`,
+  188 columns for that denial; a unit pins it (with a five-digit ledger id) within 200. A session or agent name past
+  about 20 characters is still cut, with rule 13's marker, and is whole in JSON.
+- **C (cell 594). Cause: a stale literal.** The cell asserted `10 grants`; the lane's grant file gained three in this
+  cycle. **Fix:** the cell counts the `[grant ` lines of the file it starts Adele with.
+- **D (cell 66). Cause: the cell is load-sensitive. The tools did not get slower.** `adele`'s conform probe is
+  `status`, which now makes two calls (health, then denials): five calls each against a live `adeled` on the host
+  took 142 ms on HEAD and 139 ms on master. The cell took 9.1–9.6 s in every lane-speed lane, and in this lane 62.3,
+  24.8, 17.9 and 15.1 s in its four shells. The file was `first`, so it started beside the Go step, which took 260 s
+  here against 33 s in the lane-speed lanes. The other early files were slow too (`a-restore-…` 10.8x), while the
+  median cell matched the lane-speed lanes (ratio 0.99). What loaded those first minutes is **not established**:
+  `within.tsv` and `report.xml` carry no per-file start time. **Fix:** the file is `serial` in `lane.conf`, with
+  that reason. Its budget is unchanged. The cost is its cells' time in the serial phase, about 123 s quiet. Also, the
+  new `wait_reap` ran pyq (a `docker run`) on every 2 s poll; it now polls the text ledger and parses only once a
+  reap row is there. That is load removed; it is not shown to be the cause.
+- **E (gounit, `TestDeleteAndFaultCommands`). Cause: plumbing, not a claim.** The test's first create, to its own
+  in-process stand-in (which fsyncs its record), got no answer inside a 5 s client. This is lane-speed item 9's class,
+  for which the broker's fixture already has a 120 s bound. Every package except `grants` took about 181 s in that
+  container, against at most 1.7 s before. On the host the module takes 8 s without `-race`, and the new tests have
+  about 6 s of real waits. The container's 181 s is not reproduced here (no Docker). **Fix:** the test's own client
+  is 120 s plumbing. The stand-in's `delete` command waits 30 s, not 5 s: the stand-in is test infrastructure and
+  nothing is claimed of its speed. **Found while reading, and fixed:** the reaper held the broker's request lock for
+  the whole reap, across the provider's calls and the 1 s and 2 s waits between attempts. Every agent request beside
+  a faulted reap (the spread file's `error` and `drop` cells) waited out its retries. It now holds the lock for the
+  ledger write alone. The same-box check covers a name reused meanwhile, as it already did for the operator's
+  lockless `adeled reap`. A unit (`TestARequestNeverWaitsOnAReapsRetries`) fails on the old code and passes on the
+  new.
+- **F (`tests/unit/test_bench_cli.py:151`). Not this cycle's; not changed.** The bench and its units are untouched on
+  this branch, and the same test failed in lanes `02s1-a` and `007s1-b`. Its fake run uses `--call-limit 2`. In this
+  lane a hooked `git commit` in the rejects task went past 2 s under the unit step's load, counted as a hang, and the
+  fake agent's policy sent it to `--no-verify`, which failed. So the report did not say "Tie". The fix belongs to
+  002's unit (its call limit is plumbing there, but raising it costs every hang task its limit's time), for the
+  mentor to route.
+
+**The mentor's indent note:** the ledger criterion
+`12 · "Every performed request is recorded in the ledger with grant, requesting session, resource created, estimated cost and expiry"`
+belongs in § Cycle 4's slice-0 list, beside the other four, with the same mode, **unconfirmed** (the ledger is at
+schema 2; the five fields are unchanged). It is not part of the Item 14 (b) bullet.
+
+**Modes after this addendum:** every criterion cited in § Cycle 4 stays **unconfirmed** until the mentor's next lane.
+Nothing ran in Docker.
+
+**Host lane** (advisory: files, units and hook logic, not the image), on `df52dbf` plus this addendum's working tree
+(the commit below carries exactly that tree):
+
+| Run | Time (UTC) | Result |
+|---|---|---|
+| `make test-host` (serial) | 19:14:35Z–19:26:06Z | rc 0: pytest 2546 passed, 13 skipped (657 s); host suites 60/60, 57/57, 33/33 |
+| `pytest -n 8 -m "not timed"` | 19:26:06Z–19:28:22Z | rc 0: 2530 passed, 13 skipped (135 s) |
+| `pytest -m timed` | –19:29:06Z | rc 0: 16 passed |
+| `go test -race ./...` (Adele) | after | all seven packages ok |
+
+Also: ruff check and format, mypy (39 files), shellcheck over the Makefile's files and the changed e2e files with
+helpers, gofmt, go vet: clean. Adele's Go coverage is 94.5% (90% bar).

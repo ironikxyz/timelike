@@ -225,6 +225,32 @@ func TestErroringProviderIsRetriedOnABoundThenGivenUp(t *testing.T) {
 	}
 }
 
+func TestARequestNeverWaitsOnAReapsRetries(t *testing.T) {
+	f := newFixture(t)
+	f.create(t, "box-a", "1m", "")
+	if err := f.faults.Set("box-a", standin.FaultError); err != nil {
+		t.Fatal(err)
+	}
+	mu, ok := f.b.Locker().(*sync.Mutex)
+	if !ok {
+		t.Fatalf("the broker's lock is a %T", f.b.Locker())
+	}
+	free := 0
+	f.r.Sleep = func(time.Duration) {
+		if mu.TryLock() { // what a request's Handle takes
+			free++
+			mu.Unlock()
+		}
+	}
+	f.clk.add(time.Minute)
+	if got := f.pass(t, false); len(got) != 1 || got[0].Outcome != ledger.OutcomeReapFailed {
+		t.Fatalf("pass = %+v", got)
+	}
+	if free != 2 {
+		t.Fatalf("the broker's lock was free in %d of the 2 waits between attempts", free)
+	}
+}
+
 func TestDroppedConnectionIsAFailureThenReapedWhenCleared(t *testing.T) {
 	f := newFixture(t)
 	f.create(t, "box-a", "1m", "")

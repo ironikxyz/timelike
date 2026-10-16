@@ -5,7 +5,7 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z, its Addendum 3 and npm 11.21.1 added 2026-10-15T20:50:35Z; its Addendum 4 added 2026-10-16T04:12:27Z; its merge (`ba3107b`) and 004 Cycle 3 (12 slice 1) added 2026-10-16T10:02:11Z; 004 Cycle 4 (the re-send at prompt revision 16) added 2026-10-16T10:56:40Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z, its Addendum 3 and npm 11.21.1 added 2026-10-15T20:50:35Z; its Addendum 4 added 2026-10-16T04:12:27Z; its merge (`ba3107b`) and 004 Cycle 3 (12 slice 1) added 2026-10-16T10:02:11Z; 004 Cycle 4 (the re-send at prompt revision 16) added 2026-10-16T10:56:40Z; its lane addendum 1 added 2026-10-16T19:30:14Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
@@ -25,7 +25,11 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
     (`e170872`), README block applied (21 of 38), SC-8's e2e renamed. Report: § Cycle 3 (short) and § Cycle 4.
   - **Go on the host:** no `go` on PATH; `scratchpad/goenv.sh` points at an earlier session's go1.27.1 (gone after a
     clear). Host integration script: `scratchpad/hostint/run.sh` (real binaries on loopback, the real client).
-  - **Not run:** any Docker lane. The mentor runs the full lane, then D21. No commits until the mentor says the lane
+  - **Lane 12s1a on `df52dbf` failed** (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`): six
+    causes A–F, fixed in **Cycle 4 lane addendum 1** (T041–T047): cells' `rm` → `command rm`; the denial line within
+    200 columns; the grant count from the file; the conform file `serial`; plumbing bounds; the reaper holds the
+    broker's lock for its ledger write only. F (the bench unit's 2 s call limit) is 002's, reported, not changed.
+  - **Not run:** any Docker lane. The mentor reruns the full lane, then D21. No commits until the mentor says the lane
     has ended.
 
 - **`maint/lane-speed`** (from `master` `5b9a347` = `public/main`, **`v0.20.0` pushed 2026-10-15**: object `f3c50fa`;

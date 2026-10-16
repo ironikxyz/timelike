@@ -45,7 +45,7 @@ request() {
     shift
   fi
   REQUEST_MODE="$mode"
-  run_in "$style" notty "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --name ${name} $* >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_bytes=\$(wc -c <\"\$e\") rc=\$rc\"; cat \"\$e\"; rm -f \"\$o\" \"\$e\"; exit \$rc"
+  run_in "$style" notty "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --name ${name} $* >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_bytes=\$(wc -c <\"\$e\") rc=\$rc\"; cat \"\$e\"; command rm -f \"\$o\" \"\$e\"; exit \$rc"
 }
 
 SCHEMA_PY="${BATS_TEST_DIRNAME}/../unit/schema.py"

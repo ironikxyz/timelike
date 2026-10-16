@@ -27,7 +27,7 @@ setup_file() {
 refuse() {
   local style="$1" mode="$2" name="$3" port="$4"
   run_in -e TIMELIKE_SESSION=sc8-status -e TIMELIKE_AGENT=agent-s "$style" notty \
-    "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --grant ${GRANT} --name ${name} --ttl 30m --port ${port} >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_lines=\$(wc -l <\"\$e\") rc=\$rc\"; cat \"\$e\"; rm -f \"\$o\" \"\$e\"; exit \$rc"
+    "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --grant ${GRANT} --name ${name} --ttl 30m --port ${port} >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_lines=\$(wc -l <\"\$e\") rc=\$rc\"; cat \"\$e\"; command rm -f \"\$o\" \"\$e\"; exit \$rc"
 }
 
 ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[0-9]+' | head -1; }
@@ -61,7 +61,7 @@ ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[
   done
   [[ -n "${a:-}" && -n "${b:-}" ]] || { echo "the two denials #${first} and #${second} are not both listed: $output" >&2; return 1; }
   ((b < a)) || { echo "not newest first: #${second} at line ${b}, #${first} at line ${a}" >&2; return 1; }
-  [[ "${lines[$b]}" == *"${HOST}: grant ${GRANT}, ports allows 8080, needed 23 — only the operator allows it: docker exec timelike-adele adeled extend ${GRANT} ports 23 (session sc8-status, agent agent-s)" ]] ||
+  [[ "${lines[$b]}" == *"${HOST}: grant ${GRANT}, ports allows 8080, needed 23 · operator: docker exec timelike-adele adeled extend ${GRANT} ports 23 (session sc8-status, agent agent-s)" ]] ||
     { echo "the newest denial's line: ${lines[$b]}" >&2; return 1; }
 }
 

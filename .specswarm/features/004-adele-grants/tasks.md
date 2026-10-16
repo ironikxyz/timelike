@@ -307,3 +307,23 @@ T025 is disjoint from T024/T026. Built in this instance; no delegation planned (
 
 T035 (README) and T036 (host lane, cycle report § Cycle 3 short and § Cycle 4 full, reboot.md) are done under
 this send.
+
+---
+
+# Cycle 4, addendum 1 — the mentor's Docker lane on `df52dbf` (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`)
+
+- [X] T041 (A) The cells' own temp files are removed with `command rm`, past the agent shell's guarded `rm`
+  (005's trash notice joined their captured stderr): `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`,
+  `tests/e2e/request-within-grant-performed-beyond-exits-4-nothing-performed.bats`,
+  `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats`.
+- [X] T042 (B) The agent's denial line within rule 13's 200 columns: `tools/bin/adele` (`· operator:`), the unit
+  pin in `tests/unit/test_adele_cli.py`, the SC-8 cell's assertion.
+- [X] T043 (C) The grant-file cell counts the lane's grants from the file:
+  `tests/e2e/adele-rejects-malformed-grant-with-line-at-fault.bats`.
+- [X] T044 (D) The conformance file `serial` in `tests/e2e/lane.conf`; `wait_reap` in `tests/e2e/helpers.bash` runs
+  pyq only once a reap row is there.
+- [X] T045 (E) Plumbing bounds in `adele/cmd/adele-standin/main_test.go` and the stand-in's `delete` command
+  (`adele/cmd/adele-standin/main.go`); the reaper holds the broker's lock for its ledger write only
+  (`adele/internal/reaper/reaper.go`, a unit in `adele/internal/reaper/reaper_test.go`).
+- [X] T046 (F) Not this cycle's: reported with its cause; no change.
+- [X] T047 The host lane, the § Cycle 4 addendum in `cycle-report.md`, reboot.md.

@@ -340,6 +340,11 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
+// plumbing bounds this test's own requests to its in-process stand-in, which fsyncs its record. No test here
+// asserts a time: beside the e2e lane the first create went past a 5 s client (feedback
+// 12-20261016-174206, E), the class the broker's fixture bound already covers (fixtureUpstreamTimeout).
+const plumbing = 120 * time.Second
+
 func TestDeleteAndFaultCommands(t *testing.T) {
 	f := newFixture(t)
 	var stderr syncBuffer
@@ -349,7 +354,7 @@ func TestDeleteAndFaultCommands(t *testing.T) {
 			req, _ := http.NewRequest(http.MethodPost, "http://"+addr+"/v1/boxes",
 				strings.NewReader(`{"name":"`+name+`","ttl_seconds":60,"ports":[]}`))
 			req.Header.Set("Authorization", "Bearer "+testCanary)
-			resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+			resp, err := (&http.Client{Timeout: plumbing}).Do(req)
 			if err != nil {
 				return err
 			}

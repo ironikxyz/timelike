@@ -186,6 +186,9 @@ func setFault(e env, name, mode string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
+// deleteTimeout bounds the delete command's wait for the serving stand-in.
+const deleteTimeout = 30 * time.Second
+
 // deleteBox deletes through the serving stand-in's own HTTP interface, with the canary, so the serving
 // process's record and the file stay one account.
 func deleteBox(e env, name string, stdout, stderr io.Writer) int {
@@ -205,7 +208,9 @@ func deleteBox(e env, name string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	req.Header.Set("Authorization", "Bearer "+canary)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	// 30 s: the stand-in is test infrastructure and nothing is claimed of its speed; its answer waits on an
+	// fsync of the record, which beside a loaded lane took longer than 5 s (feedback 12-20261016-174206, E).
+	resp, err := (&http.Client{Timeout: deleteTimeout}).Do(req)
 	if err != nil {
 		fmt.Fprintf(stderr, "adele-standin: delete %s: the stand-in did not answer: %v\n", name, err)
 		return exitFailure

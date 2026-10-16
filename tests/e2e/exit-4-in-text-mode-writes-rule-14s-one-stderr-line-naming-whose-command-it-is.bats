@@ -18,7 +18,7 @@ setup_file() {
 refuse() {
   local style="$1" mode="$2" name="$3" port="$4"
   run_in -e TIMELIKE_SESSION=x4-line "$style" notty \
-    "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --grant ${GRANT} --name ${name} --ttl 30m --port ${port} >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_lines=\$(wc -l <\"\$e\") rc=\$rc\"; cat \"\$e\"; rm -f \"\$o\" \"\$e\"; exit \$rc"
+    "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --grant ${GRANT} --name ${name} --ttl 30m --port ${port} >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_lines=\$(wc -l <\"\$e\") rc=\$rc\"; cat \"\$e\"; command rm -f \"\$o\" \"\$e\"; exit \$rc"
 }
 
 ledger_id_of() { printf '%s' "$1" | grep -oE '"ledger_id": [0-9]+' | grep -oE '[0-9]+' | head -1; }

@@ -485,3 +485,26 @@ ASSUMED: the README block applies now: both live slice-1 Automated criteria are 
 ASSUMED: the exit-4 cell left the status file, so each e2e file is one criterion (or one carried item) named after its text (confidence: high)
 ABSENT: no code changed under this send; no Docker lane was run here
 Verification: the final host lane on `635aae8` (cycle report § Cycle 4); lint clean
+
+---
+
+## Cycle 4, addendum 1 — the mentor's Docker lane on `df52dbf` (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`); T041–T047
+
+### T041–T047 (one record: six causes, one cycle of fixes)
+**Started:** 2026-10-16T19:04:11Z (the first clock read of this work) | **Completed:** 2026-10-16T19:29:38Z
+
+INHERITED: § Cycle 4's code at `df52dbf`; the mentor's lane log `bridge/.make-test-12s1a.log`, `bridge/.within-12s1a.tsv` and this checkout's `tests/out/` from that lane (confidence: high)
+ASSUMED: (A) the second stderr line is the cells' own `rm -f` of their temp files, inside the capture: `rm` is a function in the agent shell (`image/rootfs/etc/timelike/shell-env.bash`) that calls the guard, and the notice prints after `cat "$e"` in every failing cell; no tool path calls `rm`. `command rm` is what the snapshot cell already uses for the same reason (confidence: high)
+FLAGGED: (B) the denial line shortened (`— only the operator allows it:` → `· operator:`, 207 → 188 columns for the lane's denial) rather than split over two lines or the cell told to accept a cut — chose one line per denial because the cell, the unit and FR-36 read it as one; the full words stay in the JSON. Both shells have no COLUMNS (docker exec, no tty, and nothing in the image or helpers sets it), so agentio's 200 applies in each; the `-c` cell never lists a denial, which is why only `-lc` showed it (confidence: medium — a session or agent name past about 20 characters is still cut, with rule 13's marker, and is whole in JSON)
+ASSUMED: (C) a literal count in a cell over a shared fixture file goes stale with the file; counting from the file removes the second copy (confidence: high)
+FLAGGED: (D) the conformance file moved from `first` to `serial` rather than its budget raised (never) or left as it was — the tools were measured not slower (adele's probe 140 ms on HEAD and master, five calls each, against a live adeled), and the cell is load-sensitive by over 50 s (62.3 s against 9.1–9.6 s in every lane-speed lane), which the 15 s rule's headroom does not cover. It costs the serial phase its cells' time, about 123 s quiet (confidence: medium — what loaded the lane's first minutes is not established; the Go step's 260 s against 33 s is the same window)
+ASSUMED: (D, E) `wait_reap` ran pyq, a `docker run`, on every 2 s poll; it now polls the text ledger and parses once a row is there. Load reduced, not shown to be the cause (confidence: medium)
+FLAGGED: (E) the stand-in test's create client is plumbing (120 s, as the broker fixture's) and the stand-in's `delete` command waits 30 s rather than 5 s: nothing is claimed of the stand-in's speed, it is test infrastructure, and its answer waits on an fsync (confidence: high)
+FLAGGED: (E, found while reading) the reaper held the broker's request lock for the whole reap, across the provider's calls and the 1 s and 2 s waits between attempts, so every request waited out a faulted reap's retries; it now holds it for the ledger write alone. The same-box check covers a name reused meanwhile, as it already did for the operator's lockless `adeled reap` (T026's ASSUMED). A unit fails on the old code and passes on the new (confidence: high)
+ASSUMED: (F) not this cycle's: the bench and its unit are untouched on this branch, and the same test failed in lanes `02s1-a` and `007s1-b`. Its fake run uses `--call-limit 2`, so a hooked `git commit` past 2 s under `-n 8` counts as a hang and the fake agent takes the `no-verify` step (confidence: high)
+ABSENT: F is not fixed: the call limit belongs to 002's unit, outside this feature; raising it would cost each hang task its limit's time. Reported for the mentor to route
+ABSENT: the Go step's 181 s per package in the lane container is not reproduced (no Docker here); on the host the module's units take 8 s without -race
+ABSENT: the adeled serve test's own 5 s and 10 s waits (feature 004 slice 0, unchanged and passing) are not moved
+ABSENT: nothing ran in Docker
+Verification: Go -race all seven packages; ruff, mypy (39 files), shellcheck, gofmt, vet clean; the host lane (cycle report, addendum 1)
+SCOPE: in (all changed files are named in tasks.md T041–T047)

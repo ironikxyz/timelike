@@ -641,6 +641,14 @@ wait_reap() {
   shift
   REAP_ROWS="" REAP_ROW=""
   while :; do
+    # The poll reads the text ledger (one docker exec), and parses it with pyq (a docker run) only once a
+    # reap row of REF is there. A throwaway container every 2 s for a whole wait is load every early file
+    # shares (feedback 12-20261016-174206, D and E; not shown to be their cause).
+    if ! adeled ledger 2>/dev/null | grep -qE "^#[0-9]+ [^ ]+ (reaped|gone|reap-failed) .* of=#${ref} " &&
+      ((SECONDS < deadline)); then
+      sleep 2
+      continue
+    fi
     REAP_ROWS="$(reap_rows "$ref")" || return 1
     while IFS= read -r row; do
       [[ -n "$row" ]] || continue

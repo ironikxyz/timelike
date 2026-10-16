@@ -203,7 +203,7 @@ def _denial_line(d: dict[str, Any]) -> str:
     who = f"session {d.get('session')}" + (f", agent {d['agent']}" if d.get("agent") else "")
     return (
         f"#{d.get('ledger_id')} {d.get('at')} {host}: grant {d.get('grant')}, {lim.get('name')} allows"
-        f" {lim.get('allowed')}, needed {lim.get('needed')} — only the operator allows it: {d.get('extend')}"
+        f" {lim.get('allowed')}, needed {lim.get('needed')} · operator: {d.get('extend')}"
         f" ({who})"
     )
 

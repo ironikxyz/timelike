@@ -138,10 +138,6 @@ func (r *Reaper) Pass(ctx context.Context, force bool) ([]Result, error) {
 }
 
 func (r *Reaper) reap(ctx context.Context, d ledger.Due) (Result, error) {
-	if r.Lock != nil {
-		r.Lock.Lock()
-		defer r.Lock.Unlock()
-	}
 	row := d.Row
 	outcome, cause, attempts := r.destroy(ctx, row)
 	if err := ctx.Err(); err != nil {
@@ -156,7 +152,17 @@ func (r *Reaper) reap(ctx context.Context, d ledger.Due) (Result, error) {
 		res.Cause += fmt.Sprintf("; gave up after %d failed passes — the operator retries: %s",
 			d.Failures+1, r.OperatorCommand())
 	}
+	// The broker's lock is held for the ledger write alone, so a request's check sees the ending or not, never
+	// half of it. Never across the provider's calls and the waits between attempts: a request then waited
+	// out a faulted reap's retries (feedback 12-20261016-174206, E). A name reused meanwhile is a later box,
+	// which the same-box check leaves alone, as it does for the operator's `adeled reap`, which has no lock.
+	if r.Lock != nil {
+		r.Lock.Lock()
+	}
 	id, wrote, err := r.Ledger.Reap(row.ID, res.Outcome, res.Cause, res.Attempts, r.now())
+	if r.Lock != nil {
+		r.Lock.Unlock()
+	}
 	if err != nil {
 		return res, err
 	}

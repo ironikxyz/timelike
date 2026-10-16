@@ -677,11 +677,24 @@ def test_status_explains_each_denial_newest_first(py: str, scratch: Path, adele:
     assert out[1].endswith(" · 2 denials in 24 h (≤20/host) · record: adeled ledger"), out[1]
     assert out[2] == (
         "#46 2026-10-16T10:00:00Z adele-standin:8481: grant demo, ports allows 8080, needed 22"
-        f" — only the operator allows it: {EXTEND} (session s-1, agent agent-b)"
+        f" · operator: {EXTEND} (session s-1, agent agent-b)"
     )
     assert out[3].startswith("#45 ") and out[3].endswith("(session s-1)")
     js = doc_of(go(py, scratch, adele.url, "--json", "status"))
     assert [d["ledger_id"] for d in js["denials"]] == [46, 45]
+
+
+def test_a_lanes_denial_line_fits_rule_13s_200_columns(py: str, scratch: Path, adele: FakeAdele) -> None:
+    """SC-8's e2e denial, with a five-digit ledger id: whole within 200 columns. As first written it was 207,
+    and rule 13 cut its last 7 bytes in the Docker lane (feedback 12-20261016-174206, B)."""
+    lane = {**DENIAL, "ledger_id": 99999, "grant": "deny", "session": "sc8-status", "agent": "agent-s",
+            "limit": {"name": "ports", "allowed": "8080", "needed": "23"},
+            "extend": "docker exec timelike-adele adeled extend deny ports 23"}  # fmt: skip
+    adele.answer("GET", "/v1/denials", 200, denials_doc([lane]))
+    out = go(py, scratch, adele.url, "--text", "status").stdout.splitlines()
+    assert out[2].endswith(" · operator: docker exec timelike-adele adeled extend deny ports 23"
+                           " (session sc8-status, agent agent-s)"), out[2]  # fmt: skip
+    assert len(out[2]) <= 200, len(out[2])
 
 
 def test_status_host_must_be_one_short_word(py: str, scratch: Path, adele: FakeAdele) -> None:
