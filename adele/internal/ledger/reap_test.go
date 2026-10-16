@@ -268,3 +268,35 @@ func TestConcurrentReapsWriteOneEnding(t *testing.T) {
 		t.Fatalf("%d endings written, want 1", n)
 	}
 }
+
+func TestUnversionedFileIsUpgradedOrKeptByItsShape(t *testing.T) {
+	// A meta table that lost its version over schema 1's ledger: upgraded, rows kept.
+	path := filepath.Join(t.TempDir(), "adele.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(schemaV1 + `DELETE FROM meta;`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	l := open(t, path)
+	if rows := mustRows(t, l); len(rows) != 2 || rows[0].ID != 3 {
+		t.Fatalf("v1 rows after adoption = %+v", rows)
+	}
+	if _, _, err := l.Reap(3, OutcomeGone, "not in the record", 0, time.Time{}); err != nil {
+		t.Fatalf("an adopted v1 file cannot hold a reap row: %v", err)
+	}
+	l.Close()
+
+	// The same over schema 2's ledger: kept as it is, rows and all.
+	l2 := open(t, path)
+	if _, err := l2.db.Exec(`DELETE FROM meta`); err != nil {
+		t.Fatal(err)
+	}
+	l2.Close()
+	l3 := open(t, path)
+	if rows := mustRows(t, l3); len(rows) != 3 || rows[2].Outcome != OutcomeGone {
+		t.Fatalf("v2 rows after adoption = %+v", rows)
+	}
+}

@@ -251,32 +251,32 @@ coverage per language, Go included (quality-standards). Units come before or bes
 <!-- 0 unapproved technologies require runtime validation -->
 
 ## Phase 9: Foundational (Go)
-- [ ] T024 `adele/internal/ledger`: schema 2 (outcomes `reaped`, `gone`, `reap-failed`; `ref`, `agent`,
+- [X] T024 `adele/internal/ledger`: schema 2 (outcomes `reaped`, `gone`, `reap-failed`; `ref`, `agent`,
   `cause`, `attempts`, `host`), the v1→v2 rebuild in one transaction, `Reap` (writes only while the row is still
   unreaped), `Due`, `Failures`, `Denials`; `Live` excludes reaped; units (a v1 file migrated with its ids).
-- [ ] T025 [P] `adele/internal/standin` and `cmd/adele-standin`: faults (`error`, `drop`, `clear`) per box name
+- [X] T025 [P] `adele/internal/standin` and `cmd/adele-standin`: faults (`error`, `drop`, `clear`) per box name
   in the state dir, `delete NAME`; units.
-- [ ] T026 `adele/internal/broker`: the stand-in client's `List` and `Delete`; `agent` and `host` on requests and
+- [X] T026 `adele/internal/broker`: the stand-in client's `List` and `Delete`; `agent` and `host` on requests and
   rows; `GET /v1/denials`; units.
 
 ## Phase 10: US5 — the reaper (SC-7)
-- [ ] T027 `adele/internal/reaper`: one pass (same-box check, 3 attempts, read-back outcome), waits, give-up;
+- [X] T027 `adele/internal/reaper`: one pass (same-box check, 3 attempts, read-back outcome), waits, give-up;
   units over a fake upstream (reaped, gone, error, drop, still present, name reused, give-up, restart).
-- [ ] T028 `adele/cmd/adeled`: the reaper in `serve` (a pass at start, then every interval), `adeled reap
+- [X] T028 `adele/cmd/adeled`: the reaper in `serve` (a pass at start, then every interval), `adeled reap
   [--json]`, `adeled status [HOST]`, the ledger's new rows and keys, help text (FR-40); units.
 
 ## Phase 11: the agent side
-- [ ] T029 agentio: rule 14's stderr line for exit 4 in text mode (FR-38) and the declaration guard (FR-41);
+- [X] T029 agentio: rule 14's stderr line for exit 4 in text mode (FR-38) and the declaration guard (FR-41);
   001's contract sentence (FR-39); units; grep the e2e tree for exit-4 stderr pinned under `--text`.
-- [ ] T030 [P] `tools/bin/adele`: `agent` in the request, `status [HOST]` with denials, help (FR-40);
+- [X] T030 [P] `tools/bin/adele`: `agent` in the request, `status [HOST]` with denials, help (FR-40);
   `tools/bin/journal` reads `agent` (FR-33); units.
 
 ## Phase 12: e2e (one file per criterion)
-- [ ] T031 `tests/e2e/adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats`
+- [X] T031 `tests/e2e/adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats`
   (SC-7, spread: no budget asserted).
-- [ ] T032 `tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats` (SC-7's restart and
+- [X] T032 `tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats` (SC-7's restart and
   unreachable cases; `serial` in lane.conf: it stops Adele and the stand-in).
-- [ ] T033 e2e for exit 4's human line (Item 14 (b)) and `status` by host.
+- [X] T033 e2e for exit 4's human line (Item 14 (b)) and `status` by host.
 - [ ] T034 SC-8's denial message, **after FOR-MENTOR Item 26**.
 
 ## Phase 13: Polish

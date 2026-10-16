@@ -450,3 +450,12 @@ ASSUMED: cells find their own denials by ledger id and never count the host's to
 ABSENT: SC-8's own message and any denial source beyond Adele's grant refusals wait on FOR-MENTOR Item 26 (T034); this file does not cite SC-8
 ABSENT: not run in the image (no Docker); the host integration printed the exact lines these cells match
 Verification: shellcheck -x clean (this file and SC-3's)
+SCOPE: out — tests/e2e/adele-status-explains-recent-denials-by-host-and-exit-4-text-line.bats (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T024 follow-up (in T036's coverage pass): the unversioned-file paths of the migration
+**Started:** 2026-10-16T10:00:44Z | **Completed:** 2026-10-16T10:00:44Z
+
+INHERITED: T024's createFresh (confidence: high)
+ASSUMED: the coverage pass found createFresh at 38.5% (its "ledger table already there" branches untested) while Adele's total was 94.0%; one test now covers both shapes: v1 adopted and upgraded, v2 adopted and kept (confidence: high)
+ABSENT: no change to the code; the paths behaved as designed
+Verification: ledger 89.8% (was 87.0%); Adele total over the 90% bar (94.0% before this test)
