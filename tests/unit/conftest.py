@@ -32,6 +32,14 @@ sys.path.insert(0, str(REPO / "bench"))  # benchlib (feature 002)
 sys.path.insert(0, str(Path(__file__).parent))
 
 
+# PLUMBING_TIMEOUT_S bounds a subprocess that only sets a test up: a fixture's fixture repository, project or
+# bench run, whose time no test asserts. The bound on the command a test is about stays where the test sets
+# it. Under -n 8 on a loaded host a fixture's quiet 18 s went past its 120 s bound (feedback
+# maint-20261015-115635, item 12), so setup has one bound of its own, as tests/e2e/helpers.bash's
+# PLUMBING_TIMEOUT gives the e2e cells' setup (item 7). A hang still fails; it takes this long to.
+PLUMBING_TIMEOUT_S = 300.0
+
+
 def base_env(scratch: Path, session: str = "test", **extra: str) -> dict[str, str]:
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),

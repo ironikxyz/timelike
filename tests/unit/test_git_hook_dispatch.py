@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import REPO
+from conftest import PLUMBING_TIMEOUT_S, REPO
 
 DISPATCH_DIR = REPO / "image" / "rootfs" / "opt" / "timelike" / "git-hooks"
 SKIP_WORDS = ("--no-verify", " -n ", "hooksPath", "skip", "bypass", "disable")
@@ -68,10 +68,13 @@ def repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     home.mkdir()
     env = env_for(home)
     r = tmp_path / "r"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(r)], env=env, check=True, stdin=subprocess.DEVNULL)
+    subprocess.run(
+        ["git", "init", "-q", "-b", "main", str(r)], env=env, check=True, stdin=subprocess.DEVNULL,
+        timeout=PLUMBING_TIMEOUT_S,
+    )  # fmt: skip
     (r / "f").write_text("base\n")
-    assert git(r, env, "add", "f").returncode == 0
-    assert git(r, env, "commit", "-qm", "base").returncode == 0
+    assert git(r, env, "add", "f", timeout=PLUMBING_TIMEOUT_S).returncode == 0
+    assert git(r, env, "commit", "-qm", "base", timeout=PLUMBING_TIMEOUT_S).returncode == 0
     return r, env
 
 
@@ -159,6 +162,7 @@ def test_a_non_executable_hook_is_ignored_with_gits_own_hint(repo: tuple[Path, d
     assert "hook was ignored because it's not set as executable" in p.stderr
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_no_recursion_when_the_repository_points_at_the_dispatchers(
     repo: tuple[Path, dict[str, str]],
 ) -> None:
@@ -213,6 +217,7 @@ def assert_verdict(stderr: str, limit: str, source: str) -> None:
     assert not [w for w in SKIP_WORDS if w.lower() in lowered], line
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_a_hang_is_stopped_within_the_limit_with_a_verdict(repo: tuple[Path, dict[str, str]]) -> None:
     r, env = repo
     hanging(r)
@@ -239,6 +244,7 @@ def test_the_repository_setting_sets_the_limit(repo: tuple[Path, dict[str, str]]
     assert_verdict(p.stderr, "1", "git config timelike.hookTimeout")
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_the_environment_beats_the_repository_setting(repo: tuple[Path, dict[str, str]]) -> None:
     r, env = repo
     hanging(r)

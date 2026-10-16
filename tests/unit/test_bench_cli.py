@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 import test_bench_catalog as cat_t
-from conftest import AGENTIO_DIR, REPO, run
+from conftest import AGENTIO_DIR, PLUMBING_TIMEOUT_S, REPO, run
 from test_conform import install
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -102,7 +102,11 @@ def test_timelike_conform_passes_over_the_bench_tool(bench: dict[str, Any], tmp_
 
 @pytest.fixture
 def full_run(bench: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-    p = bench_run(bench, "run", "--out", str(bench["out"]), "--call-limit", "2", "--text", "--limit", "0")
+    # The whole fake pipeline, about 18 s on a quiet host; plumbing for the tests that read it (item 12).
+    p = bench_run(
+        bench, "run", "--out", str(bench["out"]), "--call-limit", "2", "--text", "--limit", "0",
+        timeout=PLUMBING_TIMEOUT_S,
+    )  # fmt: skip
     return bench, p
 
 
@@ -399,3 +403,30 @@ def test_categories_lists_the_rules_in_order(bench: dict[str, Any]) -> None:
     assert p.returncode == 0, p.stderr
     rules = [line for line in p.stdout.splitlines() if line[:2] in {f"{i}." for i in range(1, 7)}]
     assert len(rules) == 6 and rules[0].startswith("1. timeout:") and rules[5].startswith("6. other:")
+
+
+def test_a_live_dry_run_names_where_the_model_came_from(bench: dict[str, Any], tmp_path: Path) -> None:
+    # maint-lane-speed item 3: make records each value's source in BENCH_*_SOURCE; bench/run.sh forwards it.
+    key = tmp_path / "key"
+    key.write_text("not-a-key\n")
+    key.chmod(0o600)
+    args = ("run", "--harness", "opencode", "--dry-run", "--text")
+    p = bench_run(
+        bench, *args, BENCH_KEY_FILE=str(key), BENCH_MODEL="deepseek/deepseek-v4-flash-0731",
+        BENCH_MODEL_SOURCE="the environment", BENCH_MODEL_PRICE_IN="0.1",
+        BENCH_MODEL_PRICE_IN_SOURCE="pins.env", BENCH_MODEL_PRICE_OUT="0.2",
+        BENCH_MODEL_PRICE_OUT_SOURCE="pins.env", BENCH_MODEL_PRICE_READ="2026-10-13",
+        BENCH_MODEL_PRICE_READ_SOURCE="pins.env",
+    )  # fmt: skip
+    assert p.returncode == 0, p.stderr
+    assert (
+        "model: deepseek/deepseek-v4-flash-0731, from the environment ($0.1 in, $0.2 out, per million tokens)"
+    ) in p.stdout
+    assert "prices from: pins.env" in p.stdout
+    # Outside make nothing records a source; an unset model is the bench's own default, and says so.
+    p = bench_run(bench, *args, BENCH_KEY_FILE=str(key))
+    assert p.returncode == 0, p.stderr
+    assert "from the bench's default (BENCH_MODEL unset) ($0 in, $0 out, per million tokens)" in p.stdout
+    assert (
+        "prices from: input nowhere (unset, so 0); output nowhere (unset, so 0); date read nowhere (unset)"
+    ) in p.stdout

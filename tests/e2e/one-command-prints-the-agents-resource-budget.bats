@@ -67,7 +67,7 @@ sc7_prepare() {
     SC7_ERROR="cannot start ${SC7_BOX} with --memory 300m --cpus 1.5 --pids-limit ${SC7_PIDS}: ${err} (--cpus 1.5 needs a host with at least 2 CPUs)"
     return 1
   }
-  out="$(timeout "$RUN_TIMEOUT" docker exec "$SC7_BOX" sh -c '
+  out="$(timeout "$PLUMBING_TIMEOUT" docker exec "$SC7_BOX" sh -c '
 p="$(sed -n "s/^0:://p" /proc/self/cgroup)"; d="/sys/fs/cgroup${p%/}"
 echo "mem=$(cat "$d/memory.max" 2>&1)"
 echo "cpu=$(cat "$d/cpu.max" 2>&1)"

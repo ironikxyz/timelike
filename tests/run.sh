@@ -25,6 +25,7 @@
 #   tests/out/latest.log      a copy of the newest run log
 #   tests/out/e2e.tap         the bats TAP stream
 #   tests/out/report.xml      bats JUnit report
+#   tests/out/within.tsv      one line per assert_within: file, budget s, measured ms, cell (item 11's headroom)
 #   tests/out/unit.txt        pytest output (with -rP, so the start-up test's figure is shown)
 #   tests/out/startup.json    the in-image start-up p95 from that line (quality-standards C2), or
 #                             {"measured": false, "reason": ...} when the test did not print it
@@ -49,6 +50,28 @@ RUNNER_IMAGE=timelike-test-runner:local
 AGENT_CONTAINER=timelike-agent
 ADELE_CONTAINER=timelike-adele
 STANDIN_CONTAINER=timelike-adele-standin
+
+# ── Scope and parallelism (bridge/sends/maint-lane-speed-20261015-062546.md) ──────────────────────────────
+#   LANE_SCOPE   full (make test) or partial (make test-partial). A partial lane runs build, up, runner and
+#                benchimg as a full one does, ONLY the e2e files E2E_FILES names, and all of unit and gounit.
+#                Its first output line and summary.json say `scope: partial` and list the files, so it can
+#                never pass for a full lane. A full lane refuses a set E2E_FILES rather than narrow itself.
+#   E2E_JOBS     e2e files run side by side (bats --jobs, each file's own cells in sequence). 1 is the
+#                serial lane exactly: `bats tests/e2e`, one file at a time, nothing else changed.
+#   UNIT_JOBS    pytest-xdist workers for the unit step. 1 is the serial run exactly. Above 1, the tests
+#                marked `timed` (they measure the machine) run after the others, alone and serially.
+#   LANE_STEPS_TOGETHER  1 (the default) runs gounit beside e2e when E2E_JOBS > 1 and the host has flock: it
+#                holds the e2e lane's lock shared, so e2e's serial files still run alone. 0 runs the steps one
+#                after another. The unit step always runs after e2e (see main).
+# The defaults and the measurements behind them: .specswarm/maintenance/lane/cycle-report.md.
+E2E_JOBS_DEFAULT=8
+UNIT_JOBS_DEFAULT=8
+LANE_SCOPE="${LANE_SCOPE:-full}"
+E2E_JOBS="${E2E_JOBS:-${E2E_JOBS_DEFAULT}}"
+UNIT_JOBS="${UNIT_JOBS:-${UNIT_JOBS_DEFAULT}}"
+LANE_STEPS_TOGETHER="${LANE_STEPS_TOGETHER:-1}"
+LANE_LOCK="${out}/.e2e-lane.lock"
+declare -a E2E_TARGETS=() E2E_SERIAL=()
 
 declare -a STEP_NAMES=() STEP_RCS=() STEP_STATUS=() STEP_SECS=() STEP_NOTES=()
 declare -A RESULT=()
@@ -115,6 +138,17 @@ write_summary() {
     printf '  "startup": "tests/out/startup.json",\n'
     printf '  "go_unit_output": "tests/out/go-unit.txt",\n'
     printf '  "container_left_running": "%s",\n' "${AGENT_CONTAINER} ${ADELE_CONTAINER} ${STANDIN_CONTAINER}"
+    printf '  "scope": "%s",\n' "$(json_escape "${LANE_SCOPE}")"
+    printf '  "e2e_files": ['
+    local f fsep=""
+    for f in ${E2E_FILES:-}; do
+      printf '%s"%s"' "${fsep}" "$(json_escape "${f}")"
+      fsep=", "
+    done
+    printf '],\n'
+    printf '  "e2e_jobs": "%s",\n' "$(json_escape "${E2E_JOBS}")"
+    printf '  "unit_jobs": "%s",\n' "$(json_escape "${UNIT_JOBS}")"
+    printf '  "steps_together": "%s",\n' "$(json_escape "${STEPS_TOGETHER_NOTE:-no}")"
     printf '  "steps": ['
     for i in "${!STEP_NAMES[@]}"; do
       printf '%s\n    {"name": "%s", "rc": %s, "status": "%s", "seconds": %s, "note": "%s"}' \
@@ -124,6 +158,110 @@ write_summary() {
     done
     printf '\n  ]\n}\n'
   } >"${out}/summary.json"
+}
+
+# scope_line — the first line of the lane's output (maint-lane-speed part 2).
+scope_line() {
+  if [[ "${LANE_SCOPE}" == partial ]]; then
+    printf 'scope: partial — e2e files: %s\n' "${E2E_FILES:-<none>}"
+  else
+    printf 'scope: %s\n' "${LANE_SCOPE}"
+  fi
+}
+
+# lane_check — refuse a lane that would not be what it says, before anything is built. Prints the reason
+# and returns 1: an unknown scope, a full lane given E2E_FILES, a partial lane with none or with a name that
+# is not a file in tests/e2e (a typo must never become a lane of zero cells), or a job count that is not a
+# positive integer.
+lane_check() {
+  local f n seen=" "
+  case "${LANE_SCOPE}" in
+    full)
+      if [[ -n "${E2E_FILES:-}" ]]; then
+        echo "error: E2E_FILES is set (${E2E_FILES}) for a full lane (code 2) — a full lane runs every e2e file; run a subset with make test-partial E2E_FILES=\"…\"" >&2
+        return 1
+      fi
+      ;;
+    partial)
+      local given="${E2E_FILES:-}"
+      if [[ -z "${given// /}" ]]; then
+        echo "error: a partial lane needs E2E_FILES (code 2) — name the files: make test-partial E2E_FILES=\"a.bats b.bats\"" >&2
+        return 1
+      fi
+      for f in ${E2E_FILES}; do
+        n="${f#tests/e2e/}"
+        if [[ "${n}" != *.bats || "${n}" == */* || ! -f "${repo}/tests/e2e/${n}" ]]; then
+          echo "error: E2E_FILES names ${f}, which is not a .bats file in tests/e2e (code 2) — ls tests/e2e/*.bats" >&2
+          return 1
+        fi
+        if [[ "${seen}" == *" ${n} "* ]]; then
+          echo "error: E2E_FILES names ${n} twice (code 2)" >&2
+          return 1
+        fi
+        seen+="${n} "
+      done
+      ;;
+    *)
+      echo "error: LANE_SCOPE is '${LANE_SCOPE}', not full or partial (code 2) — make test or make test-partial" >&2
+      return 1
+      ;;
+  esac
+  for n in E2E_JOBS UNIT_JOBS; do
+    if [[ ! "${!n}" =~ ^[1-9][0-9]*$ ]]; then
+      echo "error: ${n} is '${!n}', not a positive integer (code 2) — 1 is the serial lane" >&2
+      return 1
+    fi
+  done
+}
+
+# lane_targets — the e2e files to run, in plan order, into E2E_TARGETS (paths as the runner sees them,
+# relative to /code), and the serial ones' names into E2E_SERIAL.
+#   E2E_JOBS=1   full: `tests/e2e`, as the serial lane always ran it; partial: the named files, as given.
+#   E2E_JOBS>1   tests/e2e/lane.conf's `first` files, the rest by name, then its `serial` files by name:
+#                within the scope, so a partial lane keeps the same rule over its subset.
+# Returns 1, naming it, when lane.conf names a file that does not exist.
+lane_targets() {
+  local -a all=() first=() serial=() rest=() tail=()
+  local kind name f n
+  if [[ "${LANE_SCOPE}" == partial ]]; then
+    for f in ${E2E_FILES}; do all+=("${f#tests/e2e/}"); done
+  else
+    for f in "${repo}"/tests/e2e/*.bats; do all+=("${f##*/}"); done
+  fi
+  if ((E2E_JOBS == 1)); then
+    if [[ "${LANE_SCOPE}" == partial ]]; then
+      for n in "${all[@]}"; do E2E_TARGETS+=("tests/e2e/${n}"); done
+    else
+      E2E_TARGETS=(tests/e2e)
+    fi
+    return 0
+  fi
+  while read -r kind name _; do
+    [[ -z "${kind}" || "${kind}" == \#* ]] && continue
+    if [[ ! -f "${repo}/tests/e2e/${name}" ]]; then
+      echo "error: tests/e2e/lane.conf names ${name}, which is not a file in tests/e2e (code 1) — fix lane.conf" >&2
+      return 1
+    fi
+    case "${kind}" in
+      first) first+=("${name}") ;;
+      serial) serial+=("${name}") ;;
+      *) echo "error: tests/e2e/lane.conf: '${kind}' is not first or serial (code 1)" >&2; return 1 ;;
+    esac
+  done <"${repo}/tests/e2e/lane.conf"
+  in_list() { local x; for x in "${@:2}"; do [[ "$x" == "$1" ]] && return 0; done; return 1; }
+  for n in "${first[@]}"; do in_list "${n}" "${all[@]}" && E2E_TARGETS+=("tests/e2e/${n}"); done
+  for n in "${all[@]}"; do
+    if in_list "${n}" "${serial[@]}"; then
+      tail+=("${n}")
+    elif ! in_list "${n}" "${first[@]}"; then
+      rest+=("${n}")
+    fi
+  done
+  mapfile -t rest < <(printf '%s\n' "${rest[@]}" | LC_ALL=C sort)
+  mapfile -t tail < <(printf '%s\n' "${tail[@]}" | LC_ALL=C sort)
+  for n in "${rest[@]}" "${tail[@]}"; do [[ -n "${n}" ]] && E2E_TARGETS+=("tests/e2e/${n}"); done
+  for n in "${tail[@]}"; do [[ -n "${n}" ]] && E2E_SERIAL+=("${n}"); done
+  return 0
 }
 
 # The Docker socket the runner mounts: DOCKER_HOST=unix://..., else the default path. A tcp:// or
@@ -143,13 +281,35 @@ docker_endpoint_args() {
 
 # shellcheck disable=SC2329 # invoked indirectly, by step
 run_e2e() {
+  local rc
   local -a endpoint
   mapfile -t endpoint < <(docker_endpoint_args)
-  rm -f "${out}/e2e.tap" "${out}/report.xml"
+  rm -f "${out}/e2e.tap" "${out}/report.xml" "${out}/within.tsv"
   # The speedup bench (feature 002) writes here; mounted at the SAME absolute path, because the bench
   # driver bind-mounts it again by that path from the Docker host (research RB7, lore P001/P002).
-  local bench_out="${repo}/bench/out/e2e"
+  # One directory per lane, named by the lane's stamp: the files' own names end in the runner's pid,
+  # which repeats from one lane to the next in a fresh container, so two lanes on one commit collided,
+  # and the fixed run.stdout, run.stderr and run.rc of one lane were overwritten by the next (feedback
+  # maint-20261015-115635, item 1).
+  local bench_out="${repo}/bench/out/e2e/${stamp}"
   mkdir -p "${bench_out}"
+  # The parallel lane (E2E_JOBS > 1; maint-lane-speed part 1a): files side by side, each file's own cells in
+  # sequence, under lane.bash's file lock (shared; exclusive for lane.conf's serial files). The throwaway
+  # sweep that six files did in setup_file is done here once instead, because beside other files it would
+  # remove their throwaways in use. E2E_JOBS=1 adds nothing to the serial lane's command but TL_WITHIN_LOG,
+  # which every lane sets: assert_within's record of each timed command against its budget (within_account).
+  local -a lane_env=() lane_args=()
+  if ((E2E_JOBS > 1)); then
+    echo "e2e: ${#E2E_TARGETS[@]} files, ${E2E_JOBS} at a time; serial after the rest: ${E2E_SERIAL[*]:-none}"
+    local stale
+    stale="$(docker ps -aq --filter label=timelike.test.throwaway)" || stale=""
+    # shellcheck disable=SC2086 # one id per word, on purpose
+    [[ -z "${stale}" ]] || docker rm -f ${stale} >/dev/null || true
+    : >"${LANE_LOCK}"
+    : >"${LANE_LOCK}.turn"
+    lane_env=(-e "TL_E2E_LOCK=/out/${LANE_LOCK##*/}" -e "TL_E2E_SERIAL_FILES=${E2E_SERIAL[*]}")
+    lane_args=(--jobs "${E2E_JOBS}" --no-parallelize-within-files)
+  fi
   # Runs as the invoking user (so files in tests/out stay theirs), in the socket's group.
   docker run --rm \
     -u "$(id -u):$(id -g)" \
@@ -164,11 +324,50 @@ run_e2e() {
     -e "REPO_HOST=${repo}" \
     -e "BENCH_E2E_OUT=${bench_out}" \
     -e "RUN_TIMEOUT=${RUN_TIMEOUT:-30}" \
+    -e TL_WITHIN_LOG=/out/within.tsv \
     -e "ADELE_CONTAINER=${ADELE_CONTAINER}" \
     -e "STANDIN_CONTAINER=${STANDIN_CONTAINER}" \
+    ${lane_env[@]+"${lane_env[@]}"} \
     "${RUNNER_IMAGE}" \
+    ${lane_args[@]+"${lane_args[@]}"} \
     --formatter tap --report-formatter junit --output /out --timing \
-    tests/e2e | tee "${out}/e2e.tap"
+    "${E2E_TARGETS[@]}" | tee "${out}/e2e.tap" && rc=0 || rc=$?
+  e2e_account "${out}/e2e.tap" || ((rc != 0)) || rc=1
+  within_account "${out}/within.tsv"
+  return "${rc}"
+}
+
+# within_account TSV — how much of its budget each timed command used, from assert_within's records (file,
+# budget s, measured ms, cell): the count, and the five that used the most of theirs. A cell's own time in the
+# TAP stream is mostly its setup, so this is where a budget's headroom is read (feedback maint-20261015-115635,
+# item 11). It reports; it fails nothing.
+# shellcheck disable=SC2329 # invoked from run_e2e, itself invoked indirectly by step
+within_account() {
+  [[ -s "$1" ]] || { echo "e2e headroom: no assert_within records in ${1##*/}"; return 0; }
+  echo "e2e headroom: $(wc -l <"$1" | tr -d ' ') timed commands against their budgets (${1##*/}); the five tightest:"
+  awk -F'\t' '$2 > 0 && $3 != "" { printf "%.4f\t%s\t%s\t%s\n", $3 / ($2 * 1000), $3, $2, $1 }' "$1" |
+    sort -t "$(printf '\t')" -k1,1gr | head -n 5 |
+    awk -F'\t' '{ printf "  %5.1f%%  %6d ms of %ss  %s\n", $1 * 100, $2, $3, $4 }'
+}
+
+# e2e_account TAP — the cells the TAP stream reports against its plan. A file whose setup_file fails prints
+# one `not ok N setup_file failed` in place of all its cells, so the stream then holds fewer results than
+# `1..PLAN`: say how many went unreported and why, and fail (feedback maint-20261015-115635, item 1).
+# shellcheck disable=SC2329 # invoked from run_e2e, itself invoked indirectly by step
+e2e_account() {
+  local plan reported failed setup
+  plan="$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "$1" | head -n 1)"
+  [[ -n "${plan}" ]] || { echo "e2e: no plan line in $1"; return 1; }
+  reported="$(grep -cE '^(ok|not ok) [0-9]+ ' "$1")" || true
+  failed="$(grep -cE '^not ok [0-9]+ ' "$1")" || true
+  setup="$(grep -cE '^not ok [0-9]+ setup_file failed$' "$1")" || true
+  if ((setup == 0 && reported == plan)); then
+    echo "e2e: ${reported} of ${plan} cells reported, ${failed} not ok"
+    return 0
+  fi
+  echo "e2e: $((reported - setup)) of ${plan} cells reported, $((failed - setup)) of them not ok;" \
+    "$((plan - reported + setup)) not reported: ${setup} setup_file failed, each in place of its file's cells"
+  return 1
 }
 
 # shellcheck disable=SC2329 # invoked indirectly, by step
@@ -226,26 +425,134 @@ run_go_unit() {
 }
 
 # shellcheck disable=SC2329 # invoked indirectly, by step
-run_unit() {
+# unit_tools — uv from the pinned uv image (pins.env), independent of whether the agent image keeps it.
+unit_tools() {
   local tools="${out}/.tools" cid
   mkdir -p "${tools}"
-  # uv from the pinned uv image (pins.env), independent of whether the agent image keeps it.
   cid="$(docker create "${UV_IMAGE}" /uv)" || { echo "unit: cannot create a container from ${UV_IMAGE}" >&2; return 1; }
   docker cp "${cid}:/uv" "${tools}/uv" || { docker rm "${cid}" >/dev/null; echo "unit: cannot copy uv out of ${UV_IMAGE}" >&2; return 1; }
   docker rm "${cid}" >/dev/null || true
+}
+
+# shellcheck disable=SC2329 # invoked from run_unit
+# unit_pytest [PYTEST ARG]... — pytest over tests/unit in a throwaway container of the built image, on its
+# own interpreter. With UNIT_JOBS > 1, pytest-xdist and its execnet come in at their pins (pins.env).
+unit_pytest() {
+  local -a with=(--with "pytest==${PYTEST_VERSION}")
+  ((UNIT_JOBS == 1)) || with+=(--with "pytest-xdist==${PYTEST_XDIST_VERSION}" --with "execnet==${EXECNET_VERSION}")
   docker run --rm \
     -v "${repo}:/src:ro" \
-    -v "${tools}/uv:/usr/local/bin/uv:ro" \
+    -v "${out}/.tools/uv:/usr/local/bin/uv:ro" \
     -w /src \
     -e UV_CACHE_DIR=/tmp/uv-cache \
     -e UV_PYTHON_DOWNLOADS=never \
     -e PYTHONDONTWRITEBYTECODE=1 \
     timelike-agent:local \
-    uv run --no-project --python /opt/timelike/python/bin/python3 --with "pytest==${PYTEST_VERSION}" \
-    python -m pytest -q -rP -p no:cacheprovider tests/unit 2>&1 | tee "${out}/unit.txt"
-  local rc=${PIPESTATUS[0]}
+    uv run --no-project --python /opt/timelike/python/bin/python3 "${with[@]}" \
+    python -m pytest -q -rP -p no:cacheprovider "$@" tests/unit 2>&1
+}
+
+# shellcheck disable=SC2329 # invoked from run_unit
+# unit_spread — the tests not marked `timed`, across UNIT_JOBS xdist workers (maint-lane-speed part 1b).
+unit_spread() {
+  echo "## unit: the tests not marked timed, on ${UNIT_JOBS} workers (pytest-xdist ${PYTEST_XDIST_VERSION})"
+  unit_pytest -n "${UNIT_JOBS}" -m "not timed"
+}
+
+# shellcheck disable=SC2329 # invoked from run_unit
+# unit_timed — the tests marked `timed` (they measure the machine: the start-up p95 among them), serially,
+# after unit_spread, so nothing runs beside them.
+unit_timed() {
+  echo "## unit: the tests marked timed, serially"
+  unit_pytest -m timed
+}
+
+# shellcheck disable=SC2329 # invoked from run_unit
+# unit_first — the uv binary, then the whole run (UNIT_JOBS=1) or its spread part, into tests/out/unit.txt.
+unit_first() {
+  unit_tools || return 1
+  local rc
+  if ((UNIT_JOBS == 1)); then
+    unit_pytest | tee "${out}/unit.txt"
+    rc=${PIPESTATUS[0]}
+  else
+    unit_spread | tee "${out}/unit.txt"
+    rc=${PIPESTATUS[0]}
+  fi
+  return "${rc}"
+}
+
+# shellcheck disable=SC2329 # invoked from run_unit
+# unit_second — with UNIT_JOBS > 1, the timed tests, appended to tests/out/unit.txt; then startup.json.
+unit_second() {
+  local rc=0
+  if ((UNIT_JOBS > 1)); then
+    unit_timed | tee -a "${out}/unit.txt"
+    rc=${PIPESTATUS[0]}
+  fi
   write_startup "${out}/unit.txt"
   return "${rc}"
+}
+
+# shellcheck disable=SC2329 # invoked indirectly, by step
+run_unit() {
+  local a=0 b=0
+  unit_first || a=$?
+  ((a == 0 || UNIT_JOBS > 1)) || { write_startup "${out}/unit.txt"; return "${a}"; }
+  unit_second || b=$?
+  return $((a != 0 ? a : b))
+}
+
+# ── Steps beside e2e (maint-lane-speed part 1c) ──────────────────────────────────────────────────────────
+declare -A BG_PID=() BG_START=() BG_CMD=()
+
+# bg_start NAME CMD... — start a step in the background, holding the e2e lane's lock shared for as long as it
+# runs, so lane.conf's serial files (which take it exclusive) wait for it. Its output goes to
+# tests/out/.step-NAME.out and into the log when bg_collect takes it.
+bg_start() {
+  local name="$1"
+  shift
+  BG_CMD[$name]="$*"
+  BG_START[$name]="$(date +%s)"
+  echo
+  echo "════ step ${name}: $* — started beside e2e (its output follows when it ends) ════"
+  # Its own run time goes to .step-NAME.secs when it ends: the time until bg_collect takes it also counts
+  # the steps it waited behind (feedback maint-20261015-115635, item 4).
+  rm -f "${out}/.step-${name}.secs"
+  # shellcheck disable=SC2094 # the lock file is only held open, never read or written here
+  (
+    flock -s 9 || exit 1
+    s="$(date +%s)" rc=0
+    "$@" || rc=$?
+    echo $(($(date +%s) - s)) >"${out}/.step-${name}.secs"
+    exit "${rc}"
+  ) 9>>"${LANE_LOCK}" >"${out}/.step-${name}.out" 2>&1 &
+  BG_PID[$name]=$!
+}
+
+# bg_collect NAME — wait for it, print its output and its rc line; sets BG_RC, BG_SECS (its own run time)
+# and BG_WAITED (from its start until it was collected).
+bg_collect() {
+  local name="$1" end
+  wait "${BG_PID[$name]}" && BG_RC=0 || BG_RC=$?
+  end="$(date +%s)"
+  BG_WAITED=$((end - BG_START[$name]))
+  BG_SECS="$(cat "${out}/.step-${name}.secs" 2>/dev/null)" || BG_SECS=""
+  [[ "${BG_SECS}" =~ ^[0-9]+$ ]] || BG_SECS="${BG_WAITED}"
+  echo
+  echo "════ step ${name}: ${BG_CMD[$name]} — ran beside e2e ════"
+  cat "${out}/.step-${name}.out"
+}
+
+# bg_record NAME RC SECONDS WAITED — record a step that ran (in part) beside e2e, with its rc line: SECONDS
+# is its own run time, WAITED the time from its start until it was collected after e2e and unit.
+bg_record() {
+  if [[ "$2" -eq 0 ]]; then
+    record "$1" "$2" pass "$3" "beside e2e; collected after $4 s"
+  else
+    record "$1" "$2" fail "$3" "exit $2; beside e2e; collected after $4 s"
+  fi
+  echo "════ step $1: rc=$2 ($3 s; collected after $4 s, beside e2e) ════"
 }
 
 # shellcheck disable=SC2329 # invoked from run_unit, itself invoked indirectly by step
@@ -269,8 +576,17 @@ write_startup() {
 main() {
   local started finished exit_rc=0
   started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  scope_line
   echo "timelike Docker lane (authoritative for SC-1..SC-6) — ${started}"
   echo "log: ${log}"
+  echo "e2e jobs: ${E2E_JOBS} · unit jobs: ${UNIT_JOBS}"
+
+  if ! lane_check; then
+    record preflight 2 fail 0 "the lane's scope or job counts were refused"
+    finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    write_summary "${started}" "${finished}" 2
+    return 2
+  fi
 
   if ! docker info >/dev/null 2>&1; then
     echo "error: no Docker daemon reachable (code 1) — run this on a host with Docker, mount the host socket, or set DOCKER_HOST; see .specswarm/features/001-agent-shell-baseline/research.md R10" >&2
@@ -313,20 +629,44 @@ main() {
     skip benchimg "build failed"
   fi
 
+  local together=no
   if passed up && passed runner; then
-    step e2e run_e2e
+    if lane_targets; then
+      if ((E2E_JOBS > 1)) && [[ "${LANE_STEPS_TOGETHER}" == 1 ]]; then
+        if command -v flock >/dev/null; then
+          together=yes
+          STEPS_TOGETHER_NOTE="gounit ran beside e2e"
+          : >"${LANE_LOCK}"
+          # Adele's Go units (feature 004) need no image of ours: only the pinned GO_IMAGE and the module.
+          bg_start gounit run_go_unit
+        else
+          STEPS_TOGETHER_NOTE="no: the host has no flock, so gounit ran after e2e"
+        fi
+      fi
+      step e2e run_e2e
+    else
+      record e2e 1 fail 0 "tests/e2e/lane.conf is wrong"
+      echo "════ step e2e: rc=1 (0 s) ════"
+    fi
   else
     skip e2e "needs up and runner (up=${RESULT[up]:-?}, runner=${RESULT[runner]:-?})"
   fi
 
+  # The unit step never runs beside e2e: its bench units drive real git under a 2 s call limit, and on a
+  # loaded host a commit went past it (maint-lane-speed cycle report, the unit measurements).
   if passed build; then
     step unit run_unit
   else
     skip unit "build failed"
   fi
 
-  # Adele's Go units (feature 004) need no image of ours: only the pinned GO_IMAGE and the module.
-  step gounit run_go_unit
+  if [[ "${together}" == yes ]]; then
+    bg_collect gounit
+    bg_record gounit "${BG_RC}" "${BG_SECS}" "${BG_WAITED}"
+  else
+    # Adele's Go units (feature 004) need no image of ours: only the pinned GO_IMAGE and the module.
+    step gounit run_go_unit
+  fi
 
   local s
   for s in "${STEP_STATUS[@]}"; do
@@ -341,7 +681,7 @@ main() {
   for i in "${!STEP_NAMES[@]}"; do
     printf '  %-9s %-8s rc=%-4s %s\n' "${STEP_NAMES[$i]}" "${STEP_STATUS[$i]}" "${STEP_RCS[$i]}" "${STEP_NOTES[$i]}"
   done
-  echo "  results: tests/out/summary.json, tests/out/e2e.tap, tests/out/report.xml, tests/out/unit.txt, tests/out/go-unit.txt"
+  echo "  results: tests/out/summary.json, tests/out/e2e.tap, tests/out/report.xml, tests/out/within.tsv, tests/out/unit.txt, tests/out/go-unit.txt"
   echo "  the ${AGENT_CONTAINER} container is left running (make demo; make down to stop it)"
   if [[ ${exit_rc} -eq 0 ]]; then
     echo "Docker lane: PASSED"

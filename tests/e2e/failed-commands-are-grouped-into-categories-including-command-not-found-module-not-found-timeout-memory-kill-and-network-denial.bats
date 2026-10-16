@@ -12,6 +12,9 @@
 
 DRIVER=timelike-bench-driver:local
 
+# The parallel lane's file lock (maint-lane-speed); this file loads no helpers.bash, which would source it.
+load lane
+
 probe() {
   local gid
   gid="$(stat -c %g /var/run/docker.sock)"

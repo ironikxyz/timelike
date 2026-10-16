@@ -47,19 +47,32 @@
 
 bats_require_minimum_version 1.5.0
 
+# The parallel lane's file lock (maint-lane-speed): a no-op unless tests/run.sh runs files side by side.
+# shellcheck source=tests/e2e/lane.bash
+source "${BATS_TEST_DIRNAME}/lane.bash"
+
 AGENT_CONTAINER="${AGENT_CONTAINER:-timelike-agent}"
 # shellcheck disable=SC2034 # used by the .bats files that load this
 AGENT_PY=/opt/timelike/python/bin/python3
 REVISION_LABEL=org.opencontainers.image.revision
-# Runner-side limit per docker exec. Criteria assert far tighter bounds (20 s, 10 s); this exists so
-# a hang becomes a failure (rc 124), never a wait (P2).
+# Two runner-side bounds, so that a hang becomes a failure, never a wait (P2):
+#
+# RUN_TIMEOUT bounds the command a cell measures: run_in, exec_in and run_bare, whose elapsed time
+# assert_within reads, and the few direct `timeout "$RUN_TIMEOUT"` calls whose time or timeout a cell asserts.
+# Criteria assert far tighter bounds (20 s, 10 s), and some cells set it locally around one command.
 RUN_TIMEOUT="${RUN_TIMEOUT:-30}"
-# The parser's own bound (pyq): test plumbing, so it belongs to no criterion, and it is kept apart from
-# RUN_TIMEOUT so a throwaway container's start-up under load cannot fail a cell whose tool answered.
+# PLUMBING_TIMEOUT bounds everything else: the steps that set a cell up, read evidence back or clean up, and
+# whose time no criterion names. That is exec_plain, copy_into_container, start_throwaway, remove_throwaway,
+# the throwaway sweep, adeled, standin_list, canary_bytes, pyj, pyq and the helpers built on them, and the
+# plumbing calls in the .bats files. In parallel lanes on a loaded host such steps (a fixture repository, a
+# throwaway's start, a stand-in request's container) went past 30 s while the cells' own commands did not
+# (feedback maint-20261015-115635, items 2, 5 and 7), so they have their own bound instead of one site at a time.
+PLUMBING_TIMEOUT="${PLUMBING_TIMEOUT:-300}"
+# The parser's bound (pyq) is plumbing too, and kept under its own name for the files that read it.
 # The runner's timeout is BusyBox's (bats/bats is Alpine), which exits with the killed command's status
 # (143 for SIGTERM), never GNU's 124: decide "timed out" by elapsed time, not by the exit code.
 # (Lane batch-c, not ok 448; bridge/feedback/batch-20261006-234535-lane-b-three-failures.md § Failure 4.)
-PYQ_TIMEOUT="${PYQ_TIMEOUT:-120}"
+PYQ_TIMEOUT="${PYQ_TIMEOUT:-${PLUMBING_TIMEOUT}}"
 # Process names (comm, exact match) of pagers and editors that must never be left running.
 PAGER_EDITOR_NAMES='less|more|most|pager|pg|vi|vim|vim\.basic|vim\.tiny|nvi|view|ex|nano|rnano|pico|editor|sensible-editor|emacs|jed|joe|mcedit|ne'
 
@@ -115,6 +128,9 @@ exec_in() {
   # harness turns it off unless a cell sets TIMELIKE_SNAPSHOT_INTERVAL itself; the scheduled snapshot's
   # own cells set it, the default interval included (a-directory-removed-by-a-script-*.bats).
   [[ "$sched" == given ]] || envs=(-e TIMELIKE_SNAPSHOT_INTERVAL=off "${envs[@]}")
+  # In a parallel lane only (lane.bash): the file's name travels with every command it runs, so the
+  # whole-container checks below can tell this file's processes from its neighbours'. A serial lane adds nothing.
+  [[ -z "${TL_E2E_FILE_ID:-}" ]] || envs=(-e "TL_E2E_FILE=${TL_E2E_FILE_ID}" "${envs[@]}")
   local style="$1" tty="$2" cmd="$3"
   local -a shell docker_args
   mapfile -t shell < <(_shell_argv "$style") || return 2
@@ -190,14 +206,33 @@ drop_ic_notty_lines() {
 }
 
 # exec_plain CMD... — `docker exec` (no shell, no tty) for setup, teardown and control reads.
-# Bounded like everything else. Not a style under test.
+# Bounded by PLUMBING_TIMEOUT: no criterion times it. Not a style under test.
+# Reaching the bound is a failure (124) whatever status the killed CLI left, as in exec_in: a docker CLI
+# stopped by the runner's timeout can exit 0, and the command it started carries on in the container. A
+# fixture cut off that way let the git-log file's cells run against a half-built repository while its
+# script went on committing beside them (feedback maint-20261015-115635, item 2).
 exec_plain() {
-  timeout "$RUN_TIMEOUT" docker exec "$AGENT_CONTAINER" "$@" </dev/null
+  local start rc
+  start=$(now_ms)
+  timeout "$PLUMBING_TIMEOUT" docker exec "$AGENT_CONTAINER" "$@" </dev/null && rc=0 || rc=$?
+  if (($(now_ms) - start >= PLUMBING_TIMEOUT * 1000)); then
+    printf 'exec_plain: stopped at the %ss bound, so it did not finish: %s\n' "$PLUMBING_TIMEOUT" "$*" >&2
+    rc=124
+  fi
+  return "$rc"
 }
 
 # assert_within LIMIT_S — the last run_in concluded in under LIMIT_S seconds and did not time out.
+# With TL_WITHIN_LOG set (tests/run.sh sets it in every lane), each call also appends the file, the budget,
+# the measured time and the cell to that file, passing or not, in one write: a cell's own time is mostly its
+# setup, so this is the only record of how much of a budget the timed command used (feedback
+# maint-20261015-115635, item 11). It changes no verdict.
 assert_within() {
   local limit_s="$1"
+  if [[ -n "${TL_WITHIN_LOG:-}" ]]; then
+    printf '%s\t%s\t%s\t%s\n' "${BATS_TEST_FILENAME##*/}" "$limit_s" "${ELAPSED_MS:-}" \
+      "${BATS_TEST_DESCRIPTION:-}" >>"$TL_WITHIN_LOG" 2>/dev/null || true
+  fi
   if [[ "$status" == 124 ]]; then
     echo "timed out after ${ELAPSED_S}s (runner limit ${RUN_TIMEOUT}s): the command waited on something" >&2
     return 1
@@ -262,17 +297,42 @@ assert_value() {
 # command line that carries it.
 assert_no_pager_or_editor() {
   local procs
-  procs="$(exec_plain pgrep -a -x "$PAGER_EDITOR_NAMES")" || true
+  procs="$(pager_editor_procs)" || true
   if [[ -n "$procs" ]]; then
     printf 'pager/editor processes left running in the container:\n%s\n' "$procs" >&2
     return 1
   fi
 }
 
+# pager_editor_procs — `pgrep -a -x` over the pager and editor names. In a parallel lane, only the processes
+# this file started: those whose environment carries its TL_E2E_FILE (exec_in sets it). Other files run beside
+# it there, and timelike's own `view` tool is a script, so its process is named `view`, which is on the list.
+# Reading /proc/PID/environ needs the same uid, and every cell runs as the agent.
+pager_editor_procs() {
+  if [[ -z "${TL_E2E_FILE_ID:-}" ]]; then
+    exec_plain pgrep -a -x "$PAGER_EDITOR_NAMES"
+    return
+  fi
+  # shellcheck disable=SC2016 # expanded in the container
+  exec_plain sh -c 'for p in $(pgrep -x "$1"); do
+    if grep -qzx "TL_E2E_FILE=$2" "/proc/$p/environ" 2>/dev/null; then
+      printf "%s %s\n" "$p" "$(tr "\0" " " <"/proc/$p/cmdline" 2>/dev/null)"
+    fi
+  done' s "$PAGER_EDITOR_NAMES" "$TL_E2E_FILE_ID"
+}
+
 # kill_strays — best effort: kill any pager/editor left by a hung command, so one failure does not
-# cascade into every later test.
+# cascade into every later test. In a parallel lane, only this file's own (pager_editor_procs).
 kill_strays() {
-  exec_plain pkill -KILL -x "$PAGER_EDITOR_NAMES" >/dev/null 2>&1 || true
+  if [[ -z "${TL_E2E_FILE_ID:-}" ]]; then
+    exec_plain pkill -KILL -x "$PAGER_EDITOR_NAMES" >/dev/null 2>&1 || true
+    return 0
+  fi
+  local procs p
+  procs="$(pager_editor_procs 2>/dev/null)" || true
+  for p in $(printf '%s\n' "$procs" | cut -d' ' -f1); do
+    exec_plain kill -KILL "$p" >/dev/null 2>&1 || true
+  done
 }
 
 # container_tmpdir PREFIX — make a fresh directory under /tmp in the container (owned by the agent
@@ -320,8 +380,17 @@ container_rm() {
 copy_into_container() {
   local src="$1" dest="$2" mode="${3:-0644}"
   [[ -f "$src" ]] || { echo "copy_into_container: no such file $src" >&2; return 1; }
+  # In a parallel lane, written beside DEST and renamed into place, so a file reading DEST at the same moment
+  # (two files copy the same fixture to one /tmp path; maint-lane-speed) sees the old copy or the new one,
+  # never a partial one. A serial lane writes in place, as it always has.
+  if [[ -n "${TL_E2E_FILE_ID:-}" ]]; then
+    # shellcheck disable=SC2016 # expanded in the container
+    timeout "$PLUMBING_TIMEOUT" docker exec -i "$AGENT_CONTAINER" \
+      sh -c 't="$1.tl-copy.$$" && cat > "$t" && chmod "$2" "$t" && mv -f "$t" "$1"' copy "$dest" "$mode" <"$src"
+    return
+  fi
   # shellcheck disable=SC2016 # expanded in the container
-  timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" \
+  timeout "$PLUMBING_TIMEOUT" docker exec -i "$AGENT_CONTAINER" \
     sh -c 'cat > "$1" && chmod "$2" "$1"' copy "$dest" "$mode" <"$src"
 }
 
@@ -368,17 +437,24 @@ stamp_check() {
 THROWAWAY_LABEL=timelike.test.throwaway
 
 # start_throwaway NAME [DOCKER RUN ARG]... — start one detached; extra args (e.g. --cpus 1.5) go
-# before the image. Prints nothing on success; docker's error on failure.
+# before the image. Prints nothing on success; docker's error on failure, or, when docker printed none,
+# its exit status and how long it took: a CLI stopped by the runner's timeout prints nothing (lane-speed
+# par1, SC-8: "cannot start … with --cpus 1.5:" and no reason; feedback maint-20261015-115635, item 3).
+# A start that failed part-way is removed, so a container it created is not left behind.
 start_throwaway() {
-  local name="$1" image
+  local name="$1" image err rc start
   shift
   image="$(docker inspect --format '{{.Image}}' "$AGENT_CONTAINER" 2>&1)" || {
     echo "start_throwaway: cannot read the image of ${AGENT_CONTAINER}: ${image}" >&2
     return 1
   }
-  timeout "$RUN_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" \
+  start=$(now_ms)
+  err="$(timeout "$PLUMBING_TIMEOUT" docker run -d --rm --name "$name" --label "${THROWAWAY_LABEL}=1" \
     --cap-drop ALL --security-opt no-new-privileges:true --init \
-    "$@" "$image" sleep infinity </dev/null >/dev/null
+    "$@" "$image" sleep infinity </dev/null 2>&1 >/dev/null)" && return 0 || rc=$?
+  printf '%s\n' "${err:-docker printed nothing: exit ${rc} after $(ms_to_s $(($(now_ms) - start)))s (bound ${PLUMBING_TIMEOUT}s)}" >&2
+  remove_throwaway "$name"
+  return "$rc"
 }
 
 # remove_throwaway NAME... — best effort; a missing container is not an error.
@@ -386,14 +462,17 @@ remove_throwaway() {
   local name
   for name in "$@"; do
     [[ -n "$name" ]] || continue
-    timeout "$RUN_TIMEOUT" docker rm -f "$name" </dev/null >/dev/null 2>&1 || true
+    timeout "$PLUMBING_TIMEOUT" docker rm -f "$name" </dev/null >/dev/null 2>&1 || true
   done
 }
 
 # remove_stale_throwaways — remove every container a previous run left behind (by label).
+# In a parallel lane, no-op: other files' throwaways (pyq's included) carry the same label and are in use, so
+# tests/run.sh removes the stale ones once, before the first file starts (maint-lane-speed).
 remove_stale_throwaways() {
+  [[ -z "${TL_E2E_LOCK:-}" ]] || return 0
   local ids
-  ids="$(timeout "$RUN_TIMEOUT" docker ps -aq --filter "label=${THROWAWAY_LABEL}" </dev/null 2>/dev/null)" || return 0
+  ids="$(timeout "$PLUMBING_TIMEOUT" docker ps -aq --filter "label=${THROWAWAY_LABEL}" </dev/null 2>/dev/null)" || return 0
   # shellcheck disable=SC2086 # one id per word, on purpose
   [[ -z "$ids" ]] || remove_throwaway $ids
 }
@@ -449,13 +528,13 @@ stamp_check_adele() {
 
 # adeled ARG... — the operator's command, run inside Adele's container, exactly as an operator would.
 adeled() {
-  timeout "$RUN_TIMEOUT" docker exec "$ADELE_CONTAINER" /usr/local/bin/adeled "$@" </dev/null
+  timeout "$PLUMBING_TIMEOUT" docker exec "$ADELE_CONTAINER" /usr/local/bin/adeled "$@" </dev/null
 }
 
 # standin_list — the stand-in's OWN record (JSON), read by the stand-in from its file, not via HTTP
 # (cross-stack P004: "performed" is checked against the capability's record, never Adele's word).
 standin_list() {
-  timeout "$RUN_TIMEOUT" docker exec "$STANDIN_CONTAINER" /usr/local/bin/adele-standin list </dev/null
+  timeout "$PLUMBING_TIMEOUT" docker exec "$STANDIN_CONTAINER" /usr/local/bin/adele-standin list </dev/null
 }
 
 # standin_names — one box name per line, from standin_list (the runner has no jq).
@@ -471,7 +550,7 @@ agent_image() { docker inspect --format '{{.Image}}' "$AGENT_CONTAINER"; }
 canary_bytes() {
   local image
   image="$(agent_image)" || return 1
-  timeout "$RUN_TIMEOUT" docker run --rm --network none --user 0:0 --cap-drop ALL \
+  timeout "$PLUMBING_TIMEOUT" docker run --rm --network none --user 0:0 --cap-drop ALL \
     --label "${THROWAWAY_LABEL}=1" -v "${ADELE_SECRET_VOLUME}:/s:ro" --entrypoint cat "$image" /s/canary </dev/null
 }
 
@@ -501,11 +580,17 @@ adele_run_with_grants() {
 # pyq SCRIPT — run Python (the agent image's interpreter) in a THROWAWAY container with no network and
 # nothing mounted, reading stdin: the runner has neither jq nor python. Used to read JSON that came
 # from outside the agent (the ledger, the stand-in's record); the agent container never sees it.
+# On failure it says so on stderr with its exit status and time: a cell that fails here failed in its own
+# parsing, not in the tool it ran (lane-speed par1, SC-4's entry cap: the tool's answer was right and the
+# parse failed after 295 s of a stalled daemon; feedback maint-20261015-115635, item 3).
 pyq() {
-  local image
+  local image rc start
   image="$(agent_image)" || return 1
+  start=$(now_ms)
   timeout "$PYQ_TIMEOUT" docker run --rm -i --network none --cap-drop ALL --label "${THROWAWAY_LABEL}=1" \
-    --entrypoint "$AGENT_PY" "$image" -I -c "$1"
+    --entrypoint "$AGENT_PY" "$image" -I -c "$1" && return 0 || rc=$?
+  printf 'pyq: the parser exited %s after %ss (bound %ss)\n' "$rc" "$(ms_to_s $(($(now_ms) - start)))" "$PYQ_TIMEOUT" >&2
+  return "$rc"
 }
 
 # ── Real pytest, ruff and mypy in the agent container (feature 012, research R1) ───────────────────
@@ -519,7 +604,7 @@ pyq() {
 # its values into the runner. uv's cache and tool directories, and the mypy and ruff caches, live
 # under DIR, so nothing lands in a cell's workspace except what pytest itself writes. Cells put DIR
 # first on PATH in their own command string. NEEDS NETWORK ACCESS to PyPI on the first warm-up, as
-# the unit step does; the warm-up is bounded by 300 s instead of RUN_TIMEOUT, and the cells after it
+# the unit step does; the warm-up is bounded by PLUMBING_TIMEOUT, as exec_plain is, and the cells after it
 # then start from a warm cache (mypy's builtins cache included).
 install_uv_tool_wrappers() {
   local dir="$1" pins="${BATS_TEST_DIRNAME}/../../pins.env" pair name key ver body out
@@ -540,7 +625,6 @@ exec /bin/uv --quiet tool run --python ${AGENT_PY} '${name}@${ver}' \"\$@\""
       wrapper "${dir}/${name}" "$body" || { echo "install_uv_tool_wrappers: cannot write ${dir}/${name}" >&2; return 1; }
   done
   # Warm-up: fetch each tool once and check it reports the pinned version (the wrapper is the tool).
-  local RUN_TIMEOUT=300
   for pair in pytest:PYTEST_VERSION ruff:RUFF_VERSION mypy:MYPY_VERSION; do
     name="${pair%%:*}"
     ver="$(sed -n "s/^${pair#*:}=//p" "$pins" | head -n 1)"
@@ -653,7 +737,7 @@ else:
 
 # pyj CODE — run CODE with timelike's interpreter in the agent container, the last run's $output on stdin.
 pyj() {
-  printf '%s' "$output" | timeout "$RUN_TIMEOUT" docker exec -i "$AGENT_CONTAINER" "$STANDIN_PY" -I -c "$1"
+  printf '%s' "$output" | timeout "$PLUMBING_TIMEOUT" docker exec -i "$AGENT_CONTAINER" "$STANDIN_PY" -I -c "$1"
 }
 
 # ── The agent's own install (feature 013 slice 1; FOR-MENTOR Item 24, condition 7) ──────────────────────

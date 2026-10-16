@@ -493,6 +493,7 @@ def test_request_unreachable_is_exit_1(py: str, scratch: Path, closed_url: str) 
 
 
 @pytest.mark.parametrize("mode", ["--json", "--text"])
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_own_limit_is_exit_124_naming_it(py: str, scratch: Path, adele: FakeAdele, mode: str) -> None:
     adele.answer("POST", "/v1/requests", 200, PERFORMED, delay=10)
     t0 = time.monotonic()

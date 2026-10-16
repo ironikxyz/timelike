@@ -91,11 +91,11 @@ teardown_file() {
 sc1_read_image() {
   local image out
   image="$(agent_image)" || { SC1_IMAGE_ERROR="cannot read the image of ${AGENT_CONTAINER}"; return 1; }
-  SC1_WORKDIR="$(timeout "$RUN_TIMEOUT" docker image inspect --format '{{.Config.WorkingDir}}' "$image" </dev/null 2>&1)" || {
+  SC1_WORKDIR="$(timeout "$PLUMBING_TIMEOUT" docker image inspect --format '{{.Config.WorkingDir}}' "$image" </dev/null 2>&1)" || {
     SC1_IMAGE_ERROR="cannot inspect ${image}: ${SC1_WORKDIR}"
     return 1
   }
-  out="$(timeout "$RUN_TIMEOUT" docker run --rm --network none --label "${THROWAWAY_LABEL}=1" \
+  out="$(timeout "$PLUMBING_TIMEOUT" docker run --rm --network none --label "${THROWAWAY_LABEL}=1" \
     --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /bin/sh "$image" -c '
 for f in "$HOME/.claude/CLAUDE.md" "${CODEX_HOME:-$HOME/.codex}/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"; do
   if [ -e "$f" ]; then printf "%s " "$f"; fi
@@ -112,18 +112,27 @@ printf "read=done\n"' </dev/null 2>&1)"
 # sc1_wait_command NAME — wait (at most 10 s, in the container) until the container's command is
 # running: `sleep` is a child of PID 1 (docker-init), so the entrypoint has finished and exec'd it.
 # docker exec'd processes have parent 0, so this wait cannot see itself.
+# On failure it prints docker's own error and the container's state, so the message tells a container
+# that is slow from one that is gone (lane-speed par1: "No such container" two cells later; feedback
+# maint-20261015-115635, item 3).
 sc1_wait_command() {
-  timeout "$RUN_TIMEOUT" docker exec "$1" sh -c '
+  local err state
+  err="$(timeout "$PLUMBING_TIMEOUT" docker exec "$1" sh -c '
 n=0
 until pgrep -x -P 1 sleep >/dev/null 2>&1; do
   n=$((n + 1))
   [ "$n" -lt 200 ] || exit 1
   sleep 0.05
-done' </dev/null >/dev/null 2>&1
+done' </dev/null 2>&1 >/dev/null)" && return 0
+  state="$(timeout "$PLUMBING_TIMEOUT" docker inspect --format \
+    'status {{.State.Status}}, exit {{.State.ExitCode}}, oom-killed {{.State.OOMKilled}}, error "{{.State.Error}}"' \
+    "$1" </dev/null 2>&1)" || true
+  printf '%s' "docker: ${err:-no error printed}; state: ${state:-not read}"
+  return 1
 }
 
 sc1_started_at() {
-  timeout "$RUN_TIMEOUT" docker inspect --format '{{.State.StartedAt}}' "$1" </dev/null
+  timeout "$PLUMBING_TIMEOUT" docker inspect --format '{{.State.StartedAt}}' "$1" </dev/null
 }
 
 sc1_start_fresh() {
@@ -132,8 +141,9 @@ sc1_start_fresh() {
     SC1_FRESH_ERROR="cannot start ${SC1_FRESH}: ${err}"
     return 1
   }
-  sc1_wait_command "$SC1_FRESH" || {
-    SC1_FRESH_ERROR="${SC1_FRESH}: the container's command (sleep infinity) was not running within 10 s of start — the entrypoint did not exec it (FR-8: placement never blocks the container)"
+  local why
+  why="$(sc1_wait_command "$SC1_FRESH")" || {
+    SC1_FRESH_ERROR="${SC1_FRESH}: the container's command (sleep infinity) was not running within 10 s of start — the entrypoint did not exec it (FR-8: placement never blocks the container); ${why}"
     return 1
   }
   SC1_FRESH_STARTED="$(sc1_started_at "$SC1_FRESH" 2>&1)" || {
@@ -148,19 +158,20 @@ sc1_start_prepared() {
   image="$(agent_image)" || { SC1_PREPARED_ERROR="cannot read the image of ${AGENT_CONTAINER}"; return 1; }
   while IFS= read -r line; do
     [[ -n "$line" ]] && entry+=("$line")
-  done < <(timeout "$RUN_TIMEOUT" docker image inspect --format '{{range .Config.Entrypoint}}{{println .}}{{end}}' "$image" </dev/null)
+  done < <(timeout "$PLUMBING_TIMEOUT" docker image inspect --format '{{range .Config.Entrypoint}}{{println .}}{{end}}' "$image" </dev/null)
   if [[ ${#entry[@]} -eq 0 ]]; then
     SC1_PREPARED_ERROR="the image declares no ENTRYPOINT: nothing runs on container start (contract § The entrypoint)"
     return 1
   fi
-  err="$(timeout "$RUN_TIMEOUT" docker run -d --rm --name "$SC1_PREPARED" --label "${THROWAWAY_LABEL}=1" \
+  err="$(timeout "$PLUMBING_TIMEOUT" docker run -d --rm --name "$SC1_PREPARED" --label "${THROWAWAY_LABEL}=1" \
     --cap-drop ALL --security-opt no-new-privileges:true --init \
     --entrypoint /bin/sh "$image" -c "$SC1_PREPARE" sc1-prepare "$SC1_THEIRS" "${entry[@]}" </dev/null 2>&1 >/dev/null)" || {
     SC1_PREPARED_ERROR="cannot start ${SC1_PREPARED}: ${err}"
     return 1
   }
-  sc1_wait_command "$SC1_PREPARED" || {
-    SC1_PREPARED_ERROR="${SC1_PREPARED}: the container's command (sleep infinity) was not running within 10 s of start — the preparation or the entrypoint (${entry[*]}) did not exec it"
+  local why
+  why="$(sc1_wait_command "$SC1_PREPARED")" || {
+    SC1_PREPARED_ERROR="${SC1_PREPARED}: the container's command (sleep infinity) was not running within 10 s of start — the preparation or the entrypoint (${entry[*]}) did not exec it; ${why}"
     return 1
   }
   SC1_PREPARED_STARTED="$(sc1_started_at "$SC1_PREPARED" 2>&1)" || {

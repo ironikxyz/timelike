@@ -553,6 +553,7 @@ def test_an_invalid_cap_value_is_exit_2_for_undo(lab: Lab, var: str) -> None:
 # ── FR-24: the lock covers undo --yes ─────────────────────────────────────────────────────────
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_undo_yes_waits_for_the_lock_then_exits_1_and_changes_nothing(lab: Lab) -> None:
     """Slow by design (the contract's 10 s wait)."""
     write(lab.ws / "f.txt", "x\n")

@@ -1,9 +1,29 @@
 # timelike — build, test, lint and scan. Everything that needs Docker runs in pinned containers;
 # nothing is installed on the host. Two verification lanes (research.md R10):
 #   make test       Docker lane — authoritative for the acceptance criteria
+#   make test-partial E2E_FILES="a.bats b.bats"
+#                   a rework lane: build, up, runner, benchimg, ONLY the named e2e files, all of unit and
+#                   gounit. It says `scope: partial` first, and nothing is signed off on it (maint-lane-speed)
 #   make test-host  host lane — advisory: agentio/conform units and the env-layer files
+# E2E_JOBS and UNIT_JOBS set the Docker lane's parallelism (tests/run.sh); 1 and 1 is the serial lane.
+
+# The bench's operator-set values (02 slice 1's live run, maint-lane-speed item 3): pins.env holds their
+# defaults, and an assignment in an included file overrides the environment, so `BENCH_MODEL=… make
+# bench-live` used to measure the pinned model and drop the value silently. pins.env stays plain `K=V`,
+# because tests/run.sh and scan/scan.sh source it as shell. So the environment's values are noted before
+# the include and put back after it; an empty one counts as unset. A make command-line value already
+# outranks the include. The caps (BENCH_TURN_CAP, BENCH_SPEND_CAP_USD) are not in pins.env, so the
+# environment always reached them.
+# BENCH_<NAME>_SOURCE tells the bench's plan where each value came from.
+BENCH_OPERATOR_VARS := BENCH_MODEL BENCH_MODEL_PRICE_IN BENCH_MODEL_PRICE_OUT BENCH_MODEL_PRICE_READ
+$(foreach v,$(BENCH_OPERATOR_VARS),$(if $(filter environment,$(origin $(v))),$(if $(strip $(value $(v))),\
+  $(eval BENCH_FROM_ENV_$(v) := $(value $(v))))))
 
 include pins.env
+
+$(foreach v,$(BENCH_OPERATOR_VARS),$(if $(filter undefined,$(origin BENCH_FROM_ENV_$(v))),\
+  $(eval $(v)_SOURCE := $(if $(filter command line,$(origin $(v))),the make command line,pins.env)),\
+  $(eval $(v) := $(BENCH_FROM_ENV_$(v)))$(eval $(v)_SOURCE := the environment)))
 export
 
 SHELL := /bin/bash
@@ -12,7 +32,7 @@ DIRTY := $(shell git status --porcelain 2>/dev/null | grep -v '^?? tests/out/' |
 PYTHON ?= python3
 COMPOSE := docker compose
 
-.PHONY: build up down test test-host lint lint-host scan demo docker-check stamp-check bench bench-images bench-live grants
+.PHONY: build up down test test-partial test-host lint lint-host scan demo docker-check stamp-check bench bench-images bench-live grants
 
 docker-check:
 	@docker info >/dev/null 2>&1 || { \
@@ -43,8 +63,12 @@ up: build
 down:
 	$(COMPOSE) --profile standin down --remove-orphans
 
+# `@`, so the lane's own first line (its scope) is the first line printed.
 test: docker-check stamp-check
-	tests/run.sh
+	@tests/run.sh
+
+test-partial: docker-check stamp-check
+	@LANE_SCOPE=partial tests/run.sh
 
 test-host:
 	PYTHON="$(PYTHON)" tests/host/run.sh
@@ -92,7 +116,7 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/
   tests/e2e/view-and-search-slice-1-carried-items.bats tests/e2e/fixtures/bounded-read-slice1.sh \
   tests/e2e/run-full-scratch-or-workspace-names-filesystem-and-free-space.bats \
   tests/e2e/run-secrets-redacted-in-shown-output-and-saved-log.bats \
-  tests/host/test_env_layer.sh tests/e2e/helpers.bash scan/scan.sh scripts/demo.sh \
+  tests/host/test_env_layer.sh tests/e2e/helpers.bash tests/e2e/lane.bash scan/scan.sh scripts/demo.sh \
   image/rootfs/etc/profile.d/10-timelike-shell-env.sh image/rootfs/etc/timelike/shell-env.bash \
   tests/host/test_shell_env_hook.sh tests/e2e/container-derived-defaults.bats \
   tests/e2e/hooks-a-repository-configures-run.bats tests/e2e/hook-past-its-time-limit-is-killed.bats \

@@ -110,8 +110,10 @@ fi
 
 # The bench's configuration, by name and value; none of these names is key-shaped (RB9).
 declare -a config=()
+# The *_SOURCE names say where make took each value from (the Makefile; maint-lane-speed item 3).
 for name in BENCH_MODEL BENCH_UPSTREAM BENCH_TURN_CAP BENCH_SPEND_CAP_USD BENCH_MODEL_PRICE_IN BENCH_MODEL_PRICE_OUT \
-  BENCH_MODEL_PRICE_READ; do
+  BENCH_MODEL_PRICE_READ BENCH_MODEL_SOURCE BENCH_MODEL_PRICE_IN_SOURCE BENCH_MODEL_PRICE_OUT_SOURCE \
+  BENCH_MODEL_PRICE_READ_SOURCE; do
   [[ -z "${!name:-}" ]] || config+=(-e "${name}=${!name}")
 done
 [[ -z "${OPENCODE_VERSION:-}" ]] || config+=(-e "BENCH_OPENCODE_VERSION=${OPENCODE_VERSION}")

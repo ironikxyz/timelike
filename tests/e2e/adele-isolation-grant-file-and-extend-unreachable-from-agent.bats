@@ -53,7 +53,7 @@ check_no_adele_paths() {
 standin_post() {
   local auth="$1" image
   image="$(agent_image)"
-  timeout "$RUN_TIMEOUT" docker run --rm --network timelike_adele-standin --cap-drop ALL \
+  timeout "$PLUMBING_TIMEOUT" docker run --rm --network timelike_adele-standin --cap-drop ALL \
     --label "${THROWAWAY_LABEL}=1" --entrypoint "$AGENT_PY" "$image" -I -c "
 import urllib.request, urllib.error
 req = urllib.request.Request('http://adele-standin:8481/v1/boxes', method='POST',

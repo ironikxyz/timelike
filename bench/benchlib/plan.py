@@ -56,6 +56,16 @@ class Plan:
     price_out: float  # USD per million output tokens
     standin: bool = False
     price_read: str = ""  # the date the prices were read (pins.env BENCH_MODEL_PRICE_READ)
+    # Where each operator-set value came from, as make recorded it (BENCH_*_SOURCE; maint-lane-speed item
+    # 3): "pins.env", "the environment" or "the make command line". Empty when nobody recorded it.
+    model_source: str = ""
+    price_sources: tuple[str, str, str] = ("", "", "")  # in, out, the date read
+
+    def _price_sources(self) -> str:
+        inn, out, read = (s or "not recorded" for s in self.price_sources)
+        if inn == out == read:
+            return f"prices from: {inn}"
+        return f"prices from: input {inn}; output {out}; date read {read}"
 
     @property
     def runs(self) -> int:
@@ -102,7 +112,9 @@ class Plan:
         typical, ceiling = self.estimate(TYPICAL_TURNS), self.estimate(self.caps.turns)
         binds = " — the spend cap binds first" if ceiling > self.caps.spend_usd else ""
         out += [
-            f"model: {self.model} (${self.price_in:g} in, ${self.price_out:g} out, per million tokens)",
+            f"model: {self.model}, from {self.model_source or 'not recorded'} "
+            f"(${self.price_in:g} in, ${self.price_out:g} out, per million tokens)",
+            self._price_sources(),
             f"estimate: about ${self.per_turn_usd:.3f} per turn ({TOKENS_IN_PER_TURN} in + "
             f"{TOKENS_OUT_PER_TURN} out tokens); ${typical:.2f} at {TYPICAL_TURNS} turns per run; "
             f"${ceiling:.2f} at the turn cap{binds}",

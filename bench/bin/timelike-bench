@@ -405,7 +405,22 @@ def _plan(
         price_out=float(os.environ.get("BENCH_MODEL_PRICE_OUT") or 0),
         price_read=os.environ.get("BENCH_MODEL_PRICE_READ", "").strip(),
         standin=args.standin,
+        model_source=_source("BENCH_MODEL", "the bench's default (BENCH_MODEL unset)"),
+        price_sources=(
+            _source("BENCH_MODEL_PRICE_IN", "nowhere (unset, so 0)"),
+            _source("BENCH_MODEL_PRICE_OUT", "nowhere (unset, so 0)"),
+            _source("BENCH_MODEL_PRICE_READ", "nowhere (unset)"),
+        ),
     )
+
+
+def _source(name: str, when_unset: str) -> str:
+    """Where `name`'s value came from: make records it in NAME_SOURCE (maint-lane-speed item 3). Run
+    outside make, nothing records it, unless the value is unset and so `when_unset` applies."""
+    recorded = os.environ.get(f"{name}_SOURCE", "").strip()
+    if recorded:
+        return recorded
+    return "" if os.environ.get(name, "").strip() else when_unset
 
 
 def do_run(args: argparse.Namespace) -> agentio.Result:

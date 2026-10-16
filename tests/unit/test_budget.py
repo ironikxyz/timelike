@@ -280,10 +280,20 @@ def test_budget_json_shape(rig: Rig) -> None:
         assert type(d["exists"]) is bool
         assert type(d["free_bytes"]) is int and type(d["total_bytes"]) is int, d
         assert d["reason"] is None, d
-    assert doc["lines"] == text_of(rig)[2], "JSON lines are the text body"
+    # Two runs of the tool, so two readings of free space: on a shared disk the figure moves between them
+    # (649.4 GiB against 649.3 GiB, feedback maint-20261015-115635, item 10). The lines must match in all
+    # else; the free figure itself is checked against statvfs in the disks tests.
+    assert [without_free(x) for x in doc["lines"]] == [without_free(x) for x in text_of(rig)[2]], (
+        "JSON lines are the text body"
+    )
 
 
 # ── text ───────────────────────────────────────────────────────────────────────────────────────
+
+
+def without_free(line: str) -> str:
+    """A text line with a disk's free figure blanked, the one value that moves between two runs."""
+    return re.sub(rf"{SIZE_RE} free of ", "<free> free of ", line)
 
 
 def disk_line_re(role: str, path: Path | str, total: int, suffix: str = "") -> str:

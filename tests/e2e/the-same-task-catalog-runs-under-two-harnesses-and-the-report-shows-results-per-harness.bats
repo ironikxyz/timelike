@@ -16,6 +16,9 @@ DRIVER=timelike-bench-driver:local
 TASKS=(git-inspect python-missing-module)
 PY=/opt/timelike/python/bin/python3
 
+# The parallel lane's file lock (maint-lane-speed); this file loads no helpers.bash, which would source it.
+load lane
+
 setup_file() {
   : "${GIT_SHA:?}" "${DEBIAN_IMAGE:?}" "${REPO_HOST:?}" "${BENCH_E2E_OUT:?}"
   # The harness pins, as make passes them (bench/run.sh forwards OPENCODE_VERSION and CODEX_VERSION).
@@ -24,10 +27,13 @@ setup_file() {
   . ./pins.env
   set +a
   export LIVE_OUT="${BENCH_E2E_OUT}/live-${GIT_SHA:0:12}-$$"
+  # Its status is kept and judged by the first test, as speedup-bench.bats does, so a failing run fails
+  # cells with its stderr rather than failing setup_file without a reason.
+  local rc=0
   bench/run.sh --out "${LIVE_OUT}" --harness opencode --harness codex --standin \
     --task git-inspect --task python-missing-module \
-    >"${BENCH_E2E_OUT}/live.stdout" 2>"${BENCH_E2E_OUT}/live.stderr"
-  echo $? >"${BENCH_E2E_OUT}/live.rc"
+    >"${BENCH_E2E_OUT}/live.stdout" 2>"${BENCH_E2E_OUT}/live.stderr" || rc=$?
+  echo "${rc}" >"${BENCH_E2E_OUT}/live.rc"
 }
 
 validate() {

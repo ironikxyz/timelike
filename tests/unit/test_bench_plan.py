@@ -52,7 +52,9 @@ def test_the_plan_names_cells_harnesses_model_caps_and_the_estimate() -> None:
     assert lines[0] == "plan: 5 tasks × 2 harnesses × 3 arms = 30 runs, n = 1 each"
     assert "harnesses: opencode 1.19.0, codex 0.162.1" in text
     assert "caps: 30 turns per run · 900 s per run · $10.00 per invocation (spend cap)" in text
-    assert "model: deepseek/deepseek-v4-pro-0813 ($1.32 in, $3.96 out, per million tokens)" in text
+    assert (
+        "model: deepseek/deepseek-v4-pro-0813, from not recorded ($1.32 in, $3.96 out, per million tokens)"
+    ) in text
     assert "$7.29 at 8 turns per run; $27.32 at the turn cap — the spend cap binds first" in text
     assert "never this estimate" in text
     assert (
@@ -72,3 +74,23 @@ def test_a_standin_plan_costs_nothing() -> None:
     lines = p.Plan(**{**plan.__dict__, "standin": True}).lines()
     assert "estimate: $0.00 (the stand-in charges nothing)" in lines
     assert not any(line.startswith("model: deepseek") for line in lines)
+
+
+def test_the_model_line_names_where_each_value_came_from() -> None:
+    # maint-lane-speed item 3: the plan says where make took the model and the prices from, so a value
+    # dropped on the way (the environment's, before the fix) shows on the lines the operator reads.
+    base = full().__dict__
+    pinned = p.Plan(**{**base, "model_source": "pins.env", "price_sources": ("pins.env",) * 3}).lines()
+    assert (
+        "model: deepseek/deepseek-v4-pro-0813, from pins.env ($1.32 in, $3.96 out, per million tokens)"
+    ) in pinned
+    assert "prices from: pins.env" in pinned
+    mixed = p.Plan(
+        **{**base, "model_source": "the environment",
+           "price_sources": ("the environment", "pins.env", "the make command line")}
+    ).lines()  # fmt: skip
+    model = next(line for line in mixed if line.startswith("model: "))
+    assert model.startswith("model: deepseek/deepseek-v4-pro-0813, from the environment (")
+    assert "prices from: input the environment; output pins.env; date read the make command line" in mixed
+    prices = next(line for line in mixed if line.startswith("prices from: "))
+    assert len(model) <= 200 and len(prices) <= 200  # agentio cuts a line at 200 columns (rule 13)

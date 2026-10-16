@@ -69,7 +69,9 @@ check_identity() {
 }
 
 check_no_setuid_or_setgid_files() {
-  run_in "$1" notty 'find / -xdev -perm /6000 -type f 2>/dev/null; echo "find-done=1"'
+  # A walk of the whole filesystem, whose time no criterion names (no assert_within here), so it runs under
+  # the plumbing bound: under a loaded host it went past 30 s (feedback maint-20261015-115635, item 7).
+  RUN_TIMEOUT="$PLUMBING_TIMEOUT" run_in "$1" notty 'find / -xdev -perm /6000 -type f 2>/dev/null; echo "find-done=1"'
   [[ "$status" != 124 ]] || { echo "find timed out" >&2; return 1; }
   assert_value find-done 1
   local line found=()
@@ -139,7 +141,8 @@ check_adele_dir_unlistable() {
 }
 
 check_no_runtime_socket() {
-  run_in "$1" notty 'find / \( -path /proc -o -path /sys \) -prune -o -type s -print 2>/dev/null
+  # The same walk, the same bound (see check_no_setuid_or_setgid_files).
+  RUN_TIMEOUT="$PLUMBING_TIMEOUT" run_in "$1" notty 'find / \( -path /proc -o -path /sys \) -prune -o -type s -print 2>/dev/null
 printf "DOCKER_HOST=%s\n" "${DOCKER_HOST-<unset>}"
 echo "find-done=1"'
   [[ "$status" != 124 ]] || { echo "find timed out" >&2; return 1; }

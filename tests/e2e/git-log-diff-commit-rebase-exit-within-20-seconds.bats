@@ -53,6 +53,10 @@ teardown() {
 }
 
 # prepare STATE — a fresh repository in the given state (fixtures/sc1-repo.sh), in a new temp dir.
+# The fixture makes 60 commits: test plumbing, timed by no criterion (the 20 s is the command's, from
+# run_in), so it runs under PLUMBING_TIMEOUT, as exec_plain does. Under a loaded host it took longer than
+# RUN_TIMEOUT's 30 s, and a cell then ran against a part-built repository (feedback maint-20261015-115635,
+# item 2); exec_plain now fails at its bound.
 prepare() {
   WORK="$(container_tmpdir sc1)"
   REPO_DIR="${WORK}/repo"

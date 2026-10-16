@@ -435,7 +435,7 @@ go_image() {
 # gofmt_e IMAGE FORMAT — the bytes printf FORMAT builds, through `gofmt -e` in IMAGE; gofmt's status.
 gofmt_e() {
   # shellcheck disable=SC2059 # FORMAT is the fixture, a printf format by design
-  printf "$2" | timeout "$RUN_TIMEOUT" docker run --rm -i --network none --cap-drop ALL \
+  printf "$2" | timeout "$PLUMBING_TIMEOUT" docker run --rm -i --network none --cap-drop ALL \
     --label "${THROWAWAY_LABEL}=1" "$1" gofmt -e >/dev/null
 }
 
@@ -445,7 +445,7 @@ check_go_gofmt() {
   local img
   img="$(go_image)"
   [[ -n "$img" ]] || skip "the Go fixture was not confirmed by gofmt: GO_IMAGE is not in the runner's environment (tests/run.sh does not pass it) and pins.env has none"
-  timeout "$RUN_TIMEOUT" docker image inspect "$img" >/dev/null 2>&1 </dev/null \
+  timeout "$PLUMBING_TIMEOUT" docker image inspect "$img" >/dev/null 2>&1 </dev/null \
     || skip "the Go fixture was not confirmed by gofmt: GO_IMAGE ${img} is not on the Docker host (not pulled)"
   lang go
   gofmt_e "$img" "$ORIG" || { echo "gofmt -e rejects the Go fixture's original" >&2; return 1; }

@@ -41,6 +41,7 @@ def test_fast_exit_124_is_not_a_hang(tmp_path: Path) -> None:
     assert r.hung is False
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_sleep_past_the_limit_is_hung_and_ends_near_the_limit(tmp_path: Path) -> None:
     started = time.monotonic()
     r = local(tmp_path).run("sleep 60", 1)
@@ -51,6 +52,7 @@ def test_sleep_past_the_limit_is_hung_and_ends_near_the_limit(tmp_path: Path) ->
     assert elapsed < 1 + 3
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_term_ignoring_command_is_killed_after_grace(tmp_path: Path) -> None:
     started = time.monotonic()
     r = local(tmp_path).run("trap '' TERM; sleep 60", 1)
@@ -59,6 +61,7 @@ def test_term_ignoring_command_is_killed_after_grace(tmp_path: Path) -> None:
     assert time.monotonic() - started < 1 + 2 + 3
 
 
+@pytest.mark.timed  # an elapsed-time bound: run alone in a parallel lane (maint-lane-speed)
 def test_background_child_holding_stdout_does_not_block_the_return(tmp_path: Path) -> None:
     started = time.monotonic()
     r = local(tmp_path).run("sleep 60 & echo started", 10)
