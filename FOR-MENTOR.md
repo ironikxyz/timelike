@@ -1421,7 +1421,10 @@ choice if "connection" must mean the agent's own.
 
 ### Q3 · Item 14 (b), for the record
 
-`bridge/feedback/12-20261016-091249-adele-text-mode-human-line.md` carried no answer from plan when this was
-raised. Per the send, nothing is built for (b) until it does, and `--help` and the README take route (a).
+*(Corrected 2026-10-16, same cycle.)* As first written, this said the feedback file carried no answer. That
+was read at about 09:16Z; plan's ruling had been copied in at 09:18:16Z, before this item was raised:
+**clarification, not bench-gated** (`bridge/feedback/12-20261016-091249-adele-text-mode-human-line.md`
+§ Resolution, plan `214ba21`). So (b) is built in this cycle, for both envelopes, as the ruling describes:
+rule 14's one stderr line in text mode, stdout unchanged, nothing new under `--json`. It does not depend on Q1.
 
 **For the mentor (route: code):** Q1: (a), (b), (c), or another reading. Q2: confirm, or say what to change.
