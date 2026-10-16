@@ -363,3 +363,16 @@ ASSUMED: Denials is computed in one exported function so `adeled status` (T028) 
 ABSENT: the agent's name is not authenticated (D-14), and an absent or empty one records no agent, as before slice 1
 ABSENT: no denial is recorded for "no grant allows" or a bad request: those never reached a grant and are usage errors (slice 0)
 Verification: go vet, gofmt; broker coverage 99.2%; the rest of the module passes
+SCOPE: in (7 changed files)
+
+### T027: the reaper (adele/internal/reaper)
+**Started:** 2026-10-16T09:31:12+00:00 | **Completed:** 2026-10-16T09:34:29Z
+
+INHERITED: Reap/Due/Live from T024; the stand-in faults from T025; List/Delete and Locker from T026 (confidence: high)
+FLAGGED: the outcome is decided from the record read back after the delete, and the record is read before it too (same-box check: created_at + ttl = expires_at) — chose two reads per reap over trusting the delete's 204, per cross-stack P004 and D-11 (confidence: high)
+FLAGGED: a reap cut short by Adele's own shutdown (context cancelled) records nothing — found by the restart test, whose first version recorded "reap-failed … context canceled" when the test stopped the reaper; such a row would blame the provider for Adele stopping. The row stays due and the next start reaps it (confidence: high)
+ASSUMED: the reaper takes the broker's request lock per reap, so a request reusing an expired name cannot interleave with its delete; the operator's `adeled reap` runs in another process without that lock and relies on the same-box check (confidence: medium — the window is one list-delete round trip, and a name reused inside it would read as a later box and be left alone)
+ASSUMED: a given-up row (5 failed passes) is left by the serving reaper and reached only by the operator's forced pass; a forced pass that fails again writes another reap-failed row naming the command (confidence: high)
+ABSENT: no metric or alert for given-up rows beyond the ledger row and the log line; `adeled status` (T028) is where the operator sees it
+ABSENT: reaps are sequential within a pass; with a 10 s upstream bound and 3 attempts, one dead box can delay the next by ~33 s per pass, which the bound on passes keeps finite
+Verification: `go test -race -count=3 -cover ./internal/reaper` ok, 95.7%; go vet, gofmt

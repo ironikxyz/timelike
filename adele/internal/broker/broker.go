@@ -233,3 +233,7 @@ func upstreamFailed(err error) Outcome {
 		"error": "stand-in failed: " + strings.TrimPrefix(err.Error(), errUpstream.Error()+": "), "performed": false,
 	}}
 }
+
+// Locker is the broker's request lock, so the reaper deletes nothing while a request is being checked and
+// performed: a new box may reuse an expired box's name, and the two must not interleave (spec FR-26).
+func (b *Broker) Locker() sync.Locker { return &b.mu }
