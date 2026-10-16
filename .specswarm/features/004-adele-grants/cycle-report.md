@@ -1035,3 +1035,29 @@ Nothing ran in Docker.
 
 Also: ruff check and format, mypy (39 files), shellcheck over the Makefile's files and the changed e2e files with
 helpers, gofmt, go vet: clean. Adele's Go coverage is 94.5% (90% bar).
+
+### Cycle 4 sign-off addendum — lane 12s1b on `5377bd2` and D21 (added 2026-10-16T21:27:22Z)
+
+The mentor signed off 12 slice 1 at `5377bd2`. Lane 12s1b passed (e2e 703/703, unit, timed, gounit, scan and lint;
+logs `bridge/.make-test-12s1b.log`, `bridge/.make-scan-12s1b.log`, `bridge/.make-lint-12s1b.log`,
+`bridge/.within-12s1b.tsv`). D21 was demonstrated with the operator (`bridge/.d21-demo-20261016T210428Z.txt`).
+This addendum supersedes the modes in § Cycle 4 and its lane addendum 1; nothing above is rewritten.
+
+**criteria_reestablished, as of this addendum:**
+- Slice 0's five Automated criteria, each **executed [lane 12s1b on 5377bd2, the mentor's]**:
+  - `12 · "The agent image and Adele start together from one compose file, and the agent reaches Adele only through its request interface"`
+  - `12 · "Adele rejects a malformed grant at start with the line at fault"`
+  - `12 · "Every performed request is recorded in the ledger with grant, requesting session, resource created, estimated cost and expiry"`
+  - `12 · "a request exceeding any limit exits 4 with an envelope naming the grant, the limit and the operator's extend command, and nothing is performed"`
+  - `12 · "No credential held by Adele appears in the agent's environment, filesystem, process arguments or any tool output, checked by a scan after a full request cycle"`
+- Slice 1's two Automated criteria, each **executed [lane 12s1b on 5377bd2, the mentor's]**:
+  - `12 · "Adele destroys resources whose time-to-live has expired, including after the requesting agent's container has stopped, and records each reap"`
+  - `12 · "A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed and what was needed, the operator's command, and where the record lives; a host with none says so"`
+- Slice 1's Manual criterion:
+  - `12 · "DEMO: Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the reap in the ledger"` —
+    **observed by the operator**, D21 demo 2026-10-16T21:04:28Z.
+
+The ledger criterion now sits in slice 0's list (the mentor's indent note).
+
+**The record commit:** the README's Next line reads `**Next:** 13 slice 0.`, marked with `<mark>`. The marks from
+this cycle's status block stay in place, because that change has not been pushed yet.
