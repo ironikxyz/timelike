@@ -215,7 +215,10 @@ def test_status_reachable_json(py: str, scratch: Path, adele: FakeAdele) -> None
     assert doc["revision"] == REVISION
     assert doc["grants"] == ["demo"]
     assert doc["url"] == adele.url
-    assert [(s.method, s.path) for s in adele.received()] == [("GET", "/v1/health")]
+    # slice 1: then the recent denials, read-only (FR-37); the fake has none, so they are unknown, not none
+    assert [(s.method, s.path) for s in adele.received()] == [("GET", "/v1/health"), ("GET", "/v1/denials")]
+    assert doc["denials"] is None and "HTTP 404" in doc["denials_unknown"]
+    assert "recent denials unknown (HTTP 404" in doc["verdict"]
 
 
 def test_status_reachable_text(py: str, scratch: Path, adele: FakeAdele) -> None:
@@ -629,3 +632,66 @@ def test_grants_error_shows_adeles_text(py: str, scratch: Path, adele: FakeAdele
     assert r.returncode == 1
     line = one_error_line(r)
     assert "the ledger failed: locked" in line and "retry" in line, line
+
+
+# ── slice 1: status explains recent denials by host; requests carry the agent's name ─────────────────
+
+DENIAL = {
+    "ledger_id": 46, "at": "2026-10-16T10:00:00Z", "host": "adele-standin:8481", "grant": "demo",
+    "limit": {"name": "ports", "allowed": "8080", "needed": "22"}, "extend": EXTEND, "extend_by": "operator",
+    "session": "s-1", "agent": "agent-b", "capability": "standin.box", "action": "create", "resource": "tl-9",
+}  # fmt: skip
+
+
+def denials_doc(items: list[dict[str, Any]], host: str = "") -> dict[str, Any]:
+    return {"window_hours": 24, "per_host": 20, "host": host, "count": len(items), "denials": items}
+
+
+def test_status_with_no_recent_denial_says_so(py: str, scratch: Path, adele: FakeAdele) -> None:
+    adele.answer("GET", "/v1/denials?host=adele-standin%3A8481", 200, denials_doc([], "adele-standin:8481"))
+    r = go(py, scratch, adele.url, "--json", "status", "adele-standin:8481")
+    assert r.returncode == 0, r.stderr
+    doc = doc_of(r)
+    assert doc["verdict"].endswith(" · no denial of adele-standin:8481 in the last 24 h")
+    assert doc["denials"] == [] and doc["denial_host"] == "adele-standin:8481"
+
+
+def test_status_explains_each_denial_newest_first(py: str, scratch: Path, adele: FakeAdele) -> None:
+    second = {**DENIAL, "ledger_id": 45, "at": "2026-10-16T09:00:00Z", "agent": ""}
+    adele.answer("GET", "/v1/denials", 200, denials_doc([DENIAL, second]))
+    r = go(py, scratch, adele.url, "--text", "status")
+    assert r.returncode == 0, r.stderr
+    out = r.stdout.splitlines()
+    assert out[1].endswith(" · 2 denials in the last 24 h (newest first, at most 20 per host)"), out[1]
+    assert out[2] == (
+        "#46 2026-10-16T10:00:00Z adele-standin:8481: grant demo, ports allows 8080, needed 22"
+        f" — only the operator allows it: {EXTEND} (session s-1, agent agent-b)"
+    )
+    assert out[3].startswith("#45 ") and out[3].endswith("(session s-1)")
+    js = doc_of(go(py, scratch, adele.url, "--json", "status"))
+    assert [d["ledger_id"] for d in js["denials"]] == [46, 45]
+
+
+def test_status_host_must_be_one_short_word(py: str, scratch: Path, adele: FakeAdele) -> None:
+    assert go(py, scratch, adele.url, "--json", "status", "a", "b").returncode == 2
+    assert go(py, scratch, adele.url, "--json", "status", "h" * 256).returncode == 2
+
+
+def test_status_denials_unanswered_is_unknown_not_none(py: str, scratch: Path, adele: FakeAdele) -> None:
+    adele.answer("GET", "/v1/denials", 200, denials_doc([]), delay=5)  # past STATUS_TIMEOUT_S
+    r = go(py, scratch, adele.url, "--json", "status")
+    doc = doc_of(r)
+    assert r.returncode == 0 and doc["denials"] is None
+    assert "recent denials unknown (no answer within 3 s)" in doc["verdict"]
+
+
+@pytest.mark.parametrize(("agent", "sent"), [("agent-a", "agent-a"), ("bad agent!", None), ("", None)])
+def test_request_carries_the_agents_name_when_valid(
+    py: str, scratch: Path, adele: FakeAdele, agent: str, sent: str | None
+) -> None:
+    env = base_env(scratch, session=SESSION, **{URL_ENV: adele.url, "TIMELIKE_AGENT": agent})
+    r = run([py, str(ADELE), "--json", *CREATE], env, timeout=20)
+    assert r.returncode == 0, r.stderr
+    body = adele.received()[-1].body
+    assert body.get("agent") == sent
+    assert ("agent" in body) is (sent is not None)

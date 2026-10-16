@@ -619,10 +619,12 @@ Every tool also answers `--agent-info` with its manifest (JSON), and `timelike t
 adele: adele [help]
 ask Adele to perform a reaching action within the operator's grant; never see a credential
 usage:
-  adele status                  # is Adele reachable from here; her build revision
+  adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live
   adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]
   exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)
+  extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);
+  every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)
 options:
   --help  this help (at most 40 lines)
   --json  structured output (default when piped)

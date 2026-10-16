@@ -403,3 +403,16 @@ ASSUMED: under --json, no tool printed anything on stderr for exit 4 before this
 ABSENT: the grep for other e2e pins found none beyond SC-3: the package-guard cells run notty (JSON); SC-4 searches the combined output for the canary and the status bytes, both unaffected
 ABSENT: agentio's rule-9 test (test_rule9_confirm_envelope, --text) is unchanged and passes, as the send requires
 Verification: ruff check + format clean on the five files; mypy --strict on agentio clean; pytest: agentio, adele CLI, undo, package-guard shim, conform violations — 235 passed; full unit suite before the pin updates: 3 failed (these three), 2511 passed
+SCOPE: out — tests/unit/test_agentio.py, tests/unit/test_package_guard_shim.py, tests/unit/test_undo.py, tools/agentio/agentio.py (4 of 7 changed files) (task has FLAGGED: yes)
+
+### T030: the client — `agent` on requests, `adele status [HOST]` with recent denials, help (FR-32, FR-33, FR-36, FR-37, FR-40); the journal reads `agent`
+**Started:** 2026-10-16T09:44:22+00:00 | **Completed:** 2026-10-16T09:48:01Z
+
+INHERITED: `GET /v1/denials` and its document (T026); agentio's line (T029) (confidence: high)
+FLAGGED: `adele status` asks for denials after a healthy answer, with the same 3 s bound as the health probe, and an Adele that cannot say (404 from a slice-0 Adele, a timeout) is reported "recent denials unknown (…)" — never "no denial" — and keeps exit 0, because reachability is the probe's verdict (conform C3/C4, R8) (confidence: high)
+FLAGGED: the agent's name travels as `agent` only when TIMELIKE_AGENT is valid (a new public `agentio.agent_name()`, the session event's own rule, so the event and the ledger agree); omitted otherwise, so a request is byte-identical to slice 0's when no agent is set (confidence: high)
+ASSUMED: HOST takes the CAPABILITY positional's slot (`adele status adele-standin:8481`); a second word or a HOST over 255 characters is a usage error (confidence: medium)
+ASSUMED: the journal labels a ledger row with its agent when the row names one and leaves it unlabelled otherwise, so `--agent A` now finds A's grant uses and reaps (009, changed_other_features) (confidence: high)
+ABSENT: README prose is T035's; only the generated reference changed here (`scripts/readme_reference.py --write`, `--check` current), because `adele --help` changed in this task
+ABSENT: the denial lines say "only the operator allows it" for every denial; under Item 26's answer a different source may need a different "allows" (none is built)
+Verification: ruff check + format, mypy --strict (agentio; adele and journal as scripts) clean; pytest journal, adele CLI, readme reference, agentio — pass (line above)

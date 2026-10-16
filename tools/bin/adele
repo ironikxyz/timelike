@@ -11,6 +11,10 @@ run it, and it is never offered where the agent's habit runs commands (`confirm`
 `mutating: false`: the grant is the confirmation (P4), so the agent's `--yes` would confirm nothing.
 Rule 8 still binds: slice 0 exposes no destructive request, so there is no `--dry-run` yet.
 
+Slice 1: Adele reaps what expires, in her own container, whatever the agent does; `adele status [HOST]`
+explains recent denials by host, read-only from her ledger; each request carries the agent's name
+(TIMELIKE_AGENT) beside its session, as attribution only.
+
 Design: .specswarm/features/004-adele-grants/ (spec, research R6-R8, contracts/adele-cli.md and
 adele-http.md).
 """
@@ -39,10 +43,12 @@ TOOL = agentio.Tool(
     target="adele",
     summary="ask Adele to perform a reaching action within the operator's grant; never see a credential",
     usage=[
-        "adele status                  # is Adele reachable from here; her build revision",
+        "adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)",
         "adele grants                  # the grants she applies: limits, spent, live",
         "adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]",
         "exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)",
+        "extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);",
+        "every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)",
     ],
     probe=("status",),
     grant_envelope=True,  # exit 4 is the grant envelope; not --yes-confirmed (discovery revision 10)
@@ -67,7 +73,7 @@ def configure(p: argparse.ArgumentParser) -> None:
     # Optional to argparse, required by main(): a required positional would make argparse refuse
     # --help and --agent-info before agentio handles them.
     p.add_argument("verb", nargs="?", choices=("status", "grants", "request"), metavar="VERB")
-    p.add_argument("capability", nargs="?", metavar="CAPABILITY")
+    p.add_argument("capability", nargs="?", metavar="CAPABILITY", help="request's capability; status: a HOST")
     p.add_argument("action", nargs="?", metavar="ACTION")
     p.add_argument("--name", metavar="NAME", help="the resource's name")
     p.add_argument("--ttl", metavar="D", help="its lifetime, e.g. 30m or 1h (default: the grant's ttl)")
@@ -139,15 +145,19 @@ def unreachable(reply: Reply, timeout: float) -> agentio.ToolError:
     )
 
 
-def status(ctx: agentio.Context) -> agentio.Result:
-    """Always a Result, never a ToolError, so the header is printed either way (conform C3/C4, R8)."""
+def status(ctx: agentio.Context, host: str | None = None) -> agentio.Result:
+    """Always a Result, never a ToolError, so the header is printed either way (conform C3/C4, R8). When
+    Adele answers, the verdict also says whether she denied anything recently, and each denial is
+    explained, newest first (004 slice 1, FR-36): read-only, from her ledger, through her."""
     reply = call("GET", "/v1/health", STATUS_TIMEOUT_S)
     if reply.status == 200:
         rev = str(reply.body.get("revision", "unknown"))
         grants = [str(g) for g in reply.body.get("grants", [])]
         verdict = f"Adele reachable at {base_url()} {VANTAGE} · revision {rev}"
-        data = {"reachable": True, "url": base_url(), "revision": rev, "grants": grants}
-        return agentio.Result("adele", "status", verdict, data=data)
+        data: dict[str, Any] = {"reachable": True, "url": base_url(), "revision": rev, "grants": grants}
+        said, lines, extra = denials(host)
+        data.update(extra)
+        return agentio.Result("adele", "status", f"{verdict} · {said}", lines=lines, data=data)
     if reply.status == 0:
         why = reply.reason
         verdict = f"unreachable: {base_url()} {VANTAGE} ({why}) — {UNBLOCK}"
@@ -156,6 +166,39 @@ def status(ctx: agentio.Context) -> agentio.Result:
         verdict = f"Adele at {base_url()} answered {VANTAGE} but not healthy ({why}) — {UNBLOCK}"
     data = {"reachable": reply.status != 0, "url": base_url(), "reason": why}
     return agentio.Result("adele", "status", verdict, data=data, exit=agentio.EXIT_FAILURE)
+
+
+def denials(host: str | None) -> tuple[str, list[str], dict[str, Any]]:
+    """(the verdict's words, one line per denial, the data) from /v1/denials. An Adele that cannot say is
+    named as such, never read as "no denial"."""
+    import urllib.parse
+
+    path = "/v1/denials" + (f"?host={urllib.parse.quote(host, safe='')}" if host else "")
+    reply = call("GET", path, STATUS_TIMEOUT_S)
+    where = f" of {host}" if host else ""
+    if reply.status != 200 or not isinstance(reply.body.get("denials"), list):
+        why = reply.reason or f"HTTP {reply.status}: {reply.body.get('error', 'no denials in the answer')}"
+        return f"recent denials{where} unknown ({why})", [], {"denials": None, "denials_unknown": why}
+    items = [d for d in reply.body["denials"] if isinstance(d, dict)]
+    hours, per_host = reply.body.get("window_hours", 24), reply.body.get("per_host", 20)
+    data = {"denials": items, "denial_window_hours": hours, "denial_host": host}
+    if not items:
+        return f"no denial{where} in the last {hours} h", [], data
+    s = "s" if len(items) != 1 else ""
+    said = f"{len(items)} denial{s}{where} in the last {hours} h (newest first, at most {per_host} per host)"
+    return said, [_denial_line(d) for d in items], data
+
+
+def _denial_line(d: dict[str, Any]) -> str:
+    raw = d.get("limit")
+    lim: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    host = d.get("host") or "(no host recorded)"
+    who = f"session {d.get('session')}" + (f", agent {d['agent']}" if d.get("agent") else "")
+    return (
+        f"#{d.get('ledger_id')} {d.get('at')} {host}: grant {d.get('grant')}, {lim.get('name')} allows"
+        f" {lim.get('allowed')}, needed {lim.get('needed')} — only the operator allows it: {d.get('extend')}"
+        f" ({who})"
+    )
 
 
 def grants(timeout: float) -> agentio.Result:
@@ -208,13 +251,17 @@ def build_request(args: argparse.Namespace) -> dict[str, Any]:
         raise agentio.UsageError("request needs --name", "name the resource, e.g. --name tl-1")
     if args.ttl is not None and not (_TTL_RE.match(args.ttl) and args.ttl):
         raise agentio.UsageError(f"--ttl {args.ttl!r} is not a duration like 30m or 1h", "use h and m")
-    return {
+    req: dict[str, Any] = {
         "session": agentio.session_id(),
         "grant": args.grant,
         "capability": args.capability,
         "action": args.action,
         "params": {"name": args.name, "ttl": args.ttl, "ports": list(args.port)},
     }
+    agent = agentio.agent_name()
+    if agent is not None:
+        req["agent"] = agent  # attribution beside the session (004 slice 1, FR-32); omitted when unset
+    return req
 
 
 def _performed(body: dict[str, Any]) -> dict[str, Any]:
@@ -279,7 +326,11 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if args.verb is None:
         raise agentio.UsageError("no verb given", "use one of: adele status, adele grants, adele request …")
     if args.verb == "status":
-        return status(ctx)
+        if args.action is not None:
+            raise agentio.UsageError("status takes at most one HOST", "e.g. adele status adele-standin:8481")
+        if args.capability is not None and not 0 < len(args.capability) <= 255:
+            raise agentio.UsageError("HOST is 1 to 255 characters", "e.g. adele status adele-standin:8481")
+        return status(ctx, args.capability)
     if args.verb == "grants":
         return grants(args.timeout)
     return request(args, ctx)

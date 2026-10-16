@@ -209,7 +209,8 @@ def ledger_entry(row: dict[str, Any], seq: int) -> Entry | None:
         start=at,
         end=at,
         session=session,
-        agent=None,
+        # The agent that asked, when Adele recorded one (004 slice 1, D17's finding); before that, none.
+        agent=agent if isinstance(agent := row.get("agent"), str) and agent else None,
         ref={"ledger": row.get("id"), "outcome": outcome, "grant": row.get("grant")},
         seq=seq,
     )

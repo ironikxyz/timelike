@@ -1201,6 +1201,13 @@ def _event_ref(tool: Tool, r: Result) -> dict[str, Any] | None:
 _AGENT_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
+def agent_name() -> str | None:
+    """TIMELIKE_AGENT when it is a valid name, else None: the attribution the session event carries, for a
+    client that passes it on (Adele's requests, 004 slice 1). Self-declared, never authority."""
+    agent = os.environ.get("TIMELIKE_AGENT", "")
+    return agent if _AGENT_RE.match(agent) else None
+
+
 def _write_event(
     root: Path,
     session: str,
