@@ -439,3 +439,14 @@ ASSUMED: the stand-in's record survives its restart (named volume `standin-state
 ASSUMED: "the restarted Adele did it" is read from her log since the restart (`docker logs --since`), naming the box and its ledger row (confidence: medium)
 ABSENT: not run in the image (no Docker); teardown_file starts both containers whatever happened
 Verification: shellcheck -x clean; lane.conf line added in name order
+SCOPE: in (2 changed files)
+
+### T033: e2e `adele-status-explains-recent-denials-by-host-and-exit-4-text-line.bats` (status by host; Item 14 (b)'s line); SC-3's envelope check and rule 13
+**Started:** 2026-10-16T09:55:48+00:00 | **Completed:** 2026-10-16T09:55:48Z
+
+INHERITED: status (T028, T030), the line (T029) (confidence: high)
+FLAGGED: SC-3's `envelope_ok` (T029) accepts rule 13's short form (`see "extend" on stdout`) as well as the full command: the budget cells' lines are 217 characters, past the 200 COLUMNS default, so agentio correctly points at the envelope there; the threshold itself is pinned by agentio's units (confidence: high)
+ASSUMED: cells find their own denials by ledger id and never count the host's total, because neighbours' refusals reach the same host (confidence: high)
+ABSENT: SC-8's own message and any denial source beyond Adele's grant refusals wait on FOR-MENTOR Item 26 (T034); this file does not cite SC-8
+ABSENT: not run in the image (no Docker); the host integration printed the exact lines these cells match
+Verification: shellcheck -x clean (this file and SC-3's)

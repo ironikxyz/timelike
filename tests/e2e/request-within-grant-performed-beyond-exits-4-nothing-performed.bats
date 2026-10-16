@@ -100,8 +100,13 @@ print(env.get('extend', ''))
 " < <(printf '%s\x1e%s\x1e%s' "$(cat "$SCHEMA_PY")" "$(cat "$GRANT_SCHEMA")" "$envelope")
   [[ "$status" -eq 0 && "${lines[0]}" == ok ]] || { echo "envelope: ${output}" >&2; echo "stdout was: ${envelope}" >&2; return 1; }
   EXTEND="${lines[1]}"
-  if [[ "${REQUEST_MODE:---text}" != --json && "${err[0]}" != *"only the operator can extend it: ${EXTEND}; ledger #"* ]]; then
-    echo "the stderr line does not carry the envelope's extend command (${EXTEND}): ${err[0]}" >&2
+  # Rule 13: a line past COLUMNS (200 by default, docker exec sets none) points at the envelope instead of
+  # cutting the command, so a long refusal (the budget cells') says `see "extend" on stdout`. agentio's units
+  # pin where the threshold falls; here either form must name the operator, and the full one this envelope's
+  # own command.
+  if [[ "${REQUEST_MODE:---text}" != --json && "${err[0]}" != *"only the operator can extend it: ${EXTEND}; ledger #"* &&
+    "${err[0]}" != *'only the operator can extend it: see "extend" on stdout; ledger #'* ]]; then
+    echo "the stderr line carries neither the envelope's extend command (${EXTEND}) nor a pointer to it: ${err[0]}" >&2
     return 1
   fi
 }
