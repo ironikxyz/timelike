@@ -376,3 +376,16 @@ ASSUMED: a given-up row (5 failed passes) is left by the serving reaper and reac
 ABSENT: no metric or alert for given-up rows beyond the ledger row and the log line; `adeled status` (T028) is where the operator sees it
 ABSENT: reaps are sequential within a pass; with a 10 s upstream bound and 3 attempts, one dead box can delay the next by ~33 s per pass, which the bound on passes keeps finite
 Verification: `go test -race -count=3 -cover ./internal/reaper` ok, 95.7%; go vet, gofmt
+SCOPE: in (3 changed files)
+
+### T028: adeled — the reaper in serve, `adeled reap`, `adeled status [HOST]`, the ledger's reap rows, help (FR-24, FR-28, FR-31, FR-36, FR-40)
+**Started:** 2026-10-16T09:34:29+00:00 | **Completed:** 2026-10-16T09:37:21Z
+
+INHERITED: the reaper (T027) and `broker.Denials` (T026) (confidence: high)
+FLAGGED: `adeled reap` exits 1 when any reap failed, 0 otherwise, including when nothing was due — chose a failing exit for a failed reap so an operator's script sees it; the outcome lines say which (confidence: high)
+ASSUMED: `adeled status` reads the ledger directly (no canary, no stand-in), so it works while the stand-in is down; it prints the binary's own revision (P003), `unstamped` for an unstamped build rather than refusing (confidence: high)
+ASSUMED: the reaper writes its lines to Adele's stderr, so `docker logs timelike-adele` shows each reap beside the ledger (confidence: high)
+ASSUMED: ADELE_REAP_INTERVAL accepts 100ms to 1h and ADELE_REAP_PASSES 1 to 100; anything else stops serve at start with the variable named (exit 2), like a malformed grant (confidence: medium — bounds chosen to refuse typos, not tuned)
+ABSENT: compose sets neither variable; the e2e lane runs on the defaults (5 s, 5 passes)
+ABSENT: `status` lists given-up rows but not every due row; the due count is in the verdict, and `adeled ledger` has the rest
+Verification: `go test -race -cover ./...`: all packages ok; adeled 92.9%; staticcheck (host build) see the line above; go vet, gofmt

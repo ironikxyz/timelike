@@ -233,8 +233,10 @@ func TestLedgerJSON(t *testing.T) {
 	if len(rows) != 4 {
 		t.Fatalf("%d rows", len(rows))
 	}
-	keys := []string{"action", "allowed", "at", "capability", "cost_cents", "expires_at", "grant", "id",
-		"limit_name", "needed", "outcome", "resource", "session", "undo"}
+	// Slice 1 (schema 2) adds agent, attempts, cause, extend, host and ref, null where absent (FR-31).
+	keys := []string{"action", "agent", "allowed", "at", "attempts", "capability", "cause", "cost_cents",
+		"expires_at", "extend", "grant", "host", "id", "limit_name", "needed", "outcome", "ref", "resource",
+		"session", "undo"}
 	for i, r := range rows {
 		var got []string
 		for k := range r {
