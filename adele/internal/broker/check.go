@@ -78,8 +78,9 @@ func checkStatic(req Request, g grants.Grant, ttl time.Duration) *refusal {
 func (b *Broker) refuse(req Request, grant string, r refusal) Outcome {
 	extend := ExtendCommand(b.container(), grant, r.limit, r.extendTo)
 	id, err := b.Ledger.Refused(ledger.Row{
-		At: b.now(), Grant: grant, Session: req.Session, Capability: req.Capability, Action: req.Action,
-		Resource: req.Params.Name, CostCents: r.cost, LimitName: r.limit, Allowed: r.allowed, Needed: r.needed,
+		At: b.now(), Grant: grant, Session: req.Session, Agent: req.Agent, Capability: req.Capability,
+		Action: req.Action, Resource: req.Params.Name, CostCents: r.cost, LimitName: r.limit,
+		Allowed: r.allowed, Needed: r.needed, Host: b.host(), Extend: extend,
 	})
 	if err != nil {
 		return ledgerFailed(err)
@@ -87,7 +88,7 @@ func (b *Broker) refuse(req Request, grant string, r refusal) Outcome {
 	return Outcome{http.StatusForbidden, map[string]any{
 		"outcome": ledger.OutcomeRefused, "grant": grant,
 		"limit":  map[string]string{"name": r.limit, "allowed": r.allowed, "needed": r.needed},
-		"extend": extend, "performed": false, "ledger_id": id,
+		"extend": extend, "performed": false, "ledger_id": id, "host": b.host(),
 	}}
 }
 
@@ -108,8 +109,8 @@ func (b *Broker) perform(ctx context.Context, req Request, grant string, ttl tim
 	cost := made.CostCents
 	undo := undoFor(req)
 	id, err := b.Ledger.Performed(ledger.Row{
-		At: b.now(), Grant: grant, Session: req.Session, Capability: req.Capability, Action: req.Action,
-		Resource: made.Name, CostCents: &cost, ExpiresAt: &expires, Undo: undo,
+		At: b.now(), Grant: grant, Session: req.Session, Agent: req.Agent, Capability: req.Capability,
+		Action: req.Action, Resource: made.Name, CostCents: &cost, ExpiresAt: &expires, Undo: undo,
 	})
 	if err != nil {
 		// Performed upstream but not recorded: say so plainly; the operator reconciles from the

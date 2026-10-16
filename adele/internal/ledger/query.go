@@ -7,7 +7,7 @@ import (
 )
 
 const rowColumns = `id, at, outcome, "grant", session, capability, action, resource,
-	cost_cents, expires_at, undo, limit_name, allowed, needed, ref, agent, cause, attempts, host`
+	cost_cents, expires_at, undo, limit_name, allowed, needed, ref, agent, cause, attempts, host, extend`
 
 const selectRows = `SELECT ` + rowColumns + ` FROM ledger ORDER BY id`
 
@@ -42,12 +42,12 @@ func scanRow(rows *sql.Rows) (Row, error) {
 		at                                  string
 		capability, action, resource, undo  sql.NullString
 		limitName, allowed, needed, expires sql.NullString
-		agent, cause, host                  sql.NullString
+		agent, cause, host, extend          sql.NullString
 		cost, ref, attempts                 sql.NullInt64
 	)
 	if err := rows.Scan(&r.ID, &at, &r.Outcome, &r.Grant, &r.Session, &capability, &action,
 		&resource, &cost, &expires, &undo, &limitName, &allowed, &needed,
-		&ref, &agent, &cause, &attempts, &host); err != nil {
+		&ref, &agent, &cause, &attempts, &host, &extend); err != nil {
 		return Row{}, fmt.Errorf("ledger: scan row: %w", err)
 	}
 	var err error
@@ -75,7 +75,7 @@ func scanRow(rows *sql.Rows) (Row, error) {
 		v := int(attempts.Int64)
 		r.Attempts = &v
 	}
-	r.Agent, r.Cause, r.Host = agent.String, cause.String, host.String
+	r.Agent, r.Cause, r.Host, r.Extend = agent.String, cause.String, host.String, extend.String
 	return r, nil
 }
 
@@ -198,7 +198,7 @@ func (l *Ledger) Denials(since time.Time, host string, perHost int) ([]Row, erro
 func prefixed(alias string) string {
 	cols := []string{"id", "at", "outcome", `"grant"`, "session", "capability", "action", "resource",
 		"cost_cents", "expires_at", "undo", "limit_name", "allowed", "needed", "ref", "agent", "cause",
-		"attempts", "host"}
+		"attempts", "host", "extend"}
 	s := ""
 	for i, c := range cols {
 		if i > 0 {

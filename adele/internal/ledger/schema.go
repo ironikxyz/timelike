@@ -34,7 +34,8 @@ CREATE TABLE %s (
 	agent       TEXT,
 	cause       TEXT,
 	attempts    INTEGER,
-	host        TEXT
+	host        TEXT,
+	extend      TEXT
 );`
 
 const schemaRest = `

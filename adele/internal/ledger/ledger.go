@@ -64,12 +64,13 @@ type Row struct {
 	Needed     string
 	// Slice 1 (schema 2). Ref is the performed row a reap concerns; Agent is self-declared attribution,
 	// like Session (D-14); Cause and Attempts describe a reap; Host is where a refused request would have
-	// reached (FR-35).
+	// reached (FR-35); Extend is the operator's command a refusal named.
 	Ref      *int64
 	Agent    string
 	Cause    string
 	Attempts *int
 	Host     string
+	Extend   string // a refusal's operator command, as the refusal printed it (FR-36)
 }
 
 // Extension is one operator extension: the overlay on a grant's limit.
@@ -111,8 +112,8 @@ func Open(path string) (*Ledger, error) {
 func (l *Ledger) Close() error { return l.db.Close() }
 
 const insertRow = `INSERT INTO ledger (at, outcome, "grant", session, capability, action,
-	resource, cost_cents, expires_at, undo, limit_name, allowed, needed, ref, agent, cause, attempts, host)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	resource, cost_cents, expires_at, undo, limit_name, allowed, needed, ref, agent, cause, attempts, host, extend)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Performed appends a performed row. Grant, Session, Capability, Action,
 // Resource, CostCents, ExpiresAt and Undo (valid JSON) are required; At
@@ -132,7 +133,7 @@ func (l *Ledger) Performed(r Row) (int64, error) {
 		return 0, fmt.Errorf("%w: undo is not valid JSON", ErrInvalid)
 	}
 	r.Outcome = OutcomePerformed
-	r.Ref, r.Cause, r.Attempts, r.Host = nil, "", nil, ""
+	r.Ref, r.Cause, r.Attempts, r.Host, r.Extend = nil, "", nil, "", ""
 	return l.insert(l.db, r)
 }
 
@@ -273,7 +274,7 @@ func (l *Ledger) insert(e execer, r Row) (int64, error) {
 	res, err := e.Exec(insertRow, formatTime(r.At), r.Outcome, r.Grant, r.Session,
 		nullable(r.Capability), nullable(r.Action), nullable(r.Resource), cost, expires,
 		nullable(r.Undo), nullable(r.LimitName), nullable(r.Allowed), nullable(r.Needed),
-		ref, nullable(r.Agent), nullable(r.Cause), attempts, nullable(r.Host))
+		ref, nullable(r.Agent), nullable(r.Cause), attempts, nullable(r.Host), nullable(r.Extend))
 	if err != nil {
 		return 0, fmt.Errorf("ledger: append %s row: %w", r.Outcome, err)
 	}

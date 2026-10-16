@@ -351,3 +351,15 @@ ASSUMED: `drop` hijacks and closes the connection, which Adele's client sees as 
 ABSENT: no hang fault: a hang would be bounded by Adele's 10 s upstream timeout, which the transport-error path already exercises, and it would cost 10 s per attempt in every lane
 ABSENT: faults apply to delete only; quote and create are slice 0's, already tested against a missing canary
 Verification: go vet, gofmt; standin 94.5%, cmd/adele-standin 92.1%
+SCOPE: in (5 changed files)
+
+### T026: the broker — agent and host on rows, the stand-in client's List and Delete, GET /v1/denials
+**Started:** 2026-10-16T09:29:17+00:00 | **Completed:** 2026-10-16T09:31:12Z
+
+INHERITED: ledger schema 2 and Row's new fields — from T024 (confidence: high)
+FLAGGED: added an `extend` column to schema 2 (T024's, not yet shipped) so a refusal's operator command is recorded as the refusal printed it, rather than recomputed by `status` — a budget refusal's extend value depends on what was spent at that moment, so it cannot be recomputed later (confidence: high)
+ASSUMED: `host` is the stand-in client's base-URL host:port (`adele-standin:8481` in compose), from Adele's own configuration (P002: `adeled` resolves it), and the 403 body carries it as `host`, which the grant envelope does not copy (confidence: high, for the recording; the meaning is Item 26)
+ASSUMED: Denials is computed in one exported function so `adeled status` (T028) prints the same document as the endpoint (confidence: high)
+ABSENT: the agent's name is not authenticated (D-14), and an absent or empty one records no agent, as before slice 1
+ABSENT: no denial is recorded for "no grant allows" or a bad request: those never reached a grant and are usage errors (slice 0)
+Verification: go vet, gofmt; broker coverage 99.2%; the rest of the module passes
