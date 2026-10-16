@@ -215,7 +215,10 @@ def test_status_reachable_json(py: str, scratch: Path, adele: FakeAdele) -> None
     assert doc["revision"] == REVISION
     assert doc["grants"] == ["demo"]
     assert doc["url"] == adele.url
-    assert [(s.method, s.path) for s in adele.received()] == [("GET", "/v1/health")]
+    # slice 1: then the recent denials, read-only (FR-37); the fake has none, so they are unknown, not none
+    assert [(s.method, s.path) for s in adele.received()] == [("GET", "/v1/health"), ("GET", "/v1/denials")]
+    assert doc["denials"] is None and "HTTP 404" in doc["denials_unknown"]
+    assert "denials unknown (HTTP 404" in doc["verdict"]
 
 
 def test_status_reachable_text(py: str, scratch: Path, adele: FakeAdele) -> None:
@@ -358,7 +361,13 @@ def test_refused_is_exit_4_with_the_grant_envelope_on_stdout(
     adele.answer("POST", "/v1/requests", 403, REFUSED)
     r = go(py, scratch, adele.url, mode, *CREATE, "--port", "22", "--grant", "demo")
     assert r.returncode == 4
-    assert r.stderr == ""
+    if mode == "--json":
+        assert r.stderr == ""  # with --json the envelope IS the structured error (plan, 2026-10-16)
+    else:  # rule 14's one line, naming whose command it is (Item 14 (b); 004 Cycle 3)
+        assert r.stderr == (
+            "error: beyond grant demo: ports allows 8080, needs 22; nothing was performed (code 4)"
+            f" — only the operator can extend it: {EXTEND}; ledger #7\n"
+        )
     env = json.loads(r.stdout)  # JSON in every mode, and nothing else on stdout (rule 9's convention)
     assert schema.errors(env, schema.load("grant-envelope.schema.json")) == []
     assert list(env)[:4] == ["tool", "target", "scope", "status"]  # rule 12, then the status
@@ -371,6 +380,19 @@ def test_refused_is_exit_4_with_the_grant_envelope_on_stdout(
     sent = adele.received()[-1].body
     assert env["request"] == sent  # the refused request, exactly as the client sent it
     assert "confirm" not in env  # the operator's command never sits where the agent's habit runs it
+
+
+def test_exit_4_stdout_is_byte_identical_in_text_and_json(py: str, scratch: Path, adele: FakeAdele) -> None:
+    """Item 14 (b), plan's ruling: the line is added on stderr only; what a caller acts on does not change."""
+    adele.answer("POST", "/v1/requests", 403, REFUSED)
+    text = go(py, scratch, adele.url, "--text", *CREATE, "--port", "22", "--grant", "demo")
+    adele.answer("POST", "/v1/requests", 403, REFUSED)
+    js = go(py, scratch, adele.url, "--json", *CREATE, "--port", "22", "--grant", "demo")
+    assert (text.returncode, js.returncode) == (4, 4)
+    assert text.stdout == js.stdout
+    assert len(text.stderr.splitlines()) == 1 and js.stderr == ""
+    assert "operator" in text.stderr and EXTEND in text.stderr
+    assert EXTEND not in json.loads(text.stdout).get("confirm", "")
 
 
 def test_the_envelope_passes_conform_c9_and_its_negative_case_fails(
@@ -610,3 +632,91 @@ def test_grants_error_shows_adeles_text(py: str, scratch: Path, adele: FakeAdele
     assert r.returncode == 1
     line = one_error_line(r)
     assert "the ledger failed: locked" in line and "retry" in line, line
+
+
+# ── slice 1: status explains recent denials by host; requests carry the agent's name ─────────────────
+
+DENIAL = {
+    "ledger_id": 46, "at": "2026-10-16T10:00:00Z", "host": "adele-standin:8481", "grant": "demo",
+    "limit": {"name": "ports", "allowed": "8080", "needed": "22"}, "extend": EXTEND, "extend_by": "operator",
+    "session": "s-1", "agent": "agent-b", "capability": "standin.box", "action": "create", "resource": "tl-9",
+}  # fmt: skip
+
+
+def denials_doc(items: list[dict[str, Any]], host: str = "") -> dict[str, Any]:
+    return {"window_hours": 24, "per_host": 20, "host": host, "count": len(items), "denials": items}
+
+
+def test_status_with_no_recent_denial_says_so(py: str, scratch: Path, adele: FakeAdele) -> None:
+    adele.answer("GET", "/v1/denials?host=adele-standin%3A8481", 200, denials_doc([], "adele-standin:8481"))
+    r = go(py, scratch, adele.url, "--json", "status", "adele-standin:8481")
+    assert r.returncode == 0, r.stderr
+    doc = doc_of(r)
+    assert doc["verdict"].endswith(" · no denial of adele-standin:8481 in 24 h · record: adeled ledger")
+    assert doc["record"].startswith("Adele's ledger")  # Item 26 Q2: where the record lives, whole
+    assert "docker exec timelike-adele adeled ledger" in doc["record"]
+    assert doc["denials"] == [] and doc["denial_host"] == "adele-standin:8481"
+
+
+def test_status_verdict_fits_rule_13_with_the_standins_host() -> None:
+    """The longest verdict the lane can print with the stand-in's host (a 40-character revision, 20 denials)
+    fits COLUMNS' default, so rule 13 cuts neither the count nor the record (Item 26 Q2)."""
+    verdict = (
+        f"verdict: Adele reachable at http://adele:8480 from the agent container · revision {'a' * 40}"
+        " · 20 denials of adele-standin:8481 in 24 h (≤20/host) · record: adeled ledger"
+    )
+    assert len(verdict) <= 200, len(verdict)
+
+
+def test_status_explains_each_denial_newest_first(py: str, scratch: Path, adele: FakeAdele) -> None:
+    second = {**DENIAL, "ledger_id": 45, "at": "2026-10-16T09:00:00Z", "agent": ""}
+    adele.answer("GET", "/v1/denials", 200, denials_doc([DENIAL, second]))
+    r = go(py, scratch, adele.url, "--text", "status")
+    assert r.returncode == 0, r.stderr
+    out = r.stdout.splitlines()
+    assert out[1].endswith(" · 2 denials in 24 h (≤20/host) · record: adeled ledger"), out[1]
+    assert out[2] == (
+        "#46 2026-10-16T10:00:00Z adele-standin:8481: grant demo, ports allows 8080, needed 22"
+        f" · operator: {EXTEND} (session s-1, agent agent-b)"
+    )
+    assert out[3].startswith("#45 ") and out[3].endswith("(session s-1)")
+    js = doc_of(go(py, scratch, adele.url, "--json", "status"))
+    assert [d["ledger_id"] for d in js["denials"]] == [46, 45]
+
+
+def test_a_lanes_denial_line_fits_rule_13s_200_columns(py: str, scratch: Path, adele: FakeAdele) -> None:
+    """SC-8's e2e denial, with a five-digit ledger id: whole within 200 columns. As first written it was 207,
+    and rule 13 cut its last 7 bytes in the Docker lane (feedback 12-20261016-174206, B)."""
+    lane = {**DENIAL, "ledger_id": 99999, "grant": "deny", "session": "sc8-status", "agent": "agent-s",
+            "limit": {"name": "ports", "allowed": "8080", "needed": "23"},
+            "extend": "docker exec timelike-adele adeled extend deny ports 23"}  # fmt: skip
+    adele.answer("GET", "/v1/denials", 200, denials_doc([lane]))
+    out = go(py, scratch, adele.url, "--text", "status").stdout.splitlines()
+    assert out[2].endswith(" · operator: docker exec timelike-adele adeled extend deny ports 23"
+                           " (session sc8-status, agent agent-s)"), out[2]  # fmt: skip
+    assert len(out[2]) <= 200, len(out[2])
+
+
+def test_status_host_must_be_one_short_word(py: str, scratch: Path, adele: FakeAdele) -> None:
+    assert go(py, scratch, adele.url, "--json", "status", "a", "b").returncode == 2
+    assert go(py, scratch, adele.url, "--json", "status", "h" * 256).returncode == 2
+
+
+def test_status_denials_unanswered_is_unknown_not_none(py: str, scratch: Path, adele: FakeAdele) -> None:
+    adele.answer("GET", "/v1/denials", 200, denials_doc([]), delay=5)  # past STATUS_TIMEOUT_S
+    r = go(py, scratch, adele.url, "--json", "status")
+    doc = doc_of(r)
+    assert r.returncode == 0 and doc["denials"] is None
+    assert "denials unknown (no answer within 3 s)" in doc["verdict"]
+
+
+@pytest.mark.parametrize(("agent", "sent"), [("agent-a", "agent-a"), ("bad agent!", None), ("", None)])
+def test_request_carries_the_agents_name_when_valid(
+    py: str, scratch: Path, adele: FakeAdele, agent: str, sent: str | None
+) -> None:
+    env = base_env(scratch, session=SESSION, **{URL_ENV: adele.url, "TIMELIKE_AGENT": agent})
+    r = run([py, str(ADELE), "--json", *CREATE], env, timeout=20)
+    assert r.returncode == 0, r.stderr
+    body = adele.received()[-1].body
+    assert body.get("agent") == sent
+    assert ("agent" in body) is (sent is not None)

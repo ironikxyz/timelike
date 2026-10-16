@@ -240,3 +240,90 @@ coverage per language, Go included (quality-standards). Units come before or bes
 - Then US2, US4 and the scan gate.
 - US3's envelope lands when Item 13 is answered. Until then, SC-3's envelope cells report `unconfirmed`,
   and that is said in the cycle report.
+
+---
+
+# Cycle 3 — slice 1 (send `bridge/sends/12-rev2-20261016-091249.md`)
+
+<!-- Tech Stack Validation: PASSED -->
+<!-- Validated against: .specswarm/tech-stack.md (lib/tech-stack-parser.sh; no Version line) -->
+<!-- No prohibited technologies found -->
+<!-- 0 unapproved technologies require runtime validation -->
+
+## Phase 9: Foundational (Go)
+- [X] T024 `adele/internal/ledger`: schema 2 (outcomes `reaped`, `gone`, `reap-failed`; `ref`, `agent`,
+  `cause`, `attempts`, `host`), the v1→v2 rebuild in one transaction, `Reap` (writes only while the row is still
+  unreaped), `Due`, `Failures`, `Denials`; `Live` excludes reaped; units (a v1 file migrated with its ids).
+- [X] T025 [P] `adele/internal/standin` and `cmd/adele-standin`: faults (`error`, `drop`, `clear`) per box name
+  in the state dir, `delete NAME`; units.
+- [X] T026 `adele/internal/broker`: the stand-in client's `List` and `Delete`; `agent` and `host` on requests and
+  rows; `GET /v1/denials`; units.
+
+## Phase 10: US5 — the reaper (SC-7)
+- [X] T027 `adele/internal/reaper`: one pass (same-box check, 3 attempts, read-back outcome), waits, give-up;
+  units over a fake upstream (reaped, gone, error, drop, still present, name reused, give-up, restart).
+- [X] T028 `adele/cmd/adeled`: the reaper in `serve` (a pass at start, then every interval), `adeled reap
+  [--json]`, `adeled status [HOST]`, the ledger's new rows and keys, help text (FR-40); units.
+
+## Phase 11: the agent side
+- [X] T029 agentio: rule 14's stderr line for exit 4 in text mode (FR-38) and the declaration guard (FR-41);
+  001's contract sentence (FR-39); units; grep the e2e tree for exit-4 stderr pinned under `--text`.
+- [X] T030 [P] `tools/bin/adele`: `agent` in the request, `status [HOST]` with denials, help (FR-40);
+  `tools/bin/journal` reads `agent` (FR-33); units.
+
+## Phase 12: e2e (one file per criterion)
+- [X] T031 `tests/e2e/adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats`
+  (SC-7, spread: no budget asserted).
+- [X] T032 `tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats` (SC-7's restart and
+  unreachable cases; `serial` in lane.conf: it stops Adele and the stand-in).
+- [X] T033 e2e for exit 4's human line (Item 14 (b)) and `status` by host.
+- [X] T034 ~~SC-8's denial message, **after FOR-MENTOR Item 26**.~~ Superseded by revision 16 (Cycle 4, below): the denial message is slice 2's.
+
+## Phase 13: Polish
+- [X] T035 README (Adele's section; the reference regenerated; Status/What only if SC-7 and SC-8 are met).
+- [X] T036 The host lane (Go, pytest, ruff, mypy, shellcheck; `make test-host` serial and `-n 8`), the cycle
+  report § Cycle 3, reboot.md.
+
+## Dependencies (Cycle 3)
+T024 → T026 → T027 → T028 → T031, T032. T025 before T027's e2e use. T029 → T030 → T033. T034 waits on Item 26.
+T035, T036 last.
+
+## Parallel execution
+T025 is disjoint from T024/T026. Built in this instance; no delegation planned (the files are interlocked).
+
+---
+
+# Cycle 4 — re-send at prompt revision 16 (send `bridge/sends/12-rev16-20261016-102708.md`); deltas only
+
+- [X] T037 `spec.md` § Slice 1 corrected in place for revision 16 (declared); `audited_against` gains 16;
+  `audit-log.md`.
+- [X] T038 SC-8's e2e file renamed after the new criterion:
+  `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats`; the
+  exit-4 line's cell to `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`;
+  `Makefile` SHELLCHECK_FILES.
+- [X] T039 The governance audit 15 → 16: `.specswarm/constitution.md`, `.specswarm/tech-stack.md`,
+  `.specswarm/quality-standards.md` (one commit).
+- [X] T040 FOR-MENTOR.md: Item 26 closed.
+
+T035 (README) and T036 (host lane, cycle report § Cycle 3 short and § Cycle 4 full, reboot.md) are done under
+this send.
+
+---
+
+# Cycle 4, addendum 1 — the mentor's Docker lane on `df52dbf` (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`)
+
+- [X] T041 (A) The cells' own temp files are removed with `command rm`, past the agent shell's guarded `rm`
+  (005's trash notice joined their captured stderr): `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`,
+  `tests/e2e/request-within-grant-performed-beyond-exits-4-nothing-performed.bats`,
+  `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats`.
+- [X] T042 (B) The agent's denial line within rule 13's 200 columns: `tools/bin/adele` (`· operator:`), the unit
+  pin in `tests/unit/test_adele_cli.py`, the SC-8 cell's assertion.
+- [X] T043 (C) The grant-file cell counts the lane's grants from the file:
+  `tests/e2e/adele-rejects-malformed-grant-with-line-at-fault.bats`.
+- [X] T044 (D) The conformance file `serial` in `tests/e2e/lane.conf`; `wait_reap` in `tests/e2e/helpers.bash` runs
+  pyq only once a reap row is there.
+- [X] T045 (E) Plumbing bounds in `adele/cmd/adele-standin/main_test.go` and the stand-in's `delete` command
+  (`adele/cmd/adele-standin/main.go`); the reaper holds the broker's lock for its ledger write only
+  (`adele/internal/reaper/reaper.go`, a unit in `adele/internal/reaper/reaper_test.go`).
+- [X] T046 (F) Not this cycle's: reported with its cause; no change.
+- [X] T047 The host lane, the § Cycle 4 addendum in `cycle-report.md`, reboot.md.

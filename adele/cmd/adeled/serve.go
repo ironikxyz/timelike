@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
 	"timelike/adele/internal/broker"
 	"timelike/adele/internal/grants"
 	"timelike/adele/internal/ledger"
+	"timelike/adele/internal/reaper"
 	"timelike/adele/internal/standin"
 )
 
@@ -47,6 +50,27 @@ func setup(e env, stderr io.Writer) (*broker.Broker, *ledger.Ledger, int) {
 	return b, led, exitOK
 }
 
+// newReaper is the reaper over this Adele's ledger and capability (spec FR-24, D-12). lock is the
+// broker's request lock in serve, nil in the operator's own process.
+func newReaper(e env, led *ledger.Ledger, up *broker.StandinClient, lock sync.Locker) (*reaper.Reaper, error) {
+	r := &reaper.Reaper{Ledger: led, Provider: up, Lock: lock, Container: e.get("ADELE_CONTAINER")}
+	if v := e.get("ADELE_REAP_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 100*time.Millisecond || d > time.Hour {
+			return nil, fmt.Errorf("ADELE_REAP_INTERVAL %q is not a duration between 100ms and 1h", v)
+		}
+		r.Interval = d
+	}
+	if v := e.get("ADELE_REAP_PASSES"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100 {
+			return nil, fmt.Errorf("ADELE_REAP_PASSES %q is not a whole number from 1 to 100", v)
+		}
+		r.Passes = n
+	}
+	return r, nil
+}
+
 // serve runs until SIGTERM or SIGINT. ready, when non-nil, receives the bound address (tests).
 func serve(e env, stderr io.Writer, ready chan<- string) int {
 	b, led, code := setup(e, stderr)
@@ -54,6 +78,11 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		return code
 	}
 	defer led.Close()
+	reap, err := newReaper(e, led, b.Upstream.(*broker.StandinClient), b.Locker())
+	if err != nil {
+		fmt.Fprintf(stderr, "adeled: %v\n", err)
+		return exitUsage
+	}
 	ln, err := net.Listen("tcp", e.get("ADELE_LISTEN"))
 	if err != nil {
 		fmt.Fprintf(stderr, "adeled: listen %s: %v\n", e.get("ADELE_LISTEN"), err)
@@ -63,8 +92,8 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		Handler: b.Handler(), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second,
 	}
-	fmt.Fprintf(stderr, "adeled: serving on %s · %d grants (%v) · revision %s\n",
-		ln.Addr(), len(b.Grants.Grants), b.Grants.Names(), revision)
+	fmt.Fprintf(stderr, "adeled: serving on %s · %d grants (%v) · revision %s · reaping every %s\n",
+		ln.Addr(), len(b.Grants.Grants), b.Grants.Names(), revision, reapEvery(reap))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	if ready != nil { // after NotifyContext: a signal sent on ready is handled, never fatal
@@ -72,6 +101,12 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
+	// The reaper runs beside the request interface for as long as Adele serves, whatever the agent does
+	// (spec FR-24). Its first pass is at once, so a restart reaps what expired while she was down.
+	reapCtx, stopReaper := context.WithCancel(ctx)
+	reaped := make(chan struct{})
+	go func() { reap.Run(reapCtx, stderr); close(reaped) }()
+	defer func() { stopReaper(); <-reaped }()
 	select {
 	case err := <-errc:
 		fmt.Fprintf(stderr, "adeled: %v\n", err)
@@ -106,4 +141,11 @@ func health(e env, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "healthy")
 	return exitOK
+}
+
+func reapEvery(r *reaper.Reaper) string {
+	if r.Interval > 0 {
+		return r.Interval.String()
+	}
+	return reaper.DefaultInterval.String()
 }

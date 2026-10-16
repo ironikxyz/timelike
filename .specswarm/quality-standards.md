@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -171,6 +171,11 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 > 30 days out); the gate gains the **release check**, which fails closed; npm and pip are named as components. Unchanged:
 > every threshold, the 90-day review for the rest of the baseline, the other gates. Revision 15 is appended to
 > `governance_audited_against`.
+>
+> **Audited against discovery revision 16** (2026-10-16), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 16, header "> Discovery: plan/.discover/discovery.md (revision 16)", written 2026-10-16T10:26:02Z), § "What Changed In Those Revisions" (relied on), and `../bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md` § Resolution.
+> **No change needed:** revision 16 moved one feature's criteria (prompt 12's slice-1 denial criterion struck and
+> split), not a principle, constraint or stack choice. Checked: every gate and threshold, the output-contract (H2) gate's exit-4 envelopes, the Refusals (P4) gate and the supply-chain baseline, against the principles and constraints (unchanged). Revision 16 is appended to
+> `governance_audited_against`: a no-change audit is a recorded result.
 
 # Quality Standards - Timelike
 

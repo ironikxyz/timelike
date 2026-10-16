@@ -189,7 +189,7 @@ def test_a_refused_install_is_the_envelope_and_the_installer_never_runs(
 
 def test_on_a_terminal_a_refusal_is_still_the_envelope(lab: Lab) -> None:
     """The guard's output is captured, so the shim passes the caller's own choice (a terminal: --text); the
-    refusal is the JSON envelope in every mode all the same (rule 9), exit 4."""
+    refusal is the JSON envelope in every mode all the same (rule 9), exit 4, with rule 14's line first."""
     script = lab.root / "on_a_terminal.py"
     script.write_text(
         "import os, pty, sys\n"
@@ -214,7 +214,12 @@ def test_on_a_terminal_a_refusal_is_still_the_envelope(lab: Lab) -> None:
         timeout=120, stdin=subprocess.DEVNULL,
     )  # fmt: skip
     assert r.returncode == 4, said(r)
-    env = json.loads(r.stdout.replace("\r\n", "\n"))
+    # On a terminal the guard's stderr reaches it directly and its captured stdout is printed after it
+    # exits, so rule 14's one line comes first (Item 14 (b), plan's ruling; 004 Cycle 3), then the envelope.
+    first, _, rest = r.stdout.replace("\r\n", "\n").partition("\n")
+    assert first.startswith("error: confirmation required: "), first
+    assert "(code 4) — to proceed, run: " in first, first
+    env = json.loads(rest)
     assert env["status"] == "confirmation_required" and "decoy" not in r.stdout
     (ev,) = lab.events()
     assert ev["args"][:2] == ["--gate", "--text"]

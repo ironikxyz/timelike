@@ -24,9 +24,13 @@ const DefaultContainer = "timelike-adele"
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 var sessionRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
+// agentRe is agentio's rule for TIMELIKE_AGENT; the agent's name is optional (spec FR-32).
+var agentRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
 // Request is what the agent's client sends (data-model § Request).
 type Request struct {
 	Session    string `json:"session"`
+	Agent      string `json:"agent,omitempty"` // self-declared attribution, like the session (D-14)
 	Grant      string `json:"grant"`
 	Capability string `json:"capability"`
 	Action     string `json:"action"`
@@ -44,6 +48,12 @@ type Params struct {
 type Upstream interface {
 	Quote(ctx context.Context, ttl time.Duration) (int64, error)
 	Create(ctx context.Context, name string, ttl time.Duration, ports []int) (Created, error)
+}
+
+// hosted is an Upstream that says where it reaches, so a refusal records the host it was kept from
+// (spec FR-35). An Upstream without it records no host.
+type hosted interface {
+	Host() string
 }
 
 // Created is the upstream's account of a resource it made.
@@ -106,6 +116,9 @@ func validate(req Request) (Outcome, bool) {
 	case !sessionRe.MatchString(req.Session):
 		return fail(http.StatusBadRequest, fmt.Sprintf("bad session id %q", req.Session),
 			"TIMELIKE_SESSION must match ^[A-Za-z0-9._-]{1,64}$", nil), true
+	case req.Agent != "" && !agentRe.MatchString(req.Agent):
+		return fail(http.StatusBadRequest, fmt.Sprintf("bad agent name %q", req.Agent),
+			"TIMELIKE_AGENT must match ^[A-Za-z0-9._-]{1,64}$, or be unset", nil), true
 	case !grants.KnownCapabilities[req.Capability]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("Adele knows no capability %q", req.Capability),
 			"slice 0 knows one: "+grants.CapStandinBox, nil), true
@@ -185,6 +198,14 @@ func (b *Broker) container() string {
 	return b.Container
 }
 
+// host is where this Adele's capability reaches, from her own configuration, or "".
+func (b *Broker) host() string {
+	if h, ok := b.Upstream.(hosted); ok {
+		return h.Host()
+	}
+	return ""
+}
+
 func (b *Broker) now() time.Time {
 	if b.Now == nil {
 		return time.Now().UTC()
@@ -212,3 +233,7 @@ func upstreamFailed(err error) Outcome {
 		"error": "stand-in failed: " + strings.TrimPrefix(err.Error(), errUpstream.Error()+": "), "performed": false,
 	}}
 }
+
+// Locker is the broker's request lock, so the reaper deletes nothing while a request is being checked and
+// performed: a new box may reuse an expired box's name, and the two must not interleave (spec FR-26).
+func (b *Broker) Locker() sync.Locker { return &b.mu }

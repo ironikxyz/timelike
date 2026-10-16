@@ -1,9 +1,23 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 ---
 
 <!--
 SYNC IMPACT REPORT
+- Version change: none (1.4.3 stands; a no-change audit amends nothing)
+- Audit against discovery revision 16, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern for revision 16, header "> Discovery: plan/.discover/discovery.md (revision 16)"),
+  § "What Changed In Those Revisions" (relied on: discovery moved only in its frontmatter and Revision Log;
+  principles, constraints and stack.md unchanged; prompt 12 the only prompt changed), and
+  ../bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md § Resolution (prompt 12's slice-1
+  denial criterion struck and split; a feature's criteria, which reach code/ through the 12 slice 1 re-send).
+  Revision 16 appended to governance_audited_against: a no-change audit is a recorded result
+- WHY principle statements P1–P7 and tensions T1–T4: checked, unchanged. HOW H1–H9: checked, unchanged (H2's
+  exit-4 envelopes and H1's privilege boundary hold as written: the status command is read-only through Adele)
+- Dependent artifacts: ✅ tech-stack.md, ✅ quality-standards.md (each audited, no change). In-flight:
+  004-adele-grants (12 s1), § Slice 1 corrected in place for prompt revision 16 (its own audit-log.md)
+- Deferred TODOs: none
+
 - Version change: 1.4.2 → 1.4.3 (PATCH: H9's "fix available" gains revision 15's bundled-component reading; a
   clarification)
 - Audit against discovery revision 15, amended. Source: ../bridge/governance-context.md (/mentor:regovern for

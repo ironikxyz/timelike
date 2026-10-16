@@ -748,6 +748,23 @@ def test_ledger_with_all_sessions_shows_extensions_as_operator(lab: Lab) -> None
     assert grants[5]["session"] == "someone-else"
 
 
+def test_ledger_rows_carry_the_agent_adele_recorded(lab: Lab) -> None:
+    """004 slice 1 (D17's finding): a schema-2 row names its agent, so `--agent` finds its grant uses and
+    the label shows it; a row with none (slice 0, or no TIMELIKE_AGENT) stays unlabelled, as before."""
+    _, rows = ledger_fixture(lab)
+    rows[0]["agent"] = "agent-a"
+    rows[1]["agent"] = None
+    reap = {**ledger_row(7, 0, "reaped", "work"), "agent": "agent-a", "action": "delete", "ref": 3}
+    rows.append({**reap, "at": rows[1]["at"]})  # a reap row (schema 2), at the refusal's time
+    d = ok(journal(lab, "--json", "--all", "--all-sessions", "--ledger", "-", stdin=ledger_json(rows)))
+    grants = {e["ref"]["ledger"]: e for e in by_kind(d, "grant")}
+    assert grants[3]["agent"] == "agent-a" and grants[4]["agent"] is None and grants[7]["agent"] == "agent-a"
+    assert grants[7]["exit"] == "reaped"
+    mine = ok(journal(lab, "--json", "--all", "--all-sessions", "--agent", "agent-a", "--ledger", "-",
+                      stdin=ledger_json(rows)))  # fmt: skip
+    assert sorted(e["ref"]["ledger"] for e in by_kind(mine, "grant")) == [3, 7]
+
+
 def test_stdin_is_not_read_without_ledger_dash(lab: Lab) -> None:
     made, rows = ledger_fixture(lab)
     d = ok(journal(lab, "--json", "--all", "--session", "work", stdin=ledger_json(rows)))

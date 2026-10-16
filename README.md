@@ -38,7 +38,7 @@ Whether it works is a measured claim: see Status.
 | 09 | `services` | Start long-running processes, return when ready or dead, and stop the whole process tree | slice 1 of 1–2 |
 | 10 | `symbols` | Outlines, definitions, callers and dependents: exact for Python, text-based (and saying so) for others | slice 1 of 1–2 |
 | 11 | `verify` | Failures only, and only for what a change affects: tests, lint and type-check | slice 1 of 1–2 |
-| 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | slice 0 of 0–2 |
+| 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | <mark>slices 0–1 of 0–2</mark> |
 | 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | not started |
 | 14 | Provider compute | One request for compute or an endpoint; Adele quotes, provisions within the grant, and tears down | not started |
 | 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | slice 1 of 1–2 |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**20 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+<mark>**21 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.
 Features 13, 14, 16 and 17 are not started.
 
-**Next:** 12 slice 1.
+<mark>**Next:** 13 slice 0.</mark>
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -168,6 +168,22 @@ for the other side).
 
 Nothing of Adele's is mounted into the agent's container: her ledger, her grant file and her
 credential live in her container only. She has no outside network in slice 0.
+
+<mark>**The reaper.** Every resource a grant creates has a lifetime, and Adele destroys it when it expires, in her own
+container, whatever the agent does: ending its session, or stopping or removing its container, changes nothing. She
+checks the provider's own record before and after each delete and records the outcome in her ledger (`reaped`,
+`gone` when it was already gone, or `reap-failed` with its cause). A failure is retried with a growing wait; after
+five failed passes she stops and names the operator's command, `docker exec timelike-adele adeled reap`.</mark>
+
+<mark>**Who runs what.** `extend`, `reap`, `ledger` and `status` are the operator's, run on the host with
+`docker exec timelike-adele adeled …`. The agent cannot run them (it has no Docker socket), and cannot read or change
+the ledger. A refusal the agent sees names the exact `extend` command, marked as the operator's.</mark>
+
+<mark>**Status.** `adele status HOST` (the agent's) and `adeled status HOST` (the operator's) explain each of Adele's
+refusals of the last 24 hours by host, at most 20 per host, newest first: the grant and limit, what was allowed and
+what was needed, the operator's command, and where the record lives (her ledger). A host with none says so.
+**The agent's own outbound connections are not filtered until slice 2**: nothing denies them yet, so `status` reports
+on Adele's refusals only.</mark>
 
 **The stand-in** (`timelike-adele-standin`, compose profile `standin`) is a test and demo service.
 It proves the grant path and that the credential never reaches the agent. It proves nothing about any
@@ -584,7 +600,7 @@ malformed file stops her, naming the line at fault, in `docker logs timelike-ade
 
 ```bash
 docker exec timelike-adele adeled extend demo budget 2.00 USD   # budget, ttl, instances: set; ports, capabilities: add
-docker exec timelike-adele adeled ledger                        # every request, refusal and extension
+docker exec timelike-adele adeled ledger                        # every request, refusal, extension <mark>and reap</mark>
 ```
 
 **Reading a session with its grant uses.** Adele's ledger, piped into the journal, places each grant use
@@ -619,10 +635,12 @@ Every tool also answers `--agent-info` with its manifest (JSON), and `timelike t
 adele: adele [help]
 ask Adele to perform a reaching action within the operator's grant; never see a credential
 usage:
-  adele status                  # is Adele reachable from here; her build revision
+  adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live
   adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]
   exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)
+  extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);
+  every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)
 options:
   --help  this help (at most 40 lines)
   --json  structured output (default when piped)
@@ -999,11 +1017,11 @@ make bench        # the speedup bench (feature 002): vanilla vs timelike; traces
 the full log. `make test` starts Adele on the lane's own grant file and clears her volumes first, so
 every run starts from an empty ledger. Run `make up` afterwards for the operator's own grants.
 
-<mark>The Docker lane runs its e2e files side by side and its unit tests on several workers: `E2E_JOBS` and
+The Docker lane runs its e2e files side by side and its unit tests on several workers: `E2E_JOBS` and
 `UNIT_JOBS` set how many, and `E2E_JOBS=1 UNIT_JOBS=1 make test` is the serial lane. Files whose cells
 measure time, or read state any neighbour could change, run alone after the rest (`tests/e2e/lane.conf`
 names each, and why). A partial lane's first line and `summary.json` say `scope: partial`, and it is never
-a lane anything is signed off on.</mark>
+a lane anything is signed off on.
 
 ### Two verification lanes
 
@@ -1063,8 +1081,8 @@ loss. Tokens and spend appear only in an appendix.
 
 **A live run.** The same catalog can run under two real harnesses, OpenCode and Codex CLI, pinned by
 version and checksum in `pins.env`, both driving one model, also pinned there (`BENCH_MODEL`, a dated id).
-<mark>`BENCH_MODEL=… make bench-live` drives another dated model; the plan names where the model and its prices came
-from (`pins.env`, the environment or the make command line).</mark>
+`BENCH_MODEL=… make bench-live` drives another dated model; the plan names where the model and its prices came
+from (`pins.env`, the environment or the make command line).
 A live run **spends money**: it calls the model through OpenRouter on a key you supply.
 
 ```bash

@@ -57,7 +57,7 @@ func TestUsage(t *testing.T) {
 	f := newFixture(t)
 	for _, args := range [][]string{nil, {"frobnicate"}, {"help"}} {
 		code, out, errs := f.run(args...)
-		if code != exitUsage || out != "" || !strings.Contains(errs, "usage: adele-standin serve | list | health") ||
+		if code != exitUsage || out != "" || !strings.Contains(errs, "usage: adele-standin serve | list | health | delete NAME | fault NAME") ||
 			!strings.Contains(errs, "stand-in") || !strings.Contains(errs, "not a provider") {
 			t.Errorf("%v: code %d, stdout %q, stderr %q", args, code, out, errs)
 		}
@@ -338,4 +338,74 @@ func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+// plumbing bounds this test's own requests to its in-process stand-in, which fsyncs its record. No test here
+// asserts a time: beside the e2e lane the first create went past a 5 s client (feedback
+// 12-20261016-174206, E), the class the broker's fixture bound already covers (fixtureUpstreamTimeout).
+const plumbing = 120 * time.Second
+
+func TestDeleteAndFaultCommands(t *testing.T) {
+	f := newFixture(t)
+	var stderr syncBuffer
+	code := serveUntilSignalled(t, f, &stderr, func(addr string) error {
+		f.vars["STANDIN_LISTEN"] = addr
+		create := func(name string) error {
+			req, _ := http.NewRequest(http.MethodPost, "http://"+addr+"/v1/boxes",
+				strings.NewReader(`{"name":"`+name+`","ttl_seconds":60,"ports":[]}`))
+			req.Header.Set("Authorization", "Bearer "+testCanary)
+			resp, err := (&http.Client{Timeout: plumbing}).Do(req)
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusCreated {
+				return fmt.Errorf("create %s: %d", name, resp.StatusCode)
+			}
+			return nil
+		}
+		if err := create("box-a"); err != nil {
+			return err
+		}
+		if c, out, errs := f.run("fault", "box-a", "error"); c != exitOK || out != "fault box-a: error\n" {
+			return fmt.Errorf("fault: %d %q %q", c, out, errs)
+		}
+		if c, _, errs := f.run("delete", "box-a"); c != exitFailure || !strings.Contains(errs, "HTTP 500") {
+			return fmt.Errorf("faulted delete: %d %q", c, errs)
+		}
+		if c, _, errs := f.run("fault", "box-a", "clear"); c != exitOK {
+			return fmt.Errorf("clear: %d %q", c, errs)
+		}
+		if c, out, errs := f.run("delete", "box-a"); c != exitOK || out != "deleted box-a\n" {
+			return fmt.Errorf("delete: %d %q %q", c, out, errs)
+		}
+		if c, _, errs := f.run("delete", "box-a"); c != 3 || !strings.Contains(errs, "no box named box-a") {
+			return fmt.Errorf("delete again: %d %q", c, errs)
+		}
+		if c, _, _ := f.run("fault", "box-a", "explode"); c != exitUsage {
+			return fmt.Errorf("bad mode: %d", c)
+		}
+		if c, out, _ := f.run("list"); c != exitOK || strings.Contains(out, "box-a") {
+			return fmt.Errorf("list after delete: %d %q", c, out)
+		}
+		return nil
+	})
+	if code != exitOK {
+		t.Fatalf("serve = %d: %s", code, stderr.String())
+	}
+}
+
+func TestDeleteCommandWithoutAServer(t *testing.T) {
+	f := newFixture(t)
+	f.vars["STANDIN_LISTEN"] = "127.0.0.1:1" // nothing listens on port 1
+	if c, _, errs := f.run("delete", "box-a"); c != exitFailure || !strings.Contains(errs, "did not answer") {
+		t.Fatalf("delete with no server: %d %q", c, errs)
+	}
+	f.write("canary", "not a canary\n")
+	if c, _, _ := f.run("delete", "box-a"); c != exitUsage {
+		t.Fatalf("delete with a bad canary: %d", c)
+	}
+	if c, _, _ := f.run("delete"); c != exitUsage {
+		t.Fatalf("delete with no name: %d", c)
+	}
 }

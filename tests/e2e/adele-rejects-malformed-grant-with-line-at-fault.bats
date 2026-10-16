@@ -37,5 +37,8 @@ rejects() {
   run adele_run_with_grants tests/e2e/fixtures/adele/grants.conf
   [[ "$status" -eq 124 ]] || { echo "status $status (want: still serving at the bound): $output" >&2; return 1; }
   assert_output_has "adeled: serving on"
-  assert_output_has "10 grants"
+  # Counted from the file, so the count moves with it (it gained reap, reap-serial and deny in 004 slice 1).
+  local n
+  n="$(grep -c '^\[grant ' "${BATS_TEST_DIRNAME}/fixtures/adele/grants.conf")"
+  assert_output_has "· ${n} grants ("
 }

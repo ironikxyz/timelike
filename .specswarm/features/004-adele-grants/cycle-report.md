@@ -731,3 +731,333 @@ the signed-off branch into `master`. The merge commit and its tree check are rep
 with this commit. The sign-off's condition was that commits after `77f40a2` be bookkeeping only. They
 are `5a68659` (this report's lane addendum and FOR-MENTOR Item 14) and this commit (this ship section
 and `quality-report.json`).
+
+## Cycle 3 — bridge/sends/12-rev2-20261016-091249.md
+
+**Superseded at prompt revision 16, mid-build.** This send began the cycle (12 slice 1, prompt revision 2, discovery
+15) on `modify/004-slice-1` from `master` `ba3107b`. It went stale when plan answered FOR-MENTOR Item 26 Q1 with
+discovery revision 16, and the mentor re-sent 12 slice 1 as `bridge/sends/12-rev16-20261016-102708.md`, which keeps
+the branch and the work. **The full record is § Cycle 4**; its Group C fields hold this send's work too, as the
+re-send asks.
+
+**Commits made under this send** (all ironik.xyz): `5882196` FOR-MENTOR Item 26 raised; `297c085` its Q3 corrected;
+`af410a3` the design (spec § Slice 1, impact analysis, modify, plan, tasks); `3942418` T024; `f120e4f` T025;
+`76c4f1e` T026; `fac6e74` T027; `10ee056` T028; `99671f1` T029; `57975cc` T030; `22bba5f` T031; `c75f5d9` T032;
+`f764245` T033; `a2a00a3` a T024 follow-up test; `9d45b72` status names where the record lives (Item 26 Q2, the
+mentor's addition); `77d087a` bookkeeping.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/12-rev2-20261016-091249.md |
+| source_prompt | plan/.discover/prompts/12-adele-grants.md |
+| prompt_revision | 2 |
+| discovery_revision | 15 |
+| slice | 1 |
+
+### Group C — written by the code instance
+
+Held by § Cycle 4, as the re-send asks.
+
+## Cycle 4 — bridge/sends/12-rev16-20261016-102708.md
+
+**Written:** 2026-10-16T10:56:40Z (read from the clock). Attended, not in dispatch mode. **12 slice 1 (natural), re-sent at prompt
+revision 16** to the cycle § Cycle 3 began; it holds that send's work too. A modify cycle of `004-adele-grants` on
+`modify/004-slice-1`, from `master` `ba3107b`. This path is the one the send names; this project's CLAUDE.md names
+the same one.
+
+**Plugin:** specswarm **4.0.1-botbaubble.2.44.0**, the version this session loaded (lore `specswarm` Q002).
+Under the first send: `/specswarm:modify 004 --from-send bridge/sends/12-rev2-20261016-091249.md` (provenance row
+4), then `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement` (attended), each appending a Cycle 3
+section (`spec.md` § Slice 1, `impact-analysis.md`, `modify.md`, `plan.md`, `tasks.md` T024–T036, `decisions.md`).
+Under this send: `/specswarm:modify 004 --from-send bridge/sends/12-rev16-20261016-102708.md` (**row 7**, below), then
+plan and tasks as deltas (Cycle 4 sections; tasks T037–T040), and `/specswarm:constitution` for the governance
+audit.
+
+**Commits** (`master..HEAD`, all under the ironik.xyz identity):
+- `5882196` FOR-MENTOR Item 26, raised before the denial part was built; `297c085` its Q3 corrected (below).
+- `af410a3` the design; then one commit per task: `3942418` T024, `f120e4f` T025, `76c4f1e` T026, `fac6e74` T027,
+  `10ee056` T028, `99671f1` T029, `57975cc` T030, `22bba5f` T031, `c75f5d9` T032, `f764245` T033, `a2a00a3` a
+  T024 follow-up test, `9d45b72` status names where the record lives, `77d087a` bookkeeping (all under § Cycle 3's
+  send).
+- Under this send: `1e7612b` § Slice 1 corrected in place, `audited_against [2, 16]`, SC-8's file renamed;
+  `e170872` the governance audit 15 → 16 (one commit); `635aae8` the README block and Item 26 closed; this report
+  and `reboot.md` in the last commit.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/12-rev16-20261016-102708.md |
+| source_prompt | plan/.discover/prompts/12-adele-grants.md |
+| prompt_revision | 16 |
+| discovery_revision | 16 |
+| slice | 1 |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. No subagent was used in this cycle.
+
+**reconcile_mode:** `scoped`. Revision 16 is new to 004 (modify row 7) and **amended** a criterion that § Slice 1,
+written under § Cycle 3's send, described. So that section was corrected in place, declared at its head, and **not
+regenerated**, as the send directs: the correction asks for less, and slice 0's body was true throughout. The skill's
+table calls an amended body SUPERSEDED and says to regenerate; the send's instruction was followed instead, and this
+is said here and in `impact-analysis.md` § Cycle 4. Removals were visible (the two sends diffed). Revisions 3 to 15 did
+not change prompt 12, so nothing of theirs is claimed. `audited_against` is now `[2, 16]`; `audit-log.md` has the row.
+
+**What was built** (spec § Slice 1, FR-24 to FR-42; decisions D-10 to D-16):
+- **The reaper** (`adele/internal/reaper`, Go, stdlib): in `adeled serve`, a pass at start and every 5 s
+  (`ADELE_REAP_INTERVAL`). A row is due when performed, expired and not yet `reaped` or `gone`. One pass reads the
+  stand-in's record, checks the box is the same one (created + lifetime = the row's expiry), deletes it with up to
+  3 attempts (1 s, 2 s apart), reads the record back, and records the outcome **from the read-back** (cross-stack
+  P004): `reaped`, `gone` (already gone, or a later box of that name, which is not touched) or `reap-failed` with
+  its cause from Adele's container (P001). Failed passes wait 5 s doubling to 5 min; after 5 the row is given up and
+  its last row names the operator's command, `docker exec timelike-adele adeled reap`. A reap cut short by Adele's
+  own shutdown records nothing (found by a test, fixed in T027).
+- **The ledger, schema 2:** outcomes `reaped`, `gone`, `reap-failed`; columns `ref` (the performed row), `agent`,
+  `cause`, `attempts`, `host`, `extend`. A schema-1 file is rebuilt on open in one transaction, keeping every row and
+  id (tested against slice 0's schema as shipped). One ending per resource, enforced in the transaction (tested with
+  two handles). `live` no longer counts reaped boxes; `spent` is unchanged.
+- **Attribution (carried item 3):** the client sends `agent` (TIMELIKE_AGENT when valid, `agentio.agent_name()`);
+  Adele records it on performed and refused rows; reap rows copy it from the row they end; the journal (009) labels
+  ledger rows with it, so `--agent A` finds A's grant uses and reaps.
+- **Status (seam 3; Item 26 Q2, confirmed by the mentor):** `adele status [HOST]` (the agent's; read-only
+  `GET /v1/denials` through Adele) and `adeled status [HOST]` (the operator's): Adele's revision (P003), the reaper's
+  due and given-up rows (operator's), and the denials of the last 24 h, at most 20 per host, newest first, each with
+  its time, grant, limit, allowed and needed, the operator's command and the ledger row. None is said in so many
+  words; an Adele that cannot say is "unknown", never "none".
+- **Item 14 (b), plan: a clarification:** agentio prints rule 14's one line on stderr for exit 4 in text mode, for
+  both envelopes; stdout is unchanged; `--json` adds nothing. Past COLUMNS the remediation points at the envelope.
+  001's contract gains the sentence (§ Confirmation). `adele --help` and `adeled --help` also say who runs `extend`
+  and where the ledger is.
+- **agentio's guard (carried item 2):** `Tool(mutating=True, grant_envelope=True)` raises at declaration.
+- **The stand-in's faults (P005):** `adele-standin fault NAME error|drop|clear` and `adele-standin delete NAME`, in
+  its own container.
+
+**Seam 1 — what denies an outbound connection in slice 1: FOR-MENTOR Item 26, closed.** No timelike policy denies the
+agent's own outbound connections before slice 2's allowlist, so every reading that built the old criterion read it
+more narrowly than its text; raised, with (a) recommended. **Plan ruled it a revision** (discovery 16): the criterion
+is struck and split, the status half stays in slice 1 and the connection half moves to slice 2. The record (`host`,
+`extend` on each refusal) and `status` built under § Cycle 3's send are what the new slice-1 criterion asks for, and
+where slice 2's denials will land. Nothing toward slice 2 was built. The README now says the agent's own connections
+are not filtered until slice 2.
+
+**Item 26, as answered so far** (`bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md`,
+10:05:40Z). **Q2, the mentor: confirmed as specified, plus one addition, built:** the verdict names where the record
+lives. The agent's verdict ends `record: adeled ledger`, and its JSON `record` says it whole ("Adele's ledger, which
+the operator reads with: docker exec timelike-adele adeled ledger"); the operator's ends `the record: adeled
+ledger`. A first wording pushed the agent's by-host verdict to 297 columns, where rule 13 cut the pointer off, so the
+denials phrase was tightened too (`N denials of HOST in 24 h (≤20/host)`): both of status's figures and the record
+fit 200 columns with the stand-in's host and a 40-character revision, pinned by a unit. **Q1, plan:** a revision
+(above).
+
+**Item 26's Q3, corrected in place.** As first written it said Item 14's feedback file had no answer. I had read
+that file at about 09:16Z; plan's ruling was copied in at 09:18:16Z, a minute before the item was raised. The
+correction (`297c085`) says so; (b) is built.
+
+**criteria_reestablished** (each citation matches exactly one line of the send; modes as of this report):
+- `12 · "Adele destroys resources whose time-to-live has expired, including after the requesting agent's container has stopped, and records each reap"` —
+  **unconfirmed** (the Docker lane is the mentor's). e2e:
+  `tests/e2e/adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats` (spread) and
+  `tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats` (serial). Go units for every outcome,
+  the bound, give-up, the same-box check, restart from the ledger and the migration (`internal/reaper` 95.7%). On the
+  host, the real `adeled` and `adele-standin` binaries and the real client ran the flow (scratchpad, not tracked):
+  a 1m box reaped about a second after its expiry with its session and agent; a faulted box `reap-failed` with the
+  500's cause, then `reaped` once cleared; live back to 0.
+- `12 · "A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed and what was needed, the operator's command, and where the record lives; a host with none says so"` —
+  **unconfirmed** (the Docker lane is the mentor's). e2e:
+  `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats` (renamed
+  under this send after the criterion). Units: Go (`internal/broker` denials endpoint, `cmd/adeled` status), Python
+  (the client: none, several, newest first, unknown never "none", rule 13's columns). On the host, the real binaries
+  printed the lines the cells match. **The struck criterion is not cited.**
+- `12 · "DEMO: Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the reap in the ledger"` —
+  **unconfirmed** (D21; Manual; the mentor's demo and the operator's interview after the lane).
+- Slice 0's five, all **unconfirmed in this cycle** (the lane re-establishes them; each changed beneath it):
+  - `12 · "The agent image and Adele start together from one compose file, and the agent reaches Adele only through its request interface"` —
+    compose is unchanged; the request interface gained the read-only `/v1/denials`.
+  - `12 · "Adele rejects a malformed grant at start with the line at fault"` — the grant parser is unchanged; the
+    lane's grant file gained three grants.
+  - `12 · "a request exceeding any limit exits 4 with an envelope naming the grant, the limit and the operator's extend command, and nothing is performed"` —
+    the envelope is unchanged on stdout; under `--text` its cells now also assert rule 14's stderr line.
+  - `12 · "No credential held by Adele appears in the agent's environment, filesystem, process arguments or any tool output, checked by a scan after a full request cycle"` —
+    the client gained `agent` and `status [HOST]`; the canary path is unchanged.
+- Item 14 (b), not a criterion: `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`
+  (moved under this send from the status file) and agentio's units.
+  - `12 · "Every performed request is recorded in the ledger with grant, requesting session, resource created, estimated cost and expiry"` —
+    the ledger is at schema 2; the five fields are unchanged and a unit shows a v1 file's rows survive.
+
+**not_verified:**
+- **Nothing ran in Docker** (no Docker in this session). Every e2e cell above is unrun; the host integration used the
+  same binaries built on the host's go1.27.1, not the image's.
+- **No real provider was reaped** (cross-stack P005): the stand-in is timelike's own fixture, made to fail with its
+  own faults. A real provider's delete, its errors and its idea of "gone" arrive with 13 and 14.
+- The reaper's waits under a loaded lane: the fault cells fall back to the operator's `adeled reap` if the serving
+  reaper gives up first; whether that fallback is ever needed is unmeasured.
+- The serial file's restart is `docker stop`/`docker start` of compose's containers; `docker compose restart` and a
+  host reboot were not tried.
+- govulncheck on the host reports 9 standard-library findings in go1.27.1, each fixed in go1.27.2, which is
+  `GO_IMAGE`; `make scan` runs govulncheck on the image's toolchain.
+- **A confirmation envelope's stdout is not byte-identical between `--text` and `--json`, and never was**: its
+  `confirm` replays the caller's own arguments (`undo --text --yes`). Plan's test reads "stdout is byte-identical
+  between `--text` and `--json` for exit 4"; that holds for the grant envelope (tested) and for the confirmation
+  envelope up to that one field. This cycle did not change it; reported for the mentor.
+
+**changed_other_features:**
+- **001** (`agentio`, `contracts/output-contract.md`): rule 14's line on exit 4 in text mode; `agent_name()`; the
+  declaration guard. Three of its dependents' units pinned "stderr is empty" under `--text` and were updated to the
+  ruling's assertions: `test_adele_cli`, `test_undo` (005) and `test_package_guard_shim` (013, a terminal: the line
+  comes first there, because the shim prints the guard's captured stdout after it exits).
+- **009** (`journal`): reads `agent` from ledger rows.
+- **002** (the bench): **no change.** Its network-denial category matches agentio's verdict text and the guard's,
+  neither of which moved.
+- **The README**: the send's status block (row 12 `slices 0–1 of 0–2`; **21 of 38 planned slices are built.**;
+  Adele's reaper, who runs what, `status`, the agent's connections unfiltered until slice 2; `adeled ledger` also
+  lists reaps), marked with `<mark>`, the last update's marks cleared; the generated reference regenerated because
+  `adele --help` changed (drift test passes). The Next line is left as it is.
+- **Governance** (`e170872`): discovery revision 16 audited in the constitution, tech-stack and quality standards,
+  no change needed in any; 16 appended with a header note naming the context file's section.
+
+**process_failures_recorded:**
+- Item 26's Q3 was written from a stale read of the feedback file (above); corrected in place, same cycle.
+- A decision-log time was composed (10:13:00Z) rather than read; replaced with the clock's 10:12:59Z in `77d087a`.
+- The host lane's `timed` step failed once, on `9d45b72`: `test_agentio_startup.py::test_tool_startup_p95_under_budget`,
+  p95 413.8 ms against 100 ms, with the host's load average at 5.5–5.8 (the `-n 8` step beside it took 254 s, against
+  136 s an hour earlier). Rerun alone three times at once, it passed each time. Nothing in this cycle touches a tool's
+  start-up path (agentio gained one function and two checks, imported nothing). Reported, not hidden; the final lane
+  below reruns it.
+- T029's scope record was first computed with its arguments in the wrong order (`SCOPE: none`) and replaced before
+  the next task with the right line (`out`, four 001/005/013 files, declared above).
+- `implement` step 6f's scope record was missed for T024 and appended after its commit, before T025.
+
+**retired_prompts_seen:** none.
+
+**Lane classes for the new e2e files** (the send's rule, per file):
+- `adele-destroys-expired-resources-after-agent-container-stopped-records-each-reap.bats` — **spread**: no time
+  budget is asserted (reaps are waited for with PLUMBING_TIMEOUT), its grant and box names are its own, and it stops
+  no shared container (the requesting agent is a throwaway).
+- `adele-reaps-after-restart-and-records-standin-unreachable.bats` — **serial**: it stops Adele and the stand-in.
+- `status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats` — **spread**: no
+  budget; it finds its own refusals by ledger id, whatever neighbours refuse.
+- `exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats` — **spread**: no budget, one
+  refusal of its own.
+
+**Host lane** (advisory: files, units and hook logic, not the image), on `635aae8`, the code this report describes:
+
+| Run | Time (UTC) | Result |
+|---|---|---|
+| `make test-host` (serial) | 10:39:00Z–10:48:24Z | rc 0: pytest 2545 passed, 13 skipped (530 s); host suites 60/60, 57/57, 33/33 |
+| `pytest -n 8 -m "not timed"` | 10:48:24Z–10:55:17Z | rc 0: 2529 passed, 13 skipped (412 s; load average 9.1 at the start) |
+| `pytest -m timed` | –10:56:01Z | rc 0: 16 passed |
+| `go test -race ./...` (Adele) | after | all seven packages ok |
+
+Also: ruff check and format, mypy (39 files), shellcheck over the Makefile's 96 files and every e2e file with
+helpers, gofmt, go vet, staticcheck: clean. Adele's Go coverage 94.0% (90% bar). Earlier runs this cycle: on
+`a2a00a3`, serial 2544 passed, `-n 8` 2528, timed 16 (10:00:18Z–10:12:51Z); on `9d45b72`, serial 2545 passed, `-n 8`
+2529, **timed 1 failed** (the start-up budget under load, above).
+
+### Cycle 4 lane addendum 1 — the mentor's Docker lane on `df52dbf` (feedback `bridge/feedback/12-20261016-174206-slice-1-lane-fails.md`)
+
+**Written:** 2026-10-16, from the mentor's log `bridge/.make-test-12s1a.log`, `bridge/.within-12s1a.tsv` and this
+checkout's `tests/out/` from that lane. § Cycle 4 above is not edited. The lane: e2e 689 of 703 ok, 14 not ok; unit 1
+failed; gounit `adele-standin` failed; scan and lint passed. Each cause, and its fix (tasks T041–T047; `decisions.md`
+§ Cycle 4, addendum 1):
+
+- **A (11 cells: 265, 313–320, 323–324). Cause: the cells, not a tool.** Each cell captured stderr into a temp
+  file and removed both temp files with `rm -f` inside the captured command. In the agent shell `rm` is a function
+  (`image/rootfs/etc/timelike/shell-env.bash`) that calls the guard, so 005's trash notice joined the capture, after
+  `cat "$e"` in every failing cell. Before this cycle the cells checked `stderr_bytes=0` as a substring, so the
+  trailing line passed unseen; counting rule 14's one line exposed it. The host has no such function, which is why
+  the host lane passed. **Fix:** `command rm -f`, as the snapshot cell already does, in the three files that capture
+  this way. The rule-14 line itself was right in all 11.
+- **B (cell 446). Cause: the denial line's length, not the login shell.** The lane's denial line was 207 columns,
+  and rule 13 cut it at 200. **The lane's width is 200 in both shells**: docker exec without a tty sets no `COLUMNS`,
+  nothing in the image or the helpers sets it, and agentio defaults to 200. The `bash -c` cell lists no denial, so only
+  `-lc` showed it. **Fix:** the line says `· operator: <command>` in place of `— only the operator allows it: <command>`,
+  188 columns for that denial; a unit pins it (with a five-digit ledger id) within 200. A session or agent name past
+  about 20 characters is still cut, with rule 13's marker, and is whole in JSON.
+- **C (cell 594). Cause: a stale literal.** The cell asserted `10 grants`; the lane's grant file gained three in this
+  cycle. **Fix:** the cell counts the `[grant ` lines of the file it starts Adele with.
+- **D (cell 66). Cause: the cell is load-sensitive. The tools did not get slower.** `adele`'s conform probe is
+  `status`, which now makes two calls (health, then denials): five calls each against a live `adeled` on the host
+  took 142 ms on HEAD and 139 ms on master. The cell took 9.1–9.6 s in every lane-speed lane, and in this lane 62.3,
+  24.8, 17.9 and 15.1 s in its four shells. The file was `first`, so it started beside the Go step, which took 260 s
+  here against 33 s in the lane-speed lanes. The other early files were slow too (`a-restore-…` 10.8x), while the
+  median cell matched the lane-speed lanes (ratio 0.99). What loaded those first minutes is **not established**:
+  `within.tsv` and `report.xml` carry no per-file start time. **Fix:** the file is `serial` in `lane.conf`, with
+  that reason. Its budget is unchanged. The cost is its cells' time in the serial phase, about 123 s quiet. Also, the
+  new `wait_reap` ran pyq (a `docker run`) on every 2 s poll; it now polls the text ledger and parses only once a
+  reap row is there. That is load removed; it is not shown to be the cause.
+- **E (gounit, `TestDeleteAndFaultCommands`). Cause: plumbing, not a claim.** The test's first create, to its own
+  in-process stand-in (which fsyncs its record), got no answer inside a 5 s client. This is lane-speed item 9's class,
+  for which the broker's fixture already has a 120 s bound. Every package except `grants` took about 181 s in that
+  container, against at most 1.7 s before. On the host the module takes 8 s without `-race`, and the new tests have
+  about 6 s of real waits. The container's 181 s is not reproduced here (no Docker). **Fix:** the test's own client
+  is 120 s plumbing. The stand-in's `delete` command waits 30 s, not 5 s: the stand-in is test infrastructure and
+  nothing is claimed of its speed. **Found while reading, and fixed:** the reaper held the broker's request lock for
+  the whole reap, across the provider's calls and the 1 s and 2 s waits between attempts. Every agent request beside
+  a faulted reap (the spread file's `error` and `drop` cells) waited out its retries. It now holds the lock for the
+  ledger write alone. The same-box check covers a name reused meanwhile, as it already did for the operator's
+  lockless `adeled reap`. A unit (`TestARequestNeverWaitsOnAReapsRetries`) fails on the old code and passes on the
+  new.
+- **F (`tests/unit/test_bench_cli.py:151`). Not this cycle's; not changed.** The bench and its units are untouched on
+  this branch, and the same test failed in lanes `02s1-a` and `007s1-b`. Its fake run uses `--call-limit 2`. In this
+  lane a hooked `git commit` in the rejects task went past 2 s under the unit step's load, counted as a hang, and the
+  fake agent's policy sent it to `--no-verify`, which failed. So the report did not say "Tie". The fix belongs to
+  002's unit (its call limit is plumbing there, but raising it costs every hang task its limit's time), for the
+  mentor to route.
+
+**The mentor's indent note:** the ledger criterion
+`12 · "Every performed request is recorded in the ledger with grant, requesting session, resource created, estimated cost and expiry"`
+belongs in § Cycle 4's slice-0 list, beside the other four, with the same mode, **unconfirmed** (the ledger is at
+schema 2; the five fields are unchanged). It is not part of the Item 14 (b) bullet.
+
+**Modes after this addendum:** every criterion cited in § Cycle 4 stays **unconfirmed** until the mentor's next lane.
+Nothing ran in Docker.
+
+**Host lane** (advisory: files, units and hook logic, not the image), on `df52dbf` plus this addendum's working tree
+(the commit below carries exactly that tree):
+
+| Run | Time (UTC) | Result |
+|---|---|---|
+| `make test-host` (serial) | 19:14:35Z–19:26:06Z | rc 0: pytest 2546 passed, 13 skipped (657 s); host suites 60/60, 57/57, 33/33 |
+| `pytest -n 8 -m "not timed"` | 19:26:06Z–19:28:22Z | rc 0: 2530 passed, 13 skipped (135 s) |
+| `pytest -m timed` | –19:29:06Z | rc 0: 16 passed |
+| `go test -race ./...` (Adele) | after | all seven packages ok |
+
+Also: ruff check and format, mypy (39 files), shellcheck over the Makefile's files and the changed e2e files with
+helpers, gofmt, go vet: clean. Adele's Go coverage is 94.5% (90% bar).
+
+### Cycle 4 sign-off addendum — lane 12s1b on `5377bd2` and D21 (added 2026-10-16T21:27:22Z)
+
+The mentor signed off 12 slice 1 at `5377bd2`. Lane 12s1b passed (e2e 703/703, unit, timed, gounit, scan and lint;
+logs `bridge/.make-test-12s1b.log`, `bridge/.make-scan-12s1b.log`, `bridge/.make-lint-12s1b.log`,
+`bridge/.within-12s1b.tsv`). D21 was demonstrated with the operator (`bridge/.d21-demo-20261016T210428Z.txt`).
+This addendum supersedes the modes in § Cycle 4 and its lane addendum 1; nothing above is rewritten.
+
+**criteria_reestablished, as of this addendum:**
+- Slice 0's five Automated criteria, each **executed [lane 12s1b on 5377bd2, the mentor's]**:
+  - `12 · "The agent image and Adele start together from one compose file, and the agent reaches Adele only through its request interface"`
+  - `12 · "Adele rejects a malformed grant at start with the line at fault"`
+  - `12 · "Every performed request is recorded in the ledger with grant, requesting session, resource created, estimated cost and expiry"`
+  - `12 · "a request exceeding any limit exits 4 with an envelope naming the grant, the limit and the operator's extend command, and nothing is performed"`
+  - `12 · "No credential held by Adele appears in the agent's environment, filesystem, process arguments or any tool output, checked by a scan after a full request cycle"`
+- Slice 1's two Automated criteria, each **executed [lane 12s1b on 5377bd2, the mentor's]**:
+  - `12 · "Adele destroys resources whose time-to-live has expired, including after the requesting agent's container has stopped, and records each reap"`
+  - `12 · "A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed and what was needed, the operator's command, and where the record lives; a host with none says so"`
+- Slice 1's Manual criterion:
+  - `12 · "DEMO: Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the reap in the ledger"` —
+    **observed by the operator**, D21 demo 2026-10-16T21:04:28Z.
+
+The ledger criterion now sits in slice 0's list (the mentor's indent note).
+
+**The record commit:** the README's Next line reads `**Next:** 13 slice 0.`, marked with `<mark>`. The marks from
+this cycle's status block stay in place, because that change has not been pushed yet.

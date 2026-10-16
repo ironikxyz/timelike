@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/12-adele-grants.md
 source_send: bridge/sends/12-rev2-20261002-042951.md
 prompt_revision: 2
 discovery_revision: 9
-audited_against: [2]
+audited_against: [2, 16]
 slice: 0
 ---
 
@@ -358,3 +358,177 @@ be reported, and those baseline entries are not edited:
   - the egress allowlist, standing grants for registries and source hosts, and hostile content
     (slice 2)
   - real providers (13, 14)
+
+## Slice 1 (Cycle 3, send `bridge/sends/12-rev2-20261016-091249.md`; corrected in Cycle 4, send `bridge/sends/12-rev16-20261016-102708.md`; natural)
+
+> **Corrected in place, declared (Cycle 4, prompt revision 16).** Revision 16 struck the slice-1 criterion "A
+> denied outbound connection returns a plain message …" and split it: a status command over Adele's refusals stays
+> in slice 1, and the denied-connection message moves to slice 2 with the allowlist (plan's ruling on FOR-MENTOR
+> Item 26, `bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md`). This section described the struck
+> criterion, so it said something false; the lines that did are corrected below (the criteria list, the
+> denials-and-status heading, FR-35 to FR-37 and SC-8), each marked *(revision 16)*. Nothing else moved, and slice
+> 0's body above was true throughout. Corrected by `/specswarm:modify`, not regenerated, as the send directs: the
+> correction makes the spec ask for less, not claim more.
+
+Added work on a body that stays true, recorded here, declared. Prompt 12 is at revision 2, already in
+`audited_against` (modify row 4), so nothing is appended. Two lines above become out of date and are left as
+written, because the body is append-only per cycle: the Overview's "Not in slice 0" list, and the assumption
+that `instances` counts every creation (FR-34 below replaces it from this slice on).
+
+Slice 1's three criteria, verbatim from the send:
+- *"Adele destroys resources whose time-to-live has expired, including after the requesting agent's container
+  has stopped, and records each reap"* _(slice 1)_.
+- *"A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed
+  and what was needed, the operator's command, and where the record lives; a host with none says so"* _(slice 1)_
+  *(revision 16; it replaces the struck criterion, whose connection half is slice 2's now and is no obligation of
+  this slice)*. **The agent's own outbound connections are not filtered until slice 2**: nothing in slice 1 denies
+  them, so nothing here explains them.
+- *DEMO: "Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the
+  reap in the ledger"* (D21, Manual) _(slice 1)_.
+
+Carried into this cycle by the send, all built: Item 14 (b), ruled a clarification by plan
+(`bridge/feedback/12-20261016-091249-adele-text-mode-human-line.md` § Resolution); agentio's guard on
+`mutating` + `grant_envelope`; the agent's name on ledger rows (D17's finding).
+
+### Scenarios (slice 1)
+
+**Scenario 5: a box outlives its session (Agent, then Adele, then Operator) — D21.** The agent asks for a box
+with `--ttl 1m` and its session ends; its container stops or is removed. Adele's reaper, which runs in her own
+container whatever the agent does, finds the expired row, deletes the box at the stand-in with her credential,
+reads the stand-in's record back to see it gone, and records a `reaped` row naming the box, the grant, the
+session and agent that asked, and the performed row it undoes. The operator runs
+`docker exec timelike-adele adeled ledger` and reads it.
+
+**Scenario 6: the stand-in fails during a reap.** It is unreachable, or answers an error. The pass retries on a
+bound, then records `reap-failed` with the cause and the attempts. Later passes retry with a growing wait, up to
+a bound; the last says it gave up and names the operator's command. Nothing is dropped silently.
+
+**Scenario 7: Adele restarts with expired boxes outstanding.** Her first pass at start reads the ledger (not her
+memory) and reaps every expired, unreaped box.
+
+**Scenario 8: the box is already gone.** Someone (or something) deleted it at the provider first. The reap reads
+that, records `gone`, and never retries it.
+
+**Scenario 9: a person reads a refusal in text mode (Item 14 (b)).** Under `--text`, stdout is still the
+envelope, byte for byte; stderr carries one line saying, in rule 14's shape, what was refused and that only the
+operator can extend it, with the command.
+
+### Functional requirements (slice 1)
+
+**The reaper**
+- **FR-24** `adeled serve` runs a reaper beside the request interface: one pass at start, then one every
+  `ADELE_REAP_INTERVAL` (default 5 s). It runs in Adele's container, so no agent action, container or session
+  starts, stops or delays it (P4; 001's boundary).
+- **FR-25** A row is **due** when it is `performed`, its `expires_at` is at or before now, and no `reaped` or
+  `gone` row refers to it (`ref`). A due row with failed passes waits `interval × 2^(failures−1)` (at most
+  5 min) after its last failure. After `ADELE_REAP_PASSES` (default 5) failed passes it is **given up**: no
+  automatic pass touches it again.
+- **FR-26** One pass over one row: read the stand-in's record; if the box is there **and is the same box** (its
+  creation time plus its lifetime equals the row's `expires_at`), delete it, with up to 3 attempts (1 s, then
+  2 s apart, each bounded by the upstream's 10 s); then read the record back. The outcome is recorded only from
+  that read-back (cross-stack P004):
+  - `reaped`: the delete answered and the box is no longer in the record;
+  - `gone`: the box was not in the record, or was another box of that name (not touched), or the delete
+    answered "no such box" and the read-back agrees;
+  - `reap-failed`: the stand-in did not answer, answered an error, or still holds the box after the delete.
+    The row's `cause` names which, from Adele's container (P001).
+- **FR-27** Each reap row carries: the time, the outcome, the grant, the session and agent of the performed row,
+  the capability and `delete`, the resource, `ref` (the performed row's id), `cause` and `attempts`. The
+  given-up row's cause ends with the operator's command.
+- **FR-28** `docker exec timelike-adele adeled reap [--json]` is the operator's: one pass now over every due row,
+  given-up ones included, waits ignored; it prints each outcome. It is safe beside the serving reaper: an outcome
+  is written only while the row is still unreaped, read in the same transaction.
+- **FR-29** The agent cannot alter the ledger, stop a reap or run `adeled reap` (H1: no Docker socket; nothing of
+  Adele's in its container; the request interface has no reap or ledger write).
+
+**The ledger, schema 2**
+- **FR-30** New outcomes `reaped`, `gone` and `reap-failed`; new columns `ref`, `agent`, `cause`, `attempts` and
+  `host`. A schema-1 file is migrated on open, in one transaction, keeping every row and id; a schema-2 file is
+  refused by a schema-1 Adele (slice 0's rule).
+- **FR-31** `adeled ledger` prints the new rows; `--json` adds the new columns (null when absent).
+
+**Attribution (carried item 3)**
+- **FR-32** The client sends `agent` (`TIMELIKE_AGENT`, when it matches agentio's rule; omitted otherwise).
+  Adele checks it with the same pattern and records it on `performed` and `refused` rows, and reap rows copy
+  it. It is self-declared attribution, like the session (D-9), never authority.
+- **FR-33** The journal (009) reads `agent` from the ledger rows the operator pipes in, so a grant entry is
+  labelled with its agent.
+
+**Instances**
+- **FR-34** `live` counts `performed` rows not yet `reaped` or `gone`; `spent` is unchanged (money spent stays
+  spent).
+
+**Refusals and status (seam 3; Item 26 Q2, confirmed by the mentor; revision 16)**
+- **FR-35** Each refusal records `host`, where the refused request would have reached, from Adele's own
+  configuration (`standin.box` → the stand-in's host and port), and `extend`, the operator's command as the refusal
+  printed it. Slice 2's allowlist denials land in the same record with the same fields.
+- **FR-36** `adele status [HOST]` (agent side) and `adeled status [HOST]` (operator side) report Adele's
+  reachability and revision as before (P003), and **Adele's recent refusals**: those in the last 24 hours, at most
+  20 per host, newest first, with a count. With `HOST`, each is explained: when, the grant and limit, what was
+  allowed and what was needed, the operator's command, the ledger row. A host with none says so (exit 0). Both
+  figures are printed in the verdict, and so is **where the record lives** (Adele's ledger, read with `adeled
+  ledger`; the mentor's addition to Item 26 Q2, now the criterion's own words). Output contract (001): verdict line
+  first, JSON when piped. `status` reports on Adele's refusals from her ledger, not on the agent's own connections
+  (cross-stack P001).
+- **FR-37** The agent's client reads them through `GET /v1/denials` on the request interface, read-only. The path's
+  name is kept for slice 2, whose allowlist denials it will also return.
+
+**The human line (Item 14 (b); plan's ruling)**
+- **FR-38** agentio: a Result carrying an exit-4 envelope prints, **in text mode only**, one line on stderr in
+  rule 14's form; stdout stays exactly the envelope in every mode, and `--json` adds nothing on stderr.
+  - grant: `error: beyond grant <grant>: <limit> allows <allowed>, needs <needed>; nothing was performed
+    (code 4) — only the operator can extend it: <extend>; ledger #<n>`
+  - confirmation: `error: confirmation required: <plan summary> (code 4) — to proceed, run: <confirm>`
+  - Past `COLUMNS` (rule 13), the remediation points at the envelope (`see "extend" on stdout`, `see "confirm"
+    on stdout`) instead of cutting the command.
+- **FR-39** 001's contract gains one sentence saying so (§ Confirmation).
+- **FR-40** `adele --help` and `adeled --help` say who runs `extend` (the operator, on the host) and where the
+  record is (Adele's ledger, `adeled ledger`), as (a) would have; additive.
+
+**agentio's guard (carried item 2)**
+- **FR-41** `Tool(mutating=True, grant_envelope=True)` is refused at declaration (ValueError), with a unit test.
+
+**The stand-in's faults, for tests (cross-stack P005)**
+- **FR-42** `adele-standin fault NAME error|drop|clear` and `adele-standin delete NAME`, run inside the stand-in's
+  container (the operator's or a test's `docker exec`): a delete of NAME then answers 500, or drops the
+  connection unanswered, until cleared. They live in the stand-in's own state volume. The agent cannot reach
+  the stand-in (FR-3).
+
+### Success criteria (slice 1)
+
+| SC | Criterion (send, slice 1) | How it is shown |
+|---|---|---|
+| SC-7 | "Adele destroys resources whose time-to-live has expired, including after the requesting agent's container has stopped, and records each reap" | e2e: boxes with a 1 m lifetime asked for from a throwaway agent container, which is then removed, and from the agent: each is gone from the stand-in's own record and the ledger has its `reaped` row with ref, session and agent. Already gone → `gone`; erroring and dropping stand-in → `reap-failed` with the cause, then `reaped` once cleared; Adele stopped past the expiry and started → reaped from the ledger; the stand-in stopped → `reap-failed` naming it unreachable, then `reaped`. Go units for every outcome, the bound, give-up, the same-box check and the migration |
+| SC-8 | "A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed and what was needed, the operator's command, and where the record lives; a host with none says so" *(revision 16)* | e2e, from the agent's container: `adele status HOST` with none (says so), and with several (newest first, each with grant, limit, allowed, needed, the operator's command, session and agent); the record's place in the verdict; the operator's `adeled status HOST` explaining the same rows with Adele's revision. Units for the window, the cap, an Adele that cannot say ("unknown", never "none") and rule 13's columns |
+| SC-9 (Manual, D21) | "Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the reap in the ledger" | Observed by the mentor with the operator after the lane. `unconfirmed` until then |
+
+Also required: Item 14 (b)'s three tests (stdout identical across modes for exit 4; one rule-14 line on stderr
+in `--text` and nothing new in `--json`; a grant line names the operator and its command is never in `confirm`);
+the guard's unit; the journal labels a ledger row's agent.
+
+### Decisions (slice 1)
+
+**D-10 · The reaper is in `adeled serve`, with an operator command beside it.** A separate reaper container
+would be a second holder of the canary. The operator's `adeled reap` exists so that a given-up row has a
+remedy that is not "restart Adele".
+
+**D-11 · A reap is recorded from the provider's record, never from the delete's answer** (P004). That is why
+there is a read before (the same-box check, so a new box reusing an expired name is never deleted) and a read
+after.
+
+**D-12 · Bounds.** 3 attempts per pass; 5 passes; waits doubling from the interval to 5 min. A dead stand-in
+costs at most five rows per box, then one given-up row, then silence until the operator acts. The figures are
+environment settings (`ADELE_REAP_INTERVAL`, `ADELE_REAP_PASSES`) with these defaults; compose sets none.
+
+**D-13 · The ledger moves to schema 2 by table rebuild.** SQLite cannot change a CHECK constraint in place. The
+rebuild copies every row with its id, in one immediate transaction, so a reader never sees half of it.
+
+**D-14 · `agent` is attribution, like `session`.** Proving it would need a credential in the agent's
+container (P4).
+
+**D-15 · "Recent" is 24 hours, at most 20 per host.** A day covers a working session and its review; 20 keeps
+one host's flood readable. Both are printed so the window is never implicit.
+
+**D-16 · TTLs in tests stay at the grant file's 1 m minimum.** The grant format does not change for tests; the
+reaper cells wait on the ledger with the plumbing bound and assert no time (lane.conf's rule: a reap wait is not
+a budget).
