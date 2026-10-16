@@ -427,3 +427,15 @@ FLAGGED: spread, not serial: the cells wait on the ledger with PLUMBING_TIMEOUT 
 ASSUMED: three new grants in the lane's grant file (`reap`, `reap-serial`, `deny`), so no other cell's counts move (confidence: high)
 ABSENT: not run in the image (no Docker in this session): the same flows were run on the host against the real adeled and adele-standin binaries and the real client (scratchpad hostint/run.sh): reaped with session and agent, reap-failed with the 500's cause then reaped, live back to 0
 Verification: shellcheck -x clean (file and helpers.bash); the file is added to the Makefile's SHELLCHECK_FILES
+SCOPE: in (4 changed files)
+
+### T032: e2e `adele-reaps-after-restart-and-records-standin-unreachable.bats` (SC-7's restart and unreachable cases; serial)
+**Started:** 2026-10-16T09:55:48+00:00 | **Completed:** 2026-10-16T09:55:48Z
+
+INHERITED: helpers from T031 (confidence: high)
+FLAGGED: one timeline for both cases — Adele stopped across the expiry, the stand-in stopped, Adele started: her first pass finds both rows in the ledger and cannot reach the stand-in; then the stand-in is started — chose one shared wait over two (each ~70 s) to keep the serial tail short (confidence: high)
+FLAGGED: `serial` in lane.conf: it stops Adele and the stand-in, which every Adele file reads (confidence: high)
+ASSUMED: the stand-in's record survives its restart (named volume `standin-state`), checked by the cell before the reap (confidence: high)
+ASSUMED: "the restarted Adele did it" is read from her log since the restart (`docker logs --since`), naming the box and its ledger row (confidence: medium)
+ABSENT: not run in the image (no Docker); teardown_file starts both containers whatever happened
+Verification: shellcheck -x clean; lane.conf line added in name order
