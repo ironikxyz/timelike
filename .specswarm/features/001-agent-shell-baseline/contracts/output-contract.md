@@ -153,6 +153,14 @@ and is not `--yes`-confirmed by the agent, because the grant is the confirmation
 binds it: anything destructive it exposes supports `--dry-run`. Each envelope keeps its own key order
 on stdout; neither is sorted.
 
+**In text mode, exit 4 also writes rule 14's line on stderr (a clarification, plan 2026-10-16; changed in
+feature 004).** stdout stays exactly the envelope in every mode; with `--json`, stderr adds nothing for exit
+4, because the envelope is the structured error. The line is `error: beyond grant <grant>: <limit> allows
+<allowed>, needs <needed>; nothing was performed (code 4) — only the operator can extend it: <extend>;
+ledger #<n>` for the grant envelope, and `error: confirmation required: <plan summary> (code 4) — to
+proceed, run: <confirm>` for the confirmation envelope. Past `COLUMNS` (rule 13), the remediation points
+at the envelope (`see "extend" on stdout`, `see "confirm" on stdout`) rather than cutting the command.
+
 ## Redaction (rule 15)
 
 A redacted value is replaced with `[REDACTED:<type>]`, where `<type>` is one of `token`, `password`,

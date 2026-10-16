@@ -24,6 +24,7 @@
 # grant and with no extension, so they spend nothing another cell counts: stdout is one JSON envelope in
 # --text and --json alike, `status: grant_required`, `extend_by: operator`, `performed: false`, and no
 # `confirm` — an operator's command never sits where the agent's habit runs it (discovery revision 10).
+# Under --text, stderr carries rule 14's one line (Item 14 (b), 004 Cycle 3); under --json, nothing.
 # Validation runs in a throwaway of the agent image's interpreter (pyq) with tests/unit/schema.py, the
 # same stdlib validator the units use; the runner reads both files from the read-only repository.
 
@@ -43,6 +44,7 @@ request() {
     mode="$1"
     shift
   fi
+  REQUEST_MODE="$mode"
   run_in "$style" notty "o=\$(mktemp); e=\$(mktemp); adele ${mode} request standin.box create --name ${name} $* >\"\$o\" 2>\"\$e\"; rc=\$?; cat \"\$o\"; echo \"stderr_bytes=\$(wc -c <\"\$e\") rc=\$rc\"; cat \"\$e\"; rm -f \"\$o\" \"\$e\"; exit \$rc"
 }
 
@@ -51,16 +53,29 @@ GRANT_SCHEMA="${BATS_TEST_DIRNAME}/../../.specswarm/features/001-agent-shell-bas
 
 # envelope_ok GRANT LIMIT ALLOWED NEEDED — after `request`: stdout (all of it, before the stderr_bytes
 # line) is exactly one grant envelope, valid against grant-envelope.schema.json, naming GRANT, the limit
-# and the values; stderr is empty. Leaves the envelope's `extend` in EXTEND. ALLOWED '*' means any.
+# and the values. stderr: empty with --json; with --text exactly rule 14's one line, which names the
+# operator and the envelope's own extend command (Item 14 (b), plan's ruling 2026-10-16; 004 Cycle 3).
+# Leaves the envelope's `extend` in EXTEND. ALLOWED '*' means any.
 envelope_ok() {
-  local grant="$1" limit="$2" allowed="$3" needed="$4" i out=() envelope
+  local grant="$1" limit="$2" allowed="$3" needed="$4" i out=() err=() seen=no envelope
   for i in "${!lines[@]}"; do
-    [[ "${lines[$i]}" == stderr_bytes=* ]] && break
-    out+=("${lines[$i]}")
+    if [[ "$seen" == yes ]]; then
+      err+=("${lines[$i]}")
+    elif [[ "${lines[$i]}" == stderr_bytes=* ]]; then
+      seen=yes
+    else
+      out+=("${lines[$i]}")
+    fi
   done
   [[ "${#out[@]}" -eq 1 ]] || { echo "stdout is ${#out[@]} lines, want exactly the envelope: ${out[*]}" >&2; return 1; }
   envelope="${out[0]}"
-  assert_output_has "stderr_bytes=0 rc=4"
+  if [[ "${REQUEST_MODE:---text}" == --json ]]; then
+    assert_output_has "stderr_bytes=0 rc=4"
+  else
+    assert_output_has " rc=4"
+    [[ "${#err[@]}" -eq 1 && "${err[0]}" == "error: beyond grant ${grant}: ${limit} allows "*", needs ${needed}; nothing was performed (code 4) — only the operator can extend it: "* ]] ||
+      { echo "stderr under --text is not rule 14's one line: ${err[*]}" >&2; return 1; }
+  fi
   run pyq "
 import json, sys
 src, sch, env = sys.stdin.read().split('\x1e')
@@ -85,6 +100,10 @@ print(env.get('extend', ''))
 " < <(printf '%s\x1e%s\x1e%s' "$(cat "$SCHEMA_PY")" "$(cat "$GRANT_SCHEMA")" "$envelope")
   [[ "$status" -eq 0 && "${lines[0]}" == ok ]] || { echo "envelope: ${output}" >&2; echo "stdout was: ${envelope}" >&2; return 1; }
   EXTEND="${lines[1]}"
+  if [[ "${REQUEST_MODE:---text}" != --json && "${err[0]}" != *"only the operator can extend it: ${EXTEND}; ledger #"* ]]; then
+    echo "the stderr line does not carry the envelope's extend command (${EXTEND}): ${err[0]}" >&2
+    return 1
+  fi
 }
 
 holds() { standin_names | grep -qx "$1"; }

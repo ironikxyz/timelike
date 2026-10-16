@@ -264,7 +264,12 @@ def test_without_yes_exit_4_with_the_confirm_envelope_and_nothing_changes(lab: L
     before, git_before = tree(lab.ws), git_state(lab.ws)
     r = undo(lab, mode)
     assert r.returncode == 4
-    assert r.stderr == ""
+    if mode == "--json":
+        assert r.stderr == ""  # the envelope is the structured error (plan's ruling on Item 14 (b))
+    else:  # rule 14's one line; the confirm command is the agent's own
+        want = r"error: confirmation required: .+ \(\+\d+ more\) \(code 4\) — to proceed, run: "
+        want += r"undo --text --yes\n"
+        assert re.fullmatch(want, r.stderr), r.stderr
     env = json.loads(r.stdout)  # JSON in every mode
     assert schema.errors(env, schema.load("confirm-envelope.schema.json")) == []
     assert list(env)[:4] == ["tool", "target", "scope", "status"]

@@ -389,3 +389,17 @@ ASSUMED: ADELE_REAP_INTERVAL accepts 100ms to 1h and ADELE_REAP_PASSES 1 to 100;
 ABSENT: compose sets neither variable; the e2e lane runs on the defaults (5 s, 5 passes)
 ABSENT: `status` lists given-up rows but not every due row; the due count is in the verdict, and `adeled ledger` has the rest
 Verification: `go test -race -cover ./...`: all packages ok; adeled 92.9%; staticcheck (host build) see the line above; go vet, gofmt
+SCOPE: in (5 changed files)
+
+### T029: agentio — rule 14's stderr line for exit 4 in text mode (Item 14 (b)) and the mutating + grant_envelope guard (FR-38, FR-39, FR-41)
+**Started:** 2026-10-16T09:37:21+00:00 | **Completed:** 2026-10-16T09:44:22Z
+
+INHERITED: plan's ruling, `bridge/feedback/12-20261016-091249-adele-text-mode-human-line.md` § Resolution (clarification, not bench-gated); the line's two forms and rule 13's fallback are copied from it (confidence: high)
+FLAGGED: the line is printed by agentio's envelope path, so every tool with `confirm_protocol: true` (undo, services, package-guard and the rest) and `adele` inherit it, as the ruling says — chose the shared path over a per-tool line (confidence: high)
+FLAGGED: three unit tests pinned "stderr is empty" for exit 4 under `--text` (test_adele_cli, test_undo, test_package_guard_shim's terminal case); each now asserts the ruling's line under --text and nothing under --json, the envelope unchanged. On a terminal the shim prints the guard's captured stdout after the guard's stderr has reached the terminal, so the line comes first there. SC-3's e2e `envelope_ok` asserted `stderr_bytes=0` with --text as its default mode; it now asserts exactly the line, carrying the envelope's own extend command (confidence: high)
+ASSUMED: "<plan summary>" is the first plan line plus "(+N more)", or the scope when the plan is empty (confidence: medium — the ruling names the slot, not its content)
+FLAGGED: a confirmation envelope's stdout is NOT byte-identical between --text and --json, and never was: `confirm` replays the caller's own argv (`undo --text --yes` vs `undo --json --yes`). This change leaves that as it is; the grant envelope's stdout is byte-identical across modes, tested (test_exit_4_stdout_is_byte_identical_in_text_and_json). Reported in the cycle report rather than changed (confidence: high)
+ASSUMED: under --json, no tool printed anything on stderr for exit 4 before this change (agentio's envelope path writes stdout only), so the ruling's "report it rather than change it" has nothing to report (confidence: high)
+ABSENT: the grep for other e2e pins found none beyond SC-3: the package-guard cells run notty (JSON); SC-4 searches the combined output for the canary and the status bytes, both unaffected
+ABSENT: agentio's rule-9 test (test_rule9_confirm_envelope, --text) is unchanged and passes, as the send requires
+Verification: ruff check + format clean on the five files; mypy --strict on agentio clean; pytest: agentio, adele CLI, undo, package-guard shim, conform violations — 235 passed; full unit suite before the pin updates: 3 failed (these three), 2511 passed

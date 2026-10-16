@@ -154,6 +154,14 @@ class Tool:
         # tool written before revision 13 keeps rule 9 whole (report 03 Appendix B's field, restored).
         if confirm_protocol and not mutating:
             raise ValueError(f"{name}: confirm_protocol=True needs mutating=True")
+        # 004 Cycle 3 (carried from 001's Cycle 7): a grant client is not --yes-confirmed by the agent,
+        # because the grant is the confirmation (revision 10). mutating=True would give it --yes and make
+        # codes() describe exit 4 as confirmation only, so the pair is refused here, at declaration.
+        if grant_envelope and mutating:
+            raise ValueError(
+                f"{name}: grant_envelope=True cannot be mutating=True: the grant is the confirmation,"
+                " so a grant client has no --yes (discovery revision 10)"
+            )
         self.confirm_protocol = mutating if confirm_protocol is None else confirm_protocol
         # Feature 009 (the session journal): the event's pointer, `ref: {kind: data[key]}`, taken from
         # the result's own data, so the journal points at what the tool reported (run's log, a snapshot).
@@ -525,6 +533,36 @@ def grant_required(
         envelope["ledger_id"] = ledger_id
     verdict = f"beyond grant {grant}: limit {limit['name']}; nothing performed; the operator extends it"
     return Result(target, scope, verdict, exit=EXIT_CONFIRM, envelope=envelope)
+
+
+def exit4_line(envelope: dict[str, Any], columns: int = 0) -> str:
+    """Rule 14's text line for an exit-4 envelope. The grant line says the command is the operator's; the
+    confirm line's command is the agent's own. Past `columns` (rule 13), the remediation points at the
+    envelope instead of cutting the command, which is always whole on stdout."""
+
+    def c(v: Any) -> str:
+        return _clean(str(v))
+
+    if envelope.get("status") == GRANT_REQUIRED:
+        lim = envelope.get("limit") or {}
+        what = (
+            f"beyond grant {c(envelope.get('grant'))}: {c(lim.get('name'))} allows {c(lim.get('allowed'))},"
+            f" needs {c(lim.get('needed'))}; nothing was performed"
+        )
+        ledger = envelope.get("ledger_id")
+        tail = f"; ledger #{ledger}" if isinstance(ledger, int) and not isinstance(ledger, bool) else ""
+        head = f"error: {what} (code {EXIT_CONFIRM}) — only the operator can extend it: "
+        line = f"{head}{c(envelope.get('extend'))}{tail}"
+        short = f'{head}see "extend" on stdout{tail}'
+    else:
+        plan = [c(x) for x in envelope.get("plan") or []]
+        summary = plan[0] if plan else c(envelope.get("scope", ""))
+        if len(plan) > 1:
+            summary += f" (+{len(plan) - 1} more)"
+        head = f"error: confirmation required: {summary} (code {EXIT_CONFIRM}) — to proceed, run: "
+        line = f"{head}{c(envelope.get('confirm'))}"
+        short = f'{head}see "confirm" on stdout'
+    return short if 0 < columns < len(line) else line
 
 
 def session_id() -> str:
@@ -960,6 +998,11 @@ def _emit_result(r: Result, ctx: Context, started: float) -> int:
         # The envelope's own key order, not sorted: rule 12's tool, target, scope come first, then its
         # status. Sorting the top level (as `_clean_data` does for data) put `confirm` first.
         _print_json({str(k): _clean_data(v) for k, v in r.envelope.items()})
+        if ctx.mode == "text":
+            # Rule 14 applied to exit 4 (plan's ruling, 2026-10-16; 004 Cycle 3): a person reading text gets
+            # one line on stderr saying what was refused and whose command lifts it. stdout above is unchanged
+            # in every mode, and --json adds nothing: there the envelope IS the structured error (rule 9).
+            print(exit4_line(r.envelope, ctx.columns), file=sys.stderr)
         return r.exit
     clash = RESERVED_KEYS & set(r.data)
     if clash:

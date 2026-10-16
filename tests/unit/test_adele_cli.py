@@ -358,7 +358,13 @@ def test_refused_is_exit_4_with_the_grant_envelope_on_stdout(
     adele.answer("POST", "/v1/requests", 403, REFUSED)
     r = go(py, scratch, adele.url, mode, *CREATE, "--port", "22", "--grant", "demo")
     assert r.returncode == 4
-    assert r.stderr == ""
+    if mode == "--json":
+        assert r.stderr == ""  # with --json the envelope IS the structured error (plan, 2026-10-16)
+    else:  # rule 14's one line, naming whose command it is (Item 14 (b); 004 Cycle 3)
+        assert r.stderr == (
+            "error: beyond grant demo: ports allows 8080, needs 22; nothing was performed (code 4)"
+            f" — only the operator can extend it: {EXTEND}; ledger #7\n"
+        )
     env = json.loads(r.stdout)  # JSON in every mode, and nothing else on stdout (rule 9's convention)
     assert schema.errors(env, schema.load("grant-envelope.schema.json")) == []
     assert list(env)[:4] == ["tool", "target", "scope", "status"]  # rule 12, then the status
@@ -371,6 +377,19 @@ def test_refused_is_exit_4_with_the_grant_envelope_on_stdout(
     sent = adele.received()[-1].body
     assert env["request"] == sent  # the refused request, exactly as the client sent it
     assert "confirm" not in env  # the operator's command never sits where the agent's habit runs it
+
+
+def test_exit_4_stdout_is_byte_identical_in_text_and_json(py: str, scratch: Path, adele: FakeAdele) -> None:
+    """Item 14 (b), plan's ruling: the line is added on stderr only; what a caller acts on does not change."""
+    adele.answer("POST", "/v1/requests", 403, REFUSED)
+    text = go(py, scratch, adele.url, "--text", *CREATE, "--port", "22", "--grant", "demo")
+    adele.answer("POST", "/v1/requests", 403, REFUSED)
+    js = go(py, scratch, adele.url, "--json", *CREATE, "--port", "22", "--grant", "demo")
+    assert (text.returncode, js.returncode) == (4, 4)
+    assert text.stdout == js.stdout
+    assert len(text.stderr.splitlines()) == 1 and js.stderr == ""
+    assert "operator" in text.stderr and EXTEND in text.stderr
+    assert EXTEND not in json.loads(text.stdout).get("confirm", "")
 
 
 def test_the_envelope_passes_conform_c9_and_its_negative_case_fails(

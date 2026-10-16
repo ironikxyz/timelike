@@ -309,6 +309,80 @@ def test_rule9_confirm_protocol_needs_mutating() -> None:
     assert agentio.Tool("x", "t", "s").confirm_protocol is False
 
 
+def test_grant_client_cannot_be_mutating() -> None:
+    """004 Cycle 3 (carried from 001's Cycle 7): mutating + grant_envelope would give a grant client --yes and
+    describe exit 4 as confirmation only. Refused at declaration."""
+    with pytest.raises(ValueError, match="grant_envelope=True cannot be mutating=True"):
+        agentio.Tool("x", "t", "s", mutating=True, grant_envelope=True)
+    with pytest.raises(ValueError, match="cannot be mutating"):
+        agentio.Tool("x", "t", "s", mutating=True, confirm_protocol=False, grant_envelope=True)
+    ok = agentio.Tool("x", "t", "s", grant_envelope=True)
+    assert ok.envelopes() == ["grant_required"] and ok.codes()[4].startswith("beyond the grant")
+
+
+# ── rule 14 applied to exit 4 (plan's ruling on Item 14 (b), 2026-10-16; 004 Cycle 3) ────────────────
+
+
+GRANT_ENV: dict[str, Any] = {
+    "status": "grant_required", "grant": "demo",
+    "limit": {"name": "ports", "allowed": "8080", "needed": "22"},
+    "extend": "docker exec timelike-adele adeled extend demo ports 22", "ledger_id": 46,
+}  # fmt: skip
+
+
+def test_exit4_line_for_the_grant_envelope_names_the_operator() -> None:
+    line = agentio.exit4_line(GRANT_ENV)
+    assert line == (
+        "error: beyond grant demo: ports allows 8080, needs 22; nothing was performed (code 4)"
+        " — only the operator can extend it:"
+        " docker exec timelike-adele adeled extend demo ports 22; ledger #46"
+    )
+    assert re.fullmatch(r"error: .+ \(code 4\) — .+", line)  # rule 14's shape
+    no_ledger = agentio.exit4_line({**GRANT_ENV, "ledger_id": None})
+    assert no_ledger.endswith("adeled extend demo ports 22")
+
+
+def test_exit4_line_for_the_confirm_envelope_is_the_agents_command() -> None:
+    env = {
+        "status": "confirmation_required", "scope": "all",
+        "plan": ["delete a", "delete b"], "confirm": "t --yes",
+    }  # fmt: skip
+    assert agentio.exit4_line(env) == (
+        "error: confirmation required: delete a (+1 more) (code 4) — to proceed, run: t --yes"
+    )
+    one = agentio.exit4_line({**env, "plan": ["\x1b[31mdelete a\x1b[0m"]})  # cleaned like any text line
+    assert one == "error: confirmation required: delete a (code 4) — to proceed, run: t --yes"
+    assert agentio.exit4_line({**env, "plan": []}).startswith("error: confirmation required: all (code 4)")
+
+
+def test_exit4_line_past_columns_points_at_the_envelope_instead_of_cutting() -> None:  # rule 13
+    full = agentio.exit4_line(GRANT_ENV)
+    short = agentio.exit4_line(GRANT_ENV, columns=len(full) - 1)
+    assert short.endswith('only the operator can extend it: see "extend" on stdout; ledger #46')
+    assert agentio.exit4_line(GRANT_ENV, columns=len(full)) == full
+    assert agentio.exit4_line(GRANT_ENV, columns=0) == full  # 0: no cut, as rule 13's _cut
+    conf = {"status": "confirmation_required", "scope": "s", "plan": ["p"], "confirm": "t --yes " + "x" * 200}
+    assert agentio.exit4_line(conf, columns=80).endswith('to proceed, run: see "confirm" on stdout')
+
+
+def test_exit4_stderr_line_in_text_mode_only_and_stdout_unchanged(
+    py: str, make_tool: ToolMaker, scratch: Path
+) -> None:
+    body = """
+if not args.yes:
+    return agentio.confirm_required(ctx, target="thing", scope="all", plan=["delete thing"])
+return agentio.Result(target="thing", scope="all", verdict="deleted")
+"""
+    t = make_tool("mutator", body, mutating=True, destructive=True)
+    text, js = go(py, t, scratch, "--text"), go(py, t, scratch, "--json")
+    assert (text.returncode, js.returncode) == (4, 4)
+    assert json.loads(text.stdout) == {**json.loads(js.stdout), "confirm": json.loads(text.stdout)["confirm"]}
+    assert js.stderr == ""
+    assert text.stderr.splitlines() == [
+        "error: confirmation required: delete thing (code 4) — to proceed, run: mutator --text --yes"
+    ]
+
+
 def test_manifest_dry_run_follows_the_flag(py: str, make_tool: ToolMaker, scratch: Path) -> None:
     body = 'return agentio.Result(target="t", scope="s", verdict="ok")'
     for kwargs, want in (({}, False), ({"destructive": True}, True)):
