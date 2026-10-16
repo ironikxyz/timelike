@@ -323,3 +323,19 @@ FLAGGED: the cell now greps for `"status": "grant_required"`, the bytes agentio'
 FLAGGED: T018 missed this marker: its sweep for interim forms searched for `interim`, `Item 13`, `stdout_bytes` and `operator extends it`, not for `(code 4)`. A sweep for `code 4`, `stdout_bytes` and `operator extends it` over tests/, scripts/ and tools/ now finds no other e2e use (confidence: high)
 ABSENT: not run in the image (no Docker); shellcheck clean
 SCOPE: in (1 changed files)
+
+---
+
+## Cycle 3 — slice 1 (send `bridge/sends/12-rev2-20261016-091249.md`; `/specswarm:implement`, attended, specswarm 4.0.1-botbaubble.2.44.0)
+
+### T024: ledger schema 2, the v1→v2 rebuild, Reap, Due, Live, Denials
+**Started:** 2026-10-16T09:23:47Z | **Completed:** 2026-10-16T09:27:21Z
+
+INHERITED: (none — first task of the cycle; the design is spec § Slice 1, FR-24 to FR-42)
+ASSUMED: reap rows copy grant, session, agent, capability and resource from the performed row inside the same transaction, rather than taking them from the caller, so a reap row cannot disagree with what it reaps (confidence: high)
+FLAGGED: "one ending per resource" is enforced in Reap itself (count of reaped/gone rows for ref, read in the immediate transaction) rather than by a UNIQUE index — chose the check over a partial unique index because reap-failed rows share ref and SQLite's partial index would need the outcome in its WHERE, which the migration would also have to create on upgraded files; the check is tested with two handles and eight goroutines (confidence: high)
+FLAGGED: a meta table with no version over a v1-shaped ledger is upgraded (createFresh checks for the ref column) rather than left at v1 shape stamped 2 — slice 0's "adopted" path would otherwise stamp a file schema 2 that cannot hold a reap row (confidence: high)
+ASSUMED: the upgrade carries AUTOINCREMENT's sequence through RENAME; tested: the next id after copied ids 3 and 7 is 8 (confidence: high)
+ABSENT: no down-migration: a schema-2 file is refused by a schema-1 Adele (slice 0's rule, ErrNewerSchema), which is the same stance slice 0 took for any newer file
+ABSENT: Denials has no index on (outcome, at); the ledger is small (hundreds of rows on the live stack) and every query is per request, not per row
+Verification: go vet, gofmt, `go test -cover ./internal/ledger` ok, coverage 87.0% (host toolchain go1.27.1; the lane's is GO_IMAGE 1.27.2)

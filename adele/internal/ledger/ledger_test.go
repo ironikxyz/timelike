@@ -66,7 +66,7 @@ func TestOpenCreatesSchemaIdempotently(t *testing.T) {
 			t.Fatalf("reopen %d: %d rows, want 1", i, len(got))
 		}
 		var n int
-		if err := l2.db.QueryRow(`SELECT count(*) FROM meta WHERE key='schema_version' AND value='1'`).
+		if err := l2.db.QueryRow(`SELECT count(*) FROM meta WHERE key='schema_version' AND value='2'`).
 			Scan(&n); err != nil || n != 1 {
 			t.Fatalf("schema_version rows = %d, %v", n, err)
 		}
@@ -303,12 +303,12 @@ func TestConcurrentHandles(t *testing.T) {
 
 func TestRefusesNewerSchema(t *testing.T) {
 	l, path := tempLedger(t)
-	if _, err := l.db.Exec(`UPDATE meta SET value = '2' WHERE key = 'schema_version'`); err != nil {
+	if _, err := l.db.Exec(`UPDATE meta SET value = '3' WHERE key = 'schema_version'`); err != nil {
 		t.Fatal(err)
 	}
 	l.Close()
 	if _, err := Open(path); !errors.Is(err, ErrNewerSchema) {
-		t.Fatalf("Open(v2) err = %v, want ErrNewerSchema", err)
+		t.Fatalf("Open(v3) err = %v, want ErrNewerSchema", err)
 	}
 }
 
@@ -340,7 +340,7 @@ func TestMetaWithoutVersionIsAdopted(t *testing.T) {
 	db.Close()
 	l := open(t, path)
 	var v string
-	if err := l.db.QueryRow(`SELECT value FROM meta WHERE key='schema_version'`).Scan(&v); err != nil || v != "1" {
+	if err := l.db.QueryRow(`SELECT value FROM meta WHERE key='schema_version'`).Scan(&v); err != nil || v != "2" {
 		t.Fatalf("schema_version = %q, %v", v, err)
 	}
 }

@@ -1,5 +1,6 @@
 // Package ledger is Adele's append-only account of every request: performed,
-// refused and extended (spec FR-14..FR-17, data-model § Ledger).
+// refused and extended (spec FR-14..FR-17, data-model § Ledger), and from slice 1
+// of every reap: reaped, gone or reap-failed (FR-24..FR-31).
 //
 // The file is SQLite through modernc.org/sqlite (pure Go; no cgo). `adeled
 // serve` and the operator's `adeled extend` open the same file at once, so
@@ -25,7 +26,15 @@ const (
 	OutcomePerformed = "performed"
 	OutcomeRefused   = "refused"
 	OutcomeExtended  = "extended"
+	// The reaper's outcomes (slice 1, FR-26). Reaped and gone end a resource's life in the
+	// ledger; a reap-failed row records one failed pass and the resource stays due.
+	OutcomeReaped     = "reaped"
+	OutcomeGone       = "gone"
+	OutcomeReapFailed = "reap-failed"
 )
+
+// ActionDelete is the action recorded on reap rows: the undo the performed row names (D-7).
+const ActionDelete = "delete"
 
 // OperatorSession is the session recorded on an extended row.
 const OperatorSession = "operator"
@@ -53,6 +62,14 @@ type Row struct {
 	LimitName  string
 	Allowed    string
 	Needed     string
+	// Slice 1 (schema 2). Ref is the performed row a reap concerns; Agent is self-declared attribution,
+	// like Session (D-14); Cause and Attempts describe a reap; Host is where a refused request would have
+	// reached (FR-35).
+	Ref      *int64
+	Agent    string
+	Cause    string
+	Attempts *int
+	Host     string
 }
 
 // Extension is one operator extension: the overlay on a grant's limit.
@@ -94,8 +111,8 @@ func Open(path string) (*Ledger, error) {
 func (l *Ledger) Close() error { return l.db.Close() }
 
 const insertRow = `INSERT INTO ledger (at, outcome, "grant", session, capability, action,
-	resource, cost_cents, expires_at, undo, limit_name, allowed, needed)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	resource, cost_cents, expires_at, undo, limit_name, allowed, needed, ref, agent, cause, attempts, host)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Performed appends a performed row. Grant, Session, Capability, Action,
 // Resource, CostCents, ExpiresAt and Undo (valid JSON) are required; At
@@ -115,6 +132,7 @@ func (l *Ledger) Performed(r Row) (int64, error) {
 		return 0, fmt.Errorf("%w: undo is not valid JSON", ErrInvalid)
 	}
 	r.Outcome = OutcomePerformed
+	r.Ref, r.Cause, r.Attempts, r.Host = nil, "", nil, ""
 	return l.insert(l.db, r)
 }
 
@@ -130,7 +148,7 @@ func (l *Ledger) Refused(r Row) (int64, error) {
 		return 0, fmt.Errorf("%w: cost_cents is negative", ErrInvalid)
 	}
 	r.Outcome = OutcomeRefused
-	r.ExpiresAt, r.Undo = nil, ""
+	r.ExpiresAt, r.Undo, r.Ref, r.Cause, r.Attempts = nil, "", nil, "", nil
 	return l.insert(l.db, r)
 }
 
@@ -167,6 +185,69 @@ func (l *Ledger) Extended(grant, limit, oldValue, newValue string, at time.Time)
 	return id, nil
 }
 
+// Reap records one reap of the performed row ref: its outcome (reaped, gone or reap-failed), the cause in
+// words and the delete attempts made. The grant, session, agent, capability and resource are copied from
+// the performed row, so a reap row says whose resource it was (FR-27).
+//
+// It writes only while ref is still unreaped, checked in the same immediate transaction, so the serving
+// reaper and the operator's `adeled reap` can run at once and a resource gets one ending (FR-28). wrote
+// is false, with a nil error, when ref already had one.
+func (l *Ledger) Reap(ref int64, outcome, cause string, attempts int, at time.Time) (id int64, wrote bool, err error) {
+	switch outcome {
+	case OutcomeReaped, OutcomeGone, OutcomeReapFailed:
+	default:
+		return 0, false, fmt.Errorf("%w: %q is not a reap outcome", ErrInvalid, outcome)
+	}
+	if strings.TrimSpace(cause) == "" {
+		return 0, false, fmt.Errorf("%w: missing cause", ErrInvalid)
+	}
+	if attempts < 0 {
+		return 0, false, fmt.Errorf("%w: attempts is negative", ErrInvalid)
+	}
+	if at.IsZero() {
+		at = time.Now()
+	}
+	tx, err := l.db.Begin()
+	if err != nil {
+		return 0, false, fmt.Errorf("ledger: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+	var (
+		grant, session, outcomeWas  string
+		agent, capability, resource sql.NullString
+		ended                       int
+	)
+	err = tx.QueryRow(`SELECT outcome, "grant", session, agent, capability, resource FROM ledger WHERE id = ?`,
+		ref).Scan(&outcomeWas, &grant, &session, &agent, &capability, &resource)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, fmt.Errorf("%w: no ledger row %d", ErrInvalid, ref)
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("ledger: read row %d: %w", ref, err)
+	}
+	if outcomeWas != OutcomePerformed {
+		return 0, false, fmt.Errorf("%w: row %d is %s, not performed", ErrInvalid, ref, outcomeWas)
+	}
+	if err := tx.QueryRow(`SELECT count(*) FROM ledger WHERE ref = ? AND outcome IN (?, ?)`,
+		ref, OutcomeReaped, OutcomeGone).Scan(&ended); err != nil {
+		return 0, false, fmt.Errorf("ledger: read reaps of %d: %w", ref, err)
+	}
+	if ended > 0 {
+		return 0, false, nil
+	}
+	n := attempts
+	id, err = l.insert(tx, Row{At: at, Outcome: outcome, Grant: grant, Session: session, Agent: agent.String,
+		Capability: capability.String, Action: ActionDelete, Resource: resource.String, Ref: &ref,
+		Cause: cause, Attempts: &n})
+	if err != nil {
+		return 0, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, false, fmt.Errorf("ledger: commit reap: %w", err)
+	}
+	return id, true, nil
+}
+
 type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
@@ -179,13 +260,20 @@ func (l *Ledger) insert(e execer, r Row) (int64, error) {
 	if r.ExpiresAt != nil {
 		expires = formatTime(*r.ExpiresAt)
 	}
-	var cost any
+	var cost, ref, attempts any
 	if r.CostCents != nil {
 		cost = *r.CostCents
 	}
+	if r.Ref != nil {
+		ref = *r.Ref
+	}
+	if r.Attempts != nil {
+		attempts = *r.Attempts
+	}
 	res, err := e.Exec(insertRow, formatTime(r.At), r.Outcome, r.Grant, r.Session,
 		nullable(r.Capability), nullable(r.Action), nullable(r.Resource), cost, expires,
-		nullable(r.Undo), nullable(r.LimitName), nullable(r.Allowed), nullable(r.Needed))
+		nullable(r.Undo), nullable(r.LimitName), nullable(r.Allowed), nullable(r.Needed),
+		ref, nullable(r.Agent), nullable(r.Cause), attempts, nullable(r.Host))
 	if err != nil {
 		return 0, fmt.Errorf("ledger: append %s row: %w", r.Outcome, err)
 	}
