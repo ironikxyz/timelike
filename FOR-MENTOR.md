@@ -1347,3 +1347,81 @@ It puts the key in the relay rather than the harness process, which the send rul
 
 **For the mentor (route: code):**
 - Q1: (a) or (b).
+
+---
+
+## Item 26 — Feature 12 slice 1 (`004-adele-grants`, Cycle 3): what denies an outbound connection before slice 2's allowlist (blocks the denial criterion only)
+
+**Status:** open. Raised 2026-10-16T09:19:29Z (read from the clock) on `modify/004-slice-1`, from send
+`bridge/sends/12-rev2-20261016-091249.md`, seam 1, before the denial part is built. The send asks for this item
+where a decision would read a criterion more narrowly than its text. **Every reading below that builds without
+slice 2's allowlist does that**, so it is raised here.
+
+**Built meanwhile, not blocked:** the reaper and its record (seam 2), the agent attribution on ledger rows
+(carried item 3), agentio's `mutating` + `grant_envelope` guard (carried item 2), and `status` over the denials
+Adele already records (seam 3; see Q2). None of it depends on the answer.
+
+**Blocked until this is answered:** the plain denial message and the denial record for any source other than
+Adele's grant refusals; with them, the e2e cells for the criterion's first half, and the README status block
+(the send applies it only when both slice-1 Automated criteria are met).
+
+### Q1 · Which denials does slice 1 make plain and record?
+
+The criterion: *"A denied outbound connection returns a plain message naming the host, the policy that denied it
+and how the operator allows it, and a status command explains any recent denial by host."*
+
+**What denies a connection today**, read from the code:
+- **Adele's grant refusals** (004 slice 0). The policy is the grant; how the operator allows it is the extend
+  command, already in the envelope; each is in the ledger. But what is refused is a reaching *request*, not the
+  agent's own connection, and its "host" is the capability's provider endpoint (`adele-standin:8481` for
+  `standin.box`), which the agent never connects to.
+- **The compose networks** (004 D-2). The agent cannot reach anything on `adele-standin`; it sees a DNS failure
+  ("Name or service not known"). That is a policy, but nothing records it and nothing in the agent's container
+  can tell it apart from any other name that does not resolve.
+- **The package guard** (013). Its refusals are about a package (exists, old enough), not a connection. Its
+  "unreachable from this container" is a connection that failed, not one a policy denied. Its records are in the
+  agent's own journal.
+- **`run`'s verdict** (003) concludes a refused or unreachable connection (exit and cause), but no policy denied
+  it: the agent keeps compose's default network, with egress, until slice 2 (004 D-2).
+
+So **no timelike policy denies the agent's own outbound connections in slice 1.** That is what the allowlist adds.
+
+**The options:**
+- **(a) Adele's refusals, made plain and recorded by host. Recommended.** Each refusal names the provider host
+  it would have reached, the policy (`grant G, limit L`) and the operator's command (the envelope's `extend`,
+  unchanged). `adele status HOST` (Q2) explains them. The record and `status` are built so that slice 2's
+  allowlist denials land in the same record with the same fields. The README and the cycle report say plainly
+  that the agent's own connections are not filtered until slice 2. **Narrower than the text**: "outbound
+  connection" read as "reaching request".
+- **(b) (a), plus `run`'s verdict on a failed connection** naming the host and saying that no timelike policy
+  denied it, recorded in the agent's journal. It tells the agent and the person something true, but it is not a
+  denial, and the record is agent-writable.
+- **(c) Defer the denial criterion to slice 2.** Build nothing for it now; the README stays untouched (the
+  send's rule). The reaper and the rest still ship in this cycle.
+- **(d) A minimal Adele egress filter now.** That is slice 2 early, which the send forbids. Listed for
+  completeness, not offered.
+
+**Why (a):** it is the one reading where the policy, the record and the operator's command are all real and
+Adele's. Its message and `status` are what slice 2 needs anyway, so nothing built for it is thrown away. (b)'s
+addition is honest but would put a second, agent-writable source beside Adele's. (c) is the conservative
+choice if "connection" must mean the agent's own.
+
+### Q2 · The status command (seam 3; decided in the spec, for your eye)
+
+- **Whose:** both. `adele status [HOST]` on the agent side (it extends slice 0's reachability verdict, so the
+  habit the agent already has finds it) and `adeled status [HOST]` for the operator. Both read Adele's ledger
+  through her; the agent's client asks Adele over the request interface and cannot write anything.
+- **What it shows for a host:** each recent denial: when, the policy (grant and limit, what was allowed and
+  needed), the operator's command, and the ledger row. With no recent denial, it says so (exit 0). With
+  several, it lists them, newest first, with a count.
+- **How far back "recent" reaches:** 24 hours, bounded at the last 20 denials per host. Both figures are
+  printed in the verdict, so a reader knows the window.
+- **The output contract (001):** JSON when piped, a verdict line first; Adele's revision is in the output
+  (cross-stack P003).
+
+### Q3 · Item 14 (b), for the record
+
+`bridge/feedback/12-20261016-091249-adele-text-mode-human-line.md` carried no answer from plan when this was
+raised. Per the send, nothing is built for (b) until it does, and `--help` and the README take route (a).
+
+**For the mentor (route: code):** Q1: (a), (b), (c), or another reading. Q2: confirm, or say what to change.
