@@ -280,7 +280,7 @@ coverage per language, Go included (quality-standards). Units come before or bes
 - [X] T034 ~~SC-8's denial message, **after FOR-MENTOR Item 26**.~~ Superseded by revision 16 (Cycle 4, below): the denial message is slice 2's.
 
 ## Phase 13: Polish
-- [ ] T035 README (Adele's section; the reference regenerated; Status/What only if SC-7 and SC-8 are met).
+- [X] T035 README (Adele's section; the reference regenerated; Status/What only if SC-7 and SC-8 are met).
 - [ ] T036 The host lane (Go, pytest, ruff, mypy, shellcheck; `make test-host` serial and `-n 8`), the cycle
   report § Cycle 3, reboot.md.
 
@@ -301,9 +301,9 @@ T025 is disjoint from T024/T026. Built in this instance; no delegation planned (
   `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats`; the
   exit-4 line's cell to `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`;
   `Makefile` SHELLCHECK_FILES.
-- [ ] T039 The governance audit 15 → 16: `.specswarm/constitution.md`, `.specswarm/tech-stack.md`,
+- [X] T039 The governance audit 15 → 16: `.specswarm/constitution.md`, `.specswarm/tech-stack.md`,
   `.specswarm/quality-standards.md` (one commit).
-- [ ] T040 FOR-MENTOR.md: Item 26 closed.
+- [X] T040 FOR-MENTOR.md: Item 26 closed.
 
 T035 (README) and T036 (host lane, cycle report § Cycle 3 short and § Cycle 4 full, reboot.md) are done under
 this send.

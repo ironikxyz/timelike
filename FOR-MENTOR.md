@@ -1352,10 +1352,14 @@ It puts the key in the relay rather than the harness process, which the send rul
 
 ## Item 26 — Feature 12 slice 1 (`004-adele-grants`, Cycle 3): what denies an outbound connection before slice 2's allowlist (blocks the denial criterion only)
 
-**Status:** open: **Q2 answered**, Q1 with plan. The mentor carried it to
-`../bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md` (2026-10-16T10:05:19Z): Q2 confirmed as
-specified, with one addition (the verdict names where the record lives), built in this cycle; Q1 routed to plan, to
-accept (a) as a clarification or revise the prompt. As raised: Raised 2026-10-16T09:19:29Z (read from the clock) on `modify/004-slice-1`, from send
+**Status:** closed 2026-10-16, answered in `../bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md`
+(resolved 10:24:37Z). **Q1, plan: a revision**, discovery revision 16 (plan `55aba50`): option (c), done as a split. The
+slice-1 criterion is struck; a status command over Adele's refusals by host (naming where the record lives) stays in
+slice 1, and the denied-connection message moves to slice 2 with the allowlist. (a) was rejected as a reading (it would
+repeat slice 0, with the wrong host), (b) for P4. **Q2, the mentor:** confirmed as specified, plus the record's place in
+the verdict. Built: the status command and its record (004 Cycle 3), the record's place (`9d45b72`); the spec corrected
+in place under the re-send `bridge/sends/12-rev16-20261016-102708.md` (004 Cycle 4). The text below is kept as raised.
+As raised: Raised 2026-10-16T09:19:29Z (read from the clock) on `modify/004-slice-1`, from send
 `bridge/sends/12-rev2-20261016-091249.md`, seam 1, before the denial part is built. The send asks for this item
 where a decision would read a criterion more narrowly than its text. **Every reading below that builds without
 slice 2's allowlist does that**, so it is raised here.
