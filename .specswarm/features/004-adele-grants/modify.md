@@ -38,3 +38,16 @@ All additive. A schema-1 ledger is migrated; the agent's default (piped, JSON) o
 ### Testing strategy
 Go units per outcome and for the migration; pytest for agentio's line, the guard, the client and the journal;
 bats: one file per criterion (reap: spread; restart and unreachable: serial), named after its text.
+
+---
+
+## Cycle 4 — `bridge/sends/12-rev16-20261016-102708.md` (re-send at prompt revision 16)
+
+**Status:** Active | **Created:** 2026-10-16 | **Impact analysis:** `impact-analysis.md` § Cycle 4
+
+- **F007 (correction, declared):** § Slice 1 re-specified against revision 16: SC-8 is now the status command over
+  Adele's refusals (grant and limit, allowed and needed, the operator's command, where the record lives; a host with
+  none says so). The denied-connection message is slice 2's and is no obligation here.
+- **Governance:** discovery 15 → 16 audited in all three files (no rule changed; prompt 12 only).
+- **README:** the send's status block applied; the agent's own connections are said to be unfiltered until slice 2.
+- No functional, data-model or contract change beyond Cycle 3's.

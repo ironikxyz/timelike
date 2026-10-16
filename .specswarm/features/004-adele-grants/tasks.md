@@ -277,7 +277,7 @@ coverage per language, Go included (quality-standards). Units come before or bes
 - [X] T032 `tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats` (SC-7's restart and
   unreachable cases; `serial` in lane.conf: it stops Adele and the stand-in).
 - [X] T033 e2e for exit 4's human line (Item 14 (b)) and `status` by host.
-- [ ] T034 SC-8's denial message, **after FOR-MENTOR Item 26**.
+- [X] T034 ~~SC-8's denial message, **after FOR-MENTOR Item 26**.~~ Superseded by revision 16 (Cycle 4, below): the denial message is slice 2's.
 
 ## Phase 13: Polish
 - [ ] T035 README (Adele's section; the reference regenerated; Status/What only if SC-7 and SC-8 are met).
@@ -290,3 +290,20 @@ T035, T036 last.
 
 ## Parallel execution
 T025 is disjoint from T024/T026. Built in this instance; no delegation planned (the files are interlocked).
+
+---
+
+# Cycle 4 — re-send at prompt revision 16 (send `bridge/sends/12-rev16-20261016-102708.md`); deltas only
+
+- [X] T037 `spec.md` § Slice 1 corrected in place for revision 16 (declared); `audited_against` gains 16;
+  `audit-log.md`.
+- [X] T038 SC-8's e2e file renamed after the new criterion:
+  `tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats`; the
+  exit-4 line's cell to `tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats`;
+  `Makefile` SHELLCHECK_FILES.
+- [ ] T039 The governance audit 15 → 16: `.specswarm/constitution.md`, `.specswarm/tech-stack.md`,
+  `.specswarm/quality-standards.md` (one commit).
+- [ ] T040 FOR-MENTOR.md: Item 26 closed.
+
+T035 (README) and T036 (host lane, cycle report § Cycle 3 short and § Cycle 4 full, reboot.md) are done under
+this send.

@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/12-adele-grants.md
 source_send: bridge/sends/12-rev2-20261002-042951.md
 prompt_revision: 2
 discovery_revision: 9
-audited_against: [2]
+audited_against: [2, 16]
 slice: 0
 ---
 
@@ -359,7 +359,16 @@ be reported, and those baseline entries are not edited:
     (slice 2)
   - real providers (13, 14)
 
-## Slice 1 (Cycle 3, send `bridge/sends/12-rev2-20261016-091249.md`; natural)
+## Slice 1 (Cycle 3, send `bridge/sends/12-rev2-20261016-091249.md`; corrected in Cycle 4, send `bridge/sends/12-rev16-20261016-102708.md`; natural)
+
+> **Corrected in place, declared (Cycle 4, prompt revision 16).** Revision 16 struck the slice-1 criterion "A
+> denied outbound connection returns a plain message …" and split it: a status command over Adele's refusals stays
+> in slice 1, and the denied-connection message moves to slice 2 with the allowlist (plan's ruling on FOR-MENTOR
+> Item 26, `bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md`). This section described the struck
+> criterion, so it said something false; the lines that did are corrected below (the criteria list, the
+> denials-and-status heading, FR-35 to FR-37 and SC-8), each marked *(revision 16)*. Nothing else moved, and slice
+> 0's body above was true throughout. Corrected by `/specswarm:modify`, not regenerated, as the send directs: the
+> correction makes the spec ask for less, not claim more.
 
 Added work on a body that stays true, recorded here, declared. Prompt 12 is at revision 2, already in
 `audited_against` (modify row 4), so nothing is appended. Two lines above become out of date and are left as
@@ -369,9 +378,11 @@ that `instances` counts every creation (FR-34 below replaces it from this slice 
 Slice 1's three criteria, verbatim from the send:
 - *"Adele destroys resources whose time-to-live has expired, including after the requesting agent's container
   has stopped, and records each reap"* _(slice 1)_.
-- *"A denied outbound connection returns a plain message naming the host, the policy that denied it and how the
-  operator allows it, and a status command explains any recent denial by host"* _(slice 1)_. **What counts as a
-  denial in slice 1 is FOR-MENTOR Item 26, Q1**; the record and `status` below hold whatever the answer is.
+- *"A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed
+  and what was needed, the operator's command, and where the record lives; a host with none says so"* _(slice 1)_
+  *(revision 16; it replaces the struck criterion, whose connection half is slice 2's now and is no obligation of
+  this slice)*. **The agent's own outbound connections are not filtered until slice 2**: nothing in slice 1 denies
+  them, so nothing here explains them.
 - *DEMO: "Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the
   reap in the ledger"* (D21, Manual) _(slice 1)_.
 
@@ -447,15 +458,20 @@ operator can extend it, with the command.
 - **FR-34** `live` counts `performed` rows not yet `reaped` or `gone`; `spent` is unchanged (money spent stays
   spent).
 
-**Denials and status (seam 3; the source is Item 26)**
-- **FR-35** Each refusal records `host`: where the refused request would have reached, from Adele's own
-  configuration (`standin.box` → the stand-in's host and port).
+**Refusals and status (seam 3; Item 26 Q2, confirmed by the mentor; revision 16)**
+- **FR-35** Each refusal records `host`, where the refused request would have reached, from Adele's own
+  configuration (`standin.box` → the stand-in's host and port), and `extend`, the operator's command as the refusal
+  printed it. Slice 2's allowlist denials land in the same record with the same fields.
 - **FR-36** `adele status [HOST]` (agent side) and `adeled status [HOST]` (operator side) report Adele's
-  reachability and revision as before (P003), and the **recent denials**: those in the last 24 hours, at most 20
-  per host, newest first. With `HOST`, each is explained: when, the policy (grant and limit, allowed and
-  needed), the operator's command, the ledger row. No recent denial is said in so many words (exit 0). The
-  window is printed in the verdict. Output contract (001): verdict line first, JSON when piped.
-- **FR-37** The agent's client reads denials through `GET /v1/denials` on the request interface, read-only.
+  reachability and revision as before (P003), and **Adele's recent refusals**: those in the last 24 hours, at most
+  20 per host, newest first, with a count. With `HOST`, each is explained: when, the grant and limit, what was
+  allowed and what was needed, the operator's command, the ledger row. A host with none says so (exit 0). Both
+  figures are printed in the verdict, and so is **where the record lives** (Adele's ledger, read with `adeled
+  ledger`; the mentor's addition to Item 26 Q2, now the criterion's own words). Output contract (001): verdict line
+  first, JSON when piped. `status` reports on Adele's refusals from her ledger, not on the agent's own connections
+  (cross-stack P001).
+- **FR-37** The agent's client reads them through `GET /v1/denials` on the request interface, read-only. The path's
+  name is kept for slice 2, whose allowlist denials it will also return.
 
 **The human line (Item 14 (b); plan's ruling)**
 - **FR-38** agentio: a Result carrying an exit-4 envelope prints, **in text mode only**, one line on stderr in
@@ -483,7 +499,7 @@ operator can extend it, with the command.
 | SC | Criterion (send, slice 1) | How it is shown |
 |---|---|---|
 | SC-7 | "Adele destroys resources whose time-to-live has expired, including after the requesting agent's container has stopped, and records each reap" | e2e: boxes with a 1 m lifetime asked for from a throwaway agent container, which is then removed, and from the agent: each is gone from the stand-in's own record and the ledger has its `reaped` row with ref, session and agent. Already gone → `gone`; erroring and dropping stand-in → `reap-failed` with the cause, then `reaped` once cleared; Adele stopped past the expiry and started → reaped from the ledger; the stand-in stopped → `reap-failed` naming it unreachable, then `reaped`. Go units for every outcome, the bound, give-up, the same-box check and the migration |
-| SC-8 | "A denied outbound connection returns a plain message naming the host, the policy that denied it and how the operator allows it, and a status command explains any recent denial by host" | After Item 26. Built now: `status` over Adele's recorded refusals, by host, with none, one and several |
+| SC-8 | "A status command explains each of Adele's recent refusals by host, naming the grant and limit, what was allowed and what was needed, the operator's command, and where the record lives; a host with none says so" *(revision 16)* | e2e, from the agent's container: `adele status HOST` with none (says so), and with several (newest first, each with grant, limit, allowed, needed, the operator's command, session and agent); the record's place in the verdict; the operator's `adeled status HOST` explaining the same rows with Adele's revision. Units for the window, the cap, an Adele that cannot say ("unknown", never "none") and rule 13's columns |
 | SC-9 (Manual, D21) | "Adele destroys a resource whose TTL expired after the Agent's session ended, and the Operator sees the reap in the ledger" | Observed by the mentor with the operator after the lane. `unconfirmed` until then |
 
 Also required: Item 14 (b)'s three tests (stdout identical across modes for exit 4; one rule-14 line on stderr

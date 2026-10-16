@@ -204,3 +204,11 @@ the host lane, the cycle report. The denial message's source waits on Item 26.
 - ➕ **New:** none. `Version: not bumped — nothing added`.
 - ⚠️ **Conflicting:** none.
 - ❌ **Prohibited:** none.
+
+---
+
+## Cycle 4 — re-send at prompt revision 16 (send `bridge/sends/12-rev16-20261016-102708.md`)
+
+A delta, as the send asks; Cycle 3's plan stands. SC-8's cells exist (Cycle 3's status file, renamed after the new
+criterion); the governance audit runs through `/specswarm:constitution`'s *Governance provenance*; the README block
+applies. No new technology: `Version: not bumped — nothing added`.
