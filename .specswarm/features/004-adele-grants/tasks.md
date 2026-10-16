@@ -281,7 +281,7 @@ coverage per language, Go included (quality-standards). Units come before or bes
 
 ## Phase 13: Polish
 - [X] T035 README (Adele's section; the reference regenerated; Status/What only if SC-7 and SC-8 are met).
-- [ ] T036 The host lane (Go, pytest, ruff, mypy, shellcheck; `make test-host` serial and `-n 8`), the cycle
+- [X] T036 The host lane (Go, pytest, ruff, mypy, shellcheck; `make test-host` serial and `-n 8`), the cycle
   report § Cycle 3, reboot.md.
 
 ## Dependencies (Cycle 3)

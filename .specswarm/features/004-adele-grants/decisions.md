@@ -470,3 +470,18 @@ ASSUMED: the operator's `adeled status` is not agentio and is not cut, so it kee
 ABSENT: Q1 (what counts as a denied connection) is with plan; T034 and the README block still wait on it
 Verification: ruff, mypy (39 files), shellcheck clean; adele CLI and readme-reference units pass; Go adeled units pass; host integration prints the verdicts above
 SCOPE: out — tests/e2e/adele-status-explains-recent-denials-by-host-and-exit-4-text-line.bats (1 of 5 changed files) (task has FLAGGED: yes)
+
+---
+
+## Cycle 4 — re-send at prompt revision 16 (send `bridge/sends/12-rev16-20261016-102708.md`); deltas T037–T040, T035, T036
+
+### T037–T040, T035, T036 (one record: deltas, no code change)
+**Started:** 2026-10-16T10:34:23Z (the lane's end, read from its log) | **Completed:** 2026-10-16T10:56:40Z
+
+INHERITED: Cycle 3's code, unchanged; plan's ruling (discovery 16) and the mentor's Q2 answer (confidence: high)
+FLAGGED: § Slice 1 corrected in place rather than regenerated, against modify's SUPERSEDED row and on the send's instruction (it names the route and why); the declaration heads the section (confidence: high)
+FLAGGED: reconcile_mode `scoped`, appending 16 alone: revisions 3 to 15 never changed prompt 12, so `full` would claim checks of revisions that had nothing to check (confidence: high)
+ASSUMED: the README block applies now: both live slice-1 Automated criteria are built and verified on the host, the Docker lane being the mentor's, as at every earlier slice (confidence: medium)
+ASSUMED: the exit-4 cell left the status file, so each e2e file is one criterion (or one carried item) named after its text (confidence: high)
+ABSENT: no code changed under this send; no Docker lane was run here
+Verification: the final host lane on `635aae8` (cycle report § Cycle 4); lint clean
