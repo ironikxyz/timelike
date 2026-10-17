@@ -1,10 +1,19 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 ---
 
 <!--
 SYNC IMPACT REPORT
 - Version change: none (1.4.3 stands; a no-change audit amends nothing)
+- Audit against discovery revision 17, no change needed. Source: ../bridge/governance-context.md
+  (/mentor:regovern for revision 17, header "> Discovery: plan/.discover/discovery.md (revision 17)"),
+  § "What Changed In Those Revisions — evidence, not an audit claim" (relied on: discovery moved only in its
+  frontmatter and Revision Log; principles, constraints and stack.md unchanged; prompt 13 the only prompt changed),
+  and ../bridge/feedback/13-20261017-034920-setting-refusal-extend.md (prompt 13's forbidden-settings criterion: exit
+  4 struck, exit 2 with rule 14's error added; a feature's criterion, which reaches code/ through the 13 slice 0
+  re-send). Checked: P1–P7, T1–T4 and H1–H9 unchanged. H2's "4 = cap exceeded" and its two exit-4 envelopes still
+  hold: nothing here claims every Adele refusal is exit 4, and a forbidden setting under exit 2 is outside both
+  envelopes, as plan ruled. Revision 17 appended to governance_audited_against: a no-change audit is a recorded result
 - Audit against discovery revision 16, no change needed. Source: ../bridge/governance-context.md
   (/mentor:regovern for revision 16, header "> Discovery: plan/.discover/discovery.md (revision 16)"),
   § "What Changed In Those Revisions" (relied on: discovery moved only in its frontmatter and Revision Log;
