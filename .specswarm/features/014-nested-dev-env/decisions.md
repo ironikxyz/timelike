@@ -129,3 +129,14 @@ ASSUMED: alpine's git (2.45.1 or later) needs safe.directory for a repository ow
 ABSENT: no cell builds an image (builds are refused, Item 28) and no cell publishes a host port (ports = none in every lane grant); a ports refusal is 12's tested path, through checkStatic
 ABSENT: the e2e files were not run here (no Docker); shellcheck passes on each, and every helper they call exists
 SCOPE: in
+
+### T019: README, the example grants, where agents look
+**Started:** 2026-10-17T04:38:07Z | **Completed:** 2026-10-17T04:38:07Z
+
+INHERITED: the send's README status block (applied: all five slice-0 Automated criteria are built, as e2e files not yet run in a lane)
+FLAGGED: the previous update's marks are cleared (it was pushed, v0.21.0) except the Next line's, which the send says to leave as it is; that mark is the mentor's to move at sign-off (confidence: medium)
+FLAGGED: two passages the build made false are corrected in the same cycle, marked: Install's "the agent container mounts nothing" (now its workspace, with TIMELIKE_WORKSPACES) and Adele's paragraph (she now holds the socket) (confidence: high)
+FLAGGED: P3 — a `docker` and `docker-compose` answer in missing-commands.tsv points at `adele env up`, and the announcement gains one line, because the agent's habit is `docker compose up` and there is no docker here (confidence: medium; beyond the send's list, inside 04's mechanism, each tested by 04's own units)
+ASSUMED: the help stays within 40 lines with the env options (31 lines in the regenerated reference) (confidence: high)
+ABSENT: the What row's "What it does" is unchanged, as the send allows
+SCOPE: out — image/rootfs/etc/timelike/missing-commands.tsv, tools/bin/timelike, adele/grants.example.conf, README.md (4 of 6 changed files) (task has FLAGGED: yes)

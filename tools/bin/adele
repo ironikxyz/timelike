@@ -77,10 +77,10 @@ TOOL = agentio.Tool(
     exit_codes={
         agentio.EXIT_OK: "ok",
         agentio.EXIT_FAILURE: "unreachable, or the capability failed",
-        agentio.EXIT_USAGE: "usage; or name one with --grant",
-        agentio.EXIT_NOT_FOUND: "no grant by that name",
+        agentio.EXIT_USAGE: "usage; or name one with --grant; env: a setting no grant allows",
+        agentio.EXIT_NOT_FOUND: "no grant or environment by that name; env: an image not on the daemon",
         agentio.EXIT_CONFIRM: "beyond the grant, nothing performed",
-        agentio.EXIT_TIMEOUT: "own limit fired",
+        agentio.EXIT_TIMEOUT: "own limit fired (env up: not ready within --wait)",
     },
     manifest_extra=lambda: {
         "url_env": URL_ENV,

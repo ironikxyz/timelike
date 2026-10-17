@@ -49,7 +49,7 @@ every criterion is a test). Paths are relative to the repository root.
 ## Phase 8: Polish
 
 - [X] T018 Feature 004's isolation and network assertions follow the new topology (agent: state volume plus workspace bind; networks plus `timelike-nested`; Adele: plus the socket); `tests/e2e/lane.conf` lines; `Makefile` `SHELLCHECK_FILES`
-- [ ] T019 README: the status block (if all five Automated criteria are built), the section, the regenerated reference (`scripts/readme_reference.py --write`); `adele/grants.example.conf`
+- [X] T019 README: the status block (if all five Automated criteria are built), the section, the regenerated reference (`scripts/readme_reference.py --write`); `adele/grants.example.conf`
 - [ ] T020 Host lanes (`make test-host` serial and `-n 8`), Go units and vet; the cycle report; `reboot.md`; the deny-list on the staged tree; commit
 
 ## Dependencies
