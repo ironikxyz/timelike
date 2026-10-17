@@ -80,7 +80,7 @@ func parseCapabilities(value string) ([]string, *valueError) {
 
 func checkCapability(c string) *valueError {
 	if !KnownCapabilities[c] {
-		return badValue(fmt.Sprintf("unknown capability %q", c), "Adele knows: "+CapStandinBox)
+		return badValue(fmt.Sprintf("unknown capability %q", c), "Adele knows: "+KnownList)
 	}
 	return nil
 }

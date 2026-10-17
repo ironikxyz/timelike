@@ -27,11 +27,17 @@ const (
 // Limits lists every limit name in grant-file order.
 var Limits = []string{LimitCapabilities, LimitBudget, LimitTTL, LimitInstances, LimitPorts}
 
-// CapStandinBox is the one capability slice 0 knows.
+// CapStandinBox is the stand-in's capability (feature 004, slice 0).
 const CapStandinBox = "standin.box"
 
+// CapDockerCompose is a project's compose environment on the local daemon (feature 13, slice 0; 014 D-4).
+const CapDockerCompose = "docker.compose"
+
 // KnownCapabilities is the set of capability names a grant may contain.
-var KnownCapabilities = map[string]bool{CapStandinBox: true}
+var KnownCapabilities = map[string]bool{CapStandinBox: true, CapDockerCompose: true}
+
+// KnownList names the known capabilities, for messages.
+const KnownList = CapStandinBox + ", " + CapDockerCompose
 
 // Grant is one `[grant NAME]` section, with every required key present.
 type Grant struct {

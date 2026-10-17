@@ -37,12 +37,15 @@ usage:
   adeled status [HOST] [--json]        Adele's revision, the reaper, and recent denials (by HOST)
   adeled version                       print the build revision
   adeled health                        exit 0 if this container's Adele answers healthy (the healthcheck)
+  adeled resolve --workspace W --dir D --project N [--file F]... [--profile P]...
+                                       the resolution sandbox's entrypoint (feature 13): never the operator's
 who runs what: extend, reap, ledger and status are the OPERATOR's, run on the host as
   docker exec timelike-adele adeled <command>. The agent cannot run them: it has no Docker socket.
   A refusal the agent sees names the exact extend command; the record of every request and reap is
   Adele's ledger (adeled ledger), which the agent cannot read or change.
 environment: ADELE_GRANTS, ADELE_DB, ADELE_CANARY_FILE, ADELE_LISTEN, ADELE_STANDIN_URL, ADELE_CONTAINER,
-  ADELE_REAP_INTERVAL (default 5s), ADELE_REAP_PASSES (default 5)`
+  ADELE_REAP_INTERVAL (default 5s), ADELE_REAP_PASSES (default 5), and for docker.compose: TIMELIKE_WORKSPACE,
+  TIMELIKE_HOST_GIT, ADELE_DOCKER_SOCKET, ADELE_SANDBOX_IMAGE, ADELE_COMPOSE_BIN`
 
 // env is the process environment with the container's defaults (compose.yaml; research R3).
 type env func(string) string
@@ -58,6 +61,10 @@ func (e env) get(key string) string {
 		"ADELE_LISTEN":      ":8480",
 		"ADELE_STANDIN_URL": "http://adele-standin:8481",
 		"ADELE_CONTAINER":   "timelike-adele",
+		// Feature 13 slice 0 (014 research R2, R5).
+		"ADELE_DOCKER_SOCKET": "/var/run/docker.sock",
+		"ADELE_SANDBOX_IMAGE": "timelike-adele:local",
+		"ADELE_COMPOSE_BIN":   "/usr/local/bin/docker-compose",
 	}[key]
 }
 
@@ -93,6 +100,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return exitOK
 	case "health":
 		return health(e, stdout, stderr)
+	case "resolve":
+		return resolve(e, args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprintln(stdout, usage)
 		return exitOK

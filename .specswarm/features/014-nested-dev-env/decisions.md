@@ -35,3 +35,39 @@ FLAGGED: a launch with no git on the host proceeds and says the check was not ma
 ABSENT: old per-launch workspaces are not pruned; each make up makes a new one. Removing them is the operator's
 ABSENT: shellcheck did not run here (not installed on this host); make lint runs it in the lane
 SCOPE: in (3 changed files)
+
+### T003: docker.compose in the known capabilities; LiveOf, LiveResource, LiveRows
+**Started:** 2026-10-17T04:07:10Z | **Completed:** 2026-10-17T04:14:01Z
+
+INHERITED: 12's ledger schema and its "unended" condition (performed with no reaped or gone row) — from 004 (confidence: high)
+FLAGGED: instances counts per grant AND capability (LiveOf), not per grant as 12's Live does — a stand-in box and an environment are different resources, and a grant allowing both would otherwise share one count; Live is left as it is, so 12's status and grants are unchanged (confidence: medium)
+ASSUMED: "Adele knows: standin.box, docker.compose" replaces "slice 0 knows one: standin.box" in two messages; no test pins either text (grep) (confidence: high)
+ABSENT: no new ledger outcome: down's ending is a "reaped" row with its cause, so 12's Live, Due and status read it unchanged
+SCOPE: in
+
+### T004: the Engine API client
+**Started:** 2026-10-17T04:14:01Z | **Completed:** 2026-10-17T04:14:01Z
+
+INHERITED: none
+ASSUMED: the unversioned API path (the daemon's current version) — the pin is the operator's daemon, not a client SDK (confidence: medium)
+FLAGGED: down is Adele's own, over the API, by timelike's label, not compose's `down`: compose's down acts on com.docker.compose.project, which an object timelike did not create could carry; the label is the host's rule (confidence: high)
+ABSENT: no unit drives the client against a daemon (tech-stack: Adele's Docker calls are never mocked to reach coverage); only Demux is unit-tested, and the lane's e2e cells are its test
+SCOPE: in
+
+### T005: the compose model package
+**Started:** 2026-10-17T04:14:01Z | **Completed:** 2026-10-17T04:14:01Z
+
+INHERITED: Item 27 Q1's refusal list, accepted for slice 0
+FLAGGED: container_name is refused (a name outside the project's could collide with, or be confused for, a container that is not timelike's); not on Item 27's list, a neighbour of it (confidence: medium)
+FLAGGED: any security_opt but no-new-privileges is refused, not only the unconfined forms — a label=disable or an apparmor profile name is a choice Adele cannot judge (confidence: medium)
+ASSUMED: compose config's JSON shapes (long-form volumes, ports with target/published, expose as strings, top-level env_file kept per service) as compose-go v2 prints them; not checked against the pinned binary here (no Docker). A shape that differs fails a cell, not open (confidence: medium)
+ABSENT: sysctls, ulimits, extra_hosts, dns and user are allowed: none reaches outside the container without the refused settings
+SCOPE: in
+
+### T006: adeled resolve, the sandbox's entrypoint
+**Started:** 2026-10-17T04:14:01Z | **Completed:** 2026-10-17T04:14:01Z
+
+INHERITED: T005's BindSources, Unset, Outside
+ASSUMED: compose's error for an absent env_file, include or extends names the absolute path (R2); the setting is read from the error's words. A wording that names none falls to exit 1 with compose's text, never to a pass (confidence: medium)
+ABSENT: the resolve command never runs in Adele's own container, but nothing stops the operator running it there; it reads only what it is given
+SCOPE: in

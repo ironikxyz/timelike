@@ -121,7 +121,7 @@ func validate(req Request) (Outcome, bool) {
 			"TIMELIKE_AGENT must match ^[A-Za-z0-9._-]{1,64}$, or be unset", nil), true
 	case !grants.KnownCapabilities[req.Capability]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("Adele knows no capability %q", req.Capability),
-			"slice 0 knows one: "+grants.CapStandinBox, nil), true
+			"Adele knows: "+grants.KnownList, nil), true
 	case req.Action != "create":
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
 			"the action is create", nil), true
