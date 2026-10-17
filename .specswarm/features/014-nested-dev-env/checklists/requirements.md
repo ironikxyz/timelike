@@ -28,9 +28,9 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
-- [ ] No implementation details leak into specification — D-1 to D-6 are design proposals, kept in the spec because
-      the send asks for each seam to be raised before building; they move to plan.md once answered
+- [x] No implementation details leak into specification — D-1 to D-7 are decided design points the send asked to
+      raise; their mechanics are in plan.md
 
 ## Notes
 
-- Plan, tasks and implement wait on FOR-MENTOR Item 27.
+- FOR-MENTOR Item 27 answered (`../bridge/feedback/13-20261017-034920-item-27-seams-answered.md`).

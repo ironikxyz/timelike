@@ -35,9 +35,10 @@ verdict (P2, feature 003).
 **Out of scope (later slices):** devcontainers, session and grant labels with a collect command (slice 1), and
 volume snapshots (slice 2).
 
-**Open seams.** Five design points touch compose, other features' contracts, the constitution or the socket. They
-are raised in FOR-MENTOR **Item 27** with recommendations. Each appears below as a *proposed* decision citing its
-question, and nothing past this spec is built until the item is answered.
+**Seams, decided.** Five design points touch compose, other features' contracts, the constitution or the socket. They
+were raised in FOR-MENTOR **Item 27** and answered in `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md` (2026-10-17T03:49:20Z). Each appears below as a decided
+decision citing that answer. One narrowing found while planning (D-7, builds) is raised as FOR-MENTOR Item 28 and
+does not block a criterion.
 
 ## User Scenarios
 
@@ -85,7 +86,7 @@ and the operator's extend command.
 ### The command (agent side)
 
 - **FR-1** The agent brings up, inspects and tears down a project's compose environment with one tool, announced
-  like every timelike tool (feature 04): `adele env up|status|down` (proposed; Item 27 Q3). It follows 001's output
+  like every timelike tool (feature 04): `adele env up|status|down` (D-3). It follows 001's output
   contract and 003's concluding run.
 - **FR-2** `up` names the project from its workspace directory, or from `--project`. The project name Adele gives the
   environment is unique per workspace project, so two projects, or two cells, never share one.
@@ -101,7 +102,7 @@ and the operator's extend command.
   (constitution H1). Adele's container gets the socket's group from a compose variable, never a literal.
 - **FR-7** Adele checks the project's **resolved** model, after interpolation, `extends`, `include`, profiles and
   override files, and runs exactly what she checked. Which process resolves which path is stated in the plan
-  (P002). Proposed: resolution in a throwaway sandbox that can read only the workspace (Item 27 Q1).
+  (P002). Resolution runs in a throwaway sandbox that can read only the workspace (D-1).
 - **FR-8** Adele refuses, with exit 4 naming the service and the setting, and before anything is created:
   - a privileged container, or host networking;
   - the host's PID, IPC, UTS, user or cgroup namespace;
@@ -110,9 +111,11 @@ and the operator's extend command.
   - a mount or a volume whose source is outside the workspace, including the Docker socket and a volume's driver
     options that bind a host path;
   - a file-backed secret, config or env file from outside the workspace;
-  - a build whose context is outside the workspace, or that asks for host networking, privilege or entitlements.
+  - any `build:` in slice 0 (D-7).
 
-  The full list is in Item 27 Q1.
+  The full list is in Item 27 Q1, accepted as complete for slice 0. A setting refusal is exit 4 with a grant envelope
+  whose `limit.name` is the setting and whose `extend` is `none: no grant allows <setting>`, kept in one place
+  (plan's answer may change only that string).
 - **FR-9** Adele creates nothing that lacks timelike's labels, and lists, inspects, stops or removes nothing that
   lacks them. This is the host's standing rule: timelike creates and removes only its own containers and images.
 - **FR-10** Every `up` that creates an environment is a `performed` ledger row, and every refused `up` is a
@@ -126,9 +129,9 @@ and the operator's extend command.
   - it has none, and it is running and its exposed ports accept a connection from the agent's container;
   - it is a one-shot service, and it exited 0.
 
-  The definition is proposed in Item 27 Q3.
+  The definition is D-3.
 - **FR-12** Bring-up has a bound, a default of 120 s with an at-most value, both printed. Past it, the command exits
-  124. The verdict lists each service's state, and the environment stays until `down` (proposed; Item 27 Q3).
+  124. The verdict lists each service's state, and the environment stays until `down` (D-3; at most 600 s).
 
 ### The workspace and the operator's git
 
@@ -136,13 +139,13 @@ and the operator's extend command.
   agent at the same absolute path, so bind-mount sources resolve on the host to what the agent sees.
 - **FR-14** Nothing the agent writes reaches the git state the operator's host git executes in their checkout
   (`.git/hooks/`, executing `.git/config` keys), unless the operator lifted it at launch. The launch configuration
-  shows whether it was lifted. Proposed: a private clone the operator fetches from, with the lift switch
-  `TIMELIKE_HOST_GIT` (Item 27 Q2). Tested with a real git on the host side, never by reading the agent's config
+  shows whether it was lifted. Decided: a private clone the operator fetches from, with the lift switch
+  `TIMELIKE_HOST_GIT` (D-2). Tested with a real git on the host side, never by reading the agent's config
   back.
 
 ### The grant
 
-- **FR-15** A new capability, proposed as `docker.compose`, takes 12's five keys (Item 27 Q4):
+- **FR-15** A new capability, `docker.compose`, takes 12's five keys (D-4):
   - `instances` is the number of environments live at once;
   - `ttl` is an environment's longest lifetime;
   - `ports` limits host-published ports;
@@ -183,7 +186,7 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
 - **Grant capability `docker.compose`:** the limits an environment is checked against.
 - **Launch boundary setting:** whether the host-git boundary is enforced or lifted, shown on the agent's container.
 
-## Decisions (proposed; each waits on FOR-MENTOR Item 27)
+## Decisions (decided: `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md`)
 
 - **D-1 (Q1)** The Compose CLI in Adele's image, from the pinned `DOCKER_CLI_IMAGE`. Resolution runs in a throwaway
   sandbox, with only the workspace read-only, no network, no socket, no secret and an empty environment. `up` runs
@@ -196,13 +199,19 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
   provider; collection by ended session waits for slice 1.
 - **D-5 (Q5)** Per-cell project names. The fixture project uses images the lane already has. `lane.conf` classes
   are given per file in the plan.
-- **D-6 (Q6)** The workspace parent's owner and mode, for the operator to create before the lane.
+- **D-6 (Q6)** The workspace parent is 2001:2001, mode 2775, created by the operator (read back 2026-10-17T03:53:19Z).
+  The agent (uid 1000) writes through `group_add` of the parent's group.
+- **D-7 (plan, FOR-MENTOR Item 28)** `build:` is refused in slice 0 with exit 4 naming `build`. Compose builds on the
+  client side, so a build would run in Adele's process, which can read her credential: a Dockerfile or build secret
+  that is a symlink would be read by her. No slice-0 criterion needs a build; the fixture uses images the lane has.
 
 ## Assumptions
 
 - The socket's owner, group and mode are as the mentor read them. Nothing in this project verifies that they stay so
   (the send's external prerequisites).
 - The images the fixture project uses are already on the daemon; slice 0 pulls nothing (D-1).
+- A project's `${VAR}` resolves from the workspace's `.env` only, never the agent's environment; an unset variable is
+  named in the verdict (D-1).
 - The agent's existing egress through compose's default network is unchanged until 12 slice 2. The new network
   routes nowhere (D-3).
 - This session has no Docker. Every e2e cell is first run in the mentor's lane.

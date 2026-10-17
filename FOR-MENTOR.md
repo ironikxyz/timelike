@@ -1440,7 +1440,16 @@ rule 14's one stderr line in text mode, stdout unchanged, nothing new under `--j
 
 ## Item 27 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): how Adele runs compose, the git-hook boundary, readiness, the grant, the lane, and the workspace directory (blocks the build past the spec)
 
-**Status:** open. Raised 2026-10-17T01:34:56Z (read from the clock) on `014-nested-dev-env`, from send
+**Status:** closed 2026-10-17, answered in `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md`
+(resolved 03:49:20Z). **Q1:** (a), the Compose CLI from `DOCKER_CLI_IMAGE` with sandboxed resolution; Adele never
+pulls (the operator's decision); the refusal list accepted for slice 0; the symlink race and whether the binary was
+found static go in `not_verified`. The setting refusal's `extend` is built as proposed and kept in one place, because
+plan's answer (`../bridge/feedback/13-20261017-034920-setting-refusal-extend.md`) may change that string. **Q2:** (a),
+a private clone with `TIMELIKE_HOST_GIT`. **Q3, Q5:** as recommended. **Q4:** as recommended, and 12's reaper reaps in
+slice 0 (the operator's decision). **Q6:** the parent was created at the operator's request, 2001:2001 2775, read back
+2026-10-17T03:53:19Z. The original text follows.
+
+**Raised** 2026-10-17T01:34:56Z (read from the clock) on `014-nested-dev-env`, from send
 `bridge/sends/13-rev8-20261017-012727.md`, seams 1–5, before anything past the spec is built. The send asks for an
 item, with a recommendation, wherever a seam touches compose, another feature's contract, a criterion's reading,
 the constitution or the socket. **All five seams touch at least one of those, so all five are raised here.**
@@ -1640,3 +1649,24 @@ the mentor's lean, plus one addition this item asks you to confirm.
 may be the operator's or plan's):** Q1: (a) with the sandboxed resolution, (a′), or (b). Q2: (a) with
 `TIMELIKE_HOST_GIT`, or (b). Q3, Q4 and Q5: confirm, or say what to change. Q6: ask the operator to create the
 directory.
+
+## Item 28 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): `build:` is refused in slice 0 (does not block a criterion)
+
+**Status:** open. Raised 2026-10-17T04:01:16Z (read from the clock) on `014-nested-dev-env`, while planning, after Item 27's answer.
+
+**What was found.** Item 27's answer says images built from a `build:` carry timelike's labels and are removed by
+`down`. While planning the up path, I found that Compose builds on the **client** side: it reads the Dockerfile and
+any build secret itself, and tars the context. With the Q1 design, the client is Adele's own process, the one that can
+read her credential. A Dockerfile or build secret that is a symlink into her secret volume would be read by her, and a
+build error can echo what it read back to the agent. The sandbox does not cover this: it resolves the model, and the
+build reads files after resolution.
+
+**What slice 0 does (FLAGGED in decisions.md, research R10):** any `build:` is refused with exit 4, naming `build`,
+with `extend: none: no grant allows build`. No slice-0 criterion names a build, and the fixture uses images the lane
+already has, so no criterion is left unbuilt. The README section says builds are not brokered yet.
+
+**Question, for slice 1 (natural):** how should a build be brokered? **Recommendation:** (a) build in a second
+sandbox. It would hold the workspace read-only, have no socket, and export the image as a tar; Adele loads the tar
+with `POST /images/load` and labels it. That keeps her process away from the workspace's files. (b) Mount the
+workspace read-only into Adele and resolve the Dockerfile and secret paths in the sandbox first. That is simpler, but
+it is the symlink race again, now on Adele's own reads.
