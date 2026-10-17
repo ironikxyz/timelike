@@ -1443,8 +1443,10 @@ rule 14's one stderr line in text mode, stdout unchanged, nothing new under `--j
 **Status:** closed 2026-10-17, answered in `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md`
 (resolved 03:49:20Z). **Q1:** (a), the Compose CLI from `DOCKER_CLI_IMAGE` with sandboxed resolution; Adele never
 pulls (the operator's decision); the refusal list accepted for slice 0; the symlink race and whether the binary was
-found static go in `not_verified`. The setting refusal's `extend` is built as proposed and kept in one place, because
-plan's answer (`../bridge/feedback/13-20261017-034920-setting-refusal-extend.md`) may change that string. **Q2:** (a),
+found static go in `not_verified`. **Q1's refusal code** is not Item 27's proposed exit 4 with `extend: none: …`: plan
+answered in `../bridge/feedback/13-20261017-034920-setting-refusal-extend.md` with discovery revision 17, and a
+forbidden setting is refused with exit 2 and rule 14's error, naming the setting, with no operator's command (re-send
+`../bridge/sends/13-rev17-20261017-035606.md`). **Q2:** (a),
 a private clone with `TIMELIKE_HOST_GIT`. **Q3, Q5:** as recommended. **Q4:** as recommended, and 12's reaper reaps in
 slice 0 (the operator's decision). **Q6:** the parent was created at the operator's request, 2001:2001 2775, read back
 2026-10-17T03:53:19Z. The original text follows.
@@ -1661,8 +1663,8 @@ read her credential. A Dockerfile or build secret that is a symlink into her sec
 build error can echo what it read back to the agent. The sandbox does not cover this: it resolves the model, and the
 build reads files after resolution.
 
-**What slice 0 does (FLAGGED in decisions.md, research R10):** any `build:` is refused with exit 4, naming `build`,
-with `extend: none: no grant allows build`. No slice-0 criterion names a build, and the fixture uses images the lane
+**What slice 0 does (FLAGGED in decisions.md, research R10):** any `build:` is refused like the other forbidden settings
+(exit 2 and rule 14's error naming `build`, no operator's command; revision 17). No slice-0 criterion names a build, and the fixture uses images the lane
 already has, so no criterion is left unbuilt. The README section says builds are not brokered yet.
 
 **Question, for slice 1 (natural):** how should a build be brokered? **Recommendation:** (a) build in a second
