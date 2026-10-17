@@ -221,7 +221,7 @@ func reapNow(e env, args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 	defer led.Close()
-	r, err := newReaper(e, led, b.Upstream.(*broker.StandinClient), nil)
+	r, err := newReaper(e, led, b.Upstream.(*broker.StandinClient), nil, b.Envs)
 	if err != nil {
 		fmt.Fprintf(stderr, "adeled: %v\n", err)
 		return exitUsage
@@ -278,7 +278,7 @@ func status(e env, args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	defer led.Close()
-	r, err := newReaper(e, led, nil, nil)
+	r, err := newReaper(e, led, nil, nil, nil)
 	if err != nil {
 		fmt.Fprintf(stderr, "adeled: %v\n", err)
 		return exitUsage

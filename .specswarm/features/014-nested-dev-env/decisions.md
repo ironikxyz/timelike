@@ -81,3 +81,25 @@ ASSUMED: the socket's group is read by make from the socket (stat), as tests/run
 ABSENT: timelike-nested's name is fixed (Adele joins services to it by name); two stacks on one daemon would share it — there is one stack per host (container names are fixed already)
 ABSENT: files a nested container writes as root into the workspace are root's on the host; the operator removes them with sudo or from a container. Not addressed in slice 0
 SCOPE: in
+
+### T008 (Adele's side): docker.compose up, down and /v1/envs
+**Started:** 2026-10-17T04:12:40Z | **Completed:** 2026-10-17T04:20:23Z
+
+INHERITED: T004's client, T005's checks and injection, T006's resolve document; 12's choose, effective, refuse and ledger (confidence: high)
+FLAGGED: an environment request takes its own lock (Envs.mu) for its whole length and the broker's lock only around grant and ledger calls — holding the broker's lock across a sandbox and a compose up would make every stand-in request wait out a bring-up (12's addendum 1, E, found the reaper doing that) (confidence: high)
+FLAGGED: a forbidden setting, an outside file and a missing image answer HTTP 422 with a refusal document, not 403's grant envelope: revision 17 for the first two; Item 29 for the third. Each is a refused ledger row; a setting's extend is empty, an image's is the operator's docker pull (confidence: high for settings, provisional for images)
+FLAGGED: up's order is resolve, then the live-row check (unchanged is a no-op read back; changed is 409), then the refusal list, the grant (capability, ttl, ports, instances, budget), the images, the shared network's label, compose up, the ledger row. Nothing is created before the last check; a compose failure is cleaned up by label and the count left is said (confidence: medium)
+ASSUMED: the ledger says live and the daemon has nothing labelled: the old row gets a "gone" ending and the up proceeds (an environment removed outside Adele, e.g. by the operator) (confidence: medium)
+ASSUMED: up answers once compose's up -d returns; readiness is the client's (R7), so the HTTP write deadline is raised for environment requests only (confidence: high)
+ABSENT: a project error (compose cannot resolve it) is HTTP 400, so exit 2 with compose's last lines; it is not recorded in the ledger (nothing was refused by policy)
+ABSENT: two containers of one service (scale) are listed as two services of the same name; scale is not considered in slice 0
+SCOPE: in
+
+### T016: the reaper's providers by capability
+**Started:** 2026-10-17T04:20:23Z | **Completed:** 2026-10-17T04:20:23Z
+
+INHERITED: 12's reaper (same-box check, read-back before and after, lock for the ledger write only)
+FLAGGED: the provider names its record, noun and holder (described), so an environment's reap cause says "the daemon's labelled objects"; the stand-in's words are unchanged byte for byte (its unit pins one) (confidence: high)
+ASSUMED: an environment's "box" for the same-box check is its labels: created + ttl-seconds equal the performed row's expires_at, both truncated to the second (confidence: high)
+ABSENT: collection of environments of ended sessions (slice 1's criterion) is not built
+SCOPE: in

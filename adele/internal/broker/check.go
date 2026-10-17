@@ -76,11 +76,16 @@ func checkStatic(req Request, g grants.Grant, ttl time.Duration) *refusal {
 }
 
 func (b *Broker) refuse(req Request, grant string, r refusal) Outcome {
+	return b.refuseAt(req, grant, r, b.host())
+}
+
+// refuseAt is refuse, recording host as where the request would have reached.
+func (b *Broker) refuseAt(req Request, grant string, r refusal, host string) Outcome {
 	extend := ExtendCommand(b.container(), grant, r.limit, r.extendTo)
 	id, err := b.Ledger.Refused(ledger.Row{
 		At: b.now(), Grant: grant, Session: req.Session, Agent: req.Agent, Capability: req.Capability,
 		Action: req.Action, Resource: req.Params.Name, CostCents: r.cost, LimitName: r.limit,
-		Allowed: r.allowed, Needed: r.needed, Host: b.host(), Extend: extend,
+		Allowed: r.allowed, Needed: r.needed, Host: host, Extend: extend,
 	})
 	if err != nil {
 		return ledgerFailed(err)
@@ -88,7 +93,7 @@ func (b *Broker) refuse(req Request, grant string, r refusal) Outcome {
 	return Outcome{http.StatusForbidden, map[string]any{
 		"outcome": ledger.OutcomeRefused, "grant": grant,
 		"limit":  map[string]string{"name": r.limit, "allowed": r.allowed, "needed": r.needed},
-		"extend": extend, "performed": false, "ledger_id": id, "host": b.host(),
+		"extend": extend, "performed": false, "ledger_id": id, "host": host,
 	}}
 }
 

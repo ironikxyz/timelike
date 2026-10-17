@@ -43,7 +43,7 @@ every criterion is a test). Paths are relative to the repository root.
 
 ## Phase 7: US4 and US6, never ready, beyond the grant, expiry
 
-- [ ] T016 [US4] Reaper: providers by capability, the compose provider (`adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`, `ops.go`); units
+- [X] T016 [US4] Reaper: providers by capability, the compose provider (`adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`, `ops.go`); units
 - [ ] T017 [US4] e2e `tests/e2e/nested-environment-beyond-the-grant-refused-never-ready-exits-124-and-expired-reaped.bats`
 
 ## Phase 8: Polish
