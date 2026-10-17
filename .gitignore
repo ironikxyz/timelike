@@ -13,3 +13,7 @@ bench/out/
 
 # Adele (feature 004): the operator's grant file is local, never committed.
 adele/grants.conf
+
+# The operator's launch settings (feature 13, scripts/workspace.sh): the workspace parent is a host path,
+# never committed.
+local.env

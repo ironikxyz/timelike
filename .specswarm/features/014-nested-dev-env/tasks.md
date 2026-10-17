@@ -10,8 +10,8 @@ every criterion is a test). Paths are relative to the repository root.
 
 ## Phase 1: Setup
 
-- [ ] T001 Adele's image gains the Compose CLI from `DOCKER_CLI_IMAGE`, refused unless static (`adele/Dockerfile`; `compose.yaml` build arg; R1)
-- [ ] T002 [P] The launcher `scripts/workspace.sh` (R9): parent from `TIMELIKE_WORKSPACES` or `local.env`, a new directory per launch, `TIMELIKE_HOST_GIT` enforced or lifted, the work-tree refusal; `local.env` git-ignored
+- [X] T001 Adele's image gains the Compose CLI from `DOCKER_CLI_IMAGE`, refused unless static (`adele/Dockerfile`; `compose.yaml` build arg; R1)
+- [X] T002 [P] The launcher `scripts/workspace.sh` (R9): parent from `TIMELIKE_WORKSPACES` or `local.env`, a new directory per launch, `TIMELIKE_HOST_GIT` enforced or lifted, the work-tree refusal; `local.env` git-ignored
 
 ## Phase 2: Foundational (blocks every story)
 
