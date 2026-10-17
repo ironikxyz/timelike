@@ -39,8 +39,13 @@ def test_compose_mounts_only_timelike_state_on_the_agent() -> None:
     block = _agent_block()
     v = re.search(r"^    volumes:\n((?:      - .*\n)+)", block, re.MULTILINE)
     assert v, "the agent service mounts its state root"
-    assert v.group(1).strip().splitlines() == ["- timelike-state:/var/lib/timelike"]
-    assert "docker.sock" not in block
+    # Feature 13 adds the workspace, a host directory at the same absolute path (014 research R9), with an
+    # empty named volume when none was set; nothing else, and nothing of Adele's.
+    assert [x.strip() for x in v.group(1).strip().splitlines()] == [
+        "- timelike-state:/var/lib/timelike",
+        "- ${TIMELIKE_WORKSPACE:-timelike-no-workspace}:${TIMELIKE_WORKSPACE:-/opt/timelike/no-workspace}",
+    ]
+    assert "docker.sock" not in block and "adele" not in v.group(1)
     top = re.search(r"^volumes:\n((?:  \S.*\n)+)", read(COMPOSE), re.MULTILINE)
     assert top and re.search(r"^  timelike-state:\s*$", top.group(1), re.MULTILINE)
 

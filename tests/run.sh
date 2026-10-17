@@ -398,12 +398,16 @@ compose_up() {
   launch="$(TIMELIKE_HOST_GIT=enforced scripts/workspace.sh env)" || return 1
   eval "${launch}"
   export TIMELIKE_WORKSPACE TIMELIKE_HOST_GIT TIMELIKE_WORKSPACE_GID
-  local sock="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-  sock="${sock#unix://}"
-  export TIMELIKE_DOCKER_SOCKET="${sock}"
-  TIMELIKE_DOCKER_GID="$(stat -c %g "${sock}")" || return 1
-  export TIMELIKE_DOCKER_GID
-  echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); Adele's socket group ${TIMELIKE_DOCKER_GID}"
+  local host="${DOCKER_HOST:-unix:///var/run/docker.sock}"
+  if [[ "${host}" == unix://* ]]; then
+    export TIMELIKE_DOCKER_SOCKET="${host#unix://}"
+    TIMELIKE_DOCKER_GID="$(stat -c %g "${TIMELIKE_DOCKER_SOCKET}")" || return 1
+    export TIMELIKE_DOCKER_GID
+    echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); Adele's socket group ${TIMELIKE_DOCKER_GID}"
+  else
+    # A tcp:// or ssh:// daemon has no socket file to bind into Adele: feature 13's cells will say she has no daemon.
+    echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); DOCKER_HOST ${host} is not a unix socket, so Adele gets none"
+  fi
   ADELE_GRANTS="${repo}/tests/e2e/fixtures/adele/grants.conf" \
     docker compose --profile standin up -d --build --force-recreate || return 1
   wait_healthy "${ADELE_CONTAINER}" "${STANDIN_CONTAINER}"

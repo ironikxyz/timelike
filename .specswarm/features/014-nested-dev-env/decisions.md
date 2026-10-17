@@ -139,4 +139,14 @@ FLAGGED: two passages the build made false are corrected in the same cycle, mark
 FLAGGED: P3 — a `docker` and `docker-compose` answer in missing-commands.tsv points at `adele env up`, and the announcement gains one line, because the agent's habit is `docker compose up` and there is no docker here (confidence: medium; beyond the send's list, inside 04's mechanism, each tested by 04's own units)
 ASSUMED: the help stays within 40 lines with the env options (31 lines in the regenerated reference) (confidence: high)
 ABSENT: the What row's "What it does" is unchanged, as the send allows
-SCOPE: out — image/rootfs/etc/timelike/missing-commands.tsv, tools/bin/timelike, adele/grants.example.conf, README.md (4 of 6 changed files) (task has FLAGGED: yes)
+SCOPE: out — image/rootfs/etc/timelike/missing-commands.tsv, tools/bin/timelike (2 of 6 changed files) (task has FLAGGED: yes)
+
+### T020 (part): the host lanes, two units of other features, the lane's non-unix daemon
+**Started:** 2026-10-17T04:38:38Z | **Completed:** 2026-10-17T05:02:21Z
+
+INHERITED: every earlier task's code
+FLAGGED: the first serial host lane failed 11 units: 10 of maint-lane-speed's test_lane_run_sh (its scratch lane had no scripts/workspace.sh and no workspace parent) and 005's test_state_root_image (it pinned the agent's one mount). The harness now copies the launcher and sets TIMELIKE_WORKSPACES; 005's unit allows exactly the workspace's second mount and still refuses Adele's and the socket. Two new lane units: the runner gets the workspace at the same path and DOCKER_CLI_IMAGE, the sweep runs before compose down, and a lane without the parent fails at up naming it (confidence: high)
+FLAGGED: a DOCKER_HOST that is not a unix socket gives Adele no socket and says so, rather than failing the up step at stat — the lane's units run that way; on such a daemon feature 13's cells would fail naming "no Docker daemon" (confidence: medium)
+ASSUMED: pytest-xdist 3.8.0 and execnet 2.1.2, as pins.env names them, were installed into this session's scratch venv for the -n 8 run; nothing in the repository changed for it (confidence: high)
+ABSENT: the Docker lane, the scan and make lint did not run (no Docker in this session); the e2e cells have never run
+SCOPE: in
