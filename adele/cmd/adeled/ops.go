@@ -355,8 +355,12 @@ func denialLines(doc map[string]any) []string {
 		if host == "" {
 			host = "(no host recorded: refused before slice 1)"
 		}
-		line := fmt.Sprintf("#%v %v %s: grant %v, %s allows %s, needed %s — the operator allows it: %v",
-			d["ledger_id"], d["at"], host, d["grant"], l["name"], l["allowed"], l["needed"], d["extend"])
+		who := fmt.Sprintf("the operator allows it: %v", d["extend"])
+		if ext, _ := d["extend"].(string); ext == "" { // a forbidden setting: no grant allows it (feature 13, revision 17)
+			who = "operator's command: none"
+		}
+		line := fmt.Sprintf("#%v %v %s: grant %v, %s allows %s, needed %s — %s",
+			d["ledger_id"], d["at"], host, d["grant"], l["name"], l["allowed"], l["needed"], who)
 		if a, _ := d["agent"].(string); a != "" {
 			line += fmt.Sprintf(" (session %v, agent %s)", d["session"], a)
 		} else {

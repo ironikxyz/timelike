@@ -188,6 +188,9 @@ func TestInjectLabelsEverythingAndJoinsTheSharedNetwork(t *testing.T) {
 
 func TestNamesAndWithin(t *testing.T) {
 	n := DefaultName("/w/ws1/My Project_2")
+	if n != "tl-my-project-2-48c3cb" { // the agent's client computes the same (tests/unit/test_adele_env_cli.py)
+		t.Fatalf("DefaultName = %q", n)
+	}
 	if !ValidName(n) || !strings.HasPrefix(n, "tl-my-project-2-") || n == DefaultName("/w/ws2/My Project_2") {
 		t.Fatalf("DefaultName = %q", n)
 	}

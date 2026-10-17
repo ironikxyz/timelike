@@ -103,3 +103,15 @@ FLAGGED: the provider names its record, noun and holder (described), so an envir
 ASSUMED: an environment's "box" for the same-box check is its labels: created + ttl-seconds equal the performed row's expires_at, both truncated to the second (confidence: high)
 ABSENT: collection of environments of ended sessions (slice 1's criterion) is not built
 SCOPE: in
+
+### T009: the client, adele env up|status|down
+**Started:** 2026-10-17T04:27:14Z | **Completed:** 2026-10-17T04:27:14Z
+
+INHERITED: T008's HTTP answers (200 with services read back, 403 grant envelope, 422 refusal, 409, 404); 12's client (call, unreachable, answered_error, grant_required)
+FLAGGED: readiness is the client's: it polls Adele's read-back every 0.5 s and probes each service's ports itself, so "ready" is reached from the agent's container (cross-stack P001) and the bound is the tool the agent ran (P2); a service that exits non-zero concludes at once with exit 1 rather than waiting out the bound (confidence: high)
+FLAGGED: the verdict is "up NAME: N ready in T s of W s · read back, ports probed from the agent container · local: no cost · host git X", with the grant and expiry on the first body line, so a lane's names fit rule 13's 200 columns (the first draft was cut) (confidence: high)
+FLAGGED: a forbidden setting raises agentio's usage error: "error: <setting> is not allowed (code 2) — no grant allows it; <change> (service S: value)", with nothing on stdout, as revision 17 words it; a missing image raises exit 3 naming the operator's docker pull (Item 29, provisional) (confidence: high; medium for the image)
+ASSUMED: the default name is computed by the client from the project's realpath (tl-<slug>-<sha6>), and Adele's Go DefaultName is pinned to the same value by both units (confidence: high)
+ABSENT: `adele env exec` (running a command in a service) is not built: the agent reaches services by address; slice 1's devcontainer criterion is where a command inside one is asked for
+ABSENT: status's denial line now prints "operator's command: none" for a refusal without one (both 12's client and adeled status); no existing test pinned the empty case
+SCOPE: in

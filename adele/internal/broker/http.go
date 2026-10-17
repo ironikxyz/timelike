@@ -105,10 +105,14 @@ func Denials(led *ledger.Ledger, now time.Time, host string) (map[string]any, er
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, d := range rows {
+		by := "operator"
+		if d.Extend == "" { // a forbidden setting: no grant allows it, so there is no one's command (feature 13)
+			by = "none"
+		}
 		out = append(out, map[string]any{
 			"ledger_id": d.ID, "at": d.At.UTC().Format(time.RFC3339), "host": d.Host, "grant": d.Grant,
 			"limit":  map[string]string{"name": d.LimitName, "allowed": d.Allowed, "needed": d.Needed},
-			"extend": d.Extend, "extend_by": "operator", "session": d.Session, "agent": d.Agent,
+			"extend": d.Extend, "extend_by": by, "session": d.Session, "agent": d.Agent,
 			"capability": d.Capability, "action": d.Action, "resource": d.Resource,
 		})
 	}
