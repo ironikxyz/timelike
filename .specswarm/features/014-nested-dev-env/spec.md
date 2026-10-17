@@ -7,7 +7,7 @@ source_prompt: plan/.discover/prompts/13-nested-dev-env.md
 source_send: bridge/sends/13-rev8-20261017-012727.md
 prompt_revision: 8
 discovery_revision: 16
-audited_against: [8]
+audited_against: [8, 17]
 slice: 0
 ---
 
@@ -20,7 +20,8 @@ It runs its tests against the environment's services and tears it down. All of t
 starting anything (P1).
 
 The agent never holds a daemon socket. **Adele** reaches the local Docker daemon under a grant the operator wrote,
-and she refuses every container setting that escapes a container, with exit 4 naming the setting (P4). What Adele
+and she refuses every container setting that escapes a container, with exit 2 and rule 14's error naming the
+setting and stating that no grant allows it (P4; prompt revision 17). What Adele
 checks is what would be run: the project after interpolation, `extends`, profiles and override files, never the
 text the agent wrote (cross-stack P002, P004).
 
@@ -57,8 +58,9 @@ created. The verdict says that this was read back from the daemon.
 
 A project, or text the agent was given, asks for a privileged container, host networking, the host's PID or IPC
 namespace, an added capability, a device, or a mount from outside the workspace (the socket included). Adele
-refuses before anything is created. The command exits 4, naming the service and the setting, and nothing is
-created on the daemon.
+refuses before anything is created. The command exits 2 with rule 14's error naming the service and the setting,
+stating that no grant allows it and how to change the request, with no operator's command. Nothing is created on the
+daemon.
 
 ### Scenario 3: up twice, then down (Agent)
 
@@ -103,7 +105,8 @@ and the operator's extend command.
 - **FR-7** Adele checks the project's **resolved** model, after interpolation, `extends`, `include`, profiles and
   override files, and runs exactly what she checked. Which process resolves which path is stated in the plan
   (P002). Resolution runs in a throwaway sandbox that can read only the workspace (D-1).
-- **FR-8** Adele refuses, with exit 4 naming the service and the setting, and before anything is created:
+- **FR-8** Adele refuses, with exit 2 and rule 14's structured error naming the service and the setting, and before
+  anything is created:
   - a privileged container, or host networking;
   - the host's PID, IPC, UTS, user or cgroup namespace;
   - any added capability, and any device;
@@ -113,9 +116,12 @@ and the operator's extend command.
   - a file-backed secret, config or env file from outside the workspace;
   - any `build:` in slice 0 (D-7).
 
-  The full list is in Item 27 Q1, accepted as complete for slice 0. A setting refusal is exit 4 with a grant envelope
-  whose `limit.name` is the setting and whose `extend` is `none: no grant allows <setting>`, kept in one place
-  (plan's answer may change only that string).
+  The full list is in Item 27 Q1, accepted as complete for slice 0. **A setting refusal is exit 2, with no envelope on
+  stdout** (prompt revision 17): in text mode rule 14's line,
+  `error: <setting> is not allowed (code 2) — no grant allows it; <how to change the request>`; with `--json` one
+  JSON object on stderr naming the setting. Its remediation says how to change the request, never an operator's
+  command. It is Adele's refusal and a `refused` ledger row like the others, and 12's `status` shows it with
+  "operator's command: none".
 - **FR-9** Adele creates nothing that lacks timelike's labels, and lists, inspects, stops or removes nothing that
   lacks them. This is the host's standing rule: timelike creates and removes only its own containers and images.
 - **FR-10** Every `up` that creates an environment is a `performed` ledger row, and every refused `up` is a
@@ -159,8 +165,11 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
    they are ready, with a verdict listing each service and its address.
 2. The Infra provider (the local Docker daemon) runs the nested environment's containers with the agent's workspace
    mounted at the same absolute path.
-3. A request for a privileged container, host networking or process namespace, added capabilities, or a mount
-   outside the workspace is refused by Adele with exit 4 naming the setting.
+3. ~~A request for a privileged container, host networking or process namespace, added capabilities, or a mount
+   outside the workspace is refused by Adele with exit 4 naming the setting.~~ *(Struck at prompt revision 17.)*
+   A request for a privileged container, host networking or process namespace, added capabilities, or a mount
+   outside the workspace is refused by Adele with exit 2 and rule 14's structured error, naming the setting and
+   stating that no grant allows it, without an operator's command; nothing is created. *(Added revision 17.)*
 4. A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not
    run when the Operator runs git in their own checkout on the host, unless the Operator lifted this at launch, and
    the launch configuration shows whether it was lifted.
@@ -190,7 +199,9 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
 
 - **D-1 (Q1)** The Compose CLI in Adele's image, from the pinned `DOCKER_CLI_IMAGE`. Resolution runs in a throwaway
   sandbox, with only the workspace read-only, no network, no socket, no secret and an empty environment. `up` runs
-  from the checked bytes. Adele never pulls; a missing image names the operator's `docker pull`.
+  from the checked bytes. Adele never pulls (the operator's decision); a missing image names the operator's
+  `docker pull`. Its exit code waits on FOR-MENTOR Item 29: no field of the grant envelope but `extend_by` is true of
+  it (the re-send's test).
 - **D-2 (Q2)** A private clone the operator fetches from, with `TIMELIKE_HOST_GIT=enforced|lifted` at launch, shown as
   a container label, an agent environment value and a verdict line.
 - **D-3 (Q3)** Readiness as FR-11 and FR-12. The shared network is `timelike-nested`, internal, and every nested
@@ -201,7 +212,7 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
   are given per file in the plan.
 - **D-6 (Q6)** The workspace parent is 2001:2001, mode 2775, created by the operator (read back 2026-10-17T03:53:19Z).
   The agent (uid 1000) writes through `group_add` of the parent's group.
-- **D-7 (plan, FOR-MENTOR Item 28)** `build:` is refused in slice 0 with exit 4 naming `build`. Compose builds on the
+- **D-7 (plan, FOR-MENTOR Item 28)** `build:` is refused in slice 0, as a forbidden setting (exit 2, naming `build`). Compose builds on the
   client side, so a build would run in Adele's process, which can read her credential: a Dockerfile or build secret
   that is a symlink would be read by her. No slice-0 criterion needs a build; the fixture uses images the lane has.
 

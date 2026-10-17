@@ -43,9 +43,9 @@ a git work tree unless the operator sets `TIMELIKE_HOST_GIT=lifted`.
 | P5 | Up is idempotent; down removes everything labelled, read back; the performed row's undo is `down` | ✅ |
 | P6 | No claim of value | n/a |
 | P7 | A shell command | ✅ |
-| T1 | A setting refusal names the setting; the operator's command where one exists (`none:` where none does) | ✅ |
+| T1 | A grant limit names the operator's command; a forbidden setting is exit 2 and says no grant allows it, with no command (revision 17) | ✅ |
 | H1 | The agent has no socket, group or endpoint (the isolation tests are updated, not loosened). Adele's process never reads the workspace: resolution runs in the sandbox, and builds are refused (R10) | ✅ |
-| H2 | Through agentio; exit 4 is the grant envelope; rule 14's line says "no grant allows it" for `none:` | ✅ |
+| H2 | Through agentio; exit 4 only for a grant limit; a forbidden setting is agentio's exit-2 error. A missing image's code waits on Item 29 | ✅ |
 | H3 | Up's "ready" and down's "removed" are read back from the daemon; ports probed, named "from the agent container" | ✅ |
 | H4 | Non-interactive; e2e under `bash -c` and `bash -lc` | ✅ |
 | H5 | stdlib Python and Go; the compose binary is a pinned component, static (R1) | ✅ |
@@ -62,7 +62,7 @@ a criterion.
 adele/Dockerfile                          + compose binary (static check), DOCKER_CLI_IMAGE arg
 adele/internal/compose/                   new: model checks (R3), injection (R5), resolve output, names
 adele/internal/engine/                    new: Engine API client over the unix socket (sandbox, images, list, down)
-adele/internal/broker/env.go              new: docker.compose up/down/status; NoGrantAllows
+adele/internal/broker/env.go              new: docker.compose up/down/status; the setting and image refusals (one place each)
 adele/internal/broker/{broker,http}.go    route docker.compose; /v1/envs
 adele/internal/grants/grants.go           KnownCapabilities + docker.compose
 adele/internal/ledger/query.go            LiveOf(grant, capability)
@@ -72,7 +72,6 @@ compose.yaml                              socket and group for Adele; workspace,
 scripts/workspace.sh                      new launcher (R9)
 Makefile, tests/run.sh                    the launcher before up; DOCKER_GID; runner env and workspace mount
 tools/bin/adele                           `adele env up|status|down`
-tools/agentio/agentio.py                  exit4_line: `none:` → "no grant allows it"
 tests/e2e/…                               five criterion files + one; the 004 isolation and network assertions updated
 tests/e2e/fixtures/adele/grants.conf      nested grants
 tests/e2e/fixtures/nested/                fixture compose projects

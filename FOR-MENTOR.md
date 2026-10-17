@@ -1672,3 +1672,30 @@ sandbox. It would hold the workspace read-only, have no socket, and export the i
 with `POST /images/load` and labels it. That keeps her process away from the workspace's files. (b) Mount the
 workspace read-only into Adele and resolve the Dockerfile and secret paths in the sandbox first. That is simpler, but
 it is the symlink race again, now on Adele's own reads.
+
+## Item 29 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): what a missing image exits with, since the grant envelope is false of it (does not block a criterion)
+
+**Status:** open. Raised 2026-10-17T04:04:26Z (read from the clock), as the re-send `../bridge/sends/13-rev17-20261017-035606.md` asks:
+apply plan's test to a missing image before building it, and raise an item if any grant-envelope field would be false.
+
+**The test, field by field:**
+- `status: grant_required`: **false.** No grant extension would let the request through. The operator has to pull
+  the image.
+- `grant`: **false as a cause.** A grant was chosen, but it does not govern images.
+- `limit`: **false.** "Images on the daemon" is not one of the grant's five limits, and `adeled extend` cannot
+  name it.
+- `extend_by: operator`: **true.** `docker pull <ref>` is the operator's command, run on the host.
+
+**Recommendation: exit 3 (`not_found`) with rule 14's error.** For example:
+
+    error: image <ref> is not on the daemon, and Adele never pulls (code 3) — the operator pulls it on the host: docker pull <ref>; the agent cannot
+
+- It carries no envelope on stdout, and nothing is created. It is a `refused` ledger row with `limit_name`
+  `image`, and its `extend` is the operator's `docker pull`, so 12's `status` shows the operator's command.
+- Its remediation names the command as the operator's, as `adele status`'s "the operator starts her: make up"
+  already does.
+- **Alternative:** exit 1 (failure), with the same text. I prefer 3: the thing asked for does not exist where it was
+  looked for, which is what 3 means in 001's vocabulary.
+
+**Meanwhile:** I build the recommendation, with the exit code and the text in one function, and the cycle report
+cites it as provisional. No slice-0 criterion names a missing image.

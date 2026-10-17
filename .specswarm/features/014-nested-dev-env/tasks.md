@@ -24,7 +24,7 @@ every criterion is a test). Paths are relative to the repository root.
 ## Phase 3: US1, bring up, use, tear down (criteria 1 and 2; D9)
 
 - [ ] T008 [US1] Broker: `docker.compose` up and down, `/v1/envs` (`adele/internal/broker/env.go`, `broker.go`, `http.go`); `adeled serve` wires the engine and sandbox image (`adele/cmd/adeled/serve.go`); units `adele/internal/broker/env_test.go`
-- [ ] T009 [US1] The client: `adele env up|status|down` with the readiness loop and port probes (`tools/bin/adele`); agentio's exit-4 line for `none:` (`tools/agentio/agentio.py`); units `tests/unit/test_adele_env_cli.py`
+- [ ] T009 [US1] The client: `adele env up|status|down` with the readiness loop and port probes (`tools/bin/adele`); status's "operator's command: none" for an empty extend; units `tests/unit/test_adele_env_cli.py`
 - [ ] T010 [US1] Lane: the launcher before `up`, the runner's workspace mount and env (`tests/run.sh`); nested grants (`tests/e2e/fixtures/adele/grants.conf`); fixtures (`tests/e2e/fixtures/nested/`); helpers (`tests/e2e/helpers.bash`)
 - [ ] T011 [US1] e2e `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`
 - [ ] T012 [US1] e2e `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`

@@ -57,15 +57,24 @@ Each check reads the resolved model. A refusal names the service and the setting
 - **Top-level keys:** any top-level key other than `name`, `services`, `networks`, `volumes`, `secrets`, `configs`
   and `x-*`.
 
-The envelope is a grant envelope with `limit.name` set to the setting, `allowed: never`, `needed` set to
-`service S: <value>`, and `extend` set to `none: no grant allows <setting>`. The string is built in one Go function
-(`broker.NoGrantAllows`), because plan's answer may change only it.
+**The refusal (prompt revision 17, replacing Item 27's proposed `extend: none: …`).** Adele answers HTTP 422,
+`{"outcome": "refused", "refusal": "setting", "setting", "service", "value", "remediation", "performed": false,
+"ledger_id"}`. Her ledger records a `refused` row with `limit_name` set to the setting and an empty `extend`, so 12's
+`status` prints "operator's command: none". The client exits 2 through agentio's usage error, with no envelope on
+stdout:
+
+    error: <setting> is not allowed (code 2) — no grant allows it; <how to change the request> (service S)
+
+With `--json`, the same is one JSON object on stderr. The remediation says how to change the request (for example
+"run it without privileged", "use a path inside the workspace"), never an operator's command.
 
 ## R4 · Never pull; a missing image
 
-Before `up`, Adele inspects each service's image (`GET /images/{ref}/json`). If an image is missing, the request is
-refused with exit 4: `limit.name: image`, `needed: <ref>`, and `extend: docker pull <ref>`, the operator's command.
-`up` runs with `--pull never --no-build`.
+Before `up`, Adele inspects each service's image (`GET /images/{ref}/json`). If an image is missing, she refuses
+with HTTP 422 `refusal: image`, and records a `refused` row with `limit_name: image` and `extend: docker pull <ref>`.
+The client exits 3 with rule 14's error, naming the operator's command as the operator's. This is provisional:
+plan's test showed the grant envelope is false of it, so it is raised as FOR-MENTOR Item 29, and the code and text
+are in one place. `up` runs with `--pull never --no-build`.
 
 ## R5 · `up` from the checked bytes
 

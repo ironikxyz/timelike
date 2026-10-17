@@ -19,7 +19,7 @@
 | Event | outcome | capability | action | resource | Notes |
 |---|---|---|---|---|---|
 | up created it | performed | docker.compose | up | name | `cost_cents` 0; `expires_at`; undo `{"capability":"docker.compose","action":"down","params":{"name":…}}` |
-| up refused | refused | docker.compose | up | name | `limit_name` is the setting, `image`, or a grant limit; `host` is `docker:local`; `extend` |
+| up refused | refused | docker.compose | up | name | `limit_name` is a grant limit (with its extend command), a setting (empty `extend`: no grant allows it), or `image` (`extend` is the operator's `docker pull`); `host` is `docker:local` |
 | repeat up, unchanged | none | | | | nothing is recorded |
 | down | reaped | docker.compose | delete | name | `ref` is the performed row; the cause says `adele env down` by session S, with 0 objects left (read back) |
 | reaper | reaped or gone or reap-failed | docker.compose | delete | name | 12's reaper, through the compose provider |
