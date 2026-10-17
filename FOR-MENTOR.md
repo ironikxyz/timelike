@@ -1435,3 +1435,208 @@ was read at about 09:16Z; plan's ruling had been copied in at 09:18:16Z, before 
 rule 14's one stderr line in text mode, stdout unchanged, nothing new under `--json`. It does not depend on Q1.
 
 **For the mentor (route: code):** Q1: (a), (b), (c), or another reading. Q2: confirm, or say what to change.
+
+---
+
+## Item 27 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): how Adele runs compose, the git-hook boundary, readiness, the grant, the lane, and the workspace directory (blocks the build past the spec)
+
+**Status:** open. Raised 2026-10-17T01:34:56Z (read from the clock) on `014-nested-dev-env`, from send
+`bridge/sends/13-rev8-20261017-012727.md`, seams 1–5, before anything past the spec is built. The send asks for an
+item, with a recommendation, wherever a seam touches compose, another feature's contract, a criterion's reading,
+the constitution or the socket. **All five seams touch at least one of those, so all five are raised here.**
+The send also asks for the workspace directory's owner and mode (Q6).
+
+**Built meanwhile:** the spec only (`.specswarm/features/014-nested-dev-env/spec.md`), with each seam written as a
+proposed decision that cites this item. **Blocked until this item is answered:** plan, tasks and implement. Q1
+decides Adele's image and how everything on her side is built. Q2 decides the workspace's shape and the agent's
+mounts. Q3 to Q5 change what the client, the grant file and the lane carry.
+
+### Q1 · How Adele runs compose (seam 1: Adele's image base, a stack decision)
+
+**Recommended: (a) the Compose CLI in Adele's image, resolving each project in a throwaway sandbox.** This follows
+the mentor's lean, plus one addition this item asks you to confirm.
+
+- **The binary.** Copy the compose plugin from the image already pinned as `DOCKER_CLI_IMAGE`
+  (`docker:29.9.0-cli@sha256:1a4c7c…`), which ships it. That adds no new download pin, and its version is read
+  from the binary and recorded beside the pin. Run directly, the plugin behaves as the standalone
+  `docker-compose`, so Adele needs no docker CLI.
+  - **Still to verify at build:** that the binary is static. The release binaries are built with
+    `CGO_ENABLED=0`, and the build stage will check.
+  - **If it is static:** Adele stays `FROM scratch`, with two binaries and a tmpfs `HOME`.
+  - **If not:** her base must change, and I will raise that rather than choose a base myself.
+  - **The scan:** it joins her image's scan, because Syft reads Go build info and Grype matches over its
+    modules. Its findings are reviewed like any other.
+- **The addition: who resolves the file.** The compose CLI resolves a project with Adele's own rights. It reads
+  `.env`, `env_file`, `include` and `extends` files wherever their paths point, and interpolates `${VAR}` from
+  its own environment. So run in Adele's process, a project could pull in the synthetic credential
+  (`/run/adele-secret/canary`, readable by her group) or her environment. It could do that through
+  `env_file: /run/adele-secret/canary` or through `include`.
+  - **Why a check on the output is not enough:** `include` and `extends` leave no trace in the resolved model.
+    An inlined `env_file` arrives as plain `environment` values.
+  - **So resolution runs elsewhere.** Adele runs `config --format json` in a throwaway container that she starts
+    and removes:
+    - it uses her own image with the entrypoint set to the compose binary;
+    - its only mount is the launch's workspace, read-only at the same path;
+    - it has `network_mode: none`, an empty environment, no socket and no secret;
+    - it is labelled as timelike's.
+  - **What that container can and cannot reach.** It can read only the workspace. It cannot reach a daemon, so
+    it can do nothing but print. **H1 still holds as written:** Adele alone holds the socket. The sandbox holds
+    nothing and acts on nothing.
+  - **What runs is what was checked.** Adele checks the resolved model, adds the labels and the shared network
+    (Q3), and runs `up` from **those exact bytes** with `-f -`. The files the agent wrote are never read a second
+    time.
+- **What Adele refuses, each with exit 4 naming the setting** (the send's list, read from the resolved model):
+  - `privileged`;
+  - `network_mode: host`, and `container:` pointing outside the project;
+  - `pid`, `ipc`, `uts`, `userns_mode` or `cgroup` set to `host`;
+  - any `cap_add`;
+  - any `devices`, `device_cgroup_rules` or `gpus`;
+  - `security_opt` that unconfines (`seccomp`, `apparmor`, `label=disable`);
+  - a `bind` or volume source outside the workspace, including the socket;
+  - a named volume whose `driver_opts` bind a host path;
+  - `secrets`, `configs` or `env_file` from a file outside the workspace;
+  - for a `build`: a context outside the workspace, `network: host`, `privileged`, `entitlements`, or `ssh`
+    and `secrets` from outside the workspace;
+  - a host port `ports:` publish beyond the grant's `ports` (Q4).
+- **The grant envelope's `extend` field (a 001/004 contract question).** A setting refusal has no operator
+  command: no grant can allow `privileged` (H1). Recommended: exit 4 with the envelope's `limit` set to the
+  setting, and `extend` set to `none: no grant allows <setting>` rather than an invented command. Rule 14's line
+  says the same. Say if a setting refusal should instead take another exit code.
+- **Images (the standing rule: timelike creates and removes only its own containers and images).** A pulled
+  image cannot carry timelike's labels.
+  - **Recommended for slice 0:** Adele never pulls. A missing image is refused with the operator's command,
+    `docker pull <image>`. Images a `build:` makes carry timelike's labels and are removed by `down`.
+  - **Choose instead (a′)** if Adele may pull, leaving the pulled images on the host.
+- **Known limit, for `not_verified`.** A bind source is checked when the request is made, and the daemon resolves
+  it on the host when it mounts. Symlinks are refused in every source path when checked, but an agent that swaps
+  a directory for a symlink between the check and the mount is not stopped in slice 0. This is the kind of
+  failure slice 2's hardening covers.
+
+**The alternatives:**
+- **(b) The subset of the Compose model over the Engine API, in Go.** Adele stays as she is, with no new binary.
+  But interpolation, `extends`, `include`, profiles and overrides are reimplemented, and the check then disagrees
+  with what the agent's own `docker compose` would run. That is the mentor's reason against it, and mine.
+- **(c) A third container holding the socket on Adele's behalf.** That breaks H1 as written, so it is the
+  constitution's question, not mine. Not offered.
+
+### Q2 · The git-hook boundary (seam 2; prompt 13's revision-8 criterion)
+
+**Recommended: (a) a private clone the operator fetches from.**
+- **The layout.** The workspace (`…/timelike-workspaces/<launch>/`) holds the agent's own repositories. The
+  operator's checkout is elsewhere, as your decision 2 already places it. The operator brings the agent's work
+  over with `git fetch <workspace>/<repo>` (or `pull`).
+- **What the agent cannot reach.** A fetch or pull from a local repository runs none of that repository's hooks
+  and reads none of its executing config into the fetching repository. `uploadpack.packObjectsHook` is honoured
+  only from protected config.
+- **Measured on this host's git 2.43.0, as one uid (scratchpad, not tracked):**
+  - **The agent side:** a repository carried `pre-commit`, `post-checkout`, `post-merge`, `pre-push` and
+    `reference-transaction` hooks. It also set `core.hooksPath`, `core.fsmonitor` and
+    `uploadpack.packObjectsHook`, each pointing at scripts that write a marker.
+  - **The operator side:** a separate checkout ran `clone`, `commit`, `status`, `fetch` and `pull` from it, and
+    **0 lines** were written.
+  - **The control:** the same scripts did run when git was run inside the agent's repository.
+- **What the lane adds.** The lane repeats this with the runner as the operator's stand-in, against files the
+  agent's uid wrote. In that setup, the runner's git also refuses to run inside the agent's repository at all,
+  because of `safe.directory`: another uid owns it.
+  - **One caveat for the operator.** Git ≥ 2.45.1 also checks ownership when *fetching* from a local repository.
+    So on a newer host git, the operator adds `safe.directory` for the workspace's repositories. That makes git
+    run *inside* them with the agent's config too.
+  - **The guidance therefore stays:** fetch from them, never work in them.
+- **The lift switch: `TIMELIKE_HOST_GIT=lifted` at launch** (a compose variable, `enforced` by default).
+  - **Enforced:** the launcher refuses a workspace that lies inside a git work tree on the host, so an operator's
+    checkout cannot be the workspace.
+  - **Lifted:** that refusal is off, and the operator may mount their own checkout as the workspace.
+  - **Where it is shown:**
+    - a label on the agent's container, `xyz.ironik.timelike.host-git=enforced|lifted`, readable with
+      `docker inspect`;
+    - an environment value in the agent;
+    - a line in `adele env up`'s verdict.
+  - **The test, both ways, with real git on the runner:**
+    - enforced, the agent's hooks never run in the runner's checkout;
+    - lifted, with the checkout mounted, they do;
+    - in both, the label reads true.
+- **The alternative: (b) `.git/hooks` and `.git/config` read-only to the agent** (bind-mounted read-only over a
+  checkout in the workspace). It works where the workspace *is* the operator's checkout. But:
+  - every config write the agent makes fails, including `git push -u`, `git branch --track`, `git remote add`
+    and `git config` itself;
+  - a new `git init` or `clone` in the workspace is unprotected;
+  - a rename of the mounted files fails with EBUSY.
+
+  That is a P1 cost on every git workflow, so not recommended.
+
+### Q3 · Readiness and the verdict (seam 3)
+
+**Recommended:**
+- **The bound.** `--wait` defaults to 120 s, at most 600 s, and the verdict prints it.
+- **What "ready" means.**
+  - **A service with a healthcheck** is ready when the daemon reports it `healthy`, read back after `up`.
+  - **A service without one** is ready when it is `running`. If it exposes a port, that port must also accept a
+    TCP connection **made from the agent's container** (cross-stack P001): the client probes, not Adele.
+  - **A one-shot service** that exits 0 counts as completed.
+- **Never ready within the bound:** exit 124 (003's timeout).
+  - **What the verdict says:** each service, its state (`starting`, `unhealthy` with its last health output, or
+    `exited N`) and the bound.
+  - **What stays:** the environment stays up, so the agent can look at it, and the verdict names
+    `adele env down`. It still counts against `instances`.
+- **The network the agent and the environment share: `timelike-nested`.** It is a new network in `compose.yaml`,
+  `internal: true`, and the agent joins it.
+  - **What Adele adds:** she attaches every nested service to it, with the alias `<service>.<project>`. Two
+    projects' `db` never collide, and each project keeps its own default network for its own traffic.
+  - **What the verdict lists:** each service as `<service>.<project>:<port>` for each port it exposes.
+  - **What the agent gains:** the agent's new network path is to the containers it brought up and nothing else.
+    `timelike-nested` routes nowhere. The nested containers keep their own project network, with the daemon's
+    default egress. The agent already has egress through `default` until 12 slice 2, so it gains no outside
+    reach it did not have.
+
+### Q4 · The grant (seam 4; 004's grant file and capability set)
+
+**Recommended:**
+- **A capability, `docker.compose`, in a grant beside `standin.box`, with the same five keys:**
+  - `instances` is the number of environments live at once;
+  - `ttl` is an environment's longest lifetime, with a default of the grant's;
+  - `ports` limits host-published ports, `none` by default, since the agent reaches services on
+    `timelike-nested`;
+  - `budget` stays required. Slice 0's environments are quoted at 0.00 USD (local), and the verdict says
+    "local: no cost".
+- **Each `up` that creates an environment** is a `performed` ledger row, recording the project, its services and
+  its expiry. A refused `up` is a `refused` row, with `host` set to `docker:local`. A repeat `up` of a live
+  project is a no-op, so it records nothing new. **`down`** records an ending row, as 12's reap rows do.
+- **Recommended: 12's reaper reaps an expired environment in slice 0.** Its `Provider` interface (List and
+  Delete) is what the stand-in has. A second provider maps those to the labelled projects and to `compose down`,
+  read back. That puts the ttl on the same path as every other expiry. **Collection by ended session, slice 1's
+  criterion, is not built.** If the reaper should wait for slice 1 too, say so: then a ttl is recorded and
+  enforced only at `up`.
+
+### Q5 · The lane (seam 5)
+
+- **Project names.** Each cell's project is named `tl-<file-hash6>-<cell>`, so two files, or two lanes on one
+  daemon, never share a project. Every cell's teardown runs `adele env down` and then checks, with the daemon,
+  that nothing labelled with its project is left.
+- **The fixture project** is timelike's own (cross-stack P005). Its services use images the lane already has,
+  `DEBIAN_IMAGE` and the agent image, so nothing is pulled. One service has a healthcheck, one has none, and one
+  never becomes ready. Each dangerous setting has a fixture file that asks for it.
+- **`lane.conf`, file by file in the plan.** The bring-up cells assert no budget, so they spread; waits use
+  `PLUMBING_TIMEOUT`. The git-boundary cells relaunch the agent with `TIMELIKE_HOST_GIT=lifted`, which changes
+  shared state, so they are serial. The 120 s readiness bound is measured once, quietly, and reported.
+
+### Q6 · The workspace directory (the send's decision 2)
+
+**Please ask the operator to create the workspace parent the send names (decision 2, `…/timelike-workspaces/`) owned `2001:2001`, mode
+`2775`.**
+- **Who writes it.** The runner (2001) and the operator's launcher create one directory per launch inside it,
+  inheriting group 2001 through setgid. The agent's service gets `group_add` with that group id, taken from a
+  compose variable (Q001/Q002), so the agent (uid 1000) writes through the group.
+- **What the agent creates.** With the agent's umask of 022, what it creates is `1000:2001`, mode 0644 or 0755.
+  The runner reads it (fetch, assertions) but does not write it (lore Q006: setgid alone does not make it
+  writable by both).
+- **Why both writing is not needed.** Under Q2 (a), the runner never writes into the agent's repository.
+- **Two facts the operator may want before creating it:**
+  - **uid 1000 on the host.** It may belong to a real host account, and the agent's files there will appear as
+    that account's.
+  - **The agent and group 2001.** The agent gains membership of group 2001 for whatever is mounted into it, and
+    that is only the workspace.
+
+**For the mentor (route: code; Q1, Q2 and Q4 touch the stack, the constitution's H1, and 001/004's contracts, so they
+may be the operator's or plan's):** Q1: (a) with the sandboxed resolution, (a′), or (b). Q2: (a) with
+`TIMELIKE_HOST_GIT`, or (b). Q3, Q4 and Q5: confirm, or say what to change. Q6: ask the operator to create the
+directory.
