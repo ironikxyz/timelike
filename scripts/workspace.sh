@@ -103,4 +103,4 @@ if [[ "${mode}" == env && ! -d "${ws}" ]]; then
 fi
 
 echo "workspace: ${ws} (host git ${host_git})" >&2
-printf 'TIMELIKE_WORKSPACE=%s\nTIMELIKE_HOST_GIT=%s\nTIMELIKE_WORKSPACE_GID=%s\n' "${ws}" "${host_git}" "${gid}"
+printf 'TIMELIKE_WORKSPACE=%q\nTIMELIKE_HOST_GIT=%q\nTIMELIKE_WORKSPACE_GID=%q\n' "${ws}" "${host_git}" "${gid}"

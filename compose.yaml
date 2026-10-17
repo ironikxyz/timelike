@@ -42,21 +42,39 @@ services:
     init: true
     read_only: false
     command: ["sleep", "infinity"]
-    # Deliberately no ports and no Docker socket (constitution H1: only Adele holds it). One volume, and
-    # only timelike's own: the agent's state root (feature 005 slice 1, FR-26; rule 10 at revision 11), so
-    # snapshots, the trash and caches survive a new session, a restart and a recreate. Nothing of Adele's.
-    # Removing it is the operator's explicit act (`docker volume rm timelike_timelike-state`).
+    # Deliberately no ports and no Docker socket (constitution H1: only Adele holds it). Two mounts. The
+    # agent's state root (feature 005 slice 1, FR-26; rule 10 at revision 11), so snapshots, the trash and
+    # caches survive a new session, a restart and a recreate; removing it is the operator's explicit act
+    # (`docker volume rm timelike_timelike-state`). And the workspace (feature 13 slice 0; 014 research R9): a
+    # host directory, one per launch, bound at the SAME absolute path, so a bind mount a nested project asks
+    # for resolves on the host to what the agent sees (lore docker-compose P001, item 1). `make up` sets it
+    # with scripts/workspace.sh; without it the agent gets an empty named volume instead, and `adele env up`
+    # says no workspace was mounted. Nothing of Adele's is mounted here.
     volumes:
       - timelike-state:/var/lib/timelike
+      - ${TIMELIKE_WORKSPACE:-timelike-no-workspace}:${TIMELIKE_WORKSPACE:-/opt/timelike/no-workspace}
+    # The workspace parent's group (setgid, 2775; FOR-MENTOR Item 27 Q6), so uid 1000 writes where the
+    # operator's group owns. A gid, from scripts/workspace.sh; the default is the agent's own group.
+    group_add:
+      - "${TIMELIKE_WORKSPACE_GID:-1000}"
+    # The host-git boundary, shown where the launch is read (prompt 13 revision 8; Item 27 Q2).
+    labels:
+      xyz.ironik.timelike.host-git: ${TIMELIKE_HOST_GIT:-enforced}
+      xyz.ironik.timelike.workspace: ${TIMELIKE_WORKSPACE:-}
     # The agent reaches Adele only through her request interface, on `adele-request` (spec FR-2). It
-    # keeps the default network, with egress, until slice 2's allowlist (spec D-2).
-    networks: [default, adele-request]
+    # keeps the default network, with egress, until slice 2's allowlist (spec D-2). And it shares
+    # `timelike-nested` (internal) with the services of the environments Adele brings up (feature 13).
+    networks: [default, adele-request, nested]
     environment:
       TIMELIKE_ADELE_URL: http://adele:8480
+      TIMELIKE_WORKSPACE: ${TIMELIKE_WORKSPACE:-}
+      TIMELIKE_HOST_GIT: ${TIMELIKE_HOST_GIT:-enforced}
 
   # Adele: holds the credential, enforces the operator's grants, records the ledger (P4). FROM scratch,
   # uid 10001. Nothing of hers is mounted into the agent: her state volume, her grant file (read-only)
-  # and the canary are hers alone (spec FR-4; stack rule 1).
+  # and the canary are hers alone (spec FR-4; stack rule 1). From feature 13 she alone holds the host's
+  # Docker socket (constitution H1), with its group added from TIMELIKE_DOCKER_GID (the host's id, read by
+  # `make up`; lore docker-compose Q001/Q002). Her default, her own gid, grants nothing.
   adele:
     build:
       context: adele
@@ -76,12 +94,17 @@ services:
     tmpfs:
       - /tmp
     networks: [adele-request, adele-standin]
+    group_add:
+      - "${TIMELIKE_DOCKER_GID:-10001}"
     volumes:
       - adele-state:/var/lib/adele
       - adele-secret:/run/adele-secret:ro
       - ${ADELE_GRANTS:-./adele/grants.conf}:/etc/adele/grants.conf:ro
+      - ${TIMELIKE_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     environment:
       ADELE_CANARY_FILE: /run/adele-secret/canary
+      TIMELIKE_WORKSPACE: ${TIMELIKE_WORKSPACE:-}
+      TIMELIKE_HOST_GIT: ${TIMELIKE_HOST_GIT:-enforced}
     depends_on:
       adele-secret:
         condition: service_completed_successfully
@@ -158,9 +181,17 @@ networks:
     internal: true
   adele-standin:
     internal: true
+  # Feature 13: the agent and the nested environments' services, and nothing else; no route out. Its name is
+  # fixed because Adele joins nested services to it by name, after checking its label (014 research R8).
+  nested:
+    name: timelike-nested
+    internal: true
+    labels:
+      xyz.ironik.timelike.network: nested
 
 volumes:
   timelike-state:
   adele-state:
   standin-state:
   adele-secret:
+  timelike-no-workspace:

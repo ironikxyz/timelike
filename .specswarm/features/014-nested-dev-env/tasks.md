@@ -19,7 +19,7 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T004 The Engine API client over the unix socket (`adele/internal/engine/engine.go`): sandbox run, image inspect, labelled list, label-scoped down, network inspect
 - [X] T005 The compose model package (`adele/internal/compose/`): names, the refusal list (R3), the bind sources, label and network injection (R5), the resolve document; units in `adele/internal/compose/*_test.go`
 - [X] T006 `adeled resolve` (`adele/cmd/adeled/resolve.go`), the sandbox's entrypoint (R2)
-- [ ] T007 `compose.yaml`: Adele's socket, group and workspace env; the agent's workspace mount at the same path, group, labels, env and `timelike-nested`; the network; `Makefile` `up` through the launcher, with `TIMELIKE_DOCKER_GID`
+- [X] T007 `compose.yaml`: Adele's socket, group and workspace env; the agent's workspace mount at the same path, group, labels, env and `timelike-nested`; the network; `Makefile` `up` through the launcher, with `TIMELIKE_DOCKER_GID`
 
 ## Phase 3: US1, bring up, use, tear down (criteria 1 and 2; D9)
 

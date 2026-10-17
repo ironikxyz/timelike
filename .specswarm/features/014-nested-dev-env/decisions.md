@@ -71,3 +71,13 @@ INHERITED: T005's BindSources, Unset, Outside
 ASSUMED: compose's error for an absent env_file, include or extends names the absolute path (R2); the setting is read from the error's words. A wording that names none falls to exit 1 with compose's text, never to a pass (confidence: medium)
 ABSENT: the resolve command never runs in Adele's own container, but nothing stops the operator running it there; it reads only what it is given
 SCOPE: in
+
+### T007: compose.yaml and make up
+**Started:** 2026-10-17T04:15:25Z | **Completed:** 2026-10-17T04:15:25Z
+
+INHERITED: T002's launcher output (now printf %q, so a path with a space survives eval)
+FLAGGED: without TIMELIKE_WORKSPACE the agent's second mount is an empty named volume at /opt/timelike/no-workspace, not a failure — every compose command (exec, down) interpolates the whole file, so a strict ${VAR:?} would break them (lore docker-compose Q002); the named volume keeps a valid file and creates nothing on the host (a bind of a missing path would be created as root) (confidence: medium)
+ASSUMED: the socket's group is read by make from the socket (stat), as tests/run.sh already does for the runner; the default 10001 is Adele's own gid and grants nothing (confidence: high)
+ABSENT: timelike-nested's name is fixed (Adele joins services to it by name); two stacks on one daemon would share it — there is one stack per host (container names are fixed already)
+ABSENT: files a nested container writes as root into the workspace are root's on the host; the operator removes them with sudo or from a container. Not addressed in slice 0
+SCOPE: in

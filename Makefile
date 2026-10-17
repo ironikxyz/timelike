@@ -57,8 +57,15 @@ build: docker-check stamp-check grants
 
 # The stand-in's profile is on: it is what the D8 demo requests (feature 004). Without it, Adele has no
 # capability to broker. `docker compose up` without the profile starts the agent and Adele only.
+# Feature 13: the launch gets its workspace (scripts/workspace.sh: a new directory under TIMELIKE_WORKSPACES, the
+# host-git boundary) and the socket's group for Adele, read from the socket itself.
+DOCKER_SOCKET := $(patsubst unix://%,%,$(or $(DOCKER_HOST),unix:///var/run/docker.sock))
 up: build
-	$(COMPOSE) --profile standin up -d --force-recreate
+	@set -e; eval "$$(scripts/workspace.sh env)"; \
+	  export TIMELIKE_WORKSPACE TIMELIKE_HOST_GIT TIMELIKE_WORKSPACE_GID; \
+	  export TIMELIKE_DOCKER_SOCKET="$(DOCKER_SOCKET)" TIMELIKE_DOCKER_GID="$$(stat -c %g "$(DOCKER_SOCKET)")"; \
+	  echo "$(COMPOSE) --profile standin up -d --force-recreate  (workspace $$TIMELIKE_WORKSPACE, host git $$TIMELIKE_HOST_GIT)"; \
+	  $(COMPOSE) --profile standin up -d --force-recreate
 
 down:
 	$(COMPOSE) --profile standin down --remove-orphans
