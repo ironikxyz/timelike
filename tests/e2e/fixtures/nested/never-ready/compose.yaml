@@ -1,0 +1,11 @@
+# A service whose healthcheck never passes (feature 13 slice 0, Scenario 4): bring-up ends at its bound with
+# exit 124, and the environment stays until `adele env down`.
+services:
+  stuck:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+    healthcheck:
+      test: ["CMD", "false"]
+      interval: 1s
+      timeout: 2s
+      retries: 1

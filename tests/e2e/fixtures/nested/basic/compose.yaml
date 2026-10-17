@@ -1,0 +1,28 @@
+# timelike's own fixture project for feature 13 slice 0 (cross-stack P005: a fixture proves only that what built
+# it agrees with itself; not_verified names the real projects not tried). Three services, one of each readiness
+# kind (014 research R7): `db` has a healthcheck, `web` has none and a port probed from the agent's container, and
+# `job` is a one-shot. The images are the lane's own: FIXTURE_IMAGE is DEBIAN_IMAGE, present after the lane's
+# `up` (adele-secret runs from it), and AGENT_IMAGE is timelike-agent:local; nothing is pulled.
+# Every value comes from the project's own .env, which a cell writes: the agent's environment is not read (D-1).
+services:
+  db:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    volumes:
+      - data:/data
+      # The project directory at the same absolute path (criterion 2; lore docker-compose P001, item 1).
+      - ${PROJECT_DIR:?}:${PROJECT_DIR:?}
+  web:
+    image: ${AGENT_IMAGE:?}
+    entrypoint: ["/opt/timelike/python/bin/python3", "-I", "-m", "http.server", "8080", "--directory", "/tmp"]
+    expose: ["8080"]
+  job:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["true"]
+volumes:
+  data:

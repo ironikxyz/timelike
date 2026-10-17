@@ -44,8 +44,9 @@ local_value() {
   local key="$1" line
   [[ -f "${repo}/local.env" ]] || return 0
   while IFS= read -r line || [[ -n "${line}" ]]; do
-    [[ "${line}" == "${key}="* ]] && printf '%s' "${line#*=}"
+    if [[ "${line}" == "${key}="* ]]; then printf '%s' "${line#*=}"; fi
   done <"${repo}/local.env"
+  return 0 # a key the file lacks is unset, not a failure (set -e would end the launch silently)
 }
 
 parent="${TIMELIKE_WORKSPACES:-$(local_value TIMELIKE_WORKSPACES)}"

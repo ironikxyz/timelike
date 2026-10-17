@@ -115,3 +115,17 @@ ASSUMED: the default name is computed by the client from the project's realpath 
 ABSENT: `adele env exec` (running a command in a service) is not built: the agent reaches services by address; slice 1's devcontainer criterion is where a command inside one is asked for
 ABSENT: status's denial line now prints "operator's command: none" for a refusal without one (both 12's client and adeled status); no existing test pinned the empty case
 SCOPE: in
+
+### T010-T015, T017, T018: the lane, the criterion files, the launcher's units, 004's assertions
+**Started:** 2026-10-17T04:34:19Z | **Completed:** 2026-10-17T04:34:19Z
+
+INHERITED: T007's compose variables; T009's verdict and error texts, which the cells pin
+FLAGGED: the lane's up step runs the launcher, so a lane without TIMELIKE_WORKSPACES fails at up, naming the variable, rather than skipping feature 13's cells — a skipped cell would read as a pass. The mentor's lane must set it (environment or local.env) (confidence: high)
+FLAGGED: the lane sweeps leftover nested environments and sandboxes by timelike's labels before compose down, because a container still joined to timelike-nested would stop compose removing the network; it removes nothing unlabelled (confidence: high)
+FLAGGED: the operator's git is a throwaway of DOCKER_CLI_IMAGE (alpine, carries git, already pinned and pulled for the runner's build), run as the runner's uid with the workspace at the same path — the runner image itself has no git known to this session; the first cell fails naming it if git is absent (confidence: medium)
+FLAGGED: 004's isolation test now allows exactly two agent mounts, the state volume and the workspace bind at the same path, and still refuses anything of Adele's or the socket; the network test adds timelike-nested and requires it internal. Loosened only by what feature 13 adds (confidence: high)
+ASSUMED: compose's default health with one failed check and retries 1 reads "unhealthy" while the container runs; the never-ready cell pins "stuck  running (unhealthy)" (confidence: medium)
+ASSUMED: alpine's git (2.45.1 or later) needs safe.directory for a repository owned by uid 1000; the cells pass it per command, as the README tells the operator (confidence: high)
+ABSENT: no cell builds an image (builds are refused, Item 28) and no cell publishes a host port (ports = none in every lane grant); a ports refusal is 12's tested path, through checkStatic
+ABSENT: the e2e files were not run here (no Docker); shellcheck passes on each, and every helper they call exists
+SCOPE: in

@@ -23,11 +23,18 @@ setup_file() {
   stamp_check_adele
 }
 
-@test "004 nothing of Adele's is mounted into the agent: its one mount is its own state volume" {
-  local mounts
-  mounts="$(docker inspect --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Destination}};{{end}}' "$AGENT_CONTAINER")"
-  [[ "$mounts" =~ ^volume\ [A-Za-z0-9_.-]*timelike-state\ /var/lib/timelike\;$ ]] ||
-    { docker inspect --format '{{json .Mounts}}' "$AGENT_CONTAINER" >&2; return 1; }
+# Feature 13 added the workspace: a bind of the host's directory at the same absolute path (014 research R9). The
+# agent's mounts are exactly those two, and none of them is Adele's: not her state, her secret, her grant file, or
+# the Docker socket (constitution H1).
+@test "004 nothing of Adele's is mounted into the agent: its mounts are its own state volume and its workspace" {
+  local mounts ws="${TIMELIKE_WORKSPACE:-}"
+  mounts="$(docker inspect --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Source}} {{.Destination}};{{end}}' "$AGENT_CONTAINER")"
+  [[ -n "$ws" ]] || { echo "no TIMELIKE_WORKSPACE in the runner (tests/run.sh's up step sets it)" >&2; return 1; }
+  local want_state='volume [A-Za-z0-9_.-]*timelike-state [^ ]* /var/lib/timelike;'
+  [[ "$mounts" =~ $want_state ]] || { echo "no state volume: $mounts" >&2; return 1; }
+  [[ "$mounts" == *"bind  ${ws} ${ws};"* ]] || { echo "no workspace bind at the same path: $mounts" >&2; return 1; }
+  [[ "$(grep -o ';' <<<"$mounts" | wc -l | tr -d ' ')" == 2 ]] || { echo "more than two mounts: $mounts" >&2; return 1; }
+  [[ "$mounts" != *adele* && "$mounts" != *docker.sock* ]] || { echo "one of Adele's: $mounts" >&2; return 1; }
 }
 
 check_no_adele_paths() {
@@ -41,10 +48,10 @@ check_no_adele_paths() {
 @test "004 the grant file, the ledger and the canary have no path in the agent's filesystem [bash -c]" { check_no_adele_paths c; }
 @test "004 the grant file, the ledger and the canary have no path in the agent's filesystem [bash -lc]" { check_no_adele_paths lc; }
 
-@test "004 Adele's state, grant file and canary are mounted into her container, read-only where they are config" {
+@test "004 Adele's state, grant file, canary and (feature 13) the Docker socket are mounted into her container, read-only where they are config" {
   local m
   m="$(docker inspect --format '{{range .Mounts}}{{.Destination}}:{{.RW}} {{end}}' "$ADELE_CONTAINER")"
-  for want in /var/lib/adele:true /etc/adele/grants.conf:false /run/adele-secret:false; do
+  for want in /var/lib/adele:true /etc/adele/grants.conf:false /run/adele-secret:false /var/run/docker.sock:true; do
     [[ " $m " == *" ${want} "* ]] || { echo "Adele's mounts: $m (want ${want})" >&2; return 1; }
   done
 }

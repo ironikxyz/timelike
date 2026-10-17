@@ -59,7 +59,7 @@ check_standin_unreachable() {
   done
 }
 
-@test "SC-1 004 Adele is on internal networks only; the agent on its default and Adele's request network" {
+@test "SC-1 004 Adele is on internal networks only; the agent on its default, Adele's request network and (13) timelike-nested" {
   local nets
   nets="$(docker inspect --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}} {{end}}' "$ADELE_CONTAINER")"
   [[ "$nets" == "timelike_adele-request timelike_adele-standin " ]] || { echo "Adele's networks: $nets" >&2; return 1; }
@@ -67,5 +67,7 @@ check_standin_unreachable() {
     [[ "$(docker network inspect --format '{{.Internal}}' "$n")" == true ]] || { echo "$n is not internal" >&2; return 1; }
   done
   nets="$(docker inspect --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}} {{end}}' "$AGENT_CONTAINER")"
-  [[ "$nets" == "timelike_adele-request timelike_default " ]] || { echo "the agent's networks: $nets" >&2; return 1; }
+  [[ "$nets" == "timelike-nested timelike_adele-request timelike_default " ]] || { echo "the agent's networks: $nets" >&2; return 1; }
+  # Feature 13's shared network: internal too, so the agent gains no route out through it (014 research R8).
+  [[ "$(docker network inspect --format '{{.Internal}}' timelike-nested)" == true ]] || { echo "timelike-nested is not internal" >&2; return 1; }
 }

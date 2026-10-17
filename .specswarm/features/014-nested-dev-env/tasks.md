@@ -25,30 +25,30 @@ every criterion is a test). Paths are relative to the repository root.
 
 - [ ] T008 [US1] Broker: `docker.compose` up and down, `/v1/envs` (`adele/internal/broker/env.go`, `broker.go`, `http.go`); `adeled serve` wires the engine and sandbox image (`adele/cmd/adeled/serve.go`); units `adele/internal/broker/env_test.go`
 - [X] T009 [US1] The client: `adele env up|status|down` with the readiness loop and port probes (`tools/bin/adele`); status's "operator's command: none" for an empty extend; units `tests/unit/test_adele_env_cli.py`
-- [ ] T010 [US1] Lane: the launcher before `up`, the runner's workspace mount and env (`tests/run.sh`); nested grants (`tests/e2e/fixtures/adele/grants.conf`); fixtures (`tests/e2e/fixtures/nested/`); helpers (`tests/e2e/helpers.bash`)
-- [ ] T011 [US1] e2e `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`
-- [ ] T012 [US1] e2e `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`
+- [X] T010 [US1] Lane: the launcher before `up`, the runner's workspace mount and env (`tests/run.sh`); nested grants (`tests/e2e/fixtures/adele/grants.conf`); fixtures (`tests/e2e/fixtures/nested/`); helpers (`tests/e2e/helpers.bash`)
+- [X] T011 [US1] e2e `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`
+- [X] T012 [US1] e2e `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`
 
 ## Phase 4: US2, dangerous settings (criterion 3)
 
-- [ ] T013 [US2] e2e `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-4-naming-the-setting.bats`
+- [X] T013 [US2] e2e `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`
 
 ## Phase 5: US3, idempotent up and complete down (criterion 5)
 
-- [ ] T014 [US3] e2e `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`
+- [X] T014 [US3] e2e `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`
 
 ## Phase 6: US5, the operator's git (criterion 4)
 
-- [ ] T015 [US5] e2e `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`; units `tests/unit/test_workspace_launcher.py` (real git: enforced refuses, lifted allows)
+- [X] T015 [US5] e2e `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`; units `tests/unit/test_workspace_launcher.py` (real git: enforced refuses, lifted allows)
 
 ## Phase 7: US4 and US6, never ready, beyond the grant, expiry
 
 - [X] T016 [US4] Reaper: providers by capability, the compose provider (`adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`, `ops.go`); units
-- [ ] T017 [US4] e2e `tests/e2e/nested-environment-beyond-the-grant-refused-never-ready-exits-124-and-expired-reaped.bats`
+- [X] T017 [US4] e2e `tests/e2e/nested-environment-beyond-the-grant-refused-never-ready-exits-124-and-expired-reaped.bats`
 
 ## Phase 8: Polish
 
-- [ ] T018 Feature 004's isolation and network assertions follow the new topology (agent: state volume plus workspace bind; networks plus `timelike-nested`; Adele: plus the socket); `tests/e2e/lane.conf` lines; `Makefile` `SHELLCHECK_FILES`
+- [X] T018 Feature 004's isolation and network assertions follow the new topology (agent: state volume plus workspace bind; networks plus `timelike-nested`; Adele: plus the socket); `tests/e2e/lane.conf` lines; `Makefile` `SHELLCHECK_FILES`
 - [ ] T019 README: the status block (if all five Automated criteria are built), the section, the regenerated reference (`scripts/readme_reference.py --write`); `adele/grants.example.conf`
 - [ ] T020 Host lanes (`make test-host` serial and `-n 8`), Go units and vet; the cycle report; `reboot.md`; the deny-list on the staged tree; commit
 

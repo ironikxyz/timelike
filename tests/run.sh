@@ -310,6 +310,12 @@ run_e2e() {
     lane_env=(-e "TL_E2E_LOCK=/out/${LANE_LOCK##*/}" -e "TL_E2E_SERIAL_FILES=${E2E_SERIAL[*]}")
     lane_args=(--jobs "${E2E_JOBS}" --no-parallelize-within-files)
   fi
+  # Feature 13: the lane's workspace, at the same path, so cells check from the runner what the daemon mounted.
+  local -a ws_args=()
+  if [[ -n "${TIMELIKE_WORKSPACE:-}" ]]; then
+    ws_args=(-v "${TIMELIKE_WORKSPACE}:${TIMELIKE_WORKSPACE}" -e TIMELIKE_WORKSPACE -e TIMELIKE_HOST_GIT
+      --group-add "${TIMELIKE_WORKSPACE_GID}")
+  fi
   # Runs as the invoking user (so files in tests/out stay theirs), in the socket's group.
   docker run --rm \
     -u "$(id -u):$(id -g)" \
@@ -321,6 +327,8 @@ run_e2e() {
     -e HOME=/tmp \
     -e GIT_SHA \
     -e DEBIAN_IMAGE \
+    -e DOCKER_CLI_IMAGE \
+    ${ws_args[@]+"${ws_args[@]}"} \
     -e "REPO_HOST=${repo}" \
     -e "BENCH_E2E_OUT=${bench_out}" \
     -e "RUN_TIMEOUT=${RUN_TIMEOUT:-30}" \
@@ -380,10 +388,41 @@ e2e_account() {
 # from an empty ledger, so no run's spending or extensions reach the next. Slice 0 holds no real
 # resource or credential, so nothing is lost; run `make up` afterwards for the operator's own grants.
 compose_up() {
+  # Feature 13: nested environments a previous lane left (each labelled timelike's, so these are ours to
+  # remove), before compose removes the timelike-nested network they would still be joined to.
+  nested_sweep || return 1
   docker compose --profile standin down --volumes --remove-orphans || return 1
+  # The lane's own workspace (scripts/workspace.sh: a new directory under TIMELIKE_WORKSPACES, the boundary
+  # enforced), and the socket's group for Adele. Exported, so run_e2e mounts it into the runner too.
+  local launch
+  launch="$(TIMELIKE_HOST_GIT=enforced scripts/workspace.sh env)" || return 1
+  eval "${launch}"
+  export TIMELIKE_WORKSPACE TIMELIKE_HOST_GIT TIMELIKE_WORKSPACE_GID
+  local sock="${DOCKER_HOST:-unix:///var/run/docker.sock}"
+  sock="${sock#unix://}"
+  export TIMELIKE_DOCKER_SOCKET="${sock}"
+  TIMELIKE_DOCKER_GID="$(stat -c %g "${sock}")" || return 1
+  export TIMELIKE_DOCKER_GID
+  echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); Adele's socket group ${TIMELIKE_DOCKER_GID}"
   ADELE_GRANTS="${repo}/tests/e2e/fixtures/adele/grants.conf" \
     docker compose --profile standin up -d --build --force-recreate || return 1
   wait_healthy "${ADELE_CONTAINER}" "${STANDIN_CONTAINER}"
+}
+
+# shellcheck disable=SC2329 # invoked from compose_up
+# nested_sweep — remove every container, network and volume carrying timelike's environment or sandbox label
+# (feature 13), and nothing else: the host's rule is that timelike removes only its own.
+nested_sweep() {
+  local ids
+  ids="$(docker ps -aq --filter label=xyz.ironik.timelike.env; docker ps -aq --filter label=xyz.ironik.timelike.sandbox)" || return 1
+  # shellcheck disable=SC2086 # one id per word, on purpose
+  [[ -z "${ids}" ]] || docker rm -f -v ${ids} >/dev/null || return 1
+  ids="$(docker network ls -q --filter label=xyz.ironik.timelike.env)" || return 1
+  # shellcheck disable=SC2086
+  [[ -z "${ids}" ]] || docker network rm ${ids} >/dev/null || return 1
+  ids="$(docker volume ls -q --filter label=xyz.ironik.timelike.env)" || return 1
+  # shellcheck disable=SC2086
+  [[ -z "${ids}" ]] || docker volume rm ${ids} >/dev/null || return 1
 }
 
 # shellcheck disable=SC2329 # invoked from compose_up, itself invoked indirectly by step
