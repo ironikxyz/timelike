@@ -100,3 +100,19 @@ func TestEnvListWithoutADaemon(t *testing.T) {
 		t.Fatal("no error")
 	}
 }
+
+// A failed sandbox's remediation names its cause: make build only for a missing image (lane 13s0a, item A).
+func TestASandboxRemedyNamesItsCause(t *testing.T) {
+	img := "timelike-adele:local"
+	missing := &engine.SandboxError{Phase: "create", Err: &engine.APIError{Status: http.StatusNotFound}}
+	if r := SandboxRemedy(missing, img); !strings.Contains(r, "make build") {
+		t.Errorf("missing: %s", r)
+	}
+	slow := &engine.SandboxError{Phase: "wait", TimedOut: true}
+	if r := SandboxRemedy(slow, img); strings.Contains(r, "make build") || !strings.Contains(r, "slow") {
+		t.Errorf("slow: %s", r)
+	}
+	if r := SandboxRemedy(&engine.SandboxError{Phase: "start", Err: context.Canceled}, img); strings.Contains(r, "make build") {
+		t.Errorf("other: %s", r)
+	}
+}

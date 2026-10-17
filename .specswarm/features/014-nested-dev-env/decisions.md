@@ -150,3 +150,21 @@ FLAGGED: a DOCKER_HOST that is not a unix socket gives Adele no socket and says 
 ASSUMED: pytest-xdist 3.8.0 and execnet 2.1.2, as pins.env names them, were installed into this session's scratch venv for the -n 8 run; nothing in the repository changed for it (confidence: high)
 ABSENT: the Docker lane, the scan and make lint did not run (no Docker in this session); the e2e cells have never run
 SCOPE: in
+
+## Cycle 2 — lane 13s0a (`../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`)
+
+### T021–T025: lane 13s0a's findings A, B, C and E; Item 29
+**Started:** not read from the clock; the cycle's first reading was 2026-10-17T10:06:50Z, after A–E's code was written | **Completed:** 2026-10-17T10:08:13Z
+
+INHERITED: Cycle 1's code at `e5a58af`; the lane's logs under `../bridge/`
+FLAGGED: A — Envs' lock was held for a whole request, the sandbox included, so in a parallel lane every bring-up and every one of the 26 forbidden-setting cells queued behind each other; the agent's 120 s counted that queue. The sandbox and the setting check now take no lock. Chose this over moving the bring-up files into lane.conf's serial class, because the product must answer concurrent requests and a class would hide the queue rather than remove it (confidence: medium — not run against a daemon here)
+FLAGGED: A — the bound stays counted from the agent's side: it is what the agent waits for. A request given up before Adele creates anything stops; once she creates, she finishes and records it (the context is detached), so an environment is never half-made and unrecorded; the client's remediation says so. Chose this over cancelling compose midway, which can leave objects the daemon finishes creating after compose is killed (the likeliest cause of "left 3 0 1") (confidence: medium)
+FLAGGED: A — why the sandbox was slow is not established. compose config inside it is bounded at 45 s and would have printed its own error, so cell 155's 90 s was spent in the daemon's create, start, wait or logs, under the lane's load. The sandbox's phases are now measured and reported in up's data, and the bring-up JSON cell prints them, measured and not asserted, so the next lane says which (confidence: high for the 45 s argument; the phase is unknown)
+FLAGGED: B — the cause is not established. 153 reached compose up through the same MkdirTemp in the parallel phase; 701–703 failed in the serial phase after 595 stops and starts Adele. Rather than depend on /tmp's state after a restart, the scratch is under her state directory, which the ledger writes (confidence: high for the fix, low for the cause)
+FLAGGED: C — the stand-in models a current git (2.54, from the pinned CLI image), not the host's 2.43: it is the git the README tells the operator to expect, and the stricter one. safe.directory names exactly the agent's repository, its work tree and its .git (what git 2.54 asked for). 605's failure was the operator's own write into a 0755 directory the agent made, not the hook's marker; both are addressed: the directory is 2775 and the hooks announce themselves on stderr (confidence: high)
+FLAGGED: C — the operator's git image is built by the runner step (`--target operator-git`), not pulled by a cell (confidence: high)
+FLAGGED: E — no newer Compose release exists (v5.6.0 is the newest, its binary go1.26.8 and x/net v0.58.0), so option (b): built from source in Adele's build stage, sum-checked, x/net raised; the build on this host is static and govulncheck finds no x/net advisory (confidence: medium — the image build and scan are the lane's)
+ASSUMED: D — by the parallel plan's order and the cells' durations, 005's cell 69 ran in the lane's first three minutes, before the bring-up files (11th and 12th in the plan) could have started; an estimate from durations, not start times (confidence: low)
+ABSENT: no lane.conf class is added for 005's file or for this feature's files; no e2e cell was run here (no Docker); the image's build, the scan and lint did not run here
+SCOPE: out — tests/runner/Dockerfile, tests/run.sh, pins.env, README.md (feature-scope files of the lane and the README, named by the feedback) (task has FLAGGED: yes)
+

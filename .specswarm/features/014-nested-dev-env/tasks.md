@@ -52,6 +52,15 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T019 README: the status block (if all five Automated criteria are built), the section, the regenerated reference (`scripts/readme_reference.py --write`); `adele/grants.example.conf`
 - [X] T020 Host lanes (`make test-host` serial and `-n 8`), Go units and vet; the cycle report; `reboot.md`; the deny-list on the staged tree; commit
 
+## Phase 9: Cycle 2, lane 13s0a's findings (`../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`)
+
+- [X] T021 A: the sandbox and the setting check take no lock; Envs' lock covers the live check to the ledger write, and a down of a name waits for an up of it; a request given up before creating stops, one that has started creating is finished and recorded; the sandbox's errors name their phase and say whether its own bound passed, and the remedy names make build only for a missing image; Adele's timings in up's answer and the client's data (`adele/internal/broker/env.go`, `adele/internal/engine/engine.go`, `tools/bin/adele`); units; the bring-up JSON cell prints them, measured and not asserted
+- [X] T022 B: a bring-up's empty project directory and compose's HOME under Adele's state directory, not /tmp (`adele/cmd/adeled/serve.go`, `env.go`); unit
+- [X] T023 C: the operator's git is `timelike-operator-git:local`, built by the runner step from the pinned CLI image (`tests/runner/Dockerfile`, `tests/run.sh`); safe.directory names the repository's work tree and its `.git`; hooks say on stderr that they ran; project directories are 2775 so the lifted operator can write; the cells assert the git operations happened (`tests/e2e/agent-written-…bats`, `tests/e2e/nested.bash`); README's safe.directory sentence; lane unit
+- [X] T024 E: Compose built from source at v5.6.0 with x/net v0.60.0 by GO_IMAGE's Go, sum-checked, refused unless static and carrying the pinned x/net (`adele/Dockerfile`, `pins.env`, `compose.yaml`); FOR-MENTOR Item 30
+- [X] T025 Item 29 closed against plan `eab79e9`; D answered in the cycle report
+- [X] T026 Host lanes (serial and `-n 8`), Go units and vet; Cycle 2's report; `reboot.md`; the deny-list on the staged tree; commit
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

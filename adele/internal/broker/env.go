@@ -6,9 +6,15 @@ package broker
 // removes everything carrying the environment's label and records the ending only when the daemon, read back,
 // has none of it (cross-stack P004).
 //
-// Locking: an environment request holds Envs' own lock for its whole length, so two ups never race on one name
-// or one instance count; the broker's lock is taken only around the grant and ledger calls, never across the
-// sandbox, compose or the daemon, so a stand-in request never waits out a bring-up.
+// Locking (Cycle 2, lane 13s0a item A): the sandbox and the setting check take no lock, so requests resolve side by
+// side and a refusal never waits behind another environment's bring-up. Envs' own lock is held from the live
+// check to the ledger write, so two ups never race on one name or one instance count, and a down of a name waits
+// for an up of it in progress. The broker's lock is taken only around the grant and ledger calls, never across
+// the sandbox, compose or the daemon, so a stand-in request never waits out a bring-up.
+//
+// A request given up by its client (the agent's --wait passed) stops while nothing is created: during the
+// sandbox, or while waiting for the lock. Once Adele starts creating, she finishes and records it, so an
+// environment is either absent or recorded live, never half-made and unrecorded.
 
 import (
 	"bytes"
@@ -51,6 +57,7 @@ type Envs struct {
 	HostGit      string // TIMELIKE_HOST_GIT, shown in up's answer
 	SandboxImage string
 	ComposeBin   string
+	ScratchDir   string // where a bring-up's empty project directory is made: Adele's own state directory
 	// RunCompose runs compose with stdin; nil is the real one (tests replace it).
 	RunCompose func(ctx context.Context, args []string, stdin []byte) (stdout, stderr []byte, err error)
 	mu         sync.Mutex
@@ -66,7 +73,7 @@ type Service struct {
 	Ports    []int  `json:"ports"`
 }
 
-func (e *Envs) runCompose(ctx context.Context, args []string, stdin []byte) ([]byte, []byte, error) {
+func (e *Envs) runCompose(ctx context.Context, home string, args []string, stdin []byte) ([]byte, []byte, error) {
 	if e.RunCompose != nil {
 		return e.RunCompose(ctx, args, stdin)
 	}
@@ -74,7 +81,8 @@ func (e *Envs) runCompose(ctx context.Context, args []string, stdin []byte) ([]b
 	defer cancel()
 	cmd := exec.CommandContext(ctx, e.ComposeBin, args...)
 	// Nothing of Adele's own environment: a second interpolation of the checked bytes reads nothing (R5).
-	cmd.Env = []string{"HOME=/tmp", "PATH=", "DOCKER_HOST=unix://" + e.Engine.Socket}
+	// HOME is the bring-up's own directory, under Adele's state: /tmp is not hers to rely on (lane 13s0a, item B).
+	cmd.Env = []string{"HOME=" + home, "PATH=", "DOCKER_HOST=unix://" + e.Engine.Socket}
 	cmd.Stdin = bytes.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -118,8 +126,6 @@ func (b *Broker) handleEnv(ctx context.Context, req Request) Outcome {
 		return envFail(http.StatusServiceUnavailable, "this Adele has no Docker daemon to bring environments up on",
 			"the operator starts her with the socket: make up")
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if e.Workspace == "" {
 		return envFail(http.StatusBadRequest, "no workspace was mounted at launch, so there is no project Adele can resolve",
 			"the operator launches with a workspace: make up (TIMELIKE_WORKSPACES set)")
@@ -172,10 +178,13 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 		ttl, _ = grants.ParseTTL(p.TTL)
 	}
 
-	doc, out, ok := e.resolve(ctx, p.Dir, p.Name, p.Files, p.Profiles)
+	began := time.Now()
+	var phases engine.Phases
+	doc, out, ok := e.resolve(ctx, p.Dir, p.Name, p.Files, p.Profiles, &phases)
 	if !ok {
 		return out
 	}
+	timings := map[string]any{"resolve_ms": time.Since(began).Milliseconds(), "sandbox_ms": phases.Millis()}
 	if doc.Refusal != nil {
 		return b.refuseEnv(req, g.Name, doc.Refusal)
 	}
@@ -184,6 +193,19 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 		return envFail(http.StatusBadGateway, "the sandbox's model is not readable JSON: "+err.Error(), "")
 	}
 	hash := compose.Hash(model)
+	if r := compose.Check(model, e.Workspace, doc.Real); r != nil {
+		return b.refuseEnv(req, g.Name, r)
+	}
+
+	queued := time.Now()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	timings["lock_wait_ms"] = time.Since(queued).Milliseconds()
+	if ctx.Err() != nil {
+		return envFail(http.StatusServiceUnavailable, "the request was given up before Adele started creating "+p.Name,
+			"nothing was created; bring it up again")
+	}
+	ctx = context.WithoutCancel(ctx)
 
 	// A live environment of this name: unchanged is a no-op, read back; changed is refused (FR-5).
 	b.mu.Lock()
@@ -209,7 +231,9 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 			if err != nil {
 				return daemonFailed(err)
 			}
-			return Outcome{http.StatusOK, b.upBody("unchanged", g.Name, p.Name, row.ExpiresAt, 0, doc.Unset, svcs)}
+			body := b.upBody("unchanged", g.Name, p.Name, row.ExpiresAt, 0, doc.Unset, svcs)
+			body["timings"] = timings
+			return Outcome{http.StatusOK, body}
 		}
 		// The ledger says live and the daemon has nothing: record that, then bring it up again.
 		b.mu.Lock()
@@ -221,9 +245,6 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 		}
 	}
 
-	if r := compose.Check(model, e.Workspace, doc.Real); r != nil {
-		return b.refuseEnv(req, g.Name, r)
-	}
 	check := req
 	check.Params.Ports = compose.Published(model)
 	if r := checkStatic(check, g, ttl); r != nil {
@@ -273,13 +294,20 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	if err != nil {
 		return envFail(http.StatusInternalServerError, "cannot write the checked model: "+err.Error(), "")
 	}
-	empty, err := os.MkdirTemp("", "tl-up-")
+	scratch, err := os.MkdirTemp(e.ScratchDir, "tl-up-")
 	if err != nil {
-		return envFail(http.StatusInternalServerError, "cannot make an empty project directory: "+err.Error(), "")
+		return envFail(http.StatusInternalServerError, "cannot make an empty project directory: "+err.Error(),
+			"nothing was created; the operator checks Adele's state directory "+e.ScratchDir+" is hers and writable")
 	}
-	defer os.RemoveAll(empty)
-	_, stderr, err := e.runCompose(ctx, []string{"-p", p.Name, "--project-directory", empty, "-f", "-", "up", "-d",
+	defer os.RemoveAll(scratch)
+	empty, home := filepath.Join(scratch, "project"), filepath.Join(scratch, "home")
+	if err := errors.Join(os.Mkdir(empty, 0o700), os.Mkdir(home, 0o700)); err != nil {
+		return envFail(http.StatusInternalServerError, "cannot make an empty project directory: "+err.Error(), "nothing was created")
+	}
+	composing := time.Now()
+	_, stderr, err := e.runCompose(ctx, home, []string{"-p", p.Name, "--project-directory", empty, "-f", "-", "up", "-d",
 		"--pull", "never", "--no-build", "--remove-orphans"}, bytesUp)
+	timings["compose_ms"] = time.Since(composing).Milliseconds()
 	if err != nil {
 		_, left, derr := e.Engine.Down(context.WithoutCancel(ctx), p.Name)
 		what := fmt.Sprintf("compose up failed: %s", lastLines(string(stderr), 6))
@@ -314,6 +342,8 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	}
 	body := b.upBody(ledger.OutcomePerformed, g.Name, p.Name, &expires, id, doc.Unset, svcs)
 	body["undo"] = undo
+	timings["adele_ms"] = time.Since(began).Milliseconds()
+	body["timings"] = timings
 	return Outcome{http.StatusOK, body}
 }
 
@@ -332,8 +362,8 @@ func (b *Broker) upBody(outcome, grant, name string, expires *time.Time, id int6
 	return body
 }
 
-// MissingImageRemedy is a missing image's remediation, in one place: its exit code and words wait on FOR-MENTOR
-// Item 29 (the grant envelope is false of it).
+// MissingImageRemedy is a missing image's remediation, in one place: exit 3 with rule 14's error, no grant
+// envelope (FOR-MENTOR Item 29, ratified by plan eab79e9).
 func MissingImageRemedy(ref string) string {
 	return "the operator pulls it on the host: docker pull " + ref + "; the agent cannot"
 }
@@ -343,7 +373,7 @@ func MissingImageRemedy(ref string) string {
 const NoGrantAllows = "no grant allows it; "
 
 // refuseEnv records and answers a refusal no grant limit describes: a forbidden setting or an outside file (no
-// grant allows either, revision 17) or a missing image (the operator's docker pull, Item 29).
+// grant allows either, revision 17) or a missing image (the operator's docker pull, Item 29's ruling).
 func (b *Broker) refuseEnv(req Request, grant string, r *compose.Refusal) Outcome {
 	needed := r.Value
 	if r.Service != "" {
@@ -368,7 +398,7 @@ func (b *Broker) refuseEnv(req Request, grant string, r *compose.Refusal) Outcom
 	}}
 }
 
-func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []string) (compose.Resolved, Outcome, bool) {
+func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []string, took *engine.Phases) (compose.Resolved, Outcome, bool) {
 	cmd := []string{"resolve", "--workspace", e.Workspace, "--dir", dir, "--project", name}
 	for _, f := range files {
 		cmd = append(cmd, "--file", f)
@@ -381,12 +411,11 @@ func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []
 	stdout, stderr, exit, err := e.Engine.Run(ctx, engine.Sandbox{
 		Image: e.SandboxImage, Entrypoint: []string{"/usr/local/bin/adeled"}, Cmd: cmd, User: "10001:10001",
 		Env: []string{"HOME=/tmp"}, WorkingDir: dir, Binds: []string{e.Workspace + ":" + e.Workspace + ":ro"},
-		Name: "tl-sandbox-" + name + "-" + hex.EncodeToString(suffix), Timeout: SandboxTimeout,
+		Name: "tl-sandbox-" + name + "-" + hex.EncodeToString(suffix), Timeout: SandboxTimeout, Took: took,
 	})
 	var doc compose.Resolved
 	if err != nil {
-		return doc, envFail(http.StatusBadGateway, "the resolution sandbox failed: "+err.Error(),
-			"nothing was created; the operator checks that "+e.SandboxImage+" is on the daemon (make build)"), false
+		return doc, envFail(http.StatusBadGateway, err.Error(), SandboxRemedy(err, e.SandboxImage)), false
 	}
 	if exit != 0 || json.Unmarshal(stdout, &doc) != nil {
 		return doc, envFail(http.StatusBadGateway, fmt.Sprintf("the resolution sandbox exited %d: %s", exit, lastLines(string(stderr), 4)),
@@ -399,8 +428,24 @@ func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []
 	return doc, Outcome{}, true
 }
 
+// SandboxRemedy names what a failed sandbox needs, by its cause (lane 13s0a, item A: "make build" was named
+// when the image was there and the daemon slow).
+func SandboxRemedy(err error, image string) string {
+	var se *engine.SandboxError
+	switch {
+	case errors.As(err, &se) && se.ImageMissing():
+		return "nothing was created; the operator builds " + image + " on the host: make build"
+	case errors.As(err, &se) && se.TimedOut:
+		return "nothing was created; the daemon was slow to create, start or run it, as a busy host is: retry"
+	}
+	return "nothing was created; retry, and if it persists the operator checks the daemon on the host"
+}
+
+// envDown waits for an up of the same name in progress (Envs' lock), then removes everything labelled with it.
 func (b *Broker) envDown(ctx context.Context, req Request) Outcome {
 	e, name := b.Envs, req.Params.Name
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	b.mu.Lock()
 	row, live, err := b.Ledger.LiveResource(grants.CapDockerCompose, name)
 	b.mu.Unlock()

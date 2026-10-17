@@ -47,6 +47,7 @@ stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 log="${out}/run-${stamp}.log"
 
 RUNNER_IMAGE=timelike-test-runner:local
+OPERATOR_GIT_IMAGE=timelike-operator-git:local
 AGENT_CONTAINER=timelike-agent
 ADELE_CONTAINER=timelike-adele
 STANDIN_CONTAINER=timelike-adele-standin
@@ -328,6 +329,7 @@ run_e2e() {
     -e GIT_SHA \
     -e DEBIAN_IMAGE \
     -e DOCKER_CLI_IMAGE \
+    -e "OPERATOR_GIT_IMAGE=${OPERATOR_GIT_IMAGE}" \
     ${ws_args[@]+"${ws_args[@]}"} \
     -e "REPO_HOST=${repo}" \
     -e "BENCH_E2E_OUT=${bench_out}" \
@@ -614,6 +616,14 @@ write_startup() {
   fi
 }
 
+# build_runner — the runner image, and the operator's git the git-boundary cells run (feature 13, lane 13s0a item
+# C), both from tests/runner and its pins, so no cell pulls an image.
+build_runner() {
+  docker build -t "${RUNNER_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE tests/runner &&
+    docker build --target operator-git -t "${OPERATOR_GIT_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE \
+      tests/runner
+}
+
 # main runs on the left of a pipe (tee), i.e. in a subshell with errexit off: every step's status is
 # captured explicitly by step(), and nothing in main may rely on set -e.
 main() {
@@ -663,8 +673,7 @@ main() {
     skip up "build failed"
   fi
 
-  step runner docker build -t "${RUNNER_IMAGE}" \
-    --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE tests/runner
+  step runner build_runner
 
   if passed build; then
     step benchimg make bench-images

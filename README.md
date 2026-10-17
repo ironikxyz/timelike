@@ -640,7 +640,8 @@ in the agent's repositories: they clone or fetch from them into a checkout of th
 workspace inside a git work tree. To lift this, launch with `TIMELIKE_HOST_GIT=lifted`, and git in that checkout will
 run whatever the agent wrote there. The setting is shown on the agent's container (label
 `xyz.ironik.timelike.host-git`), in its environment (`TIMELIKE_HOST_GIT`) and in `adele env up`'s verdict. With git
-2.45.1 or later, fetching from a repository another uid owns needs `-c safe.directory=<path>` on that command.</mark>
+2.45.1 or later, cloning or fetching from a repository another uid owns needs both
+`-c safe.directory=<path>` and `-c safe.directory=<path>/.git` on that command.</mark>
 
 ### What the operator does
 

@@ -1675,7 +1675,12 @@ it is the symlink race again, now on Adele's own reads.
 
 ## Item 29 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): what a missing image exits with, since the grant envelope is false of it (does not block a criterion)
 
-**Status:** open. Raised 2026-10-17T04:04:26Z (read from the clock), as the re-send `../bridge/sends/13-rev17-20261017-035606.md` asks:
+**Status:** closed 2026-10-17T10:06:50Z (read from the clock), answered in
+`../bridge/feedback/13-20261017-050653-missing-image-exit-code.md`: plan `eab79e9` ratified reading (a), exit 3 with
+rule 14's structured error, as a clarification (no discovery revision, no prompt change). What was built stands;
+Cycle 2 drops "provisional" (lane feedback `../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`).
+
+Raised 2026-10-17T04:04:26Z (read from the clock), as the re-send `../bridge/sends/13-rev17-20261017-035606.md` asks:
 apply plan's test to a missing image before building it, and raise an item if any grant-envelope field would be false.
 
 **The test, field by field:**
@@ -1699,3 +1704,52 @@ apply plan's test to a missing image before building it, and raise an item if an
 
 **Meanwhile:** I build the recommendation, with the exit code and the text in one function, and the cycle report
 cites it as provisional. No slice-0 criterion names a missing image.
+
+---
+
+## Item 30 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 2): the Compose CLI in Adele's image, rebuilt to clear the scan (a pin change; recommendation, built)
+
+**Status:** open, for the mentor's and the operator's eye. Raised 2026-10-17T10:06:50Z (read from the clock), as lane
+13s0a's feedback (`../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`, item E) asks: recommend one of its two
+options here.
+
+**What the scan found:** `timelike-adele:local` FAIL, 16 blocking. All of them are in the copied Compose plugin, v5.6.0:
+`stdlib go1.26.8` and `golang.org/x/net v0.58.0` (GO-2026-6603 to 6613, 6617). Adele's own `adeled` is Go 1.27.2.
+
+**Option (a), a newer pinned Compose, is not available.** On 2026-10-17, Compose's release page listed v5.6.0
+(2026-10-02) as the newest release, and `docker:29.9.0-cli` is the newest CLI image. No release carries a fixed Go
+and x/net, so a newer CLI image or a release binary pinned by digest is not an option.
+
+**Recommendation and what is built: (b), Compose built from source in Adele's build stage.**
+- **The pins** (`pins.env`):
+  - `COMPOSE_VERSION=v5.6.0`;
+  - `COMPOSE_SUM`, the module's h1 hash from the Go proxy (origin commit `42f48072bbf9`);
+  - `COMPOSE_XNET_VERSION=v0.60.0`.
+- **The build:**
+  - the build stage downloads the module through the Go proxy and refuses it unless its sum is `COMPOSE_SUM`;
+  - `go get golang.org/x/net@v0.60.0` raises x/net, and with it x/crypto (v0.56.0 to v0.57.0) and x/text
+    (v0.41.0 to v0.42.0);
+  - `go mod verify` passes;
+  - it is built by GO_IMAGE's Go (1.27.2) with `CGO_ENABLED=0`.
+- **The build refuses the binary unless:**
+  - its build info says `CGO_ENABLED=0`, so **the static check still holds**, and it still runs FROM scratch;
+  - it carries x/net at the pinned version;
+  - `docker-compose version --short` says the pinned version.
+- `DOCKER_CLI_IMAGE` no longer reaches Adele's image. It still pins the runner's and the bench driver's docker CLI.
+
+**What I checked, on this host, without Docker:**
+- the same steps with Go 1.27.1 build a static binary that reports Docker Compose v5.6.0;
+- its build info says `CGO_ENABLED=0` and `golang.org/x/net v0.60.0`;
+- govulncheck v1.8.0 (`-mode binary`) on that binary finds no x/net advisory. It reports the twelve stdlib advisories
+  of go1.27.1, all fixed in 1.27.2 (GO_IMAGE's Go), and GO-2026-5932 in `x/crypto/openpgp`, which has no fix.
+
+The scan of the image itself is the lane's. Grype may still list GO-2026-5932; whether it blocks is the lane's
+reading.
+
+**The cost:**
+- The build stage now fetches Compose's module graph from the Go proxy, where before it copied one file from an image.
+  The x/net raise is a change Compose's own release was not tested with.
+- When Compose ships a release built with a fixed Go and x/net, (a) becomes possible again. That is a pin change back.
+
+**For the libcurl re-review:** no fact changes. Compose is still Go with `CGO_ENABLED=0` and links no C library.
+

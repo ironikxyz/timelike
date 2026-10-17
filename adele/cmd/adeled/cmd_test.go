@@ -184,3 +184,20 @@ func TestCheck(t *testing.T) {
 		t.Errorf("absent: code %d, stderr %q", code, errs)
 	}
 }
+
+// A bring-up's scratch (its empty project directory and compose's HOME) is under Adele's own state directory,
+// the ledger's, never /tmp (lane 13s0a, item B: /tmp in her container was not writable by her).
+func TestEnvsScratchIsTheLedgersDirectory(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "docker.sock")
+	l, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Skipf("no unix socket here: %v", err)
+	}
+	defer l.Close()
+	vals := map[string]string{"ADELE_DOCKER_SOCKET": sock, "ADELE_DB": "/var/lib/adele/adele.db"}
+	e := envs(env(func(k string) string { return vals[k] }))
+	if e == nil || e.ScratchDir != "/var/lib/adele" {
+		t.Fatalf("%+v", e)
+	}
+}

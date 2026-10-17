@@ -394,3 +394,27 @@ def test_status_denial_without_an_operators_command_says_none(
     assert (
         "privileged allows no grant allows it, needed service db: true · operator's command: none" in r.stdout
     )
+
+
+def test_adele_not_answering_within_the_bound_is_124_saying_what_she_does_with_it(
+    py: str, scratch: Path, adele: FakeAdele, ws: Path
+) -> None:
+    # Lane 13s0a, item A: the bound counts from the agent's side, Adele's resolving and queueing included. The
+    # remediation says what is true of an up she has not answered: started, she finishes and records it.
+    adele.answer("POST", "/v1/requests", 200, up_body([svc("db", health="healthy")]), delay=10)
+    r = up(py, scratch, adele, ws, "--wait", "1", timeout=20)
+    assert r.returncode == 124
+    line = one_error_line(r)
+    assert f"Adele did not answer the bring-up of {NAME} within the 1 s bound" in line
+    assert (
+        "she finishes and records it" in line and f"adele env down {NAME} removes it once she is done" in line
+    )
+
+
+def test_adeles_timings_are_carried_into_the_data(py: str, scratch: Path, adele: FakeAdele, ws: Path) -> None:
+    body = up_body([svc("db", health="healthy")])
+    body["timings"] = {"resolve_ms": 900, "lock_wait_ms": 0, "compose_ms": 1200}
+    adele.answer("POST", "/v1/requests", 200, body)
+    r = up(py, scratch, adele, ws, "--json")
+    assert r.returncode == 0, r.stderr
+    assert doc_of(r)["adele_timings"] == body["timings"]

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -60,7 +61,10 @@ func envs(e env) *broker.Envs {
 		return nil
 	}
 	return &broker.Envs{Engine: engine.New(sock), Workspace: e.get("TIMELIKE_WORKSPACE"), HostGit: e.get("TIMELIKE_HOST_GIT"),
-		SandboxImage: e.get("ADELE_SANDBOX_IMAGE"), ComposeBin: e.get("ADELE_COMPOSE_BIN")}
+		SandboxImage: e.get("ADELE_SANDBOX_IMAGE"), ComposeBin: e.get("ADELE_COMPOSE_BIN"),
+		// Her own state directory, which the ledger already writes: /tmp in her container is not hers to rely
+		// on (lane 13s0a, item B).
+		ScratchDir: filepath.Dir(e.get("ADELE_DB"))}
 }
 
 // newReaper is the reaper over this Adele's ledger and capability (spec FR-24, D-12). lock is the

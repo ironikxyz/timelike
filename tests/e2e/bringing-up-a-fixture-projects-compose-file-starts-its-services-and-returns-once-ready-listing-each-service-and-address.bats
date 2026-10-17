@@ -61,7 +61,12 @@ s = {x['service']: x for x in d['services']}
 assert set(s) == {'db', 'web', 'job'}, s
 assert s['web']['addresses'] == ['web.${NP_NAME}:8080'] and s['db']['ready'] == 'ready' and s['job']['ready'] == 'completed', s
 assert isinstance(d['ledger_id'], int) and json.loads(d['undo'])['action'] == 'down', d
-"
+t = d['adele_timings']
+assert {'resolve_ms', 'lock_wait_ms', 'compose_ms', 'adele_ms', 'sandbox_ms'} <= set(t), t
+print('# 13 bring-up (json): %.1f s from the agent; Adele: resolve %d ms (sandbox create %d, start %d, wait %d, logs %d),'
+      ' lock wait %d ms, compose %d ms (measured, not asserted)' % (d['seconds'], t['resolve_ms'], t['sandbox_ms']['create'],
+      t['sandbox_ms']['start'], t['sandbox_ms']['wait'], t['sandbox_ms']['logs'], t['lock_wait_ms'], t['compose_ms']))
+" >&3
   run ledger_rows_for "$NP_NAME"
   assert_status 0
   [[ "${lines[0]}" == performed$'\t'up$'\t'* ]] || { echo "ledger: $output" >&2; return 1; }

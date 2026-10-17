@@ -28,7 +28,9 @@ nested_project() {
   nested_ready || return 1
   NP_NAME="tl-${NESTED_ID}-${cell}"
   NP_DIR="${TIMELIKE_WORKSPACE}/${NESTED_ID}-${cell}"
-  exec_plain bash -c 'command rm -rf -- "$1" && mkdir -p "$1"' mk "$NP_DIR" || return 1
+  # Group-writable and setgid, as the workspace is, so the operator (the runner's uid in its group) can work in
+  # it where TIMELIKE_HOST_GIT=lifted permits (lane 13s0a, item C: the agent's umask made it 0755).
+  exec_plain bash -c 'command rm -rf -- "$1" && mkdir -p "$1" && chmod 2775 "$1"' mk "$NP_DIR" || return 1
   if [[ "$fixture" != - ]]; then
     copy_into_container "${NESTED_FIXTURES}/${fixture}/compose.yaml" "${NP_DIR}/compose.yaml" || return 1
   fi

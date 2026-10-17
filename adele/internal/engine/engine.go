@@ -308,16 +308,68 @@ type Sandbox struct {
 	Binds      []string // "src:dst:ro"
 	Name       string
 	Timeout    time.Duration
+	// Took, when set, receives how long each phase took, whether or not Run succeeded (lane 13s0a, item A:
+	// which part of a slow sandbox was slow).
+	Took *Phases
 }
 
-// Run creates, starts and waits for the sandbox, then reads its stdout and stderr and removes it.
+// Phases is how long each of a sandbox's calls to the daemon took.
+type Phases struct {
+	Create time.Duration `json:"create"`
+	Start  time.Duration `json:"start"`
+	Wait   time.Duration `json:"wait"`
+	Logs   time.Duration `json:"logs"`
+}
+
+// Millis is the phases in whole milliseconds, for an answer's data.
+func (p Phases) Millis() map[string]int64 {
+	return map[string]int64{"create": p.Create.Milliseconds(), "start": p.Start.Milliseconds(),
+		"wait": p.Wait.Milliseconds(), "logs": p.Logs.Milliseconds()}
+}
+
+// SandboxError says where a sandbox failed: the phase it was in, how long it had run, and whether its own
+// bound passed (as opposed to the request that asked for it being given up).
+type SandboxError struct {
+	Phase    string // create, start, wait or logs
+	Elapsed  time.Duration
+	Bound    time.Duration
+	TimedOut bool
+	Err      error
+}
+
+func (e *SandboxError) Error() string {
+	if e.TimedOut {
+		return fmt.Sprintf("the resolution sandbox did not finish within %s (the daemon was still at %s)", e.Bound, e.Phase)
+	}
+	return fmt.Sprintf("the resolution sandbox failed at %s after %s: %v", e.Phase, e.Elapsed.Round(time.Millisecond), e.Err)
+}
+
+func (e *SandboxError) Unwrap() error { return e.Err }
+
+// ImageMissing reports a create the daemon refused because the image is not there.
+func (e *SandboxError) ImageMissing() bool { return e.Phase == "create" && IsNotFound(e.Err) }
+
+// Run creates, starts and waits for the sandbox, then reads its stdout and stderr and removes it. Its errors
+// are *SandboxError.
 func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exit int, err error) {
 	timeout := s.Timeout
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	var took Phases
+	if s.Took != nil {
+		defer func() { *s.Took = took }()
+	}
+	began := time.Now()
+	phase, mark := "create", time.Now()
+	failed := func(e error) error {
+		return &SandboxError{Phase: phase, Elapsed: time.Since(began), Bound: timeout, Err: e,
+			TimedOut: errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil}
+	}
+	lap := func(d *time.Duration, next string) { *d = time.Since(mark); phase, mark = next, time.Now() }
 	spec := map[string]any{
 		"Image": s.Image, "Entrypoint": s.Entrypoint, "Cmd": s.Cmd, "User": s.User, "Env": s.Env,
 		"WorkingDir": s.WorkingDir, "NetworkDisabled": true,
@@ -336,7 +388,8 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 		path += "?name=" + url.QueryEscape(s.Name)
 	}
 	if err := c.do(ctx, http.MethodPost, path, spec, &made, http.StatusCreated); err != nil {
-		return nil, nil, 0, err
+		lap(&took.Create, "create")
+		return nil, nil, 0, failed(err)
 	}
 	defer func() {
 		rm, done := context.WithTimeout(context.Background(), 20*time.Second)
@@ -344,20 +397,26 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 		_ = c.do(rm, http.MethodDelete, "/containers/"+made.ID+"?v=1&force=1", nil, nil, http.StatusNoContent,
 			http.StatusNotFound)
 	}()
+	lap(&took.Create, "start")
 	if err := c.do(ctx, http.MethodPost, "/containers/"+made.ID+"/start", nil, nil, http.StatusNoContent); err != nil {
-		return nil, nil, 0, err
+		lap(&took.Start, "start")
+		return nil, nil, 0, failed(err)
 	}
+	lap(&took.Start, "wait")
 	var waited struct {
 		StatusCode int `json:"StatusCode"`
 	}
 	if err := c.do(ctx, http.MethodPost, "/containers/"+made.ID+"/wait", nil, &waited, http.StatusOK); err != nil {
-		if ctx.Err() != nil {
-			return nil, nil, 0, fmt.Errorf("the resolution sandbox did not finish within %s", timeout)
-		}
-		return nil, nil, 0, err
+		lap(&took.Wait, "wait")
+		return nil, nil, 0, failed(err)
 	}
+	lap(&took.Wait, "logs")
 	stdout, stderr, err = c.logs(ctx, made.ID)
-	return stdout, stderr, waited.StatusCode, err
+	lap(&took.Logs, "logs")
+	if err != nil {
+		return stdout, stderr, waited.StatusCode, failed(err)
+	}
+	return stdout, stderr, waited.StatusCode, nil
 }
 
 func (c *Client) logs(ctx context.Context, id string) ([]byte, []byte, error) {

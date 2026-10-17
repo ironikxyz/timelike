@@ -375,3 +375,15 @@ def test_a_lane_without_a_workspace_parent_fails_at_up_naming_it(lane: dict[str,
     p, summary = run_lane(lane, TIMELIKE_WORKSPACES="")
     steps = {s["name"]: s["status"] for s in summary["steps"]}
     assert steps["up"] == "fail" and "TIMELIKE_WORKSPACES is not set" in p.stdout + p.stderr
+
+
+def test_the_runner_step_builds_the_operators_git_and_the_runner_names_it(lane: dict[str, object]) -> None:
+    """Feature 13 (lane 13s0a, item C): the git-boundary cells' operator git is built by the runner step from
+    the pinned CLI image, so no cell pulls DOCKER_CLI_IMAGE by its digest."""
+    p, summary = run_lane(lane)
+    assert p.returncode == 0, p.stdout + p.stderr
+    builds = [c for c in docker_calls(lane) if c[:1] == ["build"]]
+    assert any("--target" in c and "operator-git" in c and "timelike-operator-git:local" in c for c in builds)
+    assert "OPERATOR_GIT_IMAGE=timelike-operator-git:local" in runner_call(lane)
+    steps = {s["name"]: s for s in summary["steps"]}
+    assert steps["runner"]["status"] == "pass"

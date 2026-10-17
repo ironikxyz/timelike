@@ -564,7 +564,10 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
         raise agentio.ToolError(
             agentio.EXIT_TIMEOUT,
             f"Adele did not answer the bring-up of {name} within the {args.wait:g} s bound ({VANTAGE})",
-            f"it may still come up: adele env status {name}; remove it with {down}; or raise --wait",
+            # Adele stops a request given up before she creates anything, and finishes and records one she has
+            # started creating (lane 13s0a, item A); a down of the name waits for her bring-up of it.
+            f"if she had started creating it she finishes and records it: adele env status {name}; {down}"
+            " removes it once she is done; or raise --wait",
         )
     if reply.status == 0:
         raise unreachable(reply, args.timeout)
@@ -649,6 +652,8 @@ def env_data(
         "unset": body.get("unset") or [],
         "wait_s": wait,
         "seconds": round(took, 3),
+        # Adele's own share, measured by her: the sandbox's phases, the lock, compose (lane 13s0a, item A).
+        "adele_timings": body.get("timings"),
         "vantage": VANTAGE,
         "services": [
             {

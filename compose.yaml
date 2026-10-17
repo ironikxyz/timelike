@@ -83,7 +83,9 @@ services:
       args:
         GO_IMAGE: ${GO_IMAGE:-}
         GIT_SHA: ${GIT_SHA:-}
-        DOCKER_CLI_IMAGE: ${DOCKER_CLI_IMAGE:-}
+        COMPOSE_VERSION: ${COMPOSE_VERSION:-}
+        COMPOSE_SUM: ${COMPOSE_SUM:-}
+        COMPOSE_XNET_VERSION: ${COMPOSE_XNET_VERSION:-}
     image: timelike-adele:local
     container_name: timelike-adele
     cap_drop:
@@ -126,7 +128,9 @@ services:
       args:
         GO_IMAGE: ${GO_IMAGE:-}
         GIT_SHA: ${GIT_SHA:-}
-        DOCKER_CLI_IMAGE: ${DOCKER_CLI_IMAGE:-}
+        COMPOSE_VERSION: ${COMPOSE_VERSION:-}
+        COMPOSE_SUM: ${COMPOSE_SUM:-}
+        COMPOSE_XNET_VERSION: ${COMPOSE_XNET_VERSION:-}
     image: timelike-adele-standin:local
     container_name: timelike-adele-standin
     cap_drop:
