@@ -90,8 +90,8 @@ units beside each change.
 ### Phase 13: Foundational (blocks every slice-1 story)
 
 - [X] T039 Ledger: `Recorded` (a performed row with no undo and no expiry) and `SessionEnded`; `Live`, `LiveOf`, `LiveResource`, `LiveRows` count only rows with an expiry (`adele/internal/ledger/ledger.go`, `query.go`); units
-- [ ] T040 Engine: images in `Count` and `Down`; `ImagesByLabel`; `ContainerByAddress` (R18); `Logs` tail; attach for a sandbox (`RunAttached`, `LogConfig: none`); `Build` (classic builder, streamed body, pull watch, step tracking, bound); `Exec` (attached, bounded, exit code) (`adele/internal/engine/engine.go`); units against the fake daemon
-- [ ] T041 [P] `adele/internal/buildctx/`: `.dockerignore` matching, the walk (links as links), the archive, its digest, the Dockerfile scan (bases, refused RUN flags), the build key; units
+- [X] T040 Engine: images in `Count` and `Down`; `ImagesByLabel`; `ContainerByAddress` (R18); `Logs` tail; attach for a sandbox (`RunAttached`, `LogConfig: none`); `Build` (classic builder, streamed body, pull watch, step tracking, bound); `Exec` (attached, bounded, exit code) (`adele/internal/engine/engine.go`); units against the fake daemon
+- [X] T041 [P] `adele/internal/buildctx/`: `.dockerignore` matching, the walk (links as links), the archive, its digest, the Dockerfile scan (bases, refused RUN flags), the build key; units
 - [ ] T042 [P] `adele/internal/devcontainer/`: JSONC with line-numbered errors, variables, translation (image, build, dockerComposeFile), `workspaceMount`/`workspaceFolder` rules, `runArgs` mapping, the refusals; units
 - [ ] T043 Compose: `build:` allowed with R16's checks (slice 0's `build` refusal lifted); `Inject` labels session, grant, requester, one-shot and the devcontainer's primary; the build keys in the hash; `Builds(model)` (`adele/internal/compose/compose.go`); units
 

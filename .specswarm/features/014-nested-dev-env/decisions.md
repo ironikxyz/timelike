@@ -223,3 +223,24 @@ INHERITED: slice 0's ledger at `08df8e2` (schema 2), and the plan's R17 and R19
 FLAGGED: an exec and a session end are performed rows (the send: "performed, no undo") with no expiry, so the one condition every live query shares, `unended`, now also requires `expires_at IS NOT NULL`. Chose that over a new outcome (a schema change) or filtering by action in each query (four places to keep in step). Every performed row before slice 1 has an expiry, because Performed requires one (confidence: high)
 ASSUMED: a session end is under no grant, and the grant column is NOT NULL, so it records grant `(none)`, which no grant can be named (grant names are lowercase letters, digits and -) (confidence: high)
 ABSENT: no schema change and no migration; `adeled ledger` prints a performed row with no expiry by its cause, not with a cost or undo; the JSON form already prints null expiry and undo
+SCOPE: out — adele/internal/ledger/recorded_test.go (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T040: the engine's builds, exec, attach, images and agents
+**Started:** 2026-10-18T12:25:37Z | **Completed:** 2026-10-18T12:28:54Z
+
+INHERITED: slice 0's engine client (unix socket, label-filtered lists, Run, removeLate) — from T004 and Cycle 3
+FLAGGED: the context sandbox's stdout is read from an attached, upgraded stream with the container's log driver set to none, not from its logs as `Run` reads the resolve sandbox's. The json-file driver re-encodes output as JSON strings (binary is mangled) and writes it to the host's disk, which this host can least afford (cross-stack P006) (confidence: high for the reason; the attach over the unix socket is untried against a real daemon)
+FLAGGED: builds use the classic builder (`version=1`), the only one the build API offers with a plain tar body and no BuildKit session. It pulls a missing base whatever `pull=0` says, so `Build` cancels the request at the first progress message that is a pull (R15's second guard). The message prefixes are the classic builder's as remembered, not read from a daemon here (confidence: medium)
+FLAGGED: the Engine API has no call to stop an exec'd process. Exec's bound ends the call (`TimedOut`), and the caller says the process may still run and that `down` removes the container (confidence: high)
+ASSUMED: the requester is the agent-labelled container whose address on a network named `adele-request` (or `*_adele-request`, compose's project prefix) equals the request's peer (confidence: high)
+ABSENT: no image is pulled, tagged or removed outside an environment's label; the classic builder's own intermediate containers are left to forcerm; no exec kill; units against the fake daemon only (no Docker here)
+
+### T041: `adele/internal/buildctx/` (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:28:54Z
+
+INHERITED: plan R14–R16 and data-model § A build, given to a delegate with the exported API fixed
+FLAGGED (delegate): mode bits in the header and the digest keep setuid, setgid and sticky as well as the permissions, as the CLI does (confidence: high)
+FLAGGED (delegate): WriteTar re-checks each entry's type, mode, link, size and content hash against the walk, so an archive never carries a digest that does not describe it; a file changed between resolve and build fails the build (confidence: high)
+FLAGGED (delegate): RUN --mount=from=IMAGE also counts as a base, and Bases lists every stage's images, those after the target included (conservative: a missing one is refused even when the classic builder would not reach it) (confidence: medium)
+ASSUMED (delegate): an excluded directory is skipped whole only when no exception could reach below it; otherwise walked, its own entry left out (confidence: medium)
+ABSENT: heredocs are not parsed (the classic builder has none); the injected Dockerfile's name is not checked for a collision with a real file; .dockerignore beside a Dockerfile (Dockerfile.dockerignore) is not read

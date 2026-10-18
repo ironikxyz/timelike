@@ -226,17 +226,18 @@ func (c *Client) Volumes(ctx context.Context, labels ...string) ([]Object, error
 	return out.Volumes, err
 }
 
-// Counts is how many of each kind of object.
+// Counts is how many of each kind of object. Images are the ones an environment built (slice 1).
 type Counts struct {
 	Containers int `json:"containers"`
 	Networks   int `json:"networks"`
 	Volumes    int `json:"volumes"`
+	Images     int `json:"images"`
 }
 
-// Total is the sum of the three.
-func (n Counts) Total() int { return n.Containers + n.Networks + n.Volumes }
+// Total is the sum of the four.
+func (n Counts) Total() int { return n.Containers + n.Networks + n.Volumes + n.Images }
 
-// Count reads back how many containers, networks and volumes carry env=name.
+// Count reads back how many containers, networks, volumes and built images carry env=name.
 func (c *Client) Count(ctx context.Context, name string) (Counts, error) {
 	l := LabelEnv + "=" + name
 	var n Counts
@@ -252,11 +253,15 @@ func (c *Client) Count(ctx context.Context, name string) (Counts, error) {
 	if err != nil {
 		return n, err
 	}
-	return Counts{len(cs), len(ns), len(vs)}, nil
+	is, err := c.Images(ctx, l)
+	if err != nil {
+		return n, err
+	}
+	return Counts{Containers: len(cs), Networks: len(ns), Volumes: len(vs), Images: len(is)}, nil
 }
 
 // Down removes everything labelled env=name: containers (stopped, then removed with their anonymous volumes),
-// then networks, then volumes. It returns what it removed and what it read back as left afterwards. It never
+// then networks, then volumes, then the images it built (slice 1). It returns what it removed and what it read back as left afterwards. It never
 // touches an object it did not find by the label.
 func (c *Client) Down(ctx context.Context, name string) (removed, left Counts, err error) {
 	l := LabelEnv + "=" + name
@@ -301,6 +306,18 @@ func (c *Client) Down(ctx context.Context, name string) (removed, left Counts, e
 			errs = append(errs, e)
 		} else {
 			removed.Volumes++
+		}
+	}
+	is, err := c.Images(ctx, l)
+	if err != nil {
+		return removed, left, err
+	}
+	for _, im := range is {
+		if e := c.do(ctx, http.MethodDelete, "/images/"+url.PathEscape(im.ID)+"?force=1", nil, nil, http.StatusOK,
+			http.StatusNotFound); e != nil {
+			errs = append(errs, e)
+		} else {
+			removed.Images++
 		}
 	}
 	left, err = c.Count(ctx, name)

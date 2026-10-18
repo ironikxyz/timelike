@@ -40,7 +40,7 @@ func TestDemuxSplitsTheDaemonsLogStream(t *testing.T) {
 }
 
 func TestCountsTotal(t *testing.T) {
-	if (Counts{1, 2, 3}).Total() != 6 {
+	if (Counts{Containers: 1, Networks: 2, Volumes: 3, Images: 4}).Total() != 10 {
 		t.Fatal("Total")
 	}
 }
