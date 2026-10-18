@@ -100,13 +100,13 @@ units beside each change.
 - [X] T044 [US7] `adeled resolve --devcontainer` (translation, then compose config, the filtered model, the dev info); `adeled context` (the archive on stdout) (`adele/cmd/adeled/resolve.go`, `context.go`, `main.go`); units
 - [X] T045 [US7] Broker up: devcontainer requests, builds (bases checked, reuse by key, the context sandbox piped into the build, the refusals' answers), lifecycle commands after the record, outside Envs' lock (`adele/internal/broker/env.go`); units
 - [X] T046 [US7] Broker exec: `action: exec`, the target service, user, workdir and env from labels, bounded output, the timeout answer, the ledger row (`env.go`, `broker.go`); units
-- [ ] T047 [US7] Client: `adele env up --devcontainer` and the auto choice; the built and lifecycle lines; `adele env exec` with `passes_exit`, `--timeout` default 100 s for exec (`tools/bin/adele`); units `tests/unit/test_adele_env_cli.py`
+- [X] T047 [US7] Client: `adele env up --devcontainer` and the auto choice; the built and lifecycle lines; `adele env exec` with `passes_exit`, `--timeout` default 100 s for exec (`tools/bin/adele`); units `tests/unit/test_adele_env_cli.py`
 - [ ] T048 [US7] e2e `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; fixtures `tests/e2e/fixtures/nested/devcontainer/`, `devcontainer-build/`
 
 ### Phase 15: US8, labels, session end and collection (criterion 8)
 
 - [ ] T049 [US8] The requester from the peer address (`http.go` → `Request.Peer`); `POST /v1/sessions/end`; `POST /v1/envs/collect` and `Broker.Collect`; the reaper's tick runs it (`adele/internal/broker/`, `adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`); units
-- [ ] T050 [US8] Client: `adele session end`, `adele env collect` (`tools/bin/adele`); units
+- [X] T050 [US8] Client: `adele session end`, `adele env collect` (`tools/bin/adele`); units
 - [ ] T051 [US8] e2e `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (labels on all four kinds read back, session end, collect, a gone container, 0 collected, ended twice); fixture `tests/e2e/fixtures/nested/build/`
 
 ### Phase 16: The failures slice 1 owns, and decision C

@@ -286,3 +286,14 @@ FLAGGED: lifecycle commands run after the environment is recorded and Envs' lock
 FLAGGED: exec picks the named service, else the devcontainer's primary, else the only service, else answers 409 listing the services; a container that is not running is a 502 naming its state; the row records service, user, command (≤ 200 characters) and its end, with the environment's grant (confidence: high)
 ASSUMED: the requester is read before the lock, once per up, from the daemon's list of agent-labelled containers by the request's peer address (http.go sets Request.Peer from RemoteAddr; it is `json:"-"`, so the body cannot set it) (confidence: high)
 ABSENT: no unit drives the daemon side of a build, a lifecycle command or an exec (tech-stack: Adele's Docker calls are not mocked to reach coverage; the lane's cells do); EnvWriteTimeout is 30 min so the server never cuts a long build, and the agent's --wait concludes it first
+SCOPE: out — adele/internal/engine/slice1.go (1 of 6 changed files) (task has FLAGGED: yes)
+
+### T047, T050, T052 (client half): the client's devcontainer choice, exec, collect, session end, readiness per decision C (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:40:31Z
+
+INHERITED: the contract § Slice 1 and plan R12, R13, R17, R19, R20, given to a delegate
+FLAGGED (delegate): exec passes its command's exit status through by setting the tool's `passes_exit` for that verb only, after parsing, which agentio reads in one place (the exit-vocabulary check); declaring it Tool-wide would split every verb's arguments at its first word and make conform wrap a command adele does not run. The tool is declared `takes_command` instead, so `--` splits the command, and `--` on any other verb is a usage error. The manifest therefore understates exec (no passes_exit declared) rather than overstate the tool (confidence: medium)
+FLAGGED (delegate): `--timeout` resolves per verb: 100 s for exec (feature 03's run default), 30 s for every other verb, unchanged (confidence: high)
+ASSUMED (delegate): "N ready" counts ready and completed services; "running, no readiness check" never counts, and the verdict is slice 0's exactly when nothing is unchecked (confidence: high)
+FLAGGED: down's verdict and collect's lines name built images only when there were any, so slice 0's pinned verdict is unchanged (confidence: high)
+ABSENT: the README's generated reference is stale until T055 (test_readme_reference fails until then); an up verdict with a long name, "devcontainer," and the unchecked clause can pass 200 columns, and agentio cuts it with its marker
