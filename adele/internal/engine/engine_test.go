@@ -4,8 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -71,5 +78,111 @@ func TestAGivenUpRequestIsNotATimeout(t *testing.T) {
 	var se *SandboxError
 	if !errors.As(err, &se) || se.TimedOut {
 		t.Fatalf("%#v", err)
+	}
+}
+
+// fakeDaemon serves h on a unix socket and returns a client for it.
+func fakeDaemon(t *testing.T, h http.Handler) *Client {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "eng")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "d.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: h}
+	go srv.Serve(ln) //nolint:errcheck // ends with Close
+	t.Cleanup(func() { srv.Close() })
+	return New(sock)
+}
+
+// A create the daemon finishes after the sandbox's bound is removed once it lands, and a sandbox carries none of
+// the compose labels Adele's image has (lane 13s0b, item A).
+func TestASandboxCreatedAfterItsBoundIsRemovedWhenItLands(t *testing.T) {
+	defer func(r time.Duration) { LateRetry = r }(LateRetry)
+	LateRetry = 20 * time.Millisecond
+	var mu sync.Mutex
+	made, removed := false, make(chan struct{})
+	var labels map[string]string
+	c := fakeDaemon(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/containers/create":
+			var spec struct{ Labels map[string]string }
+			_ = json.NewDecoder(r.Body).Decode(&spec)
+			time.Sleep(300 * time.Millisecond) // the daemon at create, past the bound
+			mu.Lock()
+			made, labels = true, spec.Labels
+			mu.Unlock()
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"Id":"abc"}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/containers/tl-sandbox-x":
+			mu.Lock()
+			defer mu.Unlock()
+			if !made {
+				http.Error(w, `{"message":"No such container"}`, http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			close(removed)
+		default:
+			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusTeapot)
+		}
+	}))
+	_, _, _, err := c.Run(context.Background(), Sandbox{Image: "x", Name: "tl-sandbox-x", Timeout: 100 * time.Millisecond})
+	var se *SandboxError
+	if !errors.As(err, &se) || !se.TimedOut || se.Phase != "create" {
+		t.Fatalf("%#v", err)
+	}
+	select {
+	case <-removed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sandbox made after the bound was never removed")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if labels[LabelSandbox] != "resolve" {
+		t.Errorf("labels %v", labels)
+	}
+	for _, k := range composeImageLabels {
+		if v, ok := labels[k]; !ok || v != "" {
+			t.Errorf("label %s = %q, %v; want it overridden empty", k, v, ok)
+		}
+	}
+}
+
+// The sweep removes only sandboxes older than its age, found by the sandbox label.
+func TestTheSweepRemovesOnlyLeftBehindSandboxes(t *testing.T) {
+	var mu sync.Mutex
+	var gone []string
+	var filter string
+	now := time.Now().Unix()
+	c := fakeDaemon(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/containers/json":
+			mu.Lock()
+			filter = r.URL.Query().Get("filters")
+			mu.Unlock()
+			fmt.Fprintf(w, `[{"Id":"old","Created":%d},{"Id":"new","Created":%d}]`, now-3600, now-5)
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			gone = append(gone, strings.TrimPrefix(r.URL.Path, "/containers/"))
+			mu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "unexpected", http.StatusTeapot)
+		}
+	}))
+	n, err := c.SweepSandboxes(context.Background(), 15*time.Minute)
+	mu.Lock()
+	defer mu.Unlock()
+	if err != nil || n != 1 || len(gone) != 1 || gone[0] != "old" {
+		t.Fatalf("removed %d %v, %v", n, gone, err)
+	}
+	if !strings.Contains(filter, LabelSandbox+"=resolve") {
+		t.Errorf("filter %q", filter)
 	}
 }

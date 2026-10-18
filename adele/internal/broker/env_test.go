@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"timelike/adele/internal/compose"
 	"timelike/adele/internal/engine"
@@ -115,4 +116,27 @@ func TestASandboxRemedyNamesItsCause(t *testing.T) {
 	if r := SandboxRemedy(&engine.SandboxError{Phase: "start", Err: context.Canceled}, img); strings.Contains(r, "make build") {
 		t.Errorf("other: %s", r)
 	}
+}
+
+// A request that waits for Envs' lock learns what held it (lane 13s0b, item A).
+func TestAWaiterLearnsWhatHeldTheLock(t *testing.T) {
+	e := &Envs{}
+	if held := e.lock("up tl-a"); held != "" {
+		t.Fatalf("first: held by %q", held)
+	}
+	got := make(chan string)
+	go func() {
+		held := e.lock("down tl-a")
+		e.unlock()
+		got <- held
+	}()
+	time.Sleep(50 * time.Millisecond)
+	e.unlock()
+	if held := <-got; held != "up tl-a" {
+		t.Fatalf("held by %q, want the up", held)
+	}
+	if held := e.lock("up tl-b"); held != "" {
+		t.Fatalf("after both: held by %q", held)
+	}
+	e.unlock()
 }

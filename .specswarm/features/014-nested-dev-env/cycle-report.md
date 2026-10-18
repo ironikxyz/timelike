@@ -391,3 +391,162 @@ links no C library. Nothing new reaches the socket.
 
 **After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.
 
+
+## Cycle 3 — bridge/sends/13-rev17-20261017-035606.md
+
+**Written:** 2026-10-18T00:58:44Z (read from the clock). Attended, not in dispatch mode. The same send as Cycles 1 and 2, built
+again to acceptance after **lane 13s0b** on `22c4777` failed. The lane's feedback is
+`../bridge/feedback/13-20261017-153646-lane-13s0b-fails.md`: 2 of 733 e2e cells not ok, one `setup_file` in place of
+its file's 8 cells, gounit's `internal/ledger` and one shellcheck finding. Every cell 13s0a failed passes, and the scan
+passes. This cycle fixes A, C, D and E, answers B and the questions the feedback asks, and handles the six SC-8
+volumes. It is on `014-nested-dev-env`, in one commit after `22c4777`, with this report. No `/specswarm` command ran:
+no revision moved, so the spec, plan and `audited_against [8, 17]` stand. tasks.md gains T027–T032, and decisions.md
+gains § Cycle 3.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261017-035606.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 0 |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**reconcile_mode:** `scoped`. No prompt or discovery revision moved since Cycle 2.
+
+**What changed, by the feedback's items:**
+- **A · cell 151 and the container it left:**
+  - **How it leaked.** `engine.Run` removed a sandbox only once its create had answered. Here the create ran past the
+    sandbox's 90 s bound, so Run gave up without an id; the daemon finished it at 14:42:36Z, and nothing knew the
+    container was there. The reaper works from the ledger, and a sandbox is not a ledger resource.
+  - **Found and removed now, two ways:**
+    - **Run itself.** A create that got no answer from the daemon (its bound passed, the request was given up, or the
+      socket failed) starts a removal by the sandbox's name. It tries until the daemon removes it, for up to 10
+      minutes, because until a create finishes the daemon answers 404 for the name. A create answered with an error
+      status made nothing and starts none. A removal of a made sandbox that does not answer is handed to the same
+      removal.
+    - **A sweep in `adeled serve`.** At start and every 5 minutes, she removes every container labelled
+      `xyz.ironik.timelike.sandbox=resolve` created more than the bound plus that 10 minutes ago, about 12.5 minutes,
+      and logs a line when she removed any. That finds one left by an Adele that stopped while a sandbox ran.
+    - The lane's start sweep already removed sandbox-labelled containers, so the next lane would have removed this one;
+      the sweep in serve covers the time between lanes, and the operator's host.
+  - **Why it carried Adele's Compose labels.** The sandbox is made from Adele's own image, `timelike-adele:local`,
+    and `compose up --build` builds that image. Compose labels the images it builds with its project, service and
+    version, and a container inherits its image's labels. The daemon cannot drop an inherited label, so a sandbox now
+    sets each of the three to an empty value: it then matches no project and no service, and compose no longer counts
+    it as a container of the `timelike` project's `adele` service. **Not inspected here**:
+    `docker image inspect timelike-adele:local --format '{{json .Config.Labels}}'` shows the image's labels.
+  - **"Nothing was created" is now "no environment was created".** On a timeout the remediation also says that if the
+    daemon makes the sandbox after all, Adele removes it.
+  - **What held the lock for 20.6 s.** Envs' lock is held from the live check through `compose up` to the ledger
+    write, for every name, so that two ups never race on one instance count. Cell 153's own sandbox took 359 ms; it then
+    waited for another bring-up or down already holding the lock, whose `compose up` takes about 20 s under the lane's
+    load. Which request it was is not in the lane's output, so `up`'s timings now carry `lock_held_by` (`up NAME` or
+    `down NAME`, what held the lock when the wait began), and the JSON cell prints it, **measured and not asserted**.
+    No lock change: what to narrow, if anything, waits for the next lane to name the holder.
+- **B · cell 88's `setup_file`:** a `docker run` of the reap file's throwaway printed nothing for 300 s. That is the
+  daemon at create under the same load as A. No code of this feature is on that path, and nothing changes for it: its
+  bound is not raised.
+- **C · SC-1's first cell:** the 60-commit history is now made once, in the file's `setup_file`, under exec_plain's
+  `PLUMBING_TIMEOUT` and outside every cell's bound. Each cell copies it into its own directory and sets its state
+  there (`fixtures/sc1-repo.sh DIR STATE FROM`; it refuses a FROM that is not a clean 60-commit history). The command
+  each cell measures and its 20 s are unchanged. The two-argument form the demo uses is unchanged. All seven states were
+  built from a copy on this host and checked.
+- **D · the ledger's `SQLITE_BUSY`:**
+  - **The connection had:** WAL, `busy_timeout(5000)`, and transactions begun IMMEDIATE. But performed and refused
+    rows were single autocommit inserts outside any transaction, and nothing tried a write again once the 5 s passed.
+    Under the lane's load one writer can lose the lock to a busier one for longer than that.
+  - **What `adeled` did when the performed-row append failed after the resource exists:** it answered 500 with
+    `performed: true`, the resource's name and "the operator records or removes it", for a box and for an environment.
+    So it was not silent, but the resource was unrecorded, against 004 SC-5, and the reaper, which reads the ledger,
+    would not have reaped it.
+  - **The fix:** every ledger write is one IMMEDIATE transaction, and a write still refused busy (SQLITE_BUSY or
+    SQLITE_LOCKED, extended codes included) is tried again, whole, until `WriteWait` (60 s) has passed. The 500 above
+    stays for a write that fails past that.
+  - **Evidence:** a new unit holds the write lock for 12 busy timeouts and the performed row lands once it is let go;
+    with the retry removed it fails. `TestConcurrentHandles` was not reproduced failing here: 15 runs with -race under
+    a CPU load on every core passed.
+- **E · SC2329:** `build_runner` carries the directive every other step function in `tests/run.sh` carries ("invoked
+  indirectly, by step"). Cycle 2 made it a function, called only through `step`.
+- **The six `timelike-sc8-{home,state}-*` volumes:** they are SC-8's recreate cell's, whose teardown removes them with
+  `|| true` under the plumbing bound; the 2026-10-15 run's log shows the daemon printing nothing for 30 s in that
+  file, the likeliest way a removal failed. **Yes, a lane should remove them:** the cell now creates its two volumes
+  labelled as throwaways, and the parallel lane's start removes labelled throwaway volumes and SC-8's unlabelled
+  ones by their exact name shape (`timelike-sc8-{state,home}-N-N`). One still in use is left, and the lane says so.
+
+**The questions in the feedback's common thread:**
+- **Should gounit stay beside e2e? My recommendation: no, for the next lane.** In 13s0b every long gounit package took
+  about 340 s against 132 s in 13s0a, and A, B and C all fell in e2e's start window beside it. `LANE_STEPS_TOGETHER=0`
+  already runs gounit after e2e with no code change, so the mentor can run 13s0c with it and compare. I have not changed
+  its default: the default came from the lane-speed maintenance send's measurements, and that is the mentor's call.
+- **If a cell's failure is load, does its bound or its lane class move?** Neither bound moves: the bounds are the
+  criteria's, or the plumbing's, and raising one hides the load. A lane class is the lever that changes what runs at
+  once, and the steps' order is a lighter one. My order: gounit after e2e first; a class for the nested-environment
+  files only if 13s0c still shows creates stuck behind the load.
+
+**criteria_reestablished:** none of this cycle's code has run against a daemon, because there is no Docker here. So
+each criterion is `unconfirmed` for this commit, and the lane-13s0b evidence about Cycle 2's code is given beside it.
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| 13 · "Bringing up a fixture project's compose file from inside the agent container starts its services" | **unconfirmed** | Test: `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`. In 13s0b, 151 was not ok (A); 152 and 153 were ok |
+| 13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path" | **unconfirmed** | Test: `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`. Ok in 13s0b on `22c4777` |
+| 13 · "A request for a privileged container, host networking or process namespace, added capabilities, or a mount outside the workspace is refused by Adele with exit 2" | **unconfirmed** | Test: `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`. Ok in 13s0b on `22c4777` |
+| 13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent" | **unconfirmed** | Test: `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`. Ok in 13s0b on `22c4777` (603–606) |
+| 13 · "Bringing the environment up twice is a no-op the second time" | **unconfirmed** | Test: `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`. Ok in 13s0b on `22c4777` (154, 155) |
+| 13 · "DEMO: the Agent brings up a compose test environment from inside its container" (D9, Manual) | **unconfirmed** | Nobody has looked; the demo is the mentor's with the operator |
+
+**The host lanes, run before this report** (this cycle's code, uncommitted at the time; the commit is the same tree):
+- **`make test-host`, serially:** passed, ending 00:55:36Z (the log's time); 2580 passed, 12 skipped, in 515.00 s;
+  env-layer 60/60, hook 57/57, handler 33/33.
+- **The same with `-n 8`:** passed, ending 00:58:32Z; 2580 passed, 12 skipped, in 140.22 s.
+- **Go** (the session's 1.27.1): `go test -race -count=1 ./...` passed in every package; gofmt and `go vet` are clean.
+  Coverage of the changed packages: ledger 88.1 %, engine 48.5 %, broker 49.2 %, adeled 89.3 % (no gate; the Docker
+  paths are the lane's).
+- **Syntax:** `bash -n` on `tests/run.sh` and the three changed bats files; `sh -n` on the SC-1 fixture.
+- **Not run:**
+  - shellcheck, because it is not on this host (the lane's `make lint` runs it);
+  - mypy, staticcheck and govulncheck over Adele's code;
+  - the Docker lane, `make scan` and `make lint`.
+
+**One test choice to flag:** the two new engine units drive `Run` and the sweep against a fake daemon on a unix socket.
+tech-stack.md says Adele's Docker calls are never mocked to reach coverage. These exist because a create that finishes
+after its bound cannot be produced on demand from a real daemon; they check the order of calls and the labels sent,
+not the filter. The real path is the lane's. If the mentor reads the rule as covering them, they come out and the late
+removal is left to the lane alone.
+
+**not_verified:**
+- **Every e2e cell, and the late removal and the sweep against a real daemon:** no Docker here.
+- **That the image carries the three compose labels**, and that an empty override takes the sandbox out of compose's
+  view of the `timelike` project: read from how compose builds, not inspected.
+- **What held Envs' lock in 13s0b:** the next lane's `lock_held_by` names it.
+- **D's cause:** the retry's effect is shown by the new unit; the 13s0b failure was not reproduced.
+- **Whether the lane's start sweep finds the six volumes unused:** the lane's.
+- Cycle 2's list stands otherwise.
+
+**changed_other_features:**
+- **001 (SC-1):** `tests/e2e/fixtures/sc1-repo.sh` takes an optional FROM, and SC-1's file makes the history in
+  `setup_file`. The demo's two-argument call is unchanged.
+- **005 (SC-8):** its recreate cell creates its two volumes, labelled as throwaways, before starting the throwaway.
+- **004 (12):** the ledger's writes are transactions retried while busy (performed, refused, extended and reap rows).
+- **maint-lane-speed:** `tests/run.sh`'s parallel e2e start removes throwaway volumes; `build_runner`'s directive.
+- **Others:** none.
+
+**process_failures_recorded:**
+- **Lane 13s0b failed** on Cycle 2's code. A and B are the daemon not finishing a create under load; the host lanes
+  cannot reach either.
+- **A composed time.** reboot.md's snapshot line was written with a time before the clock was read, then replaced with
+  the reading before commit.
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.

@@ -4,8 +4,11 @@
 //
 // The file is SQLite through modernc.org/sqlite (pure Go; no cgo). `adeled
 // serve` and the operator's `adeled extend` open the same file at once, so
-// every connection runs WAL with a busy timeout, and transactions begin
-// IMMEDIATE so that a writer waits for the lock instead of failing on upgrade.
+// every connection runs WAL with a busy timeout, and every write is one
+// transaction begun IMMEDIATE, so a writer waits for the lock instead of failing
+// on upgrade. A write still refused busy once the timeout passes is tried again
+// until WriteWait (lane 13s0b, item D: under a loaded host a writer lost the
+// lock to a busier one for longer than the timeout, and 8 appends of 100 failed).
 package ledger
 
 import (
@@ -81,6 +84,13 @@ type Extension struct {
 	At    time.Time
 }
 
+// busyTimeoutMS is each connection's busy_timeout; WriteWait bounds how long one write keeps trying while the
+// file is busy. Variables so tests can shorten them.
+var (
+	busyTimeoutMS = 5000
+	WriteWait     = 60 * time.Second
+)
+
 // Ledger is an open ledger file.
 type Ledger struct {
 	db *sql.DB
@@ -93,7 +103,7 @@ func Open(path string) (*Ledger, error) {
 		return nil, fmt.Errorf("ledger: unusable path %q", path)
 	}
 	q := url.Values{}
-	q.Add("_pragma", "busy_timeout(5000)")
+	q.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", busyTimeoutMS))
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "foreign_keys(on)")
 	q.Set("_txlock", "immediate")
@@ -134,7 +144,7 @@ func (l *Ledger) Performed(r Row) (int64, error) {
 	}
 	r.Outcome = OutcomePerformed
 	r.Ref, r.Cause, r.Attempts, r.Host, r.Extend = nil, "", nil, "", ""
-	return l.insert(l.db, r)
+	return l.append(r)
 }
 
 // Refused appends a refused row. Session, Capability, Action, LimitName,
@@ -150,7 +160,7 @@ func (l *Ledger) Refused(r Row) (int64, error) {
 	}
 	r.Outcome = OutcomeRefused
 	r.ExpiresAt, r.Undo, r.Ref, r.Cause, r.Attempts = nil, "", nil, "", nil
-	return l.insert(l.db, r)
+	return l.append(r)
 }
 
 // Extended records an operator extension: one extensions row and its matching
@@ -166,22 +176,19 @@ func (l *Ledger) Extended(grant, limit, oldValue, newValue string, at time.Time)
 	if at.IsZero() {
 		at = time.Now()
 	}
-	tx, err := l.db.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("ledger: begin: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
-	if _, err := tx.Exec(`INSERT INTO extensions ("grant", limit_name, value, at) VALUES (?, ?, ?, ?)`,
-		grant, limit, newValue, formatTime(at)); err != nil {
-		return 0, fmt.Errorf("ledger: insert extension: %w", err)
-	}
-	id, err := l.insert(tx, Row{At: at, Outcome: OutcomeExtended, Grant: grant, Session: OperatorSession,
-		LimitName: limit, Allowed: oldValue, Needed: newValue})
+	var id int64
+	err := l.write("extension", func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`INSERT INTO extensions ("grant", limit_name, value, at) VALUES (?, ?, ?, ?)`,
+			grant, limit, newValue, formatTime(at)); err != nil {
+			return fmt.Errorf("ledger: insert extension: %w", err)
+		}
+		var err error
+		id, err = l.insert(tx, Row{At: at, Outcome: OutcomeExtended, Grant: grant, Session: OperatorSession,
+			LimitName: limit, Allowed: oldValue, Needed: newValue})
+		return err
+	})
 	if err != nil {
 		return 0, err
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("ledger: commit extension: %w", err)
 	}
 	return id, nil
 }
@@ -208,45 +215,93 @@ func (l *Ledger) Reap(ref int64, outcome, cause string, attempts int, at time.Ti
 	if at.IsZero() {
 		at = time.Now()
 	}
-	tx, err := l.db.Begin()
-	if err != nil {
-		return 0, false, fmt.Errorf("ledger: begin: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
-	var (
-		grant, session, outcomeWas  string
-		agent, capability, resource sql.NullString
-		ended                       int
-	)
-	err = tx.QueryRow(`SELECT outcome, "grant", session, agent, capability, resource FROM ledger WHERE id = ?`,
-		ref).Scan(&outcomeWas, &grant, &session, &agent, &capability, &resource)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, fmt.Errorf("%w: no ledger row %d", ErrInvalid, ref)
-	}
-	if err != nil {
-		return 0, false, fmt.Errorf("ledger: read row %d: %w", ref, err)
-	}
-	if outcomeWas != OutcomePerformed {
-		return 0, false, fmt.Errorf("%w: row %d is %s, not performed", ErrInvalid, ref, outcomeWas)
-	}
-	if err := tx.QueryRow(`SELECT count(*) FROM ledger WHERE ref = ? AND outcome IN (?, ?)`,
-		ref, OutcomeReaped, OutcomeGone).Scan(&ended); err != nil {
-		return 0, false, fmt.Errorf("ledger: read reaps of %d: %w", ref, err)
-	}
-	if ended > 0 {
-		return 0, false, nil
-	}
-	n := attempts
-	id, err = l.insert(tx, Row{At: at, Outcome: outcome, Grant: grant, Session: session, Agent: agent.String,
-		Capability: capability.String, Action: ActionDelete, Resource: resource.String, Ref: &ref,
-		Cause: cause, Attempts: &n})
+	err = l.write("reap", func(tx *sql.Tx) error {
+		id, wrote = 0, false
+		var (
+			grant, session, outcomeWas  string
+			agent, capability, resource sql.NullString
+			ended                       int
+		)
+		err := tx.QueryRow(`SELECT outcome, "grant", session, agent, capability, resource FROM ledger WHERE id = ?`,
+			ref).Scan(&outcomeWas, &grant, &session, &agent, &capability, &resource)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: no ledger row %d", ErrInvalid, ref)
+		}
+		if err != nil {
+			return fmt.Errorf("ledger: read row %d: %w", ref, err)
+		}
+		if outcomeWas != OutcomePerformed {
+			return fmt.Errorf("%w: row %d is %s, not performed", ErrInvalid, ref, outcomeWas)
+		}
+		if err := tx.QueryRow(`SELECT count(*) FROM ledger WHERE ref = ? AND outcome IN (?, ?)`,
+			ref, OutcomeReaped, OutcomeGone).Scan(&ended); err != nil {
+			return fmt.Errorf("ledger: read reaps of %d: %w", ref, err)
+		}
+		if ended > 0 {
+			return nil
+		}
+		n := attempts
+		id, err = l.insert(tx, Row{At: at, Outcome: outcome, Grant: grant, Session: session, Agent: agent.String,
+			Capability: capability.String, Action: ActionDelete, Resource: resource.String, Ref: &ref,
+			Cause: cause, Attempts: &n})
+		wrote = err == nil
+		return err
+	})
 	if err != nil {
 		return 0, false, err
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, false, fmt.Errorf("ledger: commit reap: %w", err)
+	return id, wrote, nil
+}
+
+// append writes one row in its own write.
+func (l *Ledger) append(r Row) (int64, error) {
+	var id int64
+	err := l.write(r.Outcome+" row", func(tx *sql.Tx) error {
+		var err error
+		id, err = l.insert(tx, r)
+		return err
+	})
+	return id, err
+}
+
+// write runs fn in one IMMEDIATE transaction and commits it. While the file stays busy past a connection's busy
+// timeout, the whole write is tried again, until WriteWait has passed: a performed row is written after its
+// resource exists, so giving up on a busy file would leave a resource unrecorded (004 SC-5).
+func (l *Ledger) write(what string, fn func(tx *sql.Tx) error) error {
+	until, wait := time.Now().Add(WriteWait), 10*time.Millisecond
+	for {
+		err := l.writeOnce(what, fn)
+		if err == nil || !busy(err) || time.Now().Add(wait).After(until) {
+			return err
+		}
+		time.Sleep(wait)
+		wait = min(2*wait, time.Second)
 	}
-	return id, true, nil
+}
+
+func (l *Ledger) writeOnce(what string, fn func(tx *sql.Tx) error) error {
+	tx, err := l.db.Begin()
+	if err != nil {
+		return fmt.Errorf("ledger: begin %s: %w", what, err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("ledger: commit %s: %w", what, err)
+	}
+	return nil
+}
+
+// busy reports SQLITE_BUSY or SQLITE_LOCKED, extended codes included.
+func busy(err error) bool {
+	var coded interface{ Code() int }
+	if !errors.As(err, &coded) {
+		return false
+	}
+	c := coded.Code() & 0xff
+	return c == 5 || c == 6
 }
 
 type execer interface {

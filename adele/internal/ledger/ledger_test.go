@@ -260,6 +260,41 @@ func TestSpentAndLivePerGrant(t *testing.T) {
 	}
 }
 
+// A write that finds the file held past its busy timeout is tried again and lands (lane 13s0b, item D: a
+// performed row lost to SQLITE_BUSY is a performed request left unrecorded, against 004 SC-5).
+func TestAWriteOutlastsAHolderPastTheBusyTimeout(t *testing.T) {
+	defer func(ms int) { busyTimeoutMS = ms }(busyTimeoutMS)
+	busyTimeoutMS = 50
+	l, path := tempLedger(t)
+	holder := open(t, path)
+	tx, err := holder.db.Begin() // IMMEDIATE: holds the write lock
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`INSERT INTO extensions ("grant", limit_name, value, at) VALUES ('g', 'ttl', '1h', 'x')`); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(600 * time.Millisecond) // twelve busy timeouts
+		_ = tx.Commit()
+	}()
+	began := time.Now()
+	if _, err := l.Performed(performed("demo", 1)); err != nil {
+		t.Fatalf("performed after %s: %v", time.Since(began), err)
+	}
+	if time.Since(began) < 500*time.Millisecond {
+		t.Errorf("landed after %s, before the holder let go", time.Since(began))
+	}
+	if !busy(fmt.Errorf("wrapped: %w", codeErr(517))) || busy(codeErr(19)) || busy(errors.New("x")) {
+		t.Error("busy() misreads a code")
+	}
+}
+
+type codeErr int
+
+func (c codeErr) Error() string { return fmt.Sprint(int(c)) }
+func (c codeErr) Code() int     { return int(c) }
+
 // TestConcurrentHandles is `serve` and the operator's `extend` writing the
 // same file at once: every write must land, none may fail busy.
 func TestConcurrentHandles(t *testing.T) {

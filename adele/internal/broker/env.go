@@ -46,9 +46,14 @@ const EnvHost = "docker:local"
 // Bounds on one bring-up's own calls. The agent's client bounds the whole of it.
 const (
 	SandboxTimeout = 90 * time.Second
+	// SandboxSweep is how often serve removes sandboxes older than SandboxLeftover (lane 13s0b, item A).
+	SandboxSweep   = 5 * time.Minute
 	ComposeTimeout = 5 * time.Minute
 	MaxListed      = 8 // files or profiles in one request
 )
+
+// SandboxLeftover is the age past which a sandbox is left behind: its bound, then engine.Run's own late removal.
+var SandboxLeftover = SandboxTimeout + engine.LateRemoval + time.Minute
 
 // Envs is what the docker.compose capability needs: the daemon, the workspace, the sandbox image and compose.
 type Envs struct {
@@ -61,6 +66,29 @@ type Envs struct {
 	// RunCompose runs compose with stdin; nil is the real one (tests replace it).
 	RunCompose func(ctx context.Context, args []string, stdin []byte) (stdout, stderr []byte, err error)
 	mu         sync.Mutex
+	// holder is what holds mu ("up NAME" or "down NAME"), for a waiter's timings (lane 13s0b, item A: a 20.6 s
+	// lock wait with nothing to say what held it). Guarded by hmu, never by mu.
+	hmu    sync.Mutex
+	holder string
+}
+
+// lock takes mu for what ("up NAME" or "down NAME") and returns what held it when the wait began ("" for no one).
+func (e *Envs) lock(what string) (heldBy string) {
+	e.hmu.Lock()
+	heldBy = e.holder
+	e.hmu.Unlock()
+	e.mu.Lock()
+	e.hmu.Lock()
+	e.holder = what
+	e.hmu.Unlock()
+	return heldBy
+}
+
+func (e *Envs) unlock() {
+	e.hmu.Lock()
+	e.holder = ""
+	e.hmu.Unlock()
+	e.mu.Unlock()
 }
 
 // Service is one service of an environment as the daemon reports it, read back.
@@ -198,9 +226,12 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	}
 
 	queued := time.Now()
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	heldBy := e.lock("up " + p.Name)
+	defer e.unlock()
 	timings["lock_wait_ms"] = time.Since(queued).Milliseconds()
+	if heldBy != "" {
+		timings["lock_held_by"] = heldBy
+	}
 	if ctx.Err() != nil {
 		return envFail(http.StatusServiceUnavailable, "the request was given up before Adele started creating "+p.Name,
 			"nothing was created; bring it up again")
@@ -429,23 +460,26 @@ func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []
 }
 
 // SandboxRemedy names what a failed sandbox needs, by its cause (lane 13s0a, item A: "make build" was named
-// when the image was there and the daemon slow).
+// when the image was there and the daemon slow). It says no environment was created, not that nothing was: a
+// create the daemon finishes after the bound leaves a sandbox, which engine.Run removes when it lands (lane 13s0b,
+// item A).
 func SandboxRemedy(err error, image string) string {
 	var se *engine.SandboxError
 	switch {
 	case errors.As(err, &se) && se.ImageMissing():
 		return "nothing was created; the operator builds " + image + " on the host: make build"
 	case errors.As(err, &se) && se.TimedOut:
-		return "nothing was created; the daemon was slow to create, start or run it, as a busy host is: retry"
+		return "no environment was created; the daemon was slow to create, start or run the sandbox, as a busy host is, " +
+			"and if it makes the sandbox after all Adele removes it: retry"
 	}
-	return "nothing was created; retry, and if it persists the operator checks the daemon on the host"
+	return "no environment was created; retry, and if it persists the operator checks the daemon on the host"
 }
 
 // envDown waits for an up of the same name in progress (Envs' lock), then removes everything labelled with it.
 func (b *Broker) envDown(ctx context.Context, req Request) Outcome {
 	e, name := b.Envs, req.Params.Name
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.lock("down " + name)
+	defer e.unlock()
 	b.mu.Lock()
 	row, live, err := b.Ledger.LiveResource(grants.CapDockerCompose, name)
 	b.mu.Unlock()

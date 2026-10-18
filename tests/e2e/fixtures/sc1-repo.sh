@@ -1,6 +1,8 @@
 #!/bin/sh
 # Prepare a git repository in a given state for SC-1 (tests/e2e) and the SC-7 demo (scripts/demo.sh).
-# Runs INSIDE the agent container as the agent user:  sh /tmp/sc1-repo.sh DIR STATE
+# Runs INSIDE the agent container as the agent user:  sh /tmp/sc1-repo.sh DIR STATE [FROM]
+# FROM, when given, is a repository this fixture made in state log: DIR starts as a copy of it instead of
+# making the 60 commits again (lane 13s0b, item C: SC-1 makes the history once, in setup_file).
 #
 #   log     more than one screen of history (60 commits)            → then: git log
 #   diff    history plus a 120-line unstaged change                  → then: git diff
@@ -21,19 +23,29 @@ set -eu
 
 dir="$1"
 state="$2"
+from="${3:-}"
 
-git init -q -b main "$dir"
-cd "$dir"
-git config user.name "timelike test"
-git config user.email "test@timelike.invalid"
+if [ -n "$from" ]; then
+  if [ "$(git -C "$from" rev-list --count HEAD 2>/dev/null)" != 60 ] || [ -n "$(git -C "$from" status --porcelain)" ]; then
+    echo "sc1-repo: $from is not a clean 60-commit history from this fixture" >&2
+    exit 1
+  fi
+  cp -a "$from" "$dir"
+  cd "$dir"
+else
+  git init -q -b main "$dir"
+  cd "$dir"
+  git config user.name "timelike test"
+  git config user.email "test@timelike.invalid"
 
-i=1
-while [ "$i" -le 60 ]; do
-  echo "history line $i" >>history.txt
-  git add history.txt
-  git commit -q -m "history commit $i"
-  i=$((i + 1))
-done
+  i=1
+  while [ "$i" -le 60 ]; do
+    echo "history line $i" >>history.txt
+    git add history.txt
+    git commit -q -m "history commit $i"
+    i=$((i + 1))
+  done
+fi
 
 # diverge CONFLICT_CONTENT — topic and main each add one commit; when both sides write conflict.txt
 # with different content, merging topic into main conflicts. Leaves main checked out.

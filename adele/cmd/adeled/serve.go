@@ -126,6 +126,9 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 	reapCtx, stopReaper := context.WithCancel(ctx)
 	reaped := make(chan struct{})
 	go func() { reap.Run(reapCtx, stderr); close(reaped) }()
+	if b.Envs != nil {
+		go sweepSandboxes(reapCtx, b.Envs.Engine, stderr)
+	}
 	defer func() { stopReaper(); <-reaped }()
 	select {
 	case err := <-errc:
@@ -139,6 +142,27 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		fmt.Fprintf(stderr, "adeled: shutdown: %v\n", err)
 	}
 	return exitOK
+}
+
+// sweepSandboxes removes left-behind resolution sandboxes at once and then every broker.SandboxSweep, until ctx
+// ends (lane 13s0b, item A: a create the daemon finished after the bound left one in Created, which nothing removed).
+func sweepSandboxes(ctx context.Context, eng *engine.Client, log io.Writer) {
+	for {
+		pass, done := context.WithTimeout(ctx, time.Minute)
+		n, err := eng.SweepSandboxes(pass, broker.SandboxLeftover)
+		done()
+		switch {
+		case err != nil && ctx.Err() == nil:
+			fmt.Fprintf(log, "adeled: sandbox sweep: %v\n", err)
+		case n > 0:
+			fmt.Fprintf(log, "adeled: sandbox sweep: removed %d left-behind resolution sandbox(es)\n", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(broker.SandboxSweep):
+		}
+	}
 }
 
 // health is the container's healthcheck: scratch has no shell or curl, so Adele checks herself.

@@ -64,8 +64,9 @@ assert isinstance(d['ledger_id'], int) and json.loads(d['undo'])['action'] == 'd
 t = d['adele_timings']
 assert {'resolve_ms', 'lock_wait_ms', 'compose_ms', 'adele_ms', 'sandbox_ms'} <= set(t), t
 print('# 13 bring-up (json): %.1f s from the agent; Adele: resolve %d ms (sandbox create %d, start %d, wait %d, logs %d),'
-      ' lock wait %d ms, compose %d ms (measured, not asserted)' % (d['seconds'], t['resolve_ms'], t['sandbox_ms']['create'],
-      t['sandbox_ms']['start'], t['sandbox_ms']['wait'], t['sandbox_ms']['logs'], t['lock_wait_ms'], t['compose_ms']))
+      ' lock wait %d ms (held by %s), compose %d ms (measured, not asserted)' % (d['seconds'], t['resolve_ms'],
+      t['sandbox_ms']['create'], t['sandbox_ms']['start'], t['sandbox_ms']['wait'], t['sandbox_ms']['logs'], t['lock_wait_ms'],
+      t.get('lock_held_by', 'no one'), t['compose_ms']))
 " >&3
   run ledger_rows_for "$NP_NAME"
   assert_status 0

@@ -61,6 +61,15 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T025 Item 29 closed against plan `eab79e9`; D answered in the cycle report
 - [X] T026 Host lanes (serial and `-n 8`), Go units and vet; Cycle 2's report; `reboot.md`; the deny-list on the staged tree; commit
 
+## Phase 10: Cycle 3, lane 13s0b's findings (`../bridge/feedback/13-20261017-153646-lane-13s0b-fails.md`)
+
+- [X] T027 A: a sandbox whose create the daemon finishes after the bound is removed by name when it lands, and one whose remove did not answer is tried again (`adele/internal/engine/engine.go`); serve sweeps sandboxes older than their bound and that removal at start and every 5 minutes (`adele/cmd/adeled/serve.go`); a sandbox overrides the compose labels it inherits from Adele's image with empty values; the remediation says no environment was created, not that nothing was; up's timings name what held Envs' lock (`lock_held_by`), and the bring-up JSON cell prints it, measured and not asserted; units
+- [X] T028 D: every ledger write is one IMMEDIATE transaction, tried again while the file stays busy past the busy timeout, up to `WriteWait` (60 s) (`adele/internal/ledger/ledger.go`); unit
+- [X] T029 C: SC-1's 60-commit history is made once in setup_file and copied by each cell (`tests/e2e/fixtures/sc1-repo.sh`, `tests/e2e/git-log-diff-commit-rebase-exit-within-20-seconds.bats`)
+- [X] T030 E: `build_runner` carries the SC2329 directive the other step functions carry (`tests/run.sh`)
+- [X] T031 SC-8's volumes are created labelled as throwaways; the parallel lane's start removes labelled throwaway volumes and SC-8's unlabelled ones by their exact name shape (`tests/run.sh`, the SC-8 snapshot bats)
+- [X] T032 Host lanes (serial and `-n 8`), Go units with -race and vet; Cycle 3's report; `reboot.md`; the deny-list on the staged tree; commit
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

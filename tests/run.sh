@@ -306,6 +306,12 @@ run_e2e() {
     stale="$(docker ps -aq --filter label=timelike.test.throwaway)" || stale=""
     # shellcheck disable=SC2086 # one id per word, on purpose
     [[ -z "${stale}" ]] || docker rm -f ${stale} >/dev/null || true
+    # Throwaway volumes a teardown could not remove: labelled ones, and SC-8's from before they were labelled
+    # (lane 13s0b: six from 2026-10-15), by their exact name shape. One still in use is left, and said.
+    stale="$(docker volume ls -q --filter label=timelike.test.throwaway
+      docker volume ls -q | grep -E '^timelike-sc8-(state|home)-[0-9]+-[0-9]+$')" || true
+    # shellcheck disable=SC2086 # one name per word, on purpose
+    [[ -z "${stale}" ]] || docker volume rm ${stale} >/dev/null || echo "e2e: a throwaway volume is still in use; left: ${stale//$'\n'/ }"
     : >"${LANE_LOCK}"
     : >"${LANE_LOCK}.turn"
     lane_env=(-e "TL_E2E_LOCK=/out/${LANE_LOCK##*/}" -e "TL_E2E_SERIAL_FILES=${E2E_SERIAL[*]}")
@@ -618,6 +624,7 @@ write_startup() {
 
 # build_runner — the runner image, and the operator's git the git-boundary cells run (feature 13, lane 13s0a item
 # C), both from tests/runner and its pins, so no cell pulls an image.
+# shellcheck disable=SC2329 # invoked indirectly, by step
 build_runner() {
   docker build -t "${RUNNER_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE tests/runner &&
     docker build --target operator-git -t "${OPERATOR_GIT_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE \

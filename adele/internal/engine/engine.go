@@ -36,6 +36,20 @@ const (
 	ComposeService = "com.docker.compose.service"
 )
 
+// composeImageLabels are the labels compose's build puts on the images it builds, Adele's among them. A container
+// inherits its image's labels, so a sandbox made from Adele's image carried them and compose counted it as a
+// container of the timelike project's adele service (lane 13s0b, item A). The daemon cannot remove an inherited
+// label, only override it, so a sandbox gets each one empty: it then matches no project and no service.
+var composeImageLabels = []string{"com.docker.compose.project", ComposeService, "com.docker.compose.version"}
+
+// LateRemoval is how long Run keeps trying to remove a sandbox it could not see made or removed: a create the
+// daemon finished after Run gave up on it, or a remove that did not answer (lane 13s0b, item A). LateRetry is
+// the first wait between tries, doubling to 30 s. Variables so tests can shorten them.
+var (
+	LateRemoval = 10 * time.Minute
+	LateRetry   = 2 * time.Second
+)
+
 // MaxOutput bounds what is read from a sandbox's logs or an API answer.
 const MaxOutput = 8 << 20
 
@@ -373,7 +387,7 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 	spec := map[string]any{
 		"Image": s.Image, "Entrypoint": s.Entrypoint, "Cmd": s.Cmd, "User": s.User, "Env": s.Env,
 		"WorkingDir": s.WorkingDir, "NetworkDisabled": true,
-		"Labels": map[string]string{LabelSandbox: "resolve"},
+		"Labels": sandboxLabels(),
 		"HostConfig": map[string]any{
 			"NetworkMode": "none", "Binds": s.Binds, "ReadonlyRootfs": true, "CapDrop": []string{"ALL"},
 			"SecurityOpt": []string{"no-new-privileges"}, "Tmpfs": map[string]string{"/tmp": "rw,size=64m"},
@@ -389,13 +403,20 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 	}
 	if err := c.do(ctx, http.MethodPost, path, spec, &made, http.StatusCreated); err != nil {
 		lap(&took.Create, "create")
+		// No answer from the daemon (the bound passed, the request was given up, the socket failed): it may still
+		// make the container, so it is removed by name once it does. An answer (an error status) made nothing.
+		var ae *APIError
+		if s.Name != "" && !errors.As(err, &ae) {
+			go c.removeLate(s.Name, LateRemoval)
+		}
 		return nil, nil, 0, failed(err)
 	}
 	defer func() {
 		rm, done := context.WithTimeout(context.Background(), 20*time.Second)
 		defer done()
-		_ = c.do(rm, http.MethodDelete, "/containers/"+made.ID+"?v=1&force=1", nil, nil, http.StatusNoContent,
-			http.StatusNotFound)
+		if err := c.remove(rm, made.ID); err != nil {
+			go c.removeLate(made.ID, LateRemoval)
+		}
 	}()
 	lap(&took.Create, "start")
 	if err := c.do(ctx, http.MethodPost, "/containers/"+made.ID+"/start", nil, nil, http.StatusNoContent); err != nil {
@@ -417,6 +438,62 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 		return stdout, stderr, waited.StatusCode, failed(err)
 	}
 	return stdout, stderr, waited.StatusCode, nil
+}
+
+func sandboxLabels() map[string]string {
+	l := map[string]string{LabelSandbox: "resolve"}
+	for _, k := range composeImageLabels {
+		l[k] = ""
+	}
+	return l
+}
+
+// remove force-removes a container and its anonymous volumes; one already gone is removed.
+func (c *Client) remove(ctx context.Context, ref string) error {
+	return c.do(ctx, http.MethodDelete, "/containers/"+url.PathEscape(ref)+"?v=1&force=1", nil, nil,
+		http.StatusNoContent, http.StatusNotFound)
+}
+
+// removeLate tries to remove the sandbox ref until the daemon says it removed it or for keep. Until the daemon
+// finishes a create it answers 404 for the name, so a 404 is tried again: it is not "gone" here.
+func (c *Client) removeLate(ref string, keep time.Duration) {
+	until, wait := time.Now().Add(keep), LateRetry
+	for {
+		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+		err := c.do(ctx, http.MethodDelete, "/containers/"+url.PathEscape(ref)+"?v=1&force=1", nil, nil,
+			http.StatusNoContent)
+		done()
+		if err == nil || time.Now().Add(wait).After(until) {
+			return
+		}
+		time.Sleep(wait)
+		wait = min(2*wait, 30*time.Second)
+	}
+}
+
+// SweepSandboxes removes every sandbox the daemon has that was created more than age ago. A sandbox lives at most
+// its bound, so an older one was left behind: by an Adele that stopped while one ran, or a create that outlived
+// LateRemoval. Each one carries timelike's sandbox label, so removing it is acting on our own.
+func (c *Client) SweepSandboxes(ctx context.Context, age time.Duration) (removed int, err error) {
+	var out []struct {
+		ID      string `json:"Id"`
+		Created int64  `json:"Created"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/containers/json?all=1&filters="+labelFilter(LabelSandbox+"=resolve"), nil,
+		&out, http.StatusOK); err != nil {
+		return 0, err
+	}
+	cut := time.Now().Add(-age)
+	for _, s := range out {
+		if !time.Unix(s.Created, 0).Before(cut) {
+			continue
+		}
+		if err := c.remove(ctx, s.ID); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
 }
 
 func (c *Client) logs(ctx context.Context, id string) ([]byte, []byte, error) {

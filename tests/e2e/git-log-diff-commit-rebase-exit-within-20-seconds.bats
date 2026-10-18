@@ -37,9 +37,19 @@
 
 load helpers
 
+# The 60-commit history is made once, here, under exec_plain's PLUMBING_TIMEOUT and outside every cell's
+# bound; each cell copies it (lane 13s0b, item C: the first cell made it under lane-start load, took 195.8 s in
+# 13s0a and reached the bound in 13s0b, in plumbing that is timed by no criterion).
 setup_file() {
   stamp_check
   copy_into_container "${BATS_TEST_DIRNAME}/fixtures/sc1-repo.sh" /tmp/sc1-repo.sh 0755
+  SC1_BASE="$(container_tmpdir sc1-base)"
+  export SC1_BASE
+  exec_plain sh /tmp/sc1-repo.sh "${SC1_BASE}/repo" log >/dev/null
+}
+
+teardown_file() {
+  container_rm "${SC1_BASE:-}"
 }
 
 setup() {
@@ -52,15 +62,15 @@ teardown() {
   container_rm "$WORK"
 }
 
-# prepare STATE — a fresh repository in the given state (fixtures/sc1-repo.sh), in a new temp dir.
-# The fixture makes 60 commits: test plumbing, timed by no criterion (the 20 s is the command's, from
-# run_in), so it runs under PLUMBING_TIMEOUT, as exec_plain does. Under a loaded host it took longer than
-# RUN_TIMEOUT's 30 s, and a cell then ran against a part-built repository (feedback maint-20261015-115635,
-# item 2); exec_plain now fails at its bound.
+# prepare STATE — a fresh repository in the given state (fixtures/sc1-repo.sh), in a new temp dir, copied
+# from setup_file's history. Test plumbing, timed by no criterion (the 20 s is the command's, from run_in), so
+# it runs under PLUMBING_TIMEOUT, as exec_plain does. Under a loaded host it took longer than RUN_TIMEOUT's
+# 30 s, and a cell then ran against a part-built repository (feedback maint-20261015-115635, item 2);
+# exec_plain now fails at its bound.
 prepare() {
   WORK="$(container_tmpdir sc1)"
   REPO_DIR="${WORK}/repo"
-  exec_plain sh /tmp/sc1-repo.sh "$REPO_DIR" "$1" >/dev/null
+  exec_plain sh /tmp/sc1-repo.sh "$REPO_DIR" "$1" "${SC1_BASE}/repo" >/dev/null
 }
 
 # assert_line_matching ERE — some line of $output matches, ignoring ANSI colour codes: colour is
