@@ -92,13 +92,17 @@ func (e *Envs) unlock() {
 }
 
 // Service is one service of an environment as the daemon reports it, read back.
+// Slice 1 adds one_shot (a service another waits on to complete; decision C) and, for a container that exited
+// non-zero, its last log lines.
 type Service struct {
-	Service  string `json:"service"`
-	State    string `json:"state"`
-	Health   string `json:"health"`
-	ExitCode int    `json:"exit_code"`
-	Alias    string `json:"alias"`
-	Ports    []int  `json:"ports"`
+	Service   string   `json:"service"`
+	State     string   `json:"state"`
+	Health    string   `json:"health"`
+	ExitCode  int      `json:"exit_code"`
+	Alias     string   `json:"alias"`
+	Ports     []int    `json:"ports"`
+	OneShot   bool     `json:"one_shot"`
+	LastLines []string `json:"last_lines,omitempty"`
 }
 
 func (e *Envs) runCompose(ctx context.Context, home string, args []string, stdin []byte) ([]byte, []byte, error) {
@@ -139,8 +143,14 @@ func (e *Envs) Services(ctx context.Context, name string) ([]Service, error) {
 		if ports == nil {
 			ports = []int{}
 		}
-		out = append(out, Service{Service: svc, State: c.State, Health: c.Health, ExitCode: c.ExitCode,
-			Alias: compose.Alias(svc, name), Ports: ports})
+		s := Service{Service: svc, State: c.State, Health: c.Health, ExitCode: c.ExitCode,
+			Alias: compose.Alias(svc, name), Ports: ports, OneShot: c.Labels[engine.LabelOneShot] == "1"}
+		if c.State == "exited" && c.ExitCode != 0 {
+			if lines, err := e.Engine.LogTail(ctx, c.ID, 10); err == nil {
+				s.LastLines = lines
+			}
+		}
+		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
 	return out, nil
@@ -162,8 +172,11 @@ func (b *Broker) handleEnv(ctx context.Context, req Request) Outcome {
 		return envFail(http.StatusBadRequest, fmt.Sprintf("bad environment name %q", req.Params.Name),
 			"a name is tl-, then a lowercase letter or digit, then up to 59 of a-z, 0-9 and -")
 	}
-	if req.Action == "down" {
+	switch req.Action {
+	case "down":
 		return b.envDown(ctx, req)
+	case "exec":
+		return b.envExec(ctx, req)
 	}
 	return b.envUp(ctx, req)
 }
@@ -208,7 +221,7 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 
 	began := time.Now()
 	var phases engine.Phases
-	doc, out, ok := e.resolve(ctx, p.Dir, p.Name, p.Files, p.Profiles, &phases)
+	doc, out, ok := e.resolve(ctx, p.Dir, p.Name, p.Files, p.Profiles, p.Devcontainer, &phases)
 	if !ok {
 		return out
 	}
@@ -220,21 +233,66 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	if err := json.Unmarshal(doc.Model, &model); err != nil {
 		return envFail(http.StatusBadGateway, "the sandbox's model is not readable JSON: "+err.Error(), "")
 	}
-	hash := compose.Hash(model)
 	if r := compose.Check(model, e.Workspace, doc.Real); r != nil {
 		return b.refuseEnv(req, g.Name, r)
+	}
+	keys := map[string]string{}
+	for _, s := range doc.Builds {
+		keys[s.Service] = s.Key
+	}
+	hash := compose.Hash(compose.WithBuildKeys(model, keys))
+	requester, requesterAnswer := e.requester(ctx, req.Peer)
+	kind := "compose"
+	if doc.Dev != nil {
+		kind = "devcontainer"
+	}
+
+	// Slice 1: what a build would be refused for is refused before it builds (the grant's static limits, a live
+	// environment with another model, a base image not on the daemon), so nothing is built for a request that
+	// cannot be brought up. The builds run before Envs' lock: they can take minutes.
+	var tags map[string]string
+	var builds []built
+	if len(doc.Builds) > 0 {
+		check := req
+		check.Params.Ports = compose.Published(model)
+		if r := checkStatic(check, g, ttl); r != nil {
+			return b.refuseAt(req, g.Name, *r, EnvHost)
+		}
+		if out, ok := b.sameModel(ctx, p.Name, hash); !ok {
+			return out
+		}
+		if out, ok := b.bases(ctx, req, g.Name, doc.Builds); !ok {
+			return out
+		}
+		building := time.Now()
+		if tags, builds, out, ok = b.buildAll(ctx, req, g.Name, requester, doc.Builds); !ok {
+			return out
+		}
+		timings["build_ms"] = time.Since(building).Milliseconds()
+	}
+	// After a build, a refusal removes what this request built: no environment holds it.
+	undone := func(o Outcome) Outcome {
+		e.removeBuilt(builds)
+		return o
 	}
 
 	queued := time.Now()
 	heldBy := e.lock("up " + p.Name)
-	defer e.unlock()
+	var unlocked bool
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			e.unlock()
+		}
+	}
+	defer unlock()
 	timings["lock_wait_ms"] = time.Since(queued).Milliseconds()
 	if heldBy != "" {
 		timings["lock_held_by"] = heldBy
 	}
 	if ctx.Err() != nil {
-		return envFail(http.StatusServiceUnavailable, "the request was given up before Adele started creating "+p.Name,
-			"nothing was created; bring it up again")
+		return undone(envFail(http.StatusServiceUnavailable, "the request was given up before Adele started creating "+p.Name,
+			"nothing was created; bring it up again"))
 	}
 	ctx = context.WithoutCancel(ctx)
 
@@ -253,9 +311,7 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 		if len(cs) > 0 {
 			for _, c := range cs {
 				if c.Labels[engine.LabelModel] != hash {
-					return Outcome{http.StatusConflict, map[string]any{
-						"error":       fmt.Sprintf("environment %s is up with a different model; nothing was changed", p.Name),
-						"remediation": "take it down first: adele env down " + p.Name, "performed": false}}
+					return undone(differentModel(p.Name))
 				}
 			}
 			svcs, err := e.Services(ctx, p.Name)
@@ -264,6 +320,7 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 			}
 			body := b.upBody("unchanged", g.Name, p.Name, row.ExpiresAt, 0, doc.Unset, svcs)
 			body["timings"] = timings
+			b.slice1Body(body, kind, requesterAnswer, builds, doc.Dev, nil)
 			return Outcome{http.StatusOK, body}
 		}
 		// The ledger says live and the daemon has nothing: record that, then bring it up again.
@@ -279,7 +336,7 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	check := req
 	check.Params.Ports = compose.Published(model)
 	if r := checkStatic(check, g, ttl); r != nil {
-		return b.refuseAt(req, g.Name, *r, EnvHost)
+		return undone(b.refuseAt(req, g.Name, *r, EnvHost))
 	}
 	b.mu.Lock()
 	n, err := b.Ledger.LiveOf(g.Name, grants.CapDockerCompose)
@@ -293,22 +350,25 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	}
 	if n+1 > g.Instances {
 		s := strconv.Itoa(n + 1)
-		return b.refuseAt(req, g.Name, refusal{grants.LimitInstances, strconv.Itoa(g.Instances), s, s, nil}, EnvHost)
+		return undone(b.refuseAt(req, g.Name, refusal{grants.LimitInstances, strconv.Itoa(g.Instances), s, s, nil}, EnvHost))
 	}
 	if spent > g.BudgetCents { // an environment quotes 0.00 (local: no cost); an exhausted budget still refuses
 		zero := int64(0)
-		return b.refuseAt(req, g.Name, refusal{grants.LimitBudget, grants.FormatMoney(0), grants.FormatMoney(0),
-			grants.FormatMoney(spent), &zero}, EnvHost)
+		return undone(b.refuseAt(req, g.Name, refusal{grants.LimitBudget, grants.FormatMoney(0), grants.FormatMoney(0),
+			grants.FormatMoney(spent), &zero}, EnvHost))
 	}
 	images := compose.Images(model)
 	for _, svc := range compose.Services(model) {
+		if _, ok := tags[svc]; ok {
+			continue // built just now, or reused, and read back by its tag
+		}
 		has, err := e.Engine.ImageExists(ctx, images[svc])
 		if err != nil {
-			return daemonFailed(err)
+			return undone(daemonFailed(err))
 		}
 		if !has {
-			return b.refuseEnv(req, g.Name, &compose.Refusal{Kind: compose.KindImage, Service: svc, Setting: "image",
-				Value: images[svc], Remedy: MissingImageRemedy(images[svc])})
+			return undone(b.refuseEnv(req, g.Name, &compose.Refusal{Kind: compose.KindImage, Service: svc, Setting: "image",
+				Value: images[svc], Remedy: MissingImageRemedy(images[svc])}))
 		}
 	}
 	if labels, err := e.Engine.NetworkLabels(ctx, compose.Network); err != nil || labels[engine.LabelNetwork] != "nested" {
@@ -316,12 +376,18 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 		if err != nil {
 			why = err.Error()
 		}
-		return envFail(http.StatusBadGateway, "the shared network "+compose.Network+" is not timelike's ("+why+"); nothing was created",
-			"the operator recreates the stack: make up")
+		return undone(envFail(http.StatusBadGateway, "the shared network "+compose.Network+" is not timelike's ("+why+"); nothing was created",
+			"the operator recreates the stack: make up"))
 	}
 
 	created := b.now().Truncate(time.Second)
-	bytesUp, err := compose.Inject(model, p.Name, created, ttl, hash, compose.Meta{Session: req.Session, Grant: g.Name, Requester: "unknown"})
+	meta := compose.Meta{Session: req.Session, Grant: g.Name, Requester: requester, Images: tags}
+	if doc.Dev != nil {
+		remoteEnv, _ := json.Marshal(doc.Dev.RemoteEnv)
+		meta.Primary, meta.RemoteUser, meta.Workdir, meta.RemoteEnv = doc.Dev.Primary, doc.Dev.RemoteUser,
+			doc.Dev.WorkspaceFolder, string(remoteEnv)
+	}
+	bytesUp, err := compose.Inject(model, p.Name, created, ttl, hash, meta)
 	if err != nil {
 		return envFail(http.StatusInternalServerError, "cannot write the checked model: "+err.Error(), "")
 	}
@@ -367,6 +433,16 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 			"performed": true, "remediation": "the operator records or removes it: docker exec " + b.container() + " adeled ledger",
 		}}
 	}
+	// Recorded: the lock is released before the lifecycle commands, which run in the environment's own container and
+	// can take minutes (R13).
+	unlock()
+	var runs []lifecycleRun
+	if doc.Dev != nil {
+		var lerr error
+		if runs, lerr = e.lifecycle(ctx, p.Name, doc.Dev); lerr != nil {
+			runs = append(runs, lifecycleRun{Name: "lifecycle", ExitCode: 126, LastLines: []string{lerr.Error()}})
+		}
+	}
 	svcs, err := e.Services(ctx, p.Name)
 	if err != nil {
 		return daemonFailed(err)
@@ -375,7 +451,52 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	body["undo"] = undo
 	timings["adele_ms"] = time.Since(began).Milliseconds()
 	body["timings"] = timings
+	b.slice1Body(body, kind, requesterAnswer, builds, doc.Dev, runs)
 	return Outcome{http.StatusOK, body}
+}
+
+// slice1Body adds slice 1's fields to up's answer (contracts/adele-env.md § Slice 1).
+func (b *Broker) slice1Body(body map[string]any, kind string, requester map[string]string, builds []built, dev *compose.Dev,
+	runs []lifecycleRun) {
+	if builds == nil {
+		builds = []built{}
+	}
+	if runs == nil {
+		runs = []lifecycleRun{}
+	}
+	body["kind"], body["requester"], body["built"], body["lifecycle"] = kind, requester, builds, runs
+	if dev != nil && len(dev.NotRun) > 0 {
+		body["not_run"] = dev.NotRun
+	}
+}
+
+func differentModel(name string) Outcome {
+	return Outcome{http.StatusConflict, map[string]any{
+		"error":       fmt.Sprintf("environment %s is up with a different model; nothing was changed", name),
+		"remediation": "take it down first: adele env down " + name, "performed": false}}
+}
+
+// sameModel refuses, before anything is built, a live environment of the name whose model is not hash (FR-5).
+func (b *Broker) sameModel(ctx context.Context, name, hash string) (Outcome, bool) {
+	b.mu.Lock()
+	_, live, err := b.Ledger.LiveResource(grants.CapDockerCompose, name)
+	b.mu.Unlock()
+	if err != nil {
+		return ledgerFailed(err), false
+	}
+	if !live {
+		return Outcome{}, true
+	}
+	cs, err := b.Envs.Engine.Containers(ctx, engine.LabelEnv+"="+name)
+	if err != nil {
+		return daemonFailed(err), false
+	}
+	for _, c := range cs {
+		if c.Labels[engine.LabelModel] != hash {
+			return differentModel(name), false
+		}
+	}
+	return Outcome{}, true
 }
 
 func (b *Broker) upBody(outcome, grant, name string, expires *time.Time, id int64, unset []string, svcs []Service) map[string]any {
@@ -429,8 +550,11 @@ func (b *Broker) refuseEnv(req Request, grant string, r *compose.Refusal) Outcom
 	}}
 }
 
-func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []string, took *engine.Phases) (compose.Resolved, Outcome, bool) {
+func (e *Envs) resolve(ctx context.Context, dir, name string, files, profiles []string, dev bool, took *engine.Phases) (compose.Resolved, Outcome, bool) {
 	cmd := []string{"resolve", "--workspace", e.Workspace, "--dir", dir, "--project", name}
+	if dev {
+		cmd = append(cmd, "--devcontainer")
+	}
 	for _, f := range files {
 		cmd = append(cmd, "--file", f)
 	}
@@ -505,8 +629,8 @@ func (b *Broker) envDown(ctx context.Context, req Request) Outcome {
 	}
 	body := map[string]any{"outcome": "ended", "resource": name, "removed": removed, "left": 0}
 	if live {
-		cause := fmt.Sprintf("taken down by session %s (adele env down): %d containers, %d networks, %d volumes removed; 0 left, read back from the daemon",
-			req.Session, removed.Containers, removed.Networks, removed.Volumes)
+		cause := fmt.Sprintf("taken down by session %s (adele env down): %d containers, %d networks, %d volumes, %d images removed; 0 left, read back from the daemon",
+			req.Session, removed.Containers, removed.Networks, removed.Volumes, removed.Images)
 		b.mu.Lock()
 		id, wrote, err := b.Ledger.Reap(row.ID, ledger.OutcomeReaped, cause, 1, b.now())
 		b.mu.Unlock()

@@ -559,3 +559,9 @@ func (c *Client) Exec(ctx context.Context, id string, spec ExecSpec) (ExecResult
 	res.ExitCode = in.ExitCode
 	return res, nil
 }
+
+// RemoveImage removes an image a request just built and is not keeping (a refusal after the build, or an archive
+// that was not the one resolve keyed). One already gone is removed.
+func (c *Client) RemoveImage(ctx context.Context, ref string) error {
+	return c.do(ctx, http.MethodDelete, "/images/"+url.PathEscape(ref)+"?force=1", nil, nil, http.StatusOK, http.StatusNotFound)
+}

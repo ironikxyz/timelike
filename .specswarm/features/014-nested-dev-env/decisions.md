@@ -274,3 +274,15 @@ FLAGGED: an oversize context or an unreadable Dockerfile is the resolve document
 FLAGGED: the context sandbox writes only the archive to stdout and one JSON line with its digest to stderr, so Adele can tell an archive that is not the one resolve keyed (a file changed between the two sandboxes) and keep no image built from it (confidence: high)
 ASSUMED: the devcontainer's generated compose files go in the sandbox's own /tmp (its tmpfs), which compose reads with the project directory the translation names (confidence: high)
 ABSENT: the resolve sandbox does not check that a build's bases exist (Adele does, on the daemon); runServices' filter keeps the depends_on closure only
+SCOPE: out — adele/cmd/adeled/resolve_slice1_test.go (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T045–T046: the broker's builds, lifecycle commands and exec
+**Started:** 2026-10-18T12:36:30Z | **Completed:** 2026-10-18T12:39:45Z
+
+INHERITED: the engine's Build, RunStream, Exec and Agents (T040); the resolve document's builds and devcontainer (T044); Inject's Meta (T043)
+FLAGGED: everything a build could be refused for is checked before it builds: the grant's static limits, a live environment of the name with another model (409), and every base image (exit 3). The builds then run before Envs' lock, because they can take minutes and the lock serialises every bring-up; the lock's own checks run again after, and a refusal there (instances, budget, a missing image, the network) removes what this request built (confidence: medium — two ups of one name can both build, and the second is then refused or found unchanged)
+FLAGGED: an unchanged build is the image tagged `<env>-<service>:<key[:12]>` carrying that key and the environment's label, which is reused with no build. A context archive whose digest is not the one resolve keyed keeps no image, and the answer is a 409 to bring it up again (confidence: high)
+FLAGGED: lifecycle commands run after the environment is recorded and Envs' lock is released, in the primary container, as its remote user, in its workspace folder, with remoteEnv; they stop at the first that fails or passes its 120 s bound. A command that cannot be run at all is reported as exit 126 under the name "lifecycle" (confidence: medium)
+FLAGGED: exec picks the named service, else the devcontainer's primary, else the only service, else answers 409 listing the services; a container that is not running is a 502 naming its state; the row records service, user, command (≤ 200 characters) and its end, with the environment's grant (confidence: high)
+ASSUMED: the requester is read before the lock, once per up, from the daemon's list of agent-labelled containers by the request's peer address (http.go sets Request.Peer from RemoteAddr; it is `json:"-"`, so the body cannot set it) (confidence: high)
+ABSENT: no unit drives the daemon side of a build, a lifecycle command or an exec (tech-stack: Adele's Docker calls are not mocked to reach coverage; the lane's cells do); EnvWriteTimeout is 30 min so the server never cuts a long build, and the agent's --wait concludes it first

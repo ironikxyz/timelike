@@ -98,8 +98,8 @@ units beside each change.
 ### Phase 14: US7, a devcontainer brought up and a command run in it (criterion 7; D22)
 
 - [X] T044 [US7] `adeled resolve --devcontainer` (translation, then compose config, the filtered model, the dev info); `adeled context` (the archive on stdout) (`adele/cmd/adeled/resolve.go`, `context.go`, `main.go`); units
-- [ ] T045 [US7] Broker up: devcontainer requests, builds (bases checked, reuse by key, the context sandbox piped into the build, the refusals' answers), lifecycle commands after the record, outside Envs' lock (`adele/internal/broker/env.go`); units
-- [ ] T046 [US7] Broker exec: `action: exec`, the target service, user, workdir and env from labels, bounded output, the timeout answer, the ledger row (`env.go`, `broker.go`); units
+- [X] T045 [US7] Broker up: devcontainer requests, builds (bases checked, reuse by key, the context sandbox piped into the build, the refusals' answers), lifecycle commands after the record, outside Envs' lock (`adele/internal/broker/env.go`); units
+- [X] T046 [US7] Broker exec: `action: exec`, the target service, user, workdir and env from labels, bounded output, the timeout answer, the ledger row (`env.go`, `broker.go`); units
 - [ ] T047 [US7] Client: `adele env up --devcontainer` and the auto choice; the built and lifecycle lines; `adele env exec` with `passes_exit`, `--timeout` default 100 s for exec (`tools/bin/adele`); units `tests/unit/test_adele_env_cli.py`
 - [ ] T048 [US7] e2e `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; fixtures `tests/e2e/fixtures/nested/devcontainer/`, `devcontainer-build/`
 

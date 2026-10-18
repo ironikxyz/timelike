@@ -35,6 +35,8 @@ type Request struct {
 	Capability string `json:"capability"`
 	Action     string `json:"action"`
 	Params     Params `json:"params"`
+	// Peer is the address the request came from, set by Adele's own listener and never by the client (slice 1, R18).
+	Peer string `json:"-"`
 }
 
 // Params are a request's parameters. TTL is empty for "the grant's ttl". Name, TTL and Ports are the stand-in
@@ -46,6 +48,11 @@ type Params struct {
 	Dir      string   `json:"dir,omitempty"`
 	Files    []string `json:"files,omitempty"`
 	Profiles []string `json:"profiles,omitempty"`
+	// Slice 1: a devcontainer project, and exec's service, command and bound.
+	Devcontainer bool     `json:"devcontainer,omitempty"`
+	Service      string   `json:"service,omitempty"`
+	Cmd          []string `json:"cmd,omitempty"`
+	TimeoutS     float64  `json:"timeout_s,omitempty"`
 }
 
 // Upstream is the capability Adele performs with her credential: the stand-in in slice 0.
@@ -130,9 +137,9 @@ func validate(req Request) (Outcome, bool) {
 	case !grants.KnownCapabilities[req.Capability]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("Adele knows no capability %q", req.Capability),
 			"Adele knows: "+grants.KnownList, nil), true
-	case req.Capability == grants.CapDockerCompose && req.Action != "up" && req.Action != "down":
+	case req.Capability == grants.CapDockerCompose && req.Action != "up" && req.Action != "down" && req.Action != "exec":
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
-			"the actions are up and down", nil), true
+			"the actions are up, down and exec", nil), true
 	case req.Capability != grants.CapDockerCompose && req.Action != "create":
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
 			"the action is create", nil), true
