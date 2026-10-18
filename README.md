@@ -39,7 +39,7 @@ Whether it works is a measured claim: see Status.
 | 10 | `symbols` | Outlines, definitions, callers and dependents: exact for Python, text-based (and saying so) for others | slice 1 of 1–2 |
 | 11 | `verify` | Failures only, and only for what a change affects: tests, lint and type-check | slice 1 of 1–2 |
 | 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | slices 0–1 of 0–2 |
-| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | <mark>slice 0 of 0–2</mark> |
+| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | <mark>slices 0–1 of 0–2</mark> |
 | 14 | Provider compute | One request for compute or an endpoint; Adele quotes, provisions within the grant, and tears down | not started |
 | 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | slice 1 of 1–2 |
 | 16 | Model-assisted filters | A grep, or a sed's addresses, chosen by description; off by default, and costed per call | not started |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-<mark>**22 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
+<mark>**23 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
-Features 01, 04, 05 and 06 are complete. <mark>Features 02, 03, 07–13 and 15 have their first slice or slices.
-Features 14, 16 and 17 are not started.</mark>
+Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–13 and 15 have their first slice or slices.
+Features 14, 16 and 17 are not started.
 
-<mark>**Next:** 13 slice 1.</mark>
+**Next:** 13 slice 1.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -167,10 +167,10 @@ everything in her ledger. The agent asks with `adele` (see [What the operator do
 for the other side).
 
 Nothing of Adele's is mounted into the agent's container: her ledger, her grant file and her
-credential live in her container only. She has no outside network in slice 0. <mark>From feature 13 she alone holds
+credential live in her container only. She has no outside network in slice 0. From feature 13 she alone holds
 the host's Docker socket, which she uses only for the project environments of
 [`adele env`](#adele-env--the-projects-own-environment-through-adele); the agent has no socket, no Docker group and no
-Docker endpoint.</mark>
+Docker endpoint.
 
 **The reaper.** Every resource a grant creates has a lifetime, and Adele destroys it when it expires, in her own
 container, whatever the agent does: ending its session, or stopping or removing its container, changes nothing. She
@@ -221,13 +221,13 @@ make up       # the agent, Adele and the stand-in, on the operator's adele/grant
               # (copied from adele/grants.example.conf if it is absent; edit it, then make up again)
 ```
 
-<mark>**The workspace.** `make up` needs `TIMELIKE_WORKSPACES`, the parent directory of the agent's workspaces, set in
+**The workspace.** `make up` needs `TIMELIKE_WORKSPACES`, the parent directory of the agent's workspaces, set in
 the environment or in the git-ignored `local.env`. Each launch makes a new directory under it and mounts it into the
 agent at the same absolute path, as `$TIMELIKE_WORKSPACE`; it must lie outside every git checkout of yours (see
 [the git boundary](#adele-env--the-projects-own-environment-through-adele)). Give the parent the agent's group
-write access: for example owner `2001:2001`, mode `2775`, with the agent given that group.</mark>
+write access: for example owner `2001:2001`, mode `2775`, with the agent given that group.
 
-**Give the agent its work**, <mark>in its workspace or its home</mark>, as `agent`:
+**Give the agent its work**, in its workspace or its home, as `agent`:
 
 ```bash
 docker exec -w "$TIMELIKE_WORKSPACE" timelike-agent git clone <repository> project   # it has egress until slice 2
@@ -599,49 +599,94 @@ exact command to extend it, marked as the operator's (`extend_by: operator`). As
 {"tool": "adele", …, "status": "grant_required", "grant": "e2e", "limit": {"allowed": "8080, 9000-9010", "name": "ports", "needed": "22"}, "extend": "docker exec timelike-adele adeled extend e2e ports 22", "extend_by": "operator", "performed": false, …}
 ```
 
-#### <mark>adele env — the project's own environment, through Adele</mark>
+#### adele env — the project's own environment, through Adele
 
 ```bash
 cd "$TIMELIKE_WORKSPACE/project"
 adele env up                 # resolve, check and bring up compose.yaml; returns once each service is ready
 pytest                       # against the addresses up listed, e.g. db.<environment>:5432
-adele env down               # removes every container, network and volume it created, read back
+adele env down               # removes every container, network, volume and built image it created, read back
 adele env status             # each live environment, its services and their addresses
 ```
 
-<mark>There is no Docker in the agent's container. `adele env up` asks Adele, who resolves the project with the Compose
+```bash
+adele env up                 # no compose file, but .devcontainer/devcontainer.json: the devcontainer instead
+adele env exec -- pytest -q  # run a command in it; its exit status is the command's
+adele session end            # this session is done: its environments are collected
+adele env collect            # remove every environment whose session has ended, now
+```
+
+There is no Docker in the agent's container. `adele env up` asks Adele, who resolves the project with the Compose
 CLI in a throwaway sandbox that sees only the workspace: no network, no socket, no secret and none of the agent's
 environment. She checks the resolved model, after interpolation, `include`, `extends`, profiles and override files,
 and brings up exactly what she checked, labelled as timelike's, under the operator's `docker.compose` grant. A
 service is ready when its healthcheck passes; without one, when it runs and its ports accept a connection from the
-agent's container; a one-shot service when it exits 0. The bound is 120 s by default, `--wait` up to 600 s, and past
-it the call exits 124 with each service's state and leaves the environment up. The agent and the services share
+agent's container. <mark>A service with neither gives no readiness signal, so `up` reports it as running with no
+readiness check, never as ready; if it exits while `up` waits, 0 is completed and anything else fails `up` with exit 1,
+naming the service and its last lines. A service another one waits on with `condition:
+service_completed_successfully` is a one-shot for certain, and `up` waits for its exit.</mark> The bound is 120 s by
+default, `--wait` up to 600 s, and past it the call exits 124 with each service's state and leaves the environment
+up. The agent and the services share
 `timelike-nested`, an internal network, where each service answers as `<service>.<environment>`. A repeat `up` of
-an unchanged project creates nothing. An environment past its grant's `ttl` is removed by Adele's reaper.</mark>
+an unchanged project creates nothing. An environment past its grant's `ttl` is removed by Adele's reaper.
 
-<mark>**What Adele refuses.** A privileged container, host networking, the host's PID, IPC, UTS, user or cgroup namespace,
-an added capability, a device, an unconfining security option, a mount or a file from outside the workspace (the
-Docker socket included, and a volume whose driver options bind a host path), and a build (not brokered yet). Each
-exits **2** before anything is created, with one line naming the setting:
+**What Adele refuses.** A privileged container, host networking, the host's PID, IPC, UTS, user or cgroup namespace,
+an added capability, a device, an unconfining security option, and a mount or a file from outside the workspace (the
+Docker socket included, and a volume whose driver options bind a host path). <mark>In a build, also: build secrets,
+SSH forwarding, a network other than the default, entitlements, a privileged build and additional contexts, in the
+compose file or in the Dockerfile's `RUN` flags.</mark> Each exits **2** before anything is created, with one line
+naming the setting:
 `error: privileged is not allowed (code 2) — no grant allows it; run it without privileged (service db: true)`. No
 grant can allow these, so no command is offered. Beyond a grant's limits (instances, ttl, ports) the call exits 4
 with the grant envelope, as any request does. Adele never pulls: a missing image exits 3 and names the operator's
-`docker pull`.</mark>
+`docker pull`.
 
-<mark>**Variables.** `${VAR}` resolves from the project's own `.env` only: the agent's environment is not read, and a
-variable left unset is named in the verdict.</mark>
+<mark>**Builds.** A service's `build:` is built by the daemon from an archive of its context that a second sandbox
+makes: links are archived as links and never followed, `.dockerignore` is honoured, and Adele copies the bytes to the
+daemon without opening them. A build pulls nothing: every base image (`FROM`, `COPY --from`) must already be on the
+daemon, or it exits 3 naming the operator's `docker pull`. A failed step exits 1 naming the step, with its last
+lines, and a build past its bound (5 minutes) exits 124. The image is labelled with the environment and tagged
+`<environment>-<service>`; an unchanged context, Dockerfile, args and target reuse it, and `down` removes it.</mark>
 
-<mark>**The same path.** The workspace is a directory on the host mounted into the agent at the same absolute path, so a
-bind mount the project asks for (`.:/app`, `${PWD}:${PWD}`) resolves on the host to what the agent sees.</mark>
+<mark>**Devcontainers.** Without a compose file (or with `--devcontainer`), `up` brings up the project's
+`.devcontainer/devcontainer.json` or `.devcontainer.json`. The sandbox parses it (comments and trailing commas are
+fine; a file that does not parse exits 2 naming the line) and translates it into a compose model, which Adele checks
+and brings up as any compose project, so every refusal above applies. Translated: `image`, `build`,
+`dockerComposeFile` with `service` and `runServices`, `containerEnv`, `remoteEnv`, `containerUser`, `remoteUser`,
+`workspaceFolder`, `workspaceMount` (it must keep the workspace at its own path), `mounts`, `forwardPorts` (addresses
+on `timelike-nested`; nothing is published on the host), `overrideCommand`, and the `runArgs` that map to a checked
+setting. Refused: `initializeCommand` (it runs on the host), `features` (not brokered yet), `appPort`, and any
+`runArgs` without a mapping. `onCreateCommand`, `updateContentCommand`, `postCreateCommand` and `postStartCommand` run
+in the container, each named in the verdict and bounded at 2 minutes; one that fails exits 1 and leaves the
+environment up.</mark>
 
-<mark>**The git boundary.** The operator's git never runs what the agent writes into a repository's `.git/hooks/` or its
+<mark>**Running a command.** `adele env exec [NAME] [--service S] -- CMD` runs CMD in a running container of the
+environment, as the devcontainer's `remoteUser` or the image's own user, never privileged. Its output is bounded,
+its exit status is passed through, and past `--timeout` (100 s by default) it exits 124; the process may then still
+be running, because Docker's API cannot stop it, and `down` removes the container. A name or service that does not
+exist exits 3. Each exec is in Adele's ledger.</mark>
+
+<mark>**Sessions and collection.** Everything an environment creates carries timelike's session and grant labels. A
+session has ended when the agent container that asked for its environments no longer exists (Adele reads that
+container from the daemon, never from the request) or when it was ended with `adele session end`. `adele env
+collect` removes the environments of every ended session now, and Adele's reaper does the same on its interval;
+each removal is read back and recorded in her ledger with its cause. A grant's `ttl` still removes whatever outlives
+it.</mark>
+
+**Variables.** `${VAR}` resolves from the project's own `.env` only: the agent's environment is not read, and a
+variable left unset is named in the verdict.
+
+**The same path.** The workspace is a directory on the host mounted into the agent at the same absolute path, so a
+bind mount the project asks for (`.:/app`, `${PWD}:${PWD}`) resolves on the host to what the agent sees.
+
+**The git boundary.** The operator's git never runs what the agent writes into a repository's `.git/hooks/` or its
 `.git/config` (`core.hooksPath`, `core.fsmonitor` and the other executing keys), because the operator never works
 in the agent's repositories: they clone or fetch from them into a checkout of their own. `make up` refuses a
 workspace inside a git work tree. To lift this, launch with `TIMELIKE_HOST_GIT=lifted`, and git in that checkout will
 run whatever the agent wrote there. The setting is shown on the agent's container (label
 `xyz.ironik.timelike.host-git`), in its environment (`TIMELIKE_HOST_GIT`) and in `adele env up`'s verdict. With git
 2.45.1 or later, cloning or fetching from a repository another uid owns needs both
-`-c safe.directory=<path>` and `-c safe.directory=<path>/.git` on that command.</mark>
+`-c safe.directory=<path>` and `-c safe.directory=<path>/.git` on that command.
 
 ### What the operator does
 
@@ -691,8 +736,10 @@ usage:
   adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live
   adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]
-  adele env up [DIR] [-f FILE] [--profile P] [--wait 120]  # the project's compose environment, ready
+  adele env up [DIR] [--devcontainer] [-f FILE] [--profile P] [--wait 120]  # compose or devcontainer
   adele env status [NAME] | adele env down [NAME|DIR]  # each service, its address; remove it all
+  adele env exec [NAME] [--service S] [--timeout 100] -- CMD [ARG]...  # exits with CMD's status
+  adele env collect | adele session end  # remove ended sessions' environments; end this session
   exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)
   extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);
   every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)
@@ -707,12 +754,14 @@ options:
   --ttl  its lifetime, e.g. 30m or 1h (default: the grant's ttl)
   --port  a port it exposes
   --grant  the grant to use (default: the one that allows it)
-  --timeout  give up after S seconds
+  --timeout  give up after S seconds (default 30; env exec: 100)
   -f, --file  env: a compose file in DIR
   --profile  env: a compose profile
   --project  env: the environment's name (default: from DIR)
+  --devcontainer  env up: the project's devcontainer, not its compose file
+  --service  env exec: the service to run in (default: its only one)
   --wait  env up: ready within S s (at most 600)
-exit codes: 0 ok, 1 unreachable, or the capability failed, 2 usage; or name one with --grant; env: a setting no grant allows, 3 no grant or environment by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed, 124 own limit fired (env up: not ready within --wait)
+exit codes: 0 ok, 1 unreachable, or the capability failed (env up: a build, lifecycle command or service), 2 usage; or name one with --grant; env: a setting no grant allows, a bad devcontainer.json, 3 no grant, environment or service by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed, 124 own limit fired (env up: not ready within --wait, a build or lifecycle bound; env exec: --timeout)
 ```
 
 ### `edit`

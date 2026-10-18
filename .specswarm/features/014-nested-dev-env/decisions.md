@@ -307,3 +307,12 @@ FLAGGED: a pass collects an environment when its ledger session has an end row (
 FLAGGED: a collected environment is a reaped row with the cause and the counts removed, read back with 0 left; anything left is a reap-failed row, tried again on the next pass, so the reaper's own given-up logic is not involved (confidence: medium)
 ASSUMED: the reaper's After hook runs on its existing tick (5 s by default) and lists the daemon only while there are live environments (confidence: high)
 ABSENT: no unit drives the daemon side of a collection (the lane's cells do); no unit runs the reaper's After hook through Run; collect needs no grant, since it only removes what an ended session left
+SCOPE: in (5 changed files)
+
+### T055: README
+**Started:** 2026-10-18T12:43:45Z | **Completed:** 2026-10-18T12:44:50Z
+
+INHERITED: the send's README status block; the client's verbs and verdicts (T047, T050, T052); the operator's mark rule (clear the last update's marks first)
+FLAGGED: the status block is applied now, on both slice-1 criteria being built with their cells written, as slice 0's T019 applied its block before its lane ran; the lane is what shows they are met (confidence: medium)
+ASSUMED: the Status paragraph's other sentences stay true ("Features 02, 03, 07–13 and 15 have their first slice or slices") and the Next line is left as it is, as the send says (confidence: high)
+ABSENT: the two changed command examples sit in code blocks, which cannot be marked; slice 0's 13 marks were removed first, per the operator's rule

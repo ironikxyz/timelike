@@ -117,7 +117,7 @@ units beside each change.
 ### Phase 17: Polish
 
 - [ ] T054 The lane: the start's image sweep (`tests/run.sh`); `tests/e2e/lane.conf` lines for the new files; `tests/e2e/nested.bash` helpers (images, labels, a throwaway agent); `nested_teardown` counts images
-- [ ] T055 README: the `adele env` section (devcontainers, builds, exec, collect, session end), the readiness paragraph per decision C, the status block if both slice-1 criteria are met, the reference regenerated
+- [X] T055 README: the `adele env` section (devcontainers, builds, exec, collect, session end), the readiness paragraph per decision C, the status block if both slice-1 criteria are met, the reference regenerated
 - [ ] T056 Host lanes (serial and `-n 8`), Go units with -race and vet, ruff; Cycle 6's report (the libcurl re-review's three statements; the specswarm version); `reboot.md`; the deny-list on the staged tree; commit
 
 ### Dependencies (slice 1)
