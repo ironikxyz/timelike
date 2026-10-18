@@ -264,3 +264,13 @@ FLAGGED: slice 0's `build` refusal (D-7) is lifted. A build is checked by key: c
 ASSUMED: compose's config makes a build's context absolute and leaves a relative dockerfile relative to it; Builds joins them (confidence: medium — compose's normalised output is not read here)
 ASSUMED: a one-shot for certain is exactly a service another names in depends_on with condition service_completed_successfully, in the resolved model's map form (confidence: high)
 ABSENT: Inject's requester is "unknown" until T045/T049 pass the real one; slice 0's broker call keeps compiling with session and grant
+SCOPE: in (4 changed files)
+
+### T044: `adeled resolve --devcontainer`, the build scan, `adeled context`
+**Started:** 2026-10-18T12:31:38Z | **Completed:** 2026-10-18T12:36:02Z
+
+INHERITED: devcontainer.Translate (T042), buildctx (T041), compose.Builds (T043)
+FLAGGED: an oversize context or an unreadable Dockerfile is the resolve document's error (Adele's 400, the client's exit 2 with the remedy), not plan R14's exit 1: it is the request that must change (a .dockerignore), not the capability that failed (confidence: medium)
+FLAGGED: the context sandbox writes only the archive to stdout and one JSON line with its digest to stderr, so Adele can tell an archive that is not the one resolve keyed (a file changed between the two sandboxes) and keep no image built from it (confidence: high)
+ASSUMED: the devcontainer's generated compose files go in the sandbox's own /tmp (its tmpfs), which compose reads with the project directory the translation names (confidence: high)
+ABSENT: the resolve sandbox does not check that a build's bases exist (Adele does, on the daemon); runServices' filter keeps the depends_on closure only

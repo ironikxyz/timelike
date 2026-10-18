@@ -653,6 +653,8 @@ func Inject(model Model, name string, created time.Time, ttl time.Duration, hash
 
 // Resolved is what `adeled resolve` prints from the sandbox: the model, each bind source's resolved path ("" when
 // it did not resolve), the variables compose said were unset, and either compose's error or a refusal made of it.
+//
+// Slice 1 adds a devcontainer's own settings (Dev) and, for each build, what the sandbox found (Builds, R14-R16).
 type Resolved struct {
 	OK      bool              `json:"ok"`
 	Model   json.RawMessage   `json:"model,omitempty"`
@@ -660,6 +662,39 @@ type Resolved struct {
 	Unset   []string          `json:"unset,omitempty"`
 	Error   string            `json:"error,omitempty"`
 	Refusal *Refusal          `json:"refusal,omitempty"`
+	Dev     *Dev              `json:"devcontainer,omitempty"`
+	Builds  []BuildScan       `json:"builds,omitempty"`
+}
+
+// Dev is a devcontainer's primary service and what exec and its lifecycle commands need (014 research R12, R13).
+type Dev struct {
+	Primary         string            `json:"primary"`
+	RemoteUser      string            `json:"remote_user"`
+	RemoteEnv       map[string]string `json:"remote_env"`
+	WorkspaceFolder string            `json:"workspace_folder"`
+	Lifecycle       []Command         `json:"lifecycle"`
+	NotRun          []string          `json:"not_run,omitempty"`
+}
+
+// Command is one lifecycle command: Shell runs with /bin/sh -c, Argv as is.
+type Command struct {
+	Name  string   `json:"name"`
+	Shell string   `json:"shell,omitempty"`
+	Argv  []string `json:"argv,omitempty"`
+}
+
+// BuildScan is one build as the sandbox found it: the real context and Dockerfile, the Dockerfile's name inside the
+// archive, the context's digest, the build's key, and every base image it names (R14-R16).
+type BuildScan struct {
+	Service        string            `json:"service"`
+	Context        string            `json:"context"`
+	Dockerfile     string            `json:"dockerfile"`
+	DockerfileName string            `json:"dockerfile_name"`
+	Digest         string            `json:"digest"`
+	Key            string            `json:"key"`
+	Bases          []string          `json:"bases"`
+	Args           map[string]string `json:"args"`
+	Target         string            `json:"target,omitempty"`
 }
 
 var unsetRe = regexp.MustCompile(`The \\?"([A-Za-z_][A-Za-z0-9_]*)\\?" variable is not set`)
