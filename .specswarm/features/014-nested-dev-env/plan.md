@@ -289,6 +289,11 @@ The test is a cell whose base is absent: exit 3. The daemon then still has no im
 - **The bound:** `BuildTimeout` (5 min). The step is read from the stream (`Step N/M : …`). Past the bound, the
   request is cancelled and the answer names the step (client exit 124). An `error` in the stream is exit 1, naming
   the step, with the last 6 lines.
+  - **Cycle 7 (lane 13s1a):** the step is named by the instruction and its position N in the Dockerfile. M is never
+    said: moby's classic builder appends one `LABEL` step per request label to the last stage (`buildLabelOptions`,
+    read in moby v28.5.1). Steps are numbered in the Dockerfile's order, with the label steps last, so N is the
+    position. A label step is known by being `LABEL <one of the request's keys>=`. The lines kept are that step's own,
+    without the daemon's `--->` lines.
 - **Where it runs:** after the check and before Envs' lock. A request given up while building stops the build;
   nothing of the environment exists yet. An image it left is labelled with the environment's name, so `down NAME`
   and the lane's sweep find it.

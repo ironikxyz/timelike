@@ -336,3 +336,17 @@ SCOPE: in (16 changed files)
 INHERITED: every task above
 ASSUMED: the README status block stands on both criteria being built; the lane shows whether they are met (confidence: medium)
 ABSENT: the Docker lane, scan and lint in their containers; mypy, staticcheck and govulncheck
+
+## Cycle 7 — lane 13s1a (`../bridge/feedback/13-20261018-173253-lane-13s1a-build-step-verdict-and-mypy.md`; branch `modify/014-slice-1`)
+
+### T057–T058: mypy's union-attr, and the failed build step in the Dockerfile's terms
+**Started:** 2026-10-18T17:47:10Z (the cycle's first clock reading) | **Completed:** 2026-10-18T17:53:26Z (the code; records and host lanes after)
+
+INHERITED: Cycle 6's code at `b209824`; lane 13s1a's logs under `../bridge/` (196's verdict read from `.make-test-13s1a.log`)
+ASSUMED: A — `dropped` read once into a local and narrowed by `isinstance`; mypy 2.3.1 (the version `pins.env` gives the lint) on this host over `pyproject.toml`'s files then also flagged the new `last_lines` line, narrowed the same way; it reports no issues in 39 files (confidence: high)
+ASSUMED: the six steps are Adele's six labels. Read in moby v28.5.1's source (`builder/dockerfile/builder.go`, `buildLabelOptions`): one `LABEL` command per `labels` entry, appended to the last stage, counted in "Step N/M" (`totalCommands`). The lane's daemon version is not in its logs; 2 + 6 = 8 matches (confidence: high)
+FLAGGED: B — the step is named by its position N among the Dockerfile's own instructions and its text, never the daemon's M; chose to compute nothing from M (no M minus the label count) over deriving the Dockerfile's total, because steps are numbered in the Dockerfile's order with label steps last, so N is right on any daemon, while a total would depend on how a daemon version adds labels. A label step is recognised as `LABEL <a request key>=` (buildkit v0.25.1's `NewLabelCommand` text) and said as "the labels Adele adds after the Dockerfile's last instruction" (confidence: high)
+FLAGGED: the lines kept are the failing step's own, with the daemon's `--->` and `Removing intermediate container` lines dropped; the daemon's error (`message`, e.g. "The command '…' returned a non-zero code: 1") follows them in the client's one line, because a step that prints nothing (`RUN false`) otherwise says nothing of why (confidence: high)
+ASSUMED: 196's cell asserts the instruction and its position, the daemon's message with the command left as a wildcard, and that no `Step ` or `--->` is in the line (confidence: high)
+ABSENT: no Docker here, so 196 has not run against a daemon; no broker unit drives a failed build (the engine units and 196 cover the mapping); C (002's bench probe) not touched, as ruled; the spec's FR-24 ("naming the step") left as it stands, since it is still true
+SCOPE: in (6 changed files) (task has FLAGGED: yes)

@@ -137,8 +137,12 @@ RUN false"
   app:
     build: .
     command: ["sleep", "infinity"]'
-  check_failed 1 "error: ${NP_NAME}: build of app failed at Step 2/2 : RUN false"
-  [[ "$ERR_LINE" == *" (code 1) — nothing was created; "* ]] || { echo "rule 14's line: ${ERR_LINE}" >&2; return 1; }
+  # Lane 13s1a: the instruction and its position in the Dockerfile, never the daemon's "Step N/M" (its M counts the
+  # LABEL steps it adds for Adele's labels), and that step's own output rather than the build's whole log.
+  check_failed 1 "error: ${NP_NAME}: build of app failed at instruction 2 of the Dockerfile, RUN false: "
+  [[ "$ERR_LINE" == *"RUN false: The command '"*"' returned a non-zero code: 1 (code 1) — nothing was created; "* ]] ||
+    { echo "rule 14's line: ${ERR_LINE}" >&2; return 1; }
+  [[ "$ERR_LINE" != *"Step "* && "$ERR_LINE" != *"--->"* ]] || { echo "the daemon's log in the verdict: ${ERR_LINE}" >&2; return 1; }
   nested_gone "$NP_NAME"
 }
 

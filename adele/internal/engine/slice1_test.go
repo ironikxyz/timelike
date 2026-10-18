@@ -164,13 +164,51 @@ func TestABuildStreamsTheArchiveUnopenedAndReturnsTheImage(t *testing.T) {
 }
 
 func TestAFailedStepIsNamedWithTheLastLines(t *testing.T) {
-	c, _, _ := buildDaemon(t, `{"stream":"Step 1/2 : FROM base\n"}`, `{"stream":"Step 2/2 : RUN false\n"}`,
+	c, _, _ := buildDaemon(t, `{"stream":"Step 1/2 : FROM base\n"}`, `{"stream":" ---> abc\n"}`, `{"stream":"early output\n"}`,
+		`{"stream":"Step 2/2 : RUN false\n"}`, `{"stream":" ---> Running in 19ae\n"}`,
 		`{"stream":"some output\n"}`, `{"errorDetail":{"message":"The command '/bin/sh -c false' returned a non-zero code: 1"},"error":"x"}`)
 	_, err := c.Build(context.Background(), BuildSpec{Tag: "t"}, strings.NewReader(""))
 	var be *BuildError
-	if !errors.As(err, &be) || be.Kind != "step" || be.Step != "Step 2/2 : RUN false" || !strings.Contains(be.Msg, "non-zero code: 1") ||
-		be.Last[len(be.Last)-1] != "some output" {
+	if !errors.As(err, &be) || be.Kind != "step" || be.Position != 2 || be.Instruction != "RUN false" || be.InLabels ||
+		!strings.Contains(be.Msg, "non-zero code: 1") || strings.Join(be.Last, "|") != "some output" {
 		t.Fatalf("%#v", err)
+	}
+	if !strings.Contains(err.Error(), "at instruction 2 of the Dockerfile, RUN false: The command") {
+		t.Errorf("Error() = %q", err)
+	}
+}
+
+// Lane 13s1a: the daemon appends one LABEL step per label, so a two-instruction Dockerfile built with Adele's six
+// labels is "Step 2/8". The instruction's position is still 2, the 8 is never said, and the step's lines are its own.
+func TestTheDaemonsLabelStepsAreNotCountedAsTheDockerfiles(t *testing.T) {
+	labels := map[string]string{LabelEnv: "tl-x", LabelSession: "s", LabelGrant: "g", LabelRequester: "r", LabelBuildKey: "k",
+		LabelCreated: "2026-10-18T00:00:00Z"}
+	c, _, _ := buildDaemon(t, `{"stream":"Step 1/8 : FROM debian:trixie-slim@sha256:a99c\n"}`, `{"stream":" ---> ec92d6b34c6a\n"}`,
+		`{"stream":"Step 2/8 : RUN false\n"}`, `{"stream":" ---> Running in 19aee1d31973\n"}`,
+		`{"stream":" ---> Removed intermediate container 19aee1d31973\n"}`,
+		`{"errorDetail":{"message":"The command '/bin/sh -c false' returned a non-zero code: 1"},"error":"x"}`)
+	_, err := c.Build(context.Background(), BuildSpec{Tag: "t", Labels: labels}, strings.NewReader(""))
+	var be *BuildError
+	if !errors.As(err, &be) || be.Position != 2 || be.Instruction != "RUN false" || be.InLabels || len(be.Last) != 0 ||
+		strings.Contains(err.Error(), "/8") || strings.Contains(err.Error(), "Step") {
+		t.Fatalf("%#v: %v", be, err)
+	}
+	// A failure in the label steps themselves is said as Adele's, not as an instruction the agent wrote.
+	c, _, _ = buildDaemon(t, `{"stream":"Step 1/7 : FROM base\n"}`, `{"stream":"Step 2/7 : LABEL `+LabelBuildKey+`=k\n"}`,
+		`{"errorDetail":{"message":"no space left on device"},"error":"x"}`)
+	_, err = c.Build(context.Background(), BuildSpec{Tag: "t", Labels: labels}, strings.NewReader(""))
+	if !errors.As(err, &be) || !be.InLabels || !strings.Contains(err.Error(), "the labels Adele adds after the Dockerfile's last instruction") {
+		t.Fatalf("%#v: %v", be, err)
+	}
+}
+
+func TestAContinuedInstructionIsNamedOnOneLine(t *testing.T) {
+	n, text, ok := stepLine("Step 3/9 : RUN apt-get update &&     apt-get install -y\n  make\n")
+	if !ok || n != 3 || text != "RUN apt-get update && apt-get install -y make" {
+		t.Fatalf("stepLine = %d %q %v", n, text, ok)
+	}
+	if _, _, ok := stepLine(" ---> abc"); ok {
+		t.Fatal("a non-step line read as a step")
 	}
 }
 
@@ -194,7 +232,7 @@ func TestABuildPastItsBoundNamesItsStep(t *testing.T) {
 	}))
 	_, err := c.Build(context.Background(), BuildSpec{Tag: "t", Timeout: 200 * time.Millisecond}, strings.NewReader(""))
 	var be *BuildError
-	if !errors.As(err, &be) || be.Kind != "timeout" || be.Step != "Step 1/1 : RUN sleep 9" {
+	if !errors.As(err, &be) || be.Kind != "timeout" || be.Position != 1 || be.Instruction != "RUN sleep 9" {
 		t.Fatalf("%#v", err)
 	}
 }

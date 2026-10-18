@@ -78,8 +78,14 @@ Its `Service` gains `one_shot` and, for an exited non-zero container, `last_line
 - **422 `refusal: setting`** for a devcontainer key or a build setting no grant allows, or `devcontainer.json` that
   does not parse (`setting: devcontainer.json`, `value: "line N: …"`).
 - **422 `refusal: image`** for a base image (`setting: FROM`), named with the operator's `docker pull`.
-- **502** with `build: {service, step, last_lines}` for a failed step.
-- **504** with `timed_out: true` and `build: {service, step}` for a build past its bound.
+- **502** with `build: {service, step, position, instruction, last_lines, message}` for a failed step.
+- **504** with `timed_out: true` and `build: {service, step, position, instruction, last_lines}` for a build past its
+  bound.
+- **`step`** says where, in the Dockerfile's terms: `instruction N of the Dockerfile, <instruction>`, or `the labels
+  Adele adds after the Dockerfile's last instruction`. `position` is N, counted among the Dockerfile's own
+  instructions from 1 (0 before the first). `last_lines` are that step's own output, and `message` is the daemon's
+  error. The daemon's `Step N/M` is never passed on: its classic builder appends one `LABEL` step per label in the
+  request, so M counts Adele's six labels too (lane 13s1a; Cycle 7).
 
 **`exec`**: `params: {name, service, cmd: [..], timeout_s}`.
 - **200:** `{"outcome": "performed", "exit_code", "stdout", "stderr", "dropped": {"stdout": n, "stderr": n}, "service",

@@ -301,15 +301,48 @@ def test_a_failed_build_step_is_exit_1_naming_the_step_and_its_last_lines(
             "error": "the build failed",
             "build": {
                 "service": "api",
-                "step": "Step 3/5 : RUN make",
+                "step": "instruction 3 of the Dockerfile, RUN make",
+                "position": 3,
+                "instruction": "RUN make",
                 "last_lines": ["make: *** [all] Error 2"],
+                "message": "The command '/bin/sh -c make' returned a non-zero code: 2",
             },
         },
     )
     r = up(py, scratch, adele, ws)
     assert r.returncode == 1
     line = one_error_line(r)
-    assert f"{NAME}: build of api failed at Step 3/5 : RUN make: make: *** [all] Error 2" in line
+    assert (
+        f"{NAME}: build of api failed at instruction 3 of the Dockerfile, RUN make: make: *** [all] Error 2"
+        " · The command '/bin/sh -c make' returned a non-zero code: 2" in line
+    )
+
+
+def test_a_failed_step_with_no_output_says_the_daemons_message(
+    py: str, scratch: Path, adele: FakeAdele, ws: Path
+) -> None:
+    """Lane 13s1a: RUN false writes nothing, so the daemon's message is what says why."""
+    adele.answer(
+        "POST",
+        "/v1/requests",
+        502,
+        {
+            "build": {
+                "service": "app",
+                "step": "instruction 2 of the Dockerfile, RUN false",
+                "last_lines": [],
+                "message": "The command '/bin/sh -c false' returned a non-zero code: 1",
+            },
+        },
+    )
+    r = up(py, scratch, adele, ws)
+    assert r.returncode == 1
+    line = one_error_line(r)
+    assert (
+        f"{NAME}: build of app failed at instruction 2 of the Dockerfile, RUN false:"
+        " The command '/bin/sh -c false' returned a non-zero code: 1 (code 1)" in line
+    )
+    assert "Step" not in line
 
 
 def test_a_build_past_its_bound_is_124_naming_the_step(
@@ -319,12 +352,18 @@ def test_a_build_past_its_bound_is_124_naming_the_step(
         "POST",
         "/v1/requests",
         504,
-        {"timed_out": True, "build": {"service": "api", "step": "Step 4/5 : RUN ./slow"}},
+        {
+            "timed_out": True,
+            "build": {"service": "api", "step": "instruction 4 of the Dockerfile, RUN ./slow"},
+        },
     )
     r = up(py, scratch, adele, ws)
     assert r.returncode == 124
     line = one_error_line(r)
-    assert f"{NAME}: build of api did not finish within its bound (at Step 4/5 : RUN ./slow)" in line
+    assert (
+        f"{NAME}: build of api did not finish within its bound"
+        " (at instruction 4 of the Dockerfile, RUN ./slow)" in line
+    )
 
 
 def test_a_base_image_not_on_the_daemon_is_exit_3_and_pulls_nothing(

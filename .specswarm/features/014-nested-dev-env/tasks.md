@@ -126,6 +126,13 @@ T039, T040, T043 → T044–T046, T049. T041, T042 are independent of each other
 tasks (T047, T050, T052's client half) need only the contract. The e2e files (T048, T051, T053) need the contract and
 the fixtures, and run first in the mentor's lane.
 
+
+## Phase 18: Cycle 7, lane 13s1a's findings (`../bridge/feedback/13-20261018-173253-lane-13s1a-build-step-verdict-and-mypy.md`)
+
+- [X] T057 A: mypy's union-attr at `tools/bin/adele`'s exec verdict (`dropped` narrowed once); mypy 2.3.1, the lint's pin, over `pyproject.toml`'s files
+- [X] T058 B: a failed or timed-out build is named by the instruction as the Dockerfile has it and its position there, never the daemon's "Step N/M" (`adele/internal/engine/slice1.go` `BuildError.Where`, `stepLine`, `labelStep`; `adele/internal/broker/env_slice1.go`'s `build` gains `position`, `instruction`, `message`); the step's own output only; the client's verdict (`tools/bin/adele` `build_failed`); units `adele/internal/engine/slice1_test.go`, `tests/unit/test_adele_env_slice1_cli.py`; e2e 196's expectation (`tests/e2e/devcontainer-and-build-failures-name-their-cause.bats`); `contracts/adele-env.md`, `plan.md`
+- [X] T059 Host lanes (serial and `-n 8`), Go with -race and vet, ruff, mypy; Cycle 7's report, with where the six steps came from; `reboot.md`; the deny-list on the staged tree; commit
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

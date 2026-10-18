@@ -742,7 +742,9 @@ def _entries(body: dict[str, Any], key: str) -> list[dict[str, Any]]:
 
 
 def build_failed(name: str, reply: Reply) -> agentio.ToolError:
-    """014 FR-24: a build past its bound is 124 naming its step; a failed step is 1, with its last lines."""
+    """014 FR-24: a build past its bound is 124 naming its step; a failed step is 1, with its last lines.
+    The step is Adele's words for it, the instruction as the Dockerfile has it and its position there: never
+    the daemon's "Step N/M", whose M counts the LABEL steps it adds for Adele's labels (lane 13s1a)."""
     build: dict[str, Any] = reply.body["build"]
     service, step = build.get("service"), build.get("step")
     remedy = str(reply.body.get("remediation") or "")
@@ -752,7 +754,9 @@ def build_failed(name: str, reply: Reply) -> agentio.ToolError:
             f"{name}: build of {service} did not finish within its bound (at {step})",
             remedy or f"adele env status {name} shows what is up; adele env down {name} removes it",
         )
-    last = _last(build.get("last_lines"))
+    raw_lines = build.get("last_lines")
+    lines: list[Any] = raw_lines if isinstance(raw_lines, list) else []
+    last = _last([*lines, build.get("message") or ""])
     return agentio.ToolError(
         agentio.EXIT_FAILURE,
         f"{name}: build of {service} failed at {step}" + (f": {last}" if last else ""),
@@ -997,7 +1001,8 @@ def env_exec(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         )
     user = str(body.get("user") or "") or "the image's user"
     verdict = f"exec {name} {service} as {user}: exit {code} in {took:.1f} s"
-    dropped = body.get("dropped") if isinstance(body.get("dropped"), dict) else {}
+    raw_dropped = body.get("dropped")
+    dropped: dict[str, Any] = raw_dropped if isinstance(raw_dropped, dict) else {}
     d_out, d_err = int(dropped.get("stdout") or 0), int(dropped.get("stderr") or 0)
     if d_out or d_err:
         verdict += (

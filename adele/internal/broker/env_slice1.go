@@ -142,7 +142,8 @@ func (b *Broker) buildOne(ctx context.Context, req Request, grant, requester str
 		if !errors.As(berr, &be) {
 			return daemonFailed(berr), false
 		}
-		where["step"] = be.Step
+		// Where it ended, in the Dockerfile's terms: never the daemon's "Step N/M", whose M counts Adele's labels.
+		where["step"], where["position"], where["instruction"] = be.Where(), be.Position, be.Instruction
 		switch be.Kind {
 		case "pull":
 			return b.refuseEnv(req, grant, &compose.Refusal{Kind: compose.KindImage, Service: s.Service, Setting: "FROM",
@@ -152,7 +153,7 @@ func (b *Broker) buildOne(ctx context.Context, req Request, grant, requester str
 			return Outcome{http.StatusGatewayTimeout, map[string]any{"error": be.Error(), "timed_out": true, "build": where,
 				"performed": false, "remediation": "nothing was created; make the step quicker, or the operator raises Adele's build bound"}}, false
 		case "step":
-			where["last_lines"] = be.Last
+			where["last_lines"], where["message"] = be.Last, be.Msg
 			return Outcome{http.StatusBadGateway, map[string]any{"error": "the build of " + s.Service + " failed: " + be.Error(), "build": where,
 				"performed": false, "remediation": "nothing was created; fix the Dockerfile or the context and bring it up again"}}, false
 		}

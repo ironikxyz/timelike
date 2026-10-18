@@ -19,6 +19,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -324,19 +326,38 @@ type BuildSpec struct {
 
 // BuildError says how a build ended without an image. Kind is "step" (a step failed), "pull" (the daemon began to
 // pull an image, so the build was stopped: a build pulls nothing), "timeout" (its bound passed), or "daemon".
+//
+// Where it ended is said in the Dockerfile's own terms (lane 13s1a). The daemon's "Step N/M" counts more than the
+// agent wrote: its classic builder appends one LABEL step per label in the request to the last stage (moby's
+// buildLabelOptions), so Adele's six labels made a two-instruction Dockerfile "of 8". Steps are numbered in the
+// Dockerfile's order and the label steps come last, so N is the instruction's position in the Dockerfile; M is
+// never printed.
 type BuildError struct {
-	Kind  string
-	Step  string   // the step it was in, "Step N/M : …", or "" before the first
-	Image string   // for a pull: what it began to pull
-	Msg   string   // the daemon's error, for a failed step
-	Last  []string // the build's last lines
-	Err   error
+	Kind        string
+	Position    int      // the instruction it was in, counted among the Dockerfile's own from 1; 0 before the first
+	Instruction string   // that instruction as the Dockerfile has it
+	InLabels    bool     // it was in the LABEL steps the daemon adds for the request's labels, after the Dockerfile's last
+	Image       string   // for a pull: what it began to pull
+	Msg         string   // the daemon's error, for a failed step
+	Last        []string // the last lines of that step's own output
+	Err         error
+}
+
+// Where says where the build ended, or "" before its first instruction.
+func (e *BuildError) Where() string {
+	switch {
+	case e.InLabels:
+		return "the labels Adele adds after the Dockerfile's last instruction"
+	case e.Position > 0:
+		return fmt.Sprintf("instruction %d of the Dockerfile, %s", e.Position, e.Instruction)
+	}
+	return ""
 }
 
 func (e *BuildError) Error() string {
 	at := ""
-	if e.Step != "" {
-		at = " at " + e.Step
+	if w := e.Where(); w != "" {
+		at = " at " + w
 	}
 	switch e.Kind {
 	case "pull":
@@ -392,12 +413,12 @@ func (c *Client) Build(ctx context.Context, b BuildSpec, archive io.Reader) (str
 		return "", &BuildError{Kind: "daemon", Err: err}
 	}
 	req.Header.Set("Content-Type", "application/x-tar")
-	var step string
+	var at BuildError // where the build is: Position, Instruction, InLabels
 	var last []string
 	keep := func(s string) {
 		for _, l := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
-			if l = strings.TrimSpace(l); l == "" {
-				continue
+			if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "--->") || strings.HasPrefix(l, "Removing intermediate container") {
+				continue // the daemon's own bookkeeping between steps, not the step's output
 			}
 			last = append(last, l)
 			if len(last) > 6 {
@@ -407,9 +428,9 @@ func (c *Client) Build(ctx context.Context, b BuildSpec, archive io.Reader) (str
 	}
 	ended := func(e error) error {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) && parent.Err() == nil {
-			return &BuildError{Kind: "timeout", Step: step, Last: last, Err: e}
+			return &BuildError{Kind: "timeout", Position: at.Position, Instruction: at.Instruction, InLabels: at.InLabels, Last: last, Err: e}
 		}
-		return &BuildError{Kind: "daemon", Step: step, Last: last, Err: e}
+		return &BuildError{Kind: "daemon", Position: at.Position, Instruction: at.Instruction, InLabels: at.InLabels, Last: last, Err: e}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -451,21 +472,25 @@ func (c *Client) Build(ctx context.Context, b BuildSpec, archive io.Reader) (str
 			if text == "" {
 				text = msg.Error
 			}
-			return "", &BuildError{Kind: "step", Step: step, Msg: strings.TrimSpace(text), Last: last}
+			return "", &BuildError{Kind: "step", Position: at.Position, Instruction: at.Instruction, InLabels: at.InLabels,
+				Msg: strings.TrimSpace(text), Last: last}
 		case pullStatus(msg.Status):
 			image := msg.ID
 			if i := strings.Index(msg.Status, "Pulling from "); i >= 0 {
 				image = strings.TrimSpace(msg.Status[i+len("Pulling from "):])
 			}
 			cancel()
-			return "", &BuildError{Kind: "pull", Step: step, Image: image, Last: last}
+			return "", &BuildError{Kind: "pull", Position: at.Position, Instruction: at.Instruction, InLabels: at.InLabels,
+				Image: image, Last: last}
 		case msg.Aux.ID != "":
 			id = msg.Aux.ID
 		case msg.Stream != "":
-			keep(msg.Stream)
-			if s := strings.TrimSpace(msg.Stream); strings.HasPrefix(s, "Step ") {
-				step = s
+			if n, text, ok := stepLine(msg.Stream); ok {
+				at = BuildError{Position: n, Instruction: text, InLabels: labelStep(text, b.Labels)}
+				last = nil // the lines kept are this step's own
+				continue
 			}
+			keep(msg.Stream)
 			if s := strings.TrimSpace(msg.Stream); strings.HasPrefix(s, "Successfully built ") && id == "" {
 				id = strings.TrimPrefix(s, "Successfully built ")
 			}
@@ -475,9 +500,37 @@ func (c *Client) Build(ctx context.Context, b BuildSpec, archive io.Reader) (str
 		return "", ended(ctx.Err())
 	}
 	if id == "" {
-		return "", &BuildError{Kind: "step", Step: step, Msg: "the daemon reported no image", Last: last}
+		return "", &BuildError{Kind: "step", Position: at.Position, Instruction: at.Instruction, InLabels: at.InLabels,
+			Msg: "the daemon reported no image", Last: last}
 	}
 	return id, nil
+}
+
+var stepRe = regexp.MustCompile(`(?s)^Step ([0-9]+)/[0-9]+ : (.*)$`)
+
+// stepLine reads the classic builder's "Step N/M : <instruction>" header, which it writes as one message. The
+// instruction is the Dockerfile's text; a continued one is put on one line.
+func stepLine(stream string) (int, string, bool) {
+	m := stepRe.FindStringSubmatch(strings.TrimSpace(stream))
+	if m == nil {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, "", false
+	}
+	return n, strings.Join(strings.Fields(m[2]), " "), true
+}
+
+// labelStep reports whether a step's instruction is one of the LABEL steps the daemon adds for labels, one per
+// label, as "LABEL <key>=<value>".
+func labelStep(text string, labels map[string]string) bool {
+	for k := range labels {
+		if strings.HasPrefix(text, "LABEL "+k+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 func nonNil(m map[string]string) map[string]string {
