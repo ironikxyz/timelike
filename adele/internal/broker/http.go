@@ -37,6 +37,8 @@ func (b *Broker) Handler() http.Handler {
 	mux.HandleFunc("/v1/denials", b.only(http.MethodGet, b.denials))
 	mux.HandleFunc("/v1/envs", b.only(http.MethodGet, b.envs))
 	mux.HandleFunc("/v1/envs/", b.only(http.MethodGet, b.envs))
+	mux.HandleFunc("/v1/envs/collect", b.only(http.MethodPost, b.collect))    // slice 1: a collection pass now
+	mux.HandleFunc("/v1/sessions/end", b.only(http.MethodPost, b.sessionEnd)) // slice 1: the caller's session ends
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "no such path"})
 	})

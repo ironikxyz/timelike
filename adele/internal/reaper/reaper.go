@@ -55,6 +55,8 @@ type Reaper struct {
 	Passes    int
 	Attempts  int
 	Container string // Adele's container, named in the given-up row's command
+	// After runs after each pass on Run's tick: the collection of ended sessions' environments (feature 13 slice 1).
+	After func(ctx context.Context, log io.Writer)
 }
 
 // Result is one reap as recorded.
@@ -292,6 +294,9 @@ func (r *Reaper) Run(ctx context.Context, log io.Writer) {
 		}
 		if err != nil && ctx.Err() == nil {
 			fmt.Fprintf(log, "adeled: reap pass failed: %v (retried at the next pass)\n", err)
+		}
+		if r.After != nil && ctx.Err() == nil {
+			r.After(ctx, log)
 		}
 		select {
 		case <-ctx.Done():

@@ -297,3 +297,13 @@ FLAGGED (delegate): `--timeout` resolves per verb: 100 s for exec (feature 03's 
 ASSUMED (delegate): "N ready" counts ready and completed services; "running, no readiness check" never counts, and the verdict is slice 0's exactly when nothing is unchecked (confidence: high)
 FLAGGED: down's verdict and collect's lines name built images only when there were any, so slice 0's pinned verdict is unchanged (confidence: high)
 ABSENT: the README's generated reference is stale until T055 (test_readme_reference fails until then); an up verdict with a long name, "devcontainer," and the unchecked clause can pass 200 columns, and agentio cuts it with its marker
+SCOPE: out — tests/unit/test_adele_env_slice1_cli.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T049: the requester, session end, the collection pass and the reaper's tick
+**Started:** 2026-10-18T12:40:45Z | **Completed:** 2026-10-18T12:42:21Z
+
+INHERITED: Request.Peer and the requester label (T045); the ledger's Recorded and SessionEnded (T039); the engine's Agents and Down with images (T040)
+FLAGGED: a pass collects an environment when its ledger session has an end row (b), or when its containers' requester label names an agent container the daemon's list no longer has (a); an environment whose requester is unknown, or that has none (slice 0's), is left to session end and the ttl. Chose the ledger's session over the session label as the authority, because the ledger is what records who asked and the label is read back only to find the requester (confidence: high)
+FLAGGED: a collected environment is a reaped row with the cause and the counts removed, read back with 0 left; anything left is a reap-failed row, tried again on the next pass, so the reaper's own given-up logic is not involved (confidence: medium)
+ASSUMED: the reaper's After hook runs on its existing tick (5 s by default) and lists the daemon only while there are live environments (confidence: high)
+ABSENT: no unit drives the daemon side of a collection (the lane's cells do); no unit runs the reaper's After hook through Run; collect needs no grant, since it only removes what an ended session left

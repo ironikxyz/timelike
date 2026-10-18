@@ -105,7 +105,7 @@ units beside each change.
 
 ### Phase 15: US8, labels, session end and collection (criterion 8)
 
-- [ ] T049 [US8] The requester from the peer address (`http.go` → `Request.Peer`); `POST /v1/sessions/end`; `POST /v1/envs/collect` and `Broker.Collect`; the reaper's tick runs it (`adele/internal/broker/`, `adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`); units
+- [X] T049 [US8] The requester from the peer address (`http.go` → `Request.Peer`); `POST /v1/sessions/end`; `POST /v1/envs/collect` and `Broker.Collect`; the reaper's tick runs it (`adele/internal/broker/`, `adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`); units
 - [X] T050 [US8] Client: `adele session end`, `adele env collect` (`tools/bin/adele`); units
 - [ ] T051 [US8] e2e `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (labels on all four kinds read back, session end, collect, a gone container, 0 collected, ended twice); fixture `tests/e2e/fixtures/nested/build/`
 

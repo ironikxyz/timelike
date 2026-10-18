@@ -103,6 +103,9 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		fmt.Fprintf(stderr, "adeled: %v\n", err)
 		return exitUsage
 	}
+	if b.Envs != nil { // feature 13 slice 1: the reaper's tick also collects ended sessions' environments (R19)
+		reap.After = func(ctx context.Context, log io.Writer) { logCollected(b, ctx, log) }
+	}
 	ln, err := net.Listen("tcp", e.get("ADELE_LISTEN"))
 	if err != nil {
 		fmt.Fprintf(stderr, "adeled: listen %s: %v\n", e.get("ADELE_LISTEN"), err)
@@ -202,4 +205,18 @@ func envsLine(e *broker.Envs) string {
 		return "docker.compose: the socket, but no workspace mounted"
 	}
 	return "docker.compose: workspace " + e.Workspace + ", host git " + e.HostGit
+}
+
+// logCollected runs one collection pass and logs what it removed or failed to (`docker logs timelike-adele`).
+func logCollected(b *broker.Broker, ctx context.Context, log io.Writer) {
+	collected, failed, err := b.Collect(ctx)
+	for _, c := range collected {
+		fmt.Fprintf(log, "adeled: collected %s (session %s): %s — recorded as #%d\n", c.Name, c.Session, c.Cause, c.LedgerID)
+	}
+	for _, c := range failed {
+		fmt.Fprintf(log, "adeled: collecting %s (session %s) failed: %s — tried again on the next pass\n", c.Name, c.Session, c.Cause)
+	}
+	if err != nil && ctx.Err() == nil {
+		fmt.Fprintf(log, "adeled: collection pass failed: %v (retried at the next pass)\n", err)
+	}
 }
