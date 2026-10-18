@@ -212,3 +212,14 @@ FLAGGED: B — the default is 4 on the mentor's ruling. The 8 was chosen in the 
 ASSUMED: C — 004's Cycle 4 report named the cause of the same failure in lane 12s1: the fake run's `--call-limit 2`, a hooked commit past 2 s under load counted as a hang, then `--no-verify`. 13s0e's two failures are consistent with it; the log truncates the report, so it does not show the ending (confidence: medium)
 ABSENT: C not fixed (the mentor carries it as open item 1); no e2e cell ran here; the lane's pinned ruff 0.16.9 did not run here
 SCOPE: out — tests/run.sh, tests/unit/test_lane_run_sh.py (the lane's files, named by the feedback) (task has FLAGGED: yes)
+
+
+## Cycle 6 — slice 1 (`bridge/sends/13-rev17-20261018-120700.md`; branch `modify/014-slice-1`)
+
+### T039: the ledger's Recorded writer, SessionEnded, live queries need an expiry
+**Started:** 2026-10-18T12:23:47Z | **Completed:** 2026-10-18T12:25:00Z
+
+INHERITED: slice 0's ledger at `08df8e2` (schema 2), and the plan's R17 and R19
+FLAGGED: an exec and a session end are performed rows (the send: "performed, no undo") with no expiry, so the one condition every live query shares, `unended`, now also requires `expires_at IS NOT NULL`. Chose that over a new outcome (a schema change) or filtering by action in each query (four places to keep in step). Every performed row before slice 1 has an expiry, because Performed requires one (confidence: high)
+ASSUMED: a session end is under no grant, and the grant column is NOT NULL, so it records grant `(none)`, which no grant can be named (grant names are lowercase letters, digits and -) (confidence: high)
+ABSENT: no schema change and no migration; `adeled ledger` prints a performed row with no expiry by its cause, not with a cost or undo; the JSON form already prints null expiry and undo
