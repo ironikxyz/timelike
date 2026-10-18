@@ -781,3 +781,121 @@ only a unit's line breaks and the lane's default file count. So each Automated c
 **retired_prompts_seen:** none.
 
 **After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.
+
+### Cycle 5 — sign-off addendum
+
+**Written:** 2026-10-18T11:34:48Z (read from the clock), from the mentor's
+`../bridge/feedback/13-20261018-113014-slice-0-signed-off.md`. **Feature 13 slice 0 is signed off at `49b5e76`**
+(Cycle 5), built from `bridge/sends/13-rev17-20261017-035606.md`. Append-only: nothing above is changed.
+
+**The lane, 13s0f on `49b5e76`:**
+- lint exit 0, scan exit 0 (all five images PASS), unit and gounit green;
+- e2e 732 of 733. The one not ok was 517, SC-3 `[bash -lc]` (feature 001's, not this slice's): a 0.22 s git call
+  took 22.95 s on a stalled host disk. The mentor ruled it environmental: the cell passed in 13s0b and 13s0e, and
+  Cycle 5 changed no product or e2e file.
+- 13s0e on `367bc31` was 733 of 733 on the same product and e2e code.
+
+**criteria_reestablished, at sign-off** (these supersede Cycle 5's modes for the same criteria):
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| `13 · "Bringing up a fixture project's compose file from inside the agent container starts its services and returns once they are ready"` | **executed [lane 13s0f]** | `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats` |
+| `13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path"` | **executed [lane 13s0f]** | `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats` |
+| `13 · "is refused by Adele with exit 2 and rule 14's structured error, naming the setting and stating that no grant allows it"` | **executed [lane 13s0f]** | `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats` |
+| `13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not run"` | **executed [lane 13s0f]** | `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats` |
+| `13 · "Bringing the environment up twice is a no-op the second time, and tearing it down removes every container, network and volume it created"` | **executed [lane 13s0f]** | `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats` |
+| `13 · "DEMO: the Agent brings up a compose test environment from inside its container, runs tests against it, and tears it down"` (D9) | **observed by the operator** | transcript `bridge/.d9-demo-20261018T110127Z.txt` (run 1, which failed on the mentor's own demo project, is kept beside it) |
+
+The cell 13s0f missed (517) belongs to none of these criteria. 13s0e's 733 of 733 on the same product and e2e code
+covers it.
+
+**D9, as demonstrated:**
+- The agent's own project was brought up through `adele env up`, with no Docker in the agent: a notes API on a named
+  volume, a one-shot seed job, and four tests.
+- It was tested from the agent's container against `api.tl-notes-347b48:8080` (4 OK), and a second up created nothing.
+- It was torn down with 0 containers, networks and volumes left. Adele read that back, and so did the mentor's label
+  filters on the host.
+- Ledger rows #131 (up) and #132 (down), session d9-demo.
+- **The operator's answers**, quoted in the feedback:
+  1. "api at api.tl-notes-347b48:8080 and seed, /var/lib/docker/volumes/tl-notes-347b48_notes/_data -> /home/agent".
+     The address is right. The mount quoted is the notes volume; the project folder's line is the bind mount above
+     it, at the same absolute path in both. D9 does not rest on that half: the same-path criterion is Automated, and
+     executed by the lane.
+  2. "http://api.tl-notes-347b48:8080, Ran 4 tests in 0.013s OK".
+  3. "131, 132, 2 containers, 1 networks, 1 volumes removed; 0 left, read back from the daemon".
+
+**The operator's decisions:**
+- **A. The libcurl acceptance holds.**
+  - Only Adele has the socket mounted.
+  - Her image is `adeled` and `docker-compose`: Go, static, no libcurl. Her scan passes and accepts nothing.
+  - `timelike-nested` is internal.
+  - The agent's libcurl entries stay baselined until 2026-12-27.
+- **B. Item 30 is approved:** Compose v5.6.0 built from source, its sum pinned, x/net raised to v0.60.0, static.
+  `FOR-MENTOR.md` closes Item 30 in this commit. Return to a released Compose when one ships with a fixed Go and
+  x/net; that is a pin change back.
+- **C. Carried to the 13 slice 1 send, not fixed now:** `adele env up` counts a service with no healthcheck and no
+  ports as ready while it runs.
+  - So a one-shot that is still running is reported "ready (running)", and up exits 0. In the demo's run 1 the seed
+    job then exited 1, and only the second up said so.
+  - README says a one-shot is ready when it exits 0, which is true only of one that has already exited.
+  - The slice 1 send will ask for the rule and the README to agree.
+- **D. README's Next line** is now `**Next:** 13 slice 1.` Nothing else in the README changed.
+
+**Still carried, not this feature's:**
+- open item 1, 002's bench unit, for the maintenance send after 13;
+- Item 28, build brokering, for the 13 slice 1 send.
+
+**Next:** the merge `--no-ff` into `master`, no push and no tag. The push with tag `v0.22.0` waits for the
+mentor's discharge and the operator's OK.
+
+**The ship, `/specswarm:ship` under specswarm 4.0.1-botbaubble.2.44.0, at `026727e` before this text was added** (its blocks
+extracted from the installed `analyze-quality.md` and `ship.md` and run, as in 002 Cycle 4; the modules are the
+ones this feature changed). The output, verbatim, with the checkout path written `<repo>/`:
+
+```
+== analyze-quality (2.44.0 blocks) ==
+🔤 Language: Python
+AQ_TESTS_LINE=tests|25|?|measured:pytest
+AQ_TESTS_SCORE=unavailable:pytest is declared but could not be run on this machine
+adele/internal/engine|unknown
+tools/bin|unknown
+adele/internal/broker|unknown
+image|unknown
+scripts|unknown
+adele/internal/ledger|unknown
+tests/e2e|unknown
+adele/cmd/adeled|unknown
+Overall Quality: unknown (no module could be scored (8 unscored))
+📄 Wrote <repo>/.specswarm/features/014-nested-dev-env/quality-report.json (overall_state: unknown, coverage_state: unknown, written by 4.0.1-botbaubble.2.44.0)
+== ship (2.44.0 blocks) ==
+📍 Current branch: 014-nested-dev-env @ 026727e
+NOTE: <repo>/.specswarm/features/014-nested-dev-env/quality-report.json reports overall_state='unknown' - the score is not a measurement
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/014-nested-dev-env/quality-report.json says overall_state='unknown'
+   (no module could be scored (8 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+== QUALITY_STATE=unknown ==
+```
+
+- **The gate is UNKNOWN, and it warns because `enforce_gates: false`.** Nothing was measured: it is neither a pass
+  nor a 0% failure. pytest is not beside the interpreter the analysis finds on this host, and the Go modules have no
+  detector in it.
+- **`quality-report.json`** is written by the analysis into this feature's folder (`overall_state: unknown`) and
+  committed here, as 002's was.
+- **The merge is by hand,** `--no-ff`, of this commit, which is the signed-off `49b5e76` plus these records.

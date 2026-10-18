@@ -1709,9 +1709,11 @@ cites it as provisional. No slice-0 criterion names a missing image.
 
 ## Item 30 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 2): the Compose CLI in Adele's image, rebuilt to clear the scan (a pin change; recommendation, built)
 
-**Status:** open, for the mentor's and the operator's eye. Raised 2026-10-17T10:06:50Z (read from the clock), as lane
-13s0a's feedback (`../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`, item E) asks: recommend one of its two
-options here.
+**Status:** closed 2026-10-18T11:34:48Z (read from the clock), approved at 13 slice 0's sign-off
+(`../bridge/feedback/13-20261018-113014-slice-0-signed-off.md`, decision B): Compose v5.6.0 built from source, its sum
+pinned, x/net raised to v0.60.0, static. Return to a released Compose when one ships with a fixed Go and x/net; that
+is a pin change back. Raised 2026-10-17T10:06:50Z (read from the clock), as lane 13s0a's feedback
+(`../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`, item E) asked: recommend one of its two options here.
 
 **What the scan found:** `timelike-adele:local` FAIL, 16 blocking. All of them are in the copied Compose plugin, v5.6.0:
 `stdlib go1.26.8` and `golang.org/x/net v0.58.0` (GO-2026-6603 to 6613, 6617). Adele's own `adeled` is Go 1.27.2.
