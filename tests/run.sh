@@ -3,7 +3,7 @@
 #
 # Steps, in order. Every step runs unless a step it depends on failed (then it is recorded as
 # skipped, with the reason), so one run gives a complete report:
-#   build   make build: docker compose build --build-arg GIT_SHA=<HEAD> (refuses an empty stamp, H8)
+#   build   make build: docker compose build --build-arg GIT_SHA=<HEAD>, one image at a time (refuses an empty stamp, H8)
 #   up      docker compose --profile standin up -d --build --force-recreate (lore docker-compose Q004:
 #           never a stale container; the rebuild is a cache hit after `build`), then Adele and the
 #           stand-in must report healthy within 90 s (feature 004)

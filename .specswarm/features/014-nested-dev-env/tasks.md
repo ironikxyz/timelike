@@ -70,6 +70,12 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T031 SC-8's volumes are created labelled as throwaways; the parallel lane's start removes labelled throwaway volumes and SC-8's unlabelled ones by their exact name shape (`tests/run.sh`, the SC-8 snapshot bats)
 - [X] T032 Host lanes (serial and `-n 8`), Go units with -race and vet; Cycle 3's report; `reboot.md`; the deny-list on the staged tree; commit
 
+## Phase 11: Cycle 4, lanes 13s0c and 13s0d stopped at the build (`../bridge/feedback/13-20261018-030300-build-disk-bound-uv-compile-timeout.md`)
+
+- [X] T033 Every `--compile-bytecode` carries `UV_COMPILE_BYTECODE_TIMEOUT=300`, refused at build time by a uv that does not read it (`image/Dockerfile` twice, `bench/vanilla/Dockerfile`, `bench/driver/Dockerfile`); the agent image's second compile waits for its first through a bind mount of the runtimes stage
+- [X] T034 `make build` builds the compose images one at a time, `BUILD_SERVICES` (`Makefile`; `tests/run.sh`'s header); unit `tests/unit/test_build_one_image_at_a_time.py`
+- [X] T035 Host lanes (serial and `-n 8`); Cycle 4's report, with the answer on `E2E_JOBS`; `reboot.md`; the deny-list on the staged tree; commit
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

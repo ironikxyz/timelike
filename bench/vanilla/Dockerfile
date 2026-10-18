@@ -34,6 +34,9 @@ FROM ${UV_IMAGE} AS uv
 # stage of their own so bench/vanilla/Dockerfile can run the identical steps: the two bench arms carry the
 # same binaries (RB1). Configuration is the final stage's job. The slim base has no curl and no xz, so the
 # tarballs come by ADD, and Node's is the .tar.gz.
+# uv's bytecode compile of the standard library has its own bound, 60 s by default. On a host whose disk is
+# the limit it ran out (feedback 13-20261018-030300), so it is 300 s here: a build-time plumbing bound, not a
+# criterion's. A broken interpreter still fails at once; only a compile that stops answering waits it out.
 FROM ${DEBIAN_IMAGE} AS runtimes
 SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
 COPY --from=uv /uv /bin/uv
@@ -63,7 +66,8 @@ RUN test -n "${PYTHON_VERSION:-}" && test -n "${NODE_VERSION:-}" \
  && tar -xzf /tmp/npm.tgz -C /opt/agent/node/lib/node_modules/npm --strip-components=1 --no-same-owner \
  && rm -f /tmp/npm.tgz \
  && test "$(/opt/agent/node/bin/node /opt/agent/node/bin/npm --version)" = "${NPM_VERSION}" \
- && UV_NO_CACHE=1 UV_PYTHON_INSTALL_DIR=/opt/agent \
+ && { grep -qaF UV_COMPILE_BYTECODE_TIMEOUT /bin/uv || { echo "error: the pinned uv does not read UV_COMPILE_BYTECODE_TIMEOUT, so its bytecode compile keeps the 60 s default bound — pin a uv that reads it" >&2; exit 1; }; } \
+ && UV_NO_CACHE=1 UV_COMPILE_BYTECODE_TIMEOUT=300 UV_PYTHON_INSTALL_DIR=/opt/agent \
       uv python install "${PYTHON_VERSION}" --install-dir /opt/agent --no-bin --compile-bytecode \
  && test -x "/opt/agent/cpython-${PYTHON_VERSION}-linux-x86_64-gnu/bin/python3" \
  && ln -s "cpython-${PYTHON_VERSION}-linux-x86_64-gnu" /opt/agent/python \

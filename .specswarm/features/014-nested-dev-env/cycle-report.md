@@ -550,3 +550,126 @@ removal is left to the lane alone.
 **retired_prompts_seen:** none.
 
 **After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.
+
+## Cycle 4 — bridge/sends/13-rev17-20261017-035606.md
+
+**Written:** 2026-10-18T03:51:57Z (read from the clock). Attended, not in dispatch mode. The same send as Cycles 1–3, built again
+after **lanes 13s0c and 13s0d** on `a8b0d7b` stopped at the build step. The feedback is
+`../bridge/feedback/13-20261018-030300-build-disk-bound-uv-compile-timeout.md`: both lanes failed in the agent image's
+`uv python install … --compile-bytecode` with "Python startup timed out (60s)", on a host whose one disk was saturated.
+This cycle makes the build survive a slow disk and answers the question on `E2E_JOBS`. It is on `014-nested-dev-env`,
+in one commit after `a8b0d7b`, with this report. No `/specswarm` command ran: no revision moved, so the spec, plan and
+`audited_against [8, 17]` stand. tasks.md gains T033–T035, and decisions.md gains § Cycle 4.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261017-035606.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 0 |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**reconcile_mode:** `scoped`. No prompt or discovery revision moved since Cycle 3.
+
+**What changed: both levers.**
+- **uv's own bound, 60 s → 300 s, at every bytecode compile.** There are four: the agent image's runtimes stage
+  (`/opt/agent`) and final stage (`/opt/uv-python`), and the bench's vanilla and driver images, because benchimg
+  runs beside e2e on the same disk.
+  - **Why 300.** It is five times the default. What failed was a compile worker that did not answer within 60 s
+    while the disk's average wait was 65–138 ms. A broken interpreter fails at once, not at the bound, so only a
+    compile that stops answering waits the 300 s out. It is a build-time plumbing bound, like `PLUMBING_TIMEOUT`;
+    no criterion's bound moved. It is a judgment, not a measurement: no build ran here.
+  - **A guard, so the raise cannot be silent.** uv ignores a variable it does not read. Before each compile the build
+    checks that the pinned uv binary carries the name `UV_COMPILE_BYTECODE_TIMEOUT`, and stops with a remedy if it
+    does not. The lane's build is the first run of that check.
+- **Fewer concurrent writers.**
+  - **`make build` builds one image at a time**: `agent`, then `adele`, then `adele-standin`, which reuses adele's Go
+    stage from the cache. Before, one `compose build` built all three at once, so the agent image's two compiles
+    overlapped Adele's Go build of Compose. A unit checks the list against compose.yaml's services with a build
+    section. The lane's `up --build` is unchanged, and is a cache hit after `build`.
+  - **The agent image's two compiles no longer overlap.** BuildKit built the runtimes stage beside the final stage.
+    The final stage's compile now bind-mounts the runtimes stage's `/opt`, so it starts only after that stage is
+    done. Nothing is copied by the mount, so the image's content is unchanged. The cost: a change to the runtimes
+    stage now also rebuilds the final stage's interpreter layer.
+- **The cost in time:** a cold build is now sequential where it was concurrent, so it may take longer on a fast disk.
+  Not measured here.
+
+**The mentor's question: should `E2E_JOBS` be smaller on a disk-bound host?** Yes for 13s0e: I recommend
+`E2E_JOBS=4`, with `LANE_STEPS_TOGETHER=0` as in 13s0c and 13s0d.
+- **Why.** Each e2e file starts containers and writes to the same disk. 13s0b's failures (151 at create, 88's silent
+  `docker run`) fell in its e2e start window, when 8 files began at once and the disk's average wait sat at 67–85 ms
+  with 16 tasks blocked. The CPU count does not see that.
+- **Why the default stays 8 for now.** It came from the lane-speed maintenance send's measurements, and one lane at 4
+  is the evidence for or against moving it. If 13s0e at 4 is clean where 13s0b at 8 was not, the default is the
+  mentor's to move: a send, or I can change it on the mentor's word. A default read from the disk would need a
+  measure of the disk the lane can trust, and I have none to offer.
+
+**criteria_reestablished:** none of this cycle's code has run against a daemon, because there is no Docker here. So
+each criterion is `unconfirmed` for this commit. 13s0c and 13s0d ran no e2e cell.
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| 13 · "Bringing up a fixture project's compose file from inside the agent container starts its services" | **unconfirmed** | Test: `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`. Not run since 13s0b |
+| 13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path" | **unconfirmed** | Test: `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`. Not run since 13s0b |
+| 13 · "A request for a privileged container, host networking or process namespace, added capabilities, or a mount outside the workspace is refused by Adele with exit 2" | **unconfirmed** | Test: `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`. Not run since 13s0b |
+| 13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent" | **unconfirmed** | Test: `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`. Not run since 13s0b |
+| 13 · "Bringing the environment up twice is a no-op the second time" | **unconfirmed** | Test: `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`. Not run since 13s0b |
+| 13 · "DEMO: the Agent brings up a compose test environment from inside its container" (D9, Manual) | **unconfirmed** | Nobody has looked; the demo is the mentor's with the operator |
+
+**E is verified** by the mentor's lint on `a8b0d7b` (exit 0), as the feedback says. The scan's exit 0 is of
+`22c4777`'s images and is not evidence for `a8b0d7b` or this commit.
+
+**The host lanes, run before this report** (this cycle's code, uncommitted at the time; the commit is the same tree):
+- **`make test-host`, serially:** passed, 03:24:12Z–03:35:16Z; 2584 passed, 13 skipped, in 571.65 s; env-layer 60/60,
+  hook 57/57, handler 33/33.
+- **The same with `-n 8`:**
+  - **The first run failed,** 03:35:16Z–03:39:12Z: 1 failed and 18 errors, all in `test_bench_catalog.py` and
+    `test_bench_runner.py`. Every one was a `subprocess.TimeoutExpired` in the bench fixtures' git setup, not an
+    assertion. The host's `/proc/pressure/io` "full" avg300 read 14.67 % just after it. That is the disk the
+    feedback describes, reaching the host lane too.
+  - **The two files alone with `-n 8`** passed, 70 of 70.
+  - **The whole run again** passed, 03:40:33Z–03:42:50Z: 2568 passed, 13 skipped, in 136.68 s. The 16 `timed` tests
+    passed, run alone.
+- **One more skip than Cycle 3** (13, not 12): `test_verify.py`'s `test_sc3_real_steps` skips because mypy is not on
+  this host's PATH. It does not touch this cycle's files. Cycle 3's skip list was not kept, so I cannot confirm this is
+  the one that changed. 2584 passed is Cycle 3's 2580, plus this cycle's 5, minus that one.
+- **New unit:** `tests/unit/test_build_one_image_at_a_time.py`, 5 tests. Each of its three checks failed when its
+  change was undone (the raised bound on one site, the bind mount, adele-standin in `BUILD_SERVICES`).
+- **Not run:**
+  - any image build, so the raised bound, the guard, the mount and the build's time are unmeasured;
+  - the Docker lane, `make scan` and `make lint`; shellcheck, which is not on this host. No Go code changed.
+
+**not_verified:**
+- **That uv 0.12.22 reads `UV_COMPILE_BYTECODE_TIMEOUT`:** the mentor says uv takes it; the build's guard checks the
+  binary for the name, and stops if it is missing. Not run here.
+- **That 300 s is enough on this disk,** and that the sequential build stays within the lane's budget for the step.
+- **That BuildKit orders the final stage's compile after the runtimes stage** because of the bind mount: how BuildKit
+  resolves a mount's stage, not observed here.
+- **Everything Cycle 3 listed as not verified** still stands, because no e2e cell has run on its code.
+
+**changed_other_features:**
+- **001 (the agent image):** both of its bytecode compiles carry the raised bound and its guard, and its final stage's
+  compile waits for the runtimes stage.
+- **002 (the bench):** the vanilla image's runtimes stage carries the same change as the agent image's, so the two
+  stages stay byte-identical (D-15, RB1); the driver image's compile carries the raised bound.
+- **The Makefile's `build`:** one image at a time.
+- **Others:** none.
+
+**process_failures_recorded:**
+- **Lanes 13s0c and 13s0d stopped at the build** on Cycle 3's code, on the host's disk. The host lanes cannot reach a
+  build.
+- **The host lane's first `-n 8` run failed on timeouts under the same disk,** and passed when run again (above).
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.

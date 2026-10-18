@@ -52,8 +52,16 @@ stamp-check:
 grants:
 	@test -e adele/grants.conf || { cp adele/grants.example.conf adele/grants.conf; echo "wrote adele/grants.conf from adele/grants.example.conf — edit it to change the grants"; }
 
+# One image at a time (feedback 13-20261018-030300). One `compose build` built every image at once, and on a host
+# whose disk is the limit their writes queued behind each other until uv's bytecode compile ran out of time.
+# BUILD_SERVICES is every compose service with a build section (tests/unit/test_build_one_image_at_a_time.py);
+# adele-standin follows adele, so the Go stage they share is a cache hit.
+BUILD_SERVICES := agent adele adele-standin
 build: docker-check stamp-check grants
-	$(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA)
+	@set -e; for s in $(BUILD_SERVICES); do \
+	  echo "$(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA) $$s"; \
+	  $(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA) "$$s"; \
+	done
 
 # The stand-in's profile is on: it is what the D8 demo requests (feature 004). Without it, Adele has no
 # capability to broker. `docker compose up` without the profile starts the agent and Adele only.

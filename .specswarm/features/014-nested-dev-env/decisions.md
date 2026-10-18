@@ -184,3 +184,18 @@ FLAGGED: C — SC-1's history moves to setup_file, under exec_plain's PLUMBING_T
 ASSUMED: B — the reap file's setup_file throwaway printed nothing for 300 s: the daemon at create under the same load as A. Nothing in this feature's code is on that path (confidence: medium)
 ABSENT: no bound moved, no cell's assertion changed, no lane.conf class added, and `LANE_STEPS_TOGETHER`'s default is unchanged (the mentor can run the next lane with it 0; see the report); no e2e cell ran here (no Docker); shellcheck is not on this host
 SCOPE: out — tests/run.sh, the SC-1 and SC-8 bats and the SC-1 fixture (other features' lane files, named by the feedback) (task has FLAGGED: yes)
+
+
+## Cycle 4 — lanes 13s0c and 13s0d (`../bridge/feedback/13-20261018-030300-build-disk-bound-uv-compile-timeout.md`)
+
+### T033–T034: the build on a disk-bound host
+**Started:** 2026-10-18T03:20:45Z (the cycle's first clock reading) | **Completed:** 2026-10-18T03:24:19Z (the code; records and host lanes after)
+
+INHERITED: Cycle 3's code at `a8b0d7b`; the mentor's reading of the host's disk in the feedback
+FLAGGED: both levers. uv's compile bound goes from its 60 s default to 300 s at all four compile sites, the bench's two included: benchimg runs beside e2e, on the same disk. 300 s is five times the default; the failure is a worker that did not answer within 60 s while the disk's average wait was 65–138 ms, and a broken interpreter fails at once rather than at the bound, so only a compile that stops answering waits it out. Chose a fixed value inline over a pin or a build arg: it is plumbing, not a version (confidence: medium — the value is a judgment, not a measurement)
+FLAGGED: uv ignores a variable it does not read, so a raised bound the pinned uv does not know would change nothing and say nothing. Each compile first checks that the uv binary carries the variable's name, and the build stops with a remedy if it does not. Not run here: the check's first run is the lane's build (confidence: medium)
+FLAGGED: the agent image's two standard-library compiles ran at once because BuildKit builds the runtimes stage beside the final stage. The final stage's compile now bind-mounts the runtimes stage's /opt, which makes it wait for that stage; nothing is copied, so the image is unchanged. The cost: a change to the runtimes stage now also rebuilds the final stage's interpreter layer (confidence: high)
+FLAGGED: `make build` builds `agent`, `adele` and `adele-standin` one after another instead of one `compose build` of all three. The list is checked against compose.yaml's services with a build section by a unit, and adele-standin follows adele so their shared Go stage is a cache hit. The lane's `up --build` still names all of them, after `build` has made each one, so it is a cache hit (confidence: high)
+ASSUMED: E2E_JOBS — the default stays 8 (the lane-speed send set it); 13s0e with E2E_JOBS=4 is the recommendation, see the report (confidence: medium)
+ABSENT: no image was built here (no Docker), so neither the raised bound, the guard, the mount nor the build's time is measured; no criterion's bound moved; E2E_JOBS' default is unchanged
+SCOPE: out — image/Dockerfile, bench/vanilla/Dockerfile, bench/driver/Dockerfile, Makefile, tests/run.sh (the build's files, named by the feedback) (task has FLAGGED: yes)
