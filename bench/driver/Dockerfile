@@ -56,12 +56,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 
 # --- 2. Pinned interpreter at a fixed path (as image/Dockerfile §2; 001 R6) ---------------------------
 # The same path as the agent image, because the tools' shebang is #!/opt/timelike/python/bin/python3 -I.
+# Its bytecode compile has the agent image's 300 s bound (image/Dockerfile, the runtimes stage).
 COPY --from=uv /uv /bin/uv
 
 ARG PYTHON_VERSION
 RUN test -n "${PYTHON_VERSION:-}" \
       || { echo "error: PYTHON_VERSION build arg is empty (code 1) — pass it from pins.env" >&2; exit 1; } \
- && UV_NO_CACHE=1 UV_PYTHON_INSTALL_DIR=/opt/uv-python \
+ && { grep -qaF UV_COMPILE_BYTECODE_TIMEOUT /bin/uv || { echo "error: the pinned uv does not read UV_COMPILE_BYTECODE_TIMEOUT, so its bytecode compile keeps the 60 s default bound — pin a uv that reads it" >&2; exit 1; }; } \
+ && UV_NO_CACHE=1 UV_COMPILE_BYTECODE_TIMEOUT=300 UV_PYTHON_INSTALL_DIR=/opt/uv-python \
       uv python install "${PYTHON_VERSION}" --install-dir /opt/uv-python --no-bin --compile-bytecode \
  && pydir="/opt/uv-python/cpython-${PYTHON_VERSION}-linux-x86_64-gnu" \
  && if [ ! -x "${pydir}/bin/python3" ]; then \

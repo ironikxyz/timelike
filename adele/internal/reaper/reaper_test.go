@@ -466,3 +466,66 @@ func (c cancelling) Delete(ctx context.Context, name string) error {
 	c.cancel()
 	return c.Provider.Delete(ctx, name)
 }
+
+// envFake stands in for the daemon's labelled environments (broker.EnvProvider is driven against the real daemon
+// in the e2e cell): it names its record as the compose provider does.
+type envFake struct {
+	boxes   []broker.Box
+	deleted []string
+}
+
+func (e *envFake) List(context.Context) ([]broker.Box, error) { return e.boxes, nil }
+func (e *envFake) Delete(_ context.Context, name string) error {
+	e.deleted = append(e.deleted, name)
+	e.boxes = nil
+	return nil
+}
+func (e *envFake) Record() string { return "the daemon's labelled objects" }
+func (e *envFake) Noun() string   { return "environment" }
+func (e *envFake) Holder() string { return "the daemon" }
+
+func TestEachRowIsReapedByItsCapabilitysProvider(t *testing.T) {
+	f := newFixture(t)
+	box := f.create(t, "box-a", "1h", "")
+	expires := t0.Add(30 * time.Minute)
+	zero := int64(0)
+	env, err := f.led.Performed(ledger.Row{At: t0, Grant: "demo", Session: "s1", Capability: "docker.compose", Action: "up",
+		Resource: "tl-p-abc123", CostCents: &zero, ExpiresAt: &expires, Undo: `{"action":"down"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := &envFake{boxes: []broker.Box{{Name: "tl-p-abc123", CreatedAt: t0, TTLSeconds: 1800}}}
+	f.r.Providers = map[string]Provider{"docker.compose": fake}
+	f.clk.add(2 * time.Hour)
+	got := f.pass(t, false)
+	if len(got) != 2 {
+		t.Fatalf("reaped %d, want 2: %+v", len(got), got)
+	}
+	if len(fake.deleted) != 1 || fake.deleted[0] != "tl-p-abc123" || f.held("box-a") {
+		t.Fatalf("the environment went to %v and box-a held %v", fake.deleted, f.held("box-a"))
+	}
+	for _, r := range got {
+		if r.Ref == env && (r.Outcome != ledger.OutcomeReaped || !strings.Contains(r.Cause, "the daemon's labelled objects")) {
+			t.Fatalf("environment reap %+v", r)
+		}
+		if r.Ref == box && r.Outcome != ledger.OutcomeReaped {
+			t.Fatalf("box reap %+v", r)
+		}
+	}
+}
+
+func TestARowWithNoProviderIsAFailureNamingTheCapability(t *testing.T) {
+	f := newFixture(t)
+	expires := t0.Add(time.Minute)
+	zero := int64(0)
+	if _, err := f.led.Performed(ledger.Row{At: t0, Grant: "demo", Session: "s1", Capability: "docker.compose", Action: "up",
+		Resource: "tl-p-abc123", CostCents: &zero, ExpiresAt: &expires, Undo: `{}`}); err != nil {
+		t.Fatal(err)
+	}
+	f.r.Provider = nil
+	f.clk.add(time.Hour)
+	got := f.pass(t, false)
+	if len(got) != 1 || got[0].Outcome != ledger.OutcomeReapFailed || !strings.Contains(got[0].Cause, "no provider for docker.compose") {
+		t.Fatalf("%+v", got)
+	}
+}

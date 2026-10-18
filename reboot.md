@@ -5,10 +5,47 @@
 Read this first after a context clear. It is a snapshot. The artifacts it points to are the truth:
 `cycle-report.md`, `FOR-MENTOR.md`, `tasks.md`, the bridge.
 
-**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z, its Addendum 3 and npm 11.21.1 added 2026-10-15T20:50:35Z; its Addendum 4 added 2026-10-16T04:12:27Z; its merge (`ba3107b`) and 004 Cycle 3 (12 slice 1) added 2026-10-16T10:02:11Z; 004 Cycle 4 (the re-send at prompt revision 16) added 2026-10-16T10:56:40Z; its lane addendum 1 added 2026-10-16T19:30:14Z (read from the clock). **This repository is public**:
+**Snapshot:** 2026-10-08T20:45:32Z (read from the clock), written at the end of 007 Cycle 5; lane 007s1-b's outcome added 2026-10-09T01:23:57Z; sign-off and merges added 2026-10-09T03:54:48Z; 002 Cycle 3's merge added 2026-10-09T10:22:06Z; 008 Cycle 2 added 2026-10-09T11:02:21Z; its sign-off and merge added 2026-10-10T04:01:41Z. 005 Cycle 3 (07 slice 1) added 2026-10-10T06:09:20Z. 013 Cycle 1 (15 slice 1) added 2026-10-12T01:01:33Z; its Addendum 1 added 2026-10-12T17:52:56Z; its Addendum 2 added 2026-10-13T01:02:46Z; its merge and push (`8dbddc7`, `v0.19.0`) and 002 Cycle 4 (02 slice 1) added 2026-10-13T08:34:12Z; 002 Cycle 4's addendum added 2026-10-13T17:02:11Z; its addendum 2 added 2026-10-14T03:37:56Z; its addendum 3 added 2026-10-15T01:36:34Z; its merge (`5b9a347`, `v0.20.0`) and the lane maintenance send added 2026-10-15T07:01:41Z; the lane send's Addendum 2 added 2026-10-15T16:09:39Z, its Addendum 3 and npm 11.21.1 added 2026-10-15T20:50:35Z; its Addendum 4 added 2026-10-16T04:12:27Z; its merge (`ba3107b`) and 004 Cycle 3 (12 slice 1) added 2026-10-16T10:02:11Z; 004 Cycle 4 (the re-send at prompt revision 16) added 2026-10-16T10:56:40Z; its lane addendum 1 added 2026-10-16T19:30:14Z; its sign-off, merge and push (`15a5213`, `v0.21.0`) and 014 Cycle 1 (13 slice 0) begun 2026-10-17T01:37:41Z; its build, under the re-send at prompt revision 17, reported 2026-10-17T05:04:05Z; lane 13s0a's Cycle 2 added 2026-10-17T10:08:31Z; lane 13s0b's Cycle 3 added 2026-10-18T00:47:21Z; lanes 13s0c/13s0d's Cycle 4 added 2026-10-18T03:24:48Z; lane 13s0e's Cycle 5 added 2026-10-18T05:16:03Z; 13 slice 0's sign-off added 2026-10-18T11:34:48Z (read from the clock). **This repository is public**:
 push only on a discharge and the operator's OK (CLAUDE.md rule 5).
 
 ## State at 2026-10-08T20:45:32Z
+
+- **`014-nested-dev-env`** (from `master` `15a5213` = `public/main`, **`v0.21.0` pushed 2026-10-16**; 12 slice 1
+  merged and discharged): **014 Cycle 1 = 13 slice 0** (skeletal), now under the re-send
+  `bridge/sends/13-rev17-20261017-035606.md` (prompt revision 17: a forbidden setting is exit 2, not 4), specswarm
+  2.44.0, attended. Spec first written from the rev-8 send, then corrected in place by `/specswarm:modify` (declared;
+  `audited_against [8, 17]`); governance audited to 17 (`f83b3de`). **Item 27 closed** (answered in
+  `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md`); **Items 28 (builds refused in slice 0) and 29 (a
+  missing image's exit code, built as 3) open, non-blocking.** All of T001–T020 built and committed; host lanes pass
+  (serial and `-n 8`), Go units with -race pass. **No e2e cell has run** (no Docker): the mentor's lane needs
+  `TIMELIKE_WORKSPACES` set. README block applied (22 of 38). Report: `.specswarm/features/014-nested-dev-env/
+  cycle-report.md` § Cycle 1. **Hold commits until the mentor says the lane has ended**; merge `--no-ff` only after
+  sign-off (the libcurl re-review facts are in the report for the operator).
+  - **Lane 13s0a on `e5a58af` failed** (feedback `../bridge/feedback/13-20261017-063803-lane-13s0a-fails.md`): 10 e2e
+    cells and Adele's scan. **Cycle 2** (T021–T026) fixes A (the sandbox outside Envs' lock; an up once creating is
+    finished and recorded; the sandbox's phases and remedy; Adele's timings in the data), B (the scratch under her
+    state directory, not /tmp), C (the operator's git built by the runner step; safe.directory for the work tree
+    and `.git`; 2775 project directories), E (Compose built from source with x/net v0.60.0: FOR-MENTOR **Item 30**),
+    answers D, and closes **Item 29** (plan `eab79e9`: exit 3). Report § Cycle 2.
+  - **Lane 13s0b on `22c4777` failed** (feedback `../bridge/feedback/13-20261017-153646-lane-13s0b-fails.md`): 13s0a's
+    cells all pass and the scan passes; 2 cells, one setup_file, gounit's ledger test and lint fail. **Cycle 3**
+    (T027–T032): A (a sandbox created after its bound is removed when it lands; serve sweeps left-behind sandboxes;
+    no inherited compose labels; `lock_held_by`), D (every ledger write IMMEDIATE, retried while busy), C (SC-1's
+    history in setup_file), E (SC2329), SC-8's volumes labelled and swept. Report § Cycle 3.
+  - **Lanes 13s0c and 13s0d on `a8b0d7b` stopped at the build** (feedback
+    `../bridge/feedback/13-20261018-030300-build-disk-bound-uv-compile-timeout.md`): uv's bytecode compile timed out
+    at 60 s on the host's saturated disk; lint passed (E verified). **Cycle 4** (T033–T035): uv's compile bound 300 s
+    at every compile, refused by a uv that does not read it; the agent image's two compiles in sequence; `make build`
+    one image at a time. Recommended 13s0e with `E2E_JOBS=4`. Report § Cycle 4.
+  - **Lane 13s0e on `367bc31`: e2e 733 of 733 ok, scan passes,** lint fails (E501 in Cycle 4's unit), and 002's bench
+    unit fails again (open item 1, not 014's). **Cycle 5** (T036–T038): A (the four lines wrapped), B (`E2E_JOBS`
+    default 4, the mentor's ruling). Report § Cycle 5. Next: 13s0f; if green apart from 002's unit, sign-off and the
+    D9 demo with the operator.
+  - **Signed off at `49b5e76`** (feedback `../bridge/feedback/13-20261018-113014-slice-0-signed-off.md`): 13s0f
+    green apart from one environmental SC-3 cell; D9 observed by the operator; Item 30 closed (approved); README Next
+    `13 slice 1`. The record commit, then the merge `--no-ff` into `master`. **No push, no tag:** `v0.22.0` waits
+    for the mentor's discharge and the operator's OK. Carried: slice 1's one-shot readiness (decision C), Item 28,
+    open item 1 (002's bench unit).
 
 - **`modify/004-slice-1`** (from `master` `ba3107b`; `public/main` is still `5b9a347`, `v0.20.0`, and the lane-speed
   merge rides the next push): **004 Cycle 3 = 12 slice 1** (natural), send `bridge/sends/12-rev2-20261016-091249.md`,

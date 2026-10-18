@@ -28,16 +28,26 @@ const (
 	MaxWait         = 5 * time.Minute
 )
 
-// Provider is the capability's own record and its delete: the stand-in in slice 1.
+// Provider is the capability's own record and its delete: the stand-in in slice 1; from feature 13 also the
+// daemon's labelled environments (broker.EnvProvider).
 type Provider interface {
 	List(ctx context.Context) ([]broker.Box, error)
 	Delete(ctx context.Context, name string) error
 }
 
+// described is a Provider that names its record and what it holds, for the reap's cause. One that does not is
+// the stand-in: "the stand-in's record", "box".
+type described interface {
+	Record() string
+	Noun() string
+	Holder() string
+}
+
 // Reaper holds what a pass needs. Zero values take the defaults.
 type Reaper struct {
 	Ledger    *ledger.Ledger
-	Provider  Provider
+	Provider  Provider            // the provider for any capability not in Providers
+	Providers map[string]Provider // by capability (feature 13: docker.compose)
 	Now       func() time.Time
 	Sleep     func(time.Duration) // between delete attempts; tests replace it
 	Lock      sync.Locker         // the broker's request lock; nil for none (the operator's own process)
@@ -172,27 +182,42 @@ func (r *Reaper) reap(ctx context.Context, d ledger.Due) (Result, error) {
 	return res, nil
 }
 
+func (r *Reaper) provider(capability string) Provider {
+	if p, ok := r.Providers[capability]; ok {
+		return p
+	}
+	return r.Provider
+}
+
 // destroy deletes row's resource and decides the outcome from the provider's record (FR-26).
 func (r *Reaper) destroy(ctx context.Context, row ledger.Row) (outcome, cause string, attempts int) {
 	const vantage = "from Adele's container" // P001: a reachability claim says where it was made
-	before, err := r.Provider.List(ctx)
+	prov := r.provider(row.Capability)
+	record, noun, holder := "the stand-in's record", "box", "the stand-in"
+	if d, ok := prov.(described); ok {
+		record, noun, holder = d.Record(), d.Noun(), d.Holder()
+	}
+	if prov == nil {
+		return ledger.OutcomeReapFailed, "Adele has no provider for " + row.Capability + " to reap it with", 0
+	}
+	before, err := prov.List(ctx)
 	if err != nil {
-		return ledger.OutcomeReapFailed, fmt.Sprintf("the stand-in's record could not be read %s before the delete: %v",
-			vantage, err), 0
+		return ledger.OutcomeReapFailed, fmt.Sprintf("%s could not be read %s before the delete: %v",
+			record, vantage, err), 0
 	}
 	box, held := find(before, row.Resource)
 	if !held {
-		return ledger.OutcomeGone, "already gone: no box " + row.Resource + " in the stand-in's record before the delete", 0
+		return ledger.OutcomeGone, "already gone: no " + noun + " " + row.Resource + " in " + record + " before the delete", 0
 	}
 	if !sameBox(box, row) {
-		return ledger.OutcomeGone, fmt.Sprintf("already gone: the box named %s in the stand-in's record is a later one "+
-			"(created %s), and was not touched", row.Resource, box.CreatedAt.UTC().Format(time.RFC3339)), 0
+		return ledger.OutcomeGone, fmt.Sprintf("already gone: the %s named %s in %s is a later one "+
+			"(created %s), and was not touched", noun, row.Resource, record, box.CreatedAt.UTC().Format(time.RFC3339)), 0
 	}
 	var lastErr error
 	noSuch := false
 	for attempts < r.attempts() {
 		attempts++
-		err := r.Provider.Delete(ctx, row.Resource)
+		err := prov.Delete(ctx, row.Resource)
 		if err == nil {
 			lastErr = nil
 			break
@@ -206,25 +231,25 @@ func (r *Reaper) destroy(ctx context.Context, row ledger.Row) (outcome, cause st
 			r.sleep(time.Duration(attempts) * time.Second) // 1 s, then 2 s (D-12)
 		}
 	}
-	after, err := r.Provider.List(ctx)
+	after, err := prov.List(ctx)
 	if err != nil {
-		return ledger.OutcomeReapFailed, fmt.Sprintf("the stand-in's record could not be read back %s after the delete: %v",
-			vantage, err), attempts
+		return ledger.OutcomeReapFailed, fmt.Sprintf("%s could not be read back %s after the delete: %v",
+			record, vantage, err), attempts
 	}
 	if box, still := find(after, row.Resource); still && sameBox(box, row) {
 		if lastErr != nil {
-			return ledger.OutcomeReapFailed, fmt.Sprintf("the delete failed %d times %s: %v; the box is still in the stand-in's record",
-				attempts, vantage, lastErr), attempts
+			return ledger.OutcomeReapFailed, fmt.Sprintf("the delete failed %d times %s: %v; the %s is still in %s",
+				attempts, vantage, lastErr, noun, record), attempts
 		}
-		return ledger.OutcomeReapFailed, "the delete answered, but the box is still in the stand-in's record read back", attempts
+		return ledger.OutcomeReapFailed, "the delete answered, but the " + noun + " is still in " + record + " read back", attempts
 	}
 	switch {
 	case noSuch:
-		return ledger.OutcomeGone, "already gone: the stand-in had no box " + row.Resource + " when the delete ran, and its record agrees", attempts
+		return ledger.OutcomeGone, "already gone: " + holder + " had no " + noun + " " + row.Resource + " when the delete ran, and its record agrees", attempts
 	case lastErr != nil:
-		return ledger.OutcomeReaped, fmt.Sprintf("the delete's answer was lost (%v), but the box is absent from the stand-in's record read back", lastErr), attempts
+		return ledger.OutcomeReaped, fmt.Sprintf("the delete's answer was lost (%v), but the %s is absent from %s read back", lastErr, noun, record), attempts
 	}
-	return ledger.OutcomeReaped, "deleted; absent from the stand-in's record read back", attempts
+	return ledger.OutcomeReaped, "deleted; absent from " + record + " read back", attempts
 }
 
 func (r *Reaper) sleep(d time.Duration) {

@@ -103,6 +103,12 @@ in_rc() {
 
 @test "SC-8 [bash -c, notty] a snapshot is listed and restorable after the agent's container is recreated" {
   local before after
+  # Made here, labelled as a throwaway, so a lane's start sweep removes them if this teardown could not (lane
+  # 13s0b: six left from 2026-10-15). Empty, so the first mount still takes the image's content (Q003).
+  run timeout "$PLUMBING_TIMEOUT" docker volume create --label "${THROWAWAY_LABEL}=1" "$RC_STATE" </dev/null
+  [[ "$status" == 0 ]] || flunk "cannot create ${RC_STATE}"
+  run timeout "$PLUMBING_TIMEOUT" docker volume create --label "${THROWAWAY_LABEL}=1" "$RC_HOME" </dev/null
+  [[ "$status" == 0 ]] || flunk "cannot create ${RC_HOME}"
   start_throwaway "$RC_NAME" -v "${RC_STATE}:/var/lib/timelike" -v "${RC_HOME}:/home/agent" ||
     flunk "cannot start the first container"
   in_rc "$RC_NAME" 'stat -c "%a %U" /var/lib/timelike'

@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -51,6 +51,11 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 > needed:** revision 8 clarifies tension T4 and adds a Hard constraint on the operator's host git
 > state. Neither is a technology choice, and `stack.md` is unchanged (0 lines). Revision 8 is appended
 > to `governance_audited_against`: a no-change audit is a recorded result.
+>
+> **Audited against discovery revision 17** (2026-10-17), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 17, header "> Discovery: plan/.discover/discovery.md (revision 17)"), § "What Changed In Those Revisions — evidence, not an audit claim" (relied on), and `../bridge/feedback/13-20261017-034920-setting-refusal-extend.md`.
+> **No change needed:** revision 17 moved one feature's criterion (prompt 13's forbidden-settings refusal, exit 4
+> struck, exit 2 with rule 14's error added), not a principle, constraint or stack choice. Checked: the approved and prohibited technologies, the pins and Version Updates, the scanners, against stack.md (unchanged since revision 15) and the principles (unchanged). Revision 17 is appended to
+> `governance_audited_against`: a no-change audit is a recorded result.
 >
 > **Audited against discovery revision 9** (2026-10-01), via `../bridge/governance-context.md`
 > (`/mentor:regovern`, 2026-10-01T04:32:58Z), § "What Changed In Those Revisions". **No change

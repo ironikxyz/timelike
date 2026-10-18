@@ -3,7 +3,7 @@
 #
 # Steps, in order. Every step runs unless a step it depends on failed (then it is recorded as
 # skipped, with the reason), so one run gives a complete report:
-#   build   make build: docker compose build --build-arg GIT_SHA=<HEAD> (refuses an empty stamp, H8)
+#   build   make build: docker compose build --build-arg GIT_SHA=<HEAD>, one image at a time (refuses an empty stamp, H8)
 #   up      docker compose --profile standin up -d --build --force-recreate (lore docker-compose Q004:
 #           never a stale container; the rebuild is a cache hit after `build`), then Adele and the
 #           stand-in must report healthy within 90 s (feature 004)
@@ -47,6 +47,7 @@ stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 log="${out}/run-${stamp}.log"
 
 RUNNER_IMAGE=timelike-test-runner:local
+OPERATOR_GIT_IMAGE=timelike-operator-git:local
 AGENT_CONTAINER=timelike-agent
 ADELE_CONTAINER=timelike-adele
 STANDIN_CONTAINER=timelike-adele-standin
@@ -63,8 +64,10 @@ STANDIN_CONTAINER=timelike-adele-standin
 #   LANE_STEPS_TOGETHER  1 (the default) runs gounit beside e2e when E2E_JOBS > 1 and the host has flock: it
 #                holds the e2e lane's lock shared, so e2e's serial files still run alone. 0 runs the steps one
 #                after another. The unit step always runs after e2e (see main).
-# The defaults and the measurements behind them: .specswarm/maintenance/lane/cycle-report.md.
-E2E_JOBS_DEFAULT=8
+# The defaults and the measurements behind them: .specswarm/maintenance/lane/cycle-report.md. E2E_JOBS' 8 came
+# from an estimate there; it is 4 on the mentor's ruling (feedback 13-20261018-051500): on this host the disk, not
+# the CPUs, is the limit, and 13s0e at 4 was clean where 13s0b at 8 was not. Measure again before raising it.
+E2E_JOBS_DEFAULT=4
 UNIT_JOBS_DEFAULT=8
 LANE_SCOPE="${LANE_SCOPE:-full}"
 E2E_JOBS="${E2E_JOBS:-${E2E_JOBS_DEFAULT}}"
@@ -305,10 +308,22 @@ run_e2e() {
     stale="$(docker ps -aq --filter label=timelike.test.throwaway)" || stale=""
     # shellcheck disable=SC2086 # one id per word, on purpose
     [[ -z "${stale}" ]] || docker rm -f ${stale} >/dev/null || true
+    # Throwaway volumes a teardown could not remove: labelled ones, and SC-8's from before they were labelled
+    # (lane 13s0b: six from 2026-10-15), by their exact name shape. One still in use is left, and said.
+    stale="$(docker volume ls -q --filter label=timelike.test.throwaway
+      docker volume ls -q | grep -E '^timelike-sc8-(state|home)-[0-9]+-[0-9]+$')" || true
+    # shellcheck disable=SC2086 # one name per word, on purpose
+    [[ -z "${stale}" ]] || docker volume rm ${stale} >/dev/null || echo "e2e: a throwaway volume is still in use; left: ${stale//$'\n'/ }"
     : >"${LANE_LOCK}"
     : >"${LANE_LOCK}.turn"
     lane_env=(-e "TL_E2E_LOCK=/out/${LANE_LOCK##*/}" -e "TL_E2E_SERIAL_FILES=${E2E_SERIAL[*]}")
     lane_args=(--jobs "${E2E_JOBS}" --no-parallelize-within-files)
+  fi
+  # Feature 13: the lane's workspace, at the same path, so cells check from the runner what the daemon mounted.
+  local -a ws_args=()
+  if [[ -n "${TIMELIKE_WORKSPACE:-}" ]]; then
+    ws_args=(-v "${TIMELIKE_WORKSPACE}:${TIMELIKE_WORKSPACE}" -e TIMELIKE_WORKSPACE -e TIMELIKE_HOST_GIT
+      --group-add "${TIMELIKE_WORKSPACE_GID}")
   fi
   # Runs as the invoking user (so files in tests/out stay theirs), in the socket's group.
   docker run --rm \
@@ -321,6 +336,9 @@ run_e2e() {
     -e HOME=/tmp \
     -e GIT_SHA \
     -e DEBIAN_IMAGE \
+    -e DOCKER_CLI_IMAGE \
+    -e "OPERATOR_GIT_IMAGE=${OPERATOR_GIT_IMAGE}" \
+    ${ws_args[@]+"${ws_args[@]}"} \
     -e "REPO_HOST=${repo}" \
     -e "BENCH_E2E_OUT=${bench_out}" \
     -e "RUN_TIMEOUT=${RUN_TIMEOUT:-30}" \
@@ -380,10 +398,45 @@ e2e_account() {
 # from an empty ledger, so no run's spending or extensions reach the next. Slice 0 holds no real
 # resource or credential, so nothing is lost; run `make up` afterwards for the operator's own grants.
 compose_up() {
+  # Feature 13: nested environments a previous lane left (each labelled timelike's, so these are ours to
+  # remove), before compose removes the timelike-nested network they would still be joined to.
+  nested_sweep || return 1
   docker compose --profile standin down --volumes --remove-orphans || return 1
+  # The lane's own workspace (scripts/workspace.sh: a new directory under TIMELIKE_WORKSPACES, the boundary
+  # enforced), and the socket's group for Adele. Exported, so run_e2e mounts it into the runner too.
+  local launch
+  launch="$(TIMELIKE_HOST_GIT=enforced scripts/workspace.sh env)" || return 1
+  eval "${launch}"
+  export TIMELIKE_WORKSPACE TIMELIKE_HOST_GIT TIMELIKE_WORKSPACE_GID
+  local host="${DOCKER_HOST:-unix:///var/run/docker.sock}"
+  if [[ "${host}" == unix://* ]]; then
+    export TIMELIKE_DOCKER_SOCKET="${host#unix://}"
+    TIMELIKE_DOCKER_GID="$(stat -c %g "${TIMELIKE_DOCKER_SOCKET}")" || return 1
+    export TIMELIKE_DOCKER_GID
+    echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); Adele's socket group ${TIMELIKE_DOCKER_GID}"
+  else
+    # A tcp:// or ssh:// daemon has no socket file to bind into Adele: feature 13's cells will say she has no daemon.
+    echo "up: workspace ${TIMELIKE_WORKSPACE} (host git ${TIMELIKE_HOST_GIT}); DOCKER_HOST ${host} is not a unix socket, so Adele gets none"
+  fi
   ADELE_GRANTS="${repo}/tests/e2e/fixtures/adele/grants.conf" \
     docker compose --profile standin up -d --build --force-recreate || return 1
   wait_healthy "${ADELE_CONTAINER}" "${STANDIN_CONTAINER}"
+}
+
+# shellcheck disable=SC2329 # invoked from compose_up
+# nested_sweep — remove every container, network and volume carrying timelike's environment or sandbox label
+# (feature 13), and nothing else: the host's rule is that timelike removes only its own.
+nested_sweep() {
+  local ids
+  ids="$(docker ps -aq --filter label=xyz.ironik.timelike.env; docker ps -aq --filter label=xyz.ironik.timelike.sandbox)" || return 1
+  # shellcheck disable=SC2086 # one id per word, on purpose
+  [[ -z "${ids}" ]] || docker rm -f -v ${ids} >/dev/null || return 1
+  ids="$(docker network ls -q --filter label=xyz.ironik.timelike.env)" || return 1
+  # shellcheck disable=SC2086
+  [[ -z "${ids}" ]] || docker network rm ${ids} >/dev/null || return 1
+  ids="$(docker volume ls -q --filter label=xyz.ironik.timelike.env)" || return 1
+  # shellcheck disable=SC2086
+  [[ -z "${ids}" ]] || docker volume rm ${ids} >/dev/null || return 1
 }
 
 # shellcheck disable=SC2329 # invoked from compose_up, itself invoked indirectly by step
@@ -571,6 +624,15 @@ write_startup() {
   fi
 }
 
+# build_runner — the runner image, and the operator's git the git-boundary cells run (feature 13, lane 13s0a item
+# C), both from tests/runner and its pins, so no cell pulls an image.
+# shellcheck disable=SC2329 # invoked indirectly, by step
+build_runner() {
+  docker build -t "${RUNNER_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE tests/runner &&
+    docker build --target operator-git -t "${OPERATOR_GIT_IMAGE}" --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE \
+      tests/runner
+}
+
 # main runs on the left of a pipe (tee), i.e. in a subshell with errexit off: every step's status is
 # captured explicitly by step(), and nothing in main may rely on set -e.
 main() {
@@ -620,8 +682,7 @@ main() {
     skip up "build failed"
   fi
 
-  step runner docker build -t "${RUNNER_IMAGE}" \
-    --build-arg BATS_IMAGE --build-arg DOCKER_CLI_IMAGE tests/runner
+  step runner build_runner
 
   if passed build; then
     step benchimg make bench-images

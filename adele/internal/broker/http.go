@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"timelike/adele/internal/grants"
@@ -33,6 +34,8 @@ func (b *Broker) Handler() http.Handler {
 	mux.HandleFunc("/v1/grants", b.only(http.MethodGet, b.grantsList))
 	mux.HandleFunc("/v1/requests", b.only(http.MethodPost, b.requests))
 	mux.HandleFunc("/v1/denials", b.only(http.MethodGet, b.denials))
+	mux.HandleFunc("/v1/envs", b.only(http.MethodGet, b.envs))
+	mux.HandleFunc("/v1/envs/", b.only(http.MethodGet, b.envs))
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "no such path"})
 	})
@@ -102,10 +105,14 @@ func Denials(led *ledger.Ledger, now time.Time, host string) (map[string]any, er
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, d := range rows {
+		by := "operator"
+		if d.Extend == "" { // a forbidden setting: no grant allows it, so there is no one's command (feature 13)
+			by = "none"
+		}
 		out = append(out, map[string]any{
 			"ledger_id": d.ID, "at": d.At.UTC().Format(time.RFC3339), "host": d.Host, "grant": d.Grant,
 			"limit":  map[string]string{"name": d.LimitName, "allowed": d.Allowed, "needed": d.Needed},
-			"extend": d.Extend, "extend_by": "operator", "session": d.Session, "agent": d.Agent,
+			"extend": d.Extend, "extend_by": by, "session": d.Session, "agent": d.Agent,
 			"capability": d.Capability, "action": d.Action, "resource": d.Resource,
 		})
 	}
@@ -124,8 +131,40 @@ func (b *Broker) requests(w http.ResponseWriter, r *http.Request) {
 			"remediation": "use the adele client: adele request …"})
 		return
 	}
+	if req.Capability == grants.CapDockerCompose {
+		// A bring-up resolves in a sandbox and runs compose: longer than the server's write timeout allows
+		// (feature 13). The client's own bound concludes it.
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(EnvWriteTimeout))
+	}
 	out := b.Handle(r.Context(), req)
 	writeJSON(w, out.Status, out.Body)
+}
+
+// EnvWriteTimeout bounds one environment request's answer: the sandbox and compose, with room.
+const EnvWriteTimeout = SandboxTimeout + ComposeTimeout + time.Minute
+
+// envs serves GET /v1/envs and GET /v1/envs/NAME: read-only, read back from the daemon by label (feature 13).
+func (b *Broker) envs(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/v1/envs"), "/")
+	if name == "" {
+		doc, err := b.EnvList(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, doc)
+		return
+	}
+	doc, found, err := b.EnvGet(r.Context(), name)
+	switch {
+	case err != nil:
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+	case !found:
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "no live environment named " + name,
+			"remediation": "list them with adele env status"})
+	default:
+		writeJSON(w, http.StatusOK, doc)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

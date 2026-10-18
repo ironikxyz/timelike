@@ -57,6 +57,10 @@ def lane(tmp_path: Path) -> dict[str, object]:
     (root / "tests" / "e2e").mkdir(parents=True)
     shutil.copy(REPO / "tests" / "run.sh", root / "tests" / "run.sh")
     shutil.copy(REPO / "pins.env", root / "pins.env")
+    (root / "scripts").mkdir()
+    shutil.copy(REPO / "scripts" / "workspace.sh", root / "scripts" / "workspace.sh")  # feature 13's up step
+    workspaces = tmp_path / "workspaces"
+    workspaces.mkdir()
     for f in FILES:
         (root / "tests" / "e2e" / f).write_text("@test x { :; }\n")
     (root / "tests" / "e2e" / "lane.conf").write_text(LANE_CONF)
@@ -80,6 +84,7 @@ def lane(tmp_path: Path) -> dict[str, object]:
         "FAKE_STALE": "",
         "FAKE_E2E_SLEEP": "",
         "FAKE_WITHIN": "",
+        "TIMELIKE_WORKSPACES": str(workspaces),
     }
     return {"root": root, "env": env, "logs": logs}
 
@@ -155,7 +160,7 @@ def test_a_parallel_lane_runs_files_side_by_side_in_lane_conf_s_order(lane: dict
     assert p.returncode == 0, p.stdout + p.stderr
     runner = runner_call(lane)
     tail = after_image(runner, "timelike-test-runner:local")
-    assert tail[:3] == ["--jobs", "8", "--no-parallelize-within-files"]
+    assert tail[:3] == ["--jobs", "4", "--no-parallelize-within-files"]
     files = [a for a in tail if a.startswith("tests/e2e/")]
     assert files == [f"tests/e2e/{n}" for n in ("b-long.bats", "a.bats", "c.bats", "e.bats", "d-timed.bats")]
     assert "TL_E2E_LOCK=/out/.e2e-lane.lock" in runner
@@ -167,7 +172,7 @@ def test_a_parallel_lane_runs_files_side_by_side_in_lane_conf_s_order(lane: dict
     assert timed[-3:] == ["-m", "timed", "tests/unit"]
     assert f"pytest-xdist=={pin('PYTEST_XDIST_VERSION')}" in spread
     assert f"execnet=={pin('EXECNET_VERSION')}" in spread
-    assert summary["e2e_jobs"] == "8" and summary["unit_jobs"] == "8"
+    assert summary["e2e_jobs"] == "4" and summary["unit_jobs"] == "8"
     steps = {s["name"]: s for s in summary["steps"]}
     assert all(steps[n]["status"] == "pass" for n in ("e2e", "unit", "gounit"))
     assert summary["exit"] == 0
@@ -342,3 +347,43 @@ def test_gounit_beside_e2e_prints_its_own_seconds_and_when_it_was_collected(lane
     steps = {s["name"]: s for s in summary["steps"]}
     assert steps["gounit"]["seconds"] == own
     assert f"collected after {waited} s" in steps["gounit"]["note"]
+
+
+def test_the_up_step_gives_the_lane_a_workspace_and_the_runner_mounts_it_at_the_same_path(
+    lane: dict[str, object],
+) -> None:
+    """Feature 13: compose_up runs scripts/workspace.sh (a new directory under TIMELIKE_WORKSPACES, enforced),
+    sweeps leftover nested environments by timelike's labels before compose down, and run_e2e mounts the
+    workspace into the runner at the same path, with DOCKER_CLI_IMAGE (the operator's git) passed on."""
+    p, _ = run_lane(lane)
+    env = lane["env"]
+    assert isinstance(env, dict)
+    parent = Path(env["TIMELIKE_WORKSPACES"])
+    (ws,) = list(parent.iterdir())
+    assert "up: workspace " + str(ws) + " (host git enforced)" in p.stdout
+    call = runner_call(lane)
+    assert f"{ws}:{ws}" in call and "TIMELIKE_WORKSPACE" in call and "DOCKER_CLI_IMAGE" in call
+    calls = docker_calls(lane)
+    sweep = next(
+        i for i, c in enumerate(calls) if c[:2] == ["ps", "-aq"] and "label=xyz.ironik.timelike.env" in c
+    )
+    down = next(i for i, c in enumerate(calls) if c[:1] == ["compose"] and "down" in c)
+    assert sweep < down
+
+
+def test_a_lane_without_a_workspace_parent_fails_at_up_naming_it(lane: dict[str, object]) -> None:
+    p, summary = run_lane(lane, TIMELIKE_WORKSPACES="")
+    steps = {s["name"]: s["status"] for s in summary["steps"]}
+    assert steps["up"] == "fail" and "TIMELIKE_WORKSPACES is not set" in p.stdout + p.stderr
+
+
+def test_the_runner_step_builds_the_operators_git_and_the_runner_names_it(lane: dict[str, object]) -> None:
+    """Feature 13 (lane 13s0a, item C): the git-boundary cells' operator git is built by the runner step from
+    the pinned CLI image, so no cell pulls DOCKER_CLI_IMAGE by its digest."""
+    p, summary = run_lane(lane)
+    assert p.returncode == 0, p.stdout + p.stderr
+    builds = [c for c in docker_calls(lane) if c[:1] == ["build"]]
+    assert any("--target" in c and "operator-git" in c and "timelike-operator-git:local" in c for c in builds)
+    assert "OPERATOR_GIT_IMAGE=timelike-operator-git:local" in runner_call(lane)
+    steps = {s["name"]: s for s in summary["steps"]}
+    assert steps["runner"]["status"] == "pass"

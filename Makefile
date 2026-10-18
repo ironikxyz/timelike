@@ -52,13 +52,28 @@ stamp-check:
 grants:
 	@test -e adele/grants.conf || { cp adele/grants.example.conf adele/grants.conf; echo "wrote adele/grants.conf from adele/grants.example.conf — edit it to change the grants"; }
 
+# One image at a time (feedback 13-20261018-030300). One `compose build` built every image at once, and on a host
+# whose disk is the limit their writes queued behind each other until uv's bytecode compile ran out of time.
+# BUILD_SERVICES is every compose service with a build section (tests/unit/test_build_one_image_at_a_time.py);
+# adele-standin follows adele, so the Go stage they share is a cache hit.
+BUILD_SERVICES := agent adele adele-standin
 build: docker-check stamp-check grants
-	$(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA)
+	@set -e; for s in $(BUILD_SERVICES); do \
+	  echo "$(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA) $$s"; \
+	  $(COMPOSE) --profile standin build --build-arg GIT_SHA=$(GIT_SHA) "$$s"; \
+	done
 
 # The stand-in's profile is on: it is what the D8 demo requests (feature 004). Without it, Adele has no
 # capability to broker. `docker compose up` without the profile starts the agent and Adele only.
+# Feature 13: the launch gets its workspace (scripts/workspace.sh: a new directory under TIMELIKE_WORKSPACES, the
+# host-git boundary) and the socket's group for Adele, read from the socket itself.
+DOCKER_SOCKET := $(patsubst unix://%,%,$(or $(DOCKER_HOST),unix:///var/run/docker.sock))
 up: build
-	$(COMPOSE) --profile standin up -d --force-recreate
+	@set -e; eval "$$(scripts/workspace.sh env)"; \
+	  export TIMELIKE_WORKSPACE TIMELIKE_HOST_GIT TIMELIKE_WORKSPACE_GID; \
+	  export TIMELIKE_DOCKER_SOCKET="$(DOCKER_SOCKET)" TIMELIKE_DOCKER_GID="$$(stat -c %g "$(DOCKER_SOCKET)")"; \
+	  echo "$(COMPOSE) --profile standin up -d --force-recreate  (workspace $$TIMELIKE_WORKSPACE, host git $$TIMELIKE_HOST_GIT)"; \
+	  $(COMPOSE) --profile standin up -d --force-recreate
 
 down:
 	$(COMPOSE) --profile standin down --remove-orphans
@@ -152,6 +167,13 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/
   tests/e2e/adele-reaps-after-restart-and-records-standin-unreachable.bats \
   tests/e2e/status-command-explains-each-of-adeles-recent-refusals-by-host-a-host-with-none-says-so.bats \
   tests/e2e/exit-4-in-text-mode-writes-rule-14s-one-stderr-line-naming-whose-command-it-is.bats \
+  scripts/workspace.sh tests/e2e/nested.bash \
+  tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats \
+  tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats \
+  tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats \
+  tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats \
+  tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats \
+  tests/e2e/nested-environment-beyond-the-grant-refused-never-ready-exits-124-and-expired-reaped.bats \
   bench/run.sh
 PY_IN_IMAGE := docker run --rm -v "$(CURDIR)":/src:ro -w /src -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uv \
   -e UV_TOOL_DIR=/tmp/uv-tools --entrypoint bash timelike-agent:local -c

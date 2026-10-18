@@ -222,6 +222,12 @@ def generate() -> tuple[list[str], dict[str, str]]:
             " `type -a pnpm` lists a real one after the check; an absent one exits 127 and says how to"
             " install it."
         )
+    if has("adele"):
+        # feature 13 slice 0: there is no Docker here; a project's compose environment comes up through Adele
+        lines.append(
+            "- No `docker` here: `adele env up` brings the project's compose environment up, checked by"
+            " Adele, and waits until ready; `adele env down` removes it."
+        )
     if has("timelike"):
         lines.append(
             "- `timelike tools`: every tool, standard ones too, with the safer command to use instead."

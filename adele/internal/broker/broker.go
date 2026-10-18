@@ -37,11 +37,15 @@ type Request struct {
 	Params     Params `json:"params"`
 }
 
-// Params are the stand-in box's parameters. TTL is empty for "the grant's ttl".
+// Params are a request's parameters. TTL is empty for "the grant's ttl". Name, TTL and Ports are the stand-in
+// box's; Dir, Files and Profiles are a docker.compose environment's (feature 13; contracts/adele-env.md).
 type Params struct {
-	Name  string `json:"name"`
-	TTL   string `json:"ttl"`
-	Ports []int  `json:"ports"`
+	Name     string   `json:"name"`
+	TTL      string   `json:"ttl"`
+	Ports    []int    `json:"ports"`
+	Dir      string   `json:"dir,omitempty"`
+	Files    []string `json:"files,omitempty"`
+	Profiles []string `json:"profiles,omitempty"`
 }
 
 // Upstream is the capability Adele performs with her credential: the stand-in in slice 0.
@@ -72,6 +76,7 @@ type Broker struct {
 	Now       func() time.Time
 	Container string
 	Revision  string
+	Envs      *Envs // the docker.compose capability; nil when Adele has no daemon (feature 13)
 	mu        sync.Mutex
 }
 
@@ -94,11 +99,14 @@ func fail(status int, what, remedy string, names []string) Outcome {
 
 // Handle decides one request. It never panics on agent input and never performs before checking.
 func (b *Broker) Handle(ctx context.Context, req Request) Outcome {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	if out, bad := validate(req); bad {
 		return out
 	}
+	if req.Capability == grants.CapDockerCompose {
+		return b.handleEnv(ctx, req) // its own locking: never the broker's lock across a bring-up (env.go)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	g, out, ok := b.choose(req)
 	if !ok {
 		return out
@@ -121,8 +129,11 @@ func validate(req Request) (Outcome, bool) {
 			"TIMELIKE_AGENT must match ^[A-Za-z0-9._-]{1,64}$, or be unset", nil), true
 	case !grants.KnownCapabilities[req.Capability]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("Adele knows no capability %q", req.Capability),
-			"slice 0 knows one: "+grants.CapStandinBox, nil), true
-	case req.Action != "create":
+			"Adele knows: "+grants.KnownList, nil), true
+	case req.Capability == grants.CapDockerCompose && req.Action != "up" && req.Action != "down":
+		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
+			"the actions are up and down", nil), true
+	case req.Capability != grants.CapDockerCompose && req.Action != "create":
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
 			"the action is create", nil), true
 	case !nameRe.MatchString(req.Params.Name):

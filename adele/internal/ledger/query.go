@@ -105,6 +105,38 @@ func (l *Ledger) Live(grant string) (int, error) {
 	return n, nil
 }
 
+// LiveOf is Live for one capability: an environment and a stand-in box never share a grant's instances
+// (feature 13, slice 0; 014 data-model).
+func (l *Ledger) LiveOf(grant, capability string) (int, error) {
+	var n int
+	err := l.db.QueryRow(`SELECT count(*) FROM ledger p WHERE p."grant" = ? AND p.capability = ? AND p.outcome = ? AND `+
+		unended, grant, capability, OutcomePerformed).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: live %s %s: %w", grant, capability, err)
+	}
+	return n, nil
+}
+
+// LiveResource returns the newest performed row of capability whose resource is name and has not ended, under
+// any grant, and whether there is one.
+func (l *Ledger) LiveResource(capability, name string) (Row, bool, error) {
+	rows, err := l.query(`SELECT `+prefixed("p")+` FROM ledger p WHERE p.capability = ? AND p.resource = ? AND p.outcome = ? AND `+
+		unended+` ORDER BY p.id DESC LIMIT 1`, capability, name, OutcomePerformed)
+	if err != nil {
+		return Row{}, false, err
+	}
+	if len(rows) == 0 {
+		return Row{}, false, nil
+	}
+	return rows[0], true, nil
+}
+
+// LiveRows returns every performed row of capability that has not ended, oldest first.
+func (l *Ledger) LiveRows(capability string) ([]Row, error) {
+	return l.query(`SELECT `+prefixed("p")+` FROM ledger p WHERE p.capability = ? AND p.outcome = ? AND `+unended+
+		` ORDER BY p.id`, capability, OutcomePerformed)
+}
+
 // Extensions returns grant's extensions in insertion order (latest last, so
 // a caller overlaying them in order gets "latest wins per limit").
 func (l *Ledger) Extensions(grant string) ([]Extension, error) {

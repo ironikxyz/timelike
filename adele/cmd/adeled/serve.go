@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	"timelike/adele/internal/broker"
+	"timelike/adele/internal/engine"
 	"timelike/adele/internal/grants"
 	"timelike/adele/internal/ledger"
 	"timelike/adele/internal/reaper"
@@ -46,14 +48,32 @@ func setup(e env, stderr io.Writer) (*broker.Broker, *ledger.Ledger, int) {
 	b := &broker.Broker{
 		Grants: file, Ledger: led, Container: e.get("ADELE_CONTAINER"), Revision: revision,
 		Upstream: broker.NewStandinClient(e.get("ADELE_STANDIN_URL"), canary),
+		Envs:     envs(e),
 	}
 	return b, led, exitOK
 }
 
+// envs is the docker.compose capability when the socket is mounted (feature 13), else nil: then an environment
+// request is answered "no Docker daemon", and nothing else changes.
+func envs(e env) *broker.Envs {
+	sock := e.get("ADELE_DOCKER_SOCKET")
+	if fi, err := os.Stat(sock); err != nil || fi.Mode()&os.ModeSocket == 0 {
+		return nil
+	}
+	return &broker.Envs{Engine: engine.New(sock), Workspace: e.get("TIMELIKE_WORKSPACE"), HostGit: e.get("TIMELIKE_HOST_GIT"),
+		SandboxImage: e.get("ADELE_SANDBOX_IMAGE"), ComposeBin: e.get("ADELE_COMPOSE_BIN"),
+		// Her own state directory, which the ledger already writes: /tmp in her container is not hers to rely
+		// on (lane 13s0a, item B).
+		ScratchDir: filepath.Dir(e.get("ADELE_DB"))}
+}
+
 // newReaper is the reaper over this Adele's ledger and capability (spec FR-24, D-12). lock is the
 // broker's request lock in serve, nil in the operator's own process.
-func newReaper(e env, led *ledger.Ledger, up *broker.StandinClient, lock sync.Locker) (*reaper.Reaper, error) {
+func newReaper(e env, led *ledger.Ledger, up *broker.StandinClient, lock sync.Locker, envs *broker.Envs) (*reaper.Reaper, error) {
 	r := &reaper.Reaper{Ledger: led, Provider: up, Lock: lock, Container: e.get("ADELE_CONTAINER")}
+	if envs != nil { // feature 13: expired environments are reaped too (the operator's decision, Item 27 Q4)
+		r.Providers = map[string]reaper.Provider{grants.CapDockerCompose: &broker.EnvProvider{Engine: envs.Engine}}
+	}
 	if v := e.get("ADELE_REAP_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < 100*time.Millisecond || d > time.Hour {
@@ -78,7 +98,7 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		return code
 	}
 	defer led.Close()
-	reap, err := newReaper(e, led, b.Upstream.(*broker.StandinClient), b.Locker())
+	reap, err := newReaper(e, led, b.Upstream.(*broker.StandinClient), b.Locker(), b.Envs)
 	if err != nil {
 		fmt.Fprintf(stderr, "adeled: %v\n", err)
 		return exitUsage
@@ -92,8 +112,8 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		Handler: b.Handler(), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second,
 	}
-	fmt.Fprintf(stderr, "adeled: serving on %s · %d grants (%v) · revision %s · reaping every %s\n",
-		ln.Addr(), len(b.Grants.Grants), b.Grants.Names(), revision, reapEvery(reap))
+	fmt.Fprintf(stderr, "adeled: serving on %s · %d grants (%v) · revision %s · reaping every %s · %s\n",
+		ln.Addr(), len(b.Grants.Grants), b.Grants.Names(), revision, reapEvery(reap), envsLine(b.Envs))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	if ready != nil { // after NotifyContext: a signal sent on ready is handled, never fatal
@@ -106,6 +126,9 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 	reapCtx, stopReaper := context.WithCancel(ctx)
 	reaped := make(chan struct{})
 	go func() { reap.Run(reapCtx, stderr); close(reaped) }()
+	if b.Envs != nil {
+		go sweepSandboxes(reapCtx, b.Envs.Engine, stderr)
+	}
 	defer func() { stopReaper(); <-reaped }()
 	select {
 	case err := <-errc:
@@ -119,6 +142,27 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		fmt.Fprintf(stderr, "adeled: shutdown: %v\n", err)
 	}
 	return exitOK
+}
+
+// sweepSandboxes removes left-behind resolution sandboxes at once and then every broker.SandboxSweep, until ctx
+// ends (lane 13s0b, item A: a create the daemon finished after the bound left one in Created, which nothing removed).
+func sweepSandboxes(ctx context.Context, eng *engine.Client, log io.Writer) {
+	for {
+		pass, done := context.WithTimeout(ctx, time.Minute)
+		n, err := eng.SweepSandboxes(pass, broker.SandboxLeftover)
+		done()
+		switch {
+		case err != nil && ctx.Err() == nil:
+			fmt.Fprintf(log, "adeled: sandbox sweep: %v\n", err)
+		case n > 0:
+			fmt.Fprintf(log, "adeled: sandbox sweep: removed %d left-behind resolution sandbox(es)\n", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(broker.SandboxSweep):
+		}
+	}
 }
 
 // health is the container's healthcheck: scratch has no shell or curl, so Adele checks herself.
@@ -148,4 +192,14 @@ func reapEvery(r *reaper.Reaper) string {
 		return r.Interval.String()
 	}
 	return reaper.DefaultInterval.String()
+}
+
+func envsLine(e *broker.Envs) string {
+	switch {
+	case e == nil:
+		return "docker.compose: no socket, so no environments"
+	case e.Workspace == "":
+		return "docker.compose: the socket, but no workspace mounted"
+	}
+	return "docker.compose: workspace " + e.Workspace + ", host git " + e.HostGit
 }

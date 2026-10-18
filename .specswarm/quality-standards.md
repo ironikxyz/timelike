@@ -1,5 +1,5 @@
 ---
-governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 ---
 
 > **Amended 2026-09-28** per `../bridge/feedback/stack-review-2026-09-28.md` (plan's review of
@@ -175,6 +175,11 @@ governance_audited_against: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 > **Audited against discovery revision 16** (2026-10-16), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 16, header "> Discovery: plan/.discover/discovery.md (revision 16)", written 2026-10-16T10:26:02Z), § "What Changed In Those Revisions" (relied on), and `../bridge/feedback/12-20261016-100519-item-26-what-denies-in-slice-1.md` § Resolution.
 > **No change needed:** revision 16 moved one feature's criteria (prompt 12's slice-1 denial criterion struck and
 > split), not a principle, constraint or stack choice. Checked: every gate and threshold, the output-contract (H2) gate's exit-4 envelopes, the Refusals (P4) gate and the supply-chain baseline, against the principles and constraints (unchanged). Revision 16 is appended to
+> `governance_audited_against`: a no-change audit is a recorded result.
+>
+> **Audited against discovery revision 17** (2026-10-17), via `../bridge/governance-context.md` (`/mentor:regovern` for revision 17, header "> Discovery: plan/.discover/discovery.md (revision 17)"), § "What Changed In Those Revisions — evidence, not an audit claim" (relied on), and `../bridge/feedback/13-20261017-034920-setting-refusal-extend.md`.
+> **No change needed:** revision 17 moved one feature's criterion (prompt 13's forbidden-settings refusal, exit 4
+> struck, exit 2 with rule 14's error added), not a principle, constraint or stack choice. Checked: every gate and threshold, the Refusals (P4) gate ("cap excess exits 4", which still holds: a forbidden setting is not a cap) and the output-contract (H2) gate's exit-4 envelopes (neither is claimed for every refusal), against the principles and constraints (unchanged). Revision 17 is appended to
 > `governance_audited_against`: a no-change audit is a recorded result.
 
 # Quality Standards - Timelike

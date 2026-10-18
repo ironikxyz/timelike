@@ -81,3 +81,5 @@ prettier	user	npm install -g prettier	formatter
 yarn	user	npm install -g yarn	package manager
 pnpm	user	npm install -g pnpm	package manager
 ts-node	user	npm install -g ts-node	TypeScript runner
+docker	instead	adele env up	a project's compose environment, brought up through Adele (no Docker daemon or socket here)
+docker-compose	instead	adele env up	a project's compose environment, brought up through Adele (no Docker daemon or socket here)
