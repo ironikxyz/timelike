@@ -76,6 +76,12 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T034 `make build` builds the compose images one at a time, `BUILD_SERVICES` (`Makefile`; `tests/run.sh`'s header); unit `tests/unit/test_build_one_image_at_a_time.py`
 - [X] T035 Host lanes (serial and `-n 8`); Cycle 4's report, with the answer on `E2E_JOBS`; `reboot.md`; the deny-list on the staged tree; commit
 
+## Phase 12: Cycle 5, lane 13s0e's findings (`../bridge/feedback/13-20261018-051500-lane-13s0e-e2e-green-lint-e501.md`)
+
+- [X] T036 A: the four E501 lines in `tests/unit/test_build_one_image_at_a_time.py` wrapped; ruff check and format over the lint's paths
+- [X] T037 B: `E2E_JOBS`' default 4, on the mentor's ruling (`tests/run.sh`); `tests/unit/test_lane_run_sh.py`'s parallel lane expects 4
+- [X] T038 Host lanes (serial and `-n 8`); Cycle 5's report, with C read from the lane's log; `reboot.md`; the deny-list on the staged tree; commit
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

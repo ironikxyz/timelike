@@ -160,7 +160,7 @@ def test_a_parallel_lane_runs_files_side_by_side_in_lane_conf_s_order(lane: dict
     assert p.returncode == 0, p.stdout + p.stderr
     runner = runner_call(lane)
     tail = after_image(runner, "timelike-test-runner:local")
-    assert tail[:3] == ["--jobs", "8", "--no-parallelize-within-files"]
+    assert tail[:3] == ["--jobs", "4", "--no-parallelize-within-files"]
     files = [a for a in tail if a.startswith("tests/e2e/")]
     assert files == [f"tests/e2e/{n}" for n in ("b-long.bats", "a.bats", "c.bats", "e.bats", "d-timed.bats")]
     assert "TL_E2E_LOCK=/out/.e2e-lane.lock" in runner
@@ -172,7 +172,7 @@ def test_a_parallel_lane_runs_files_side_by_side_in_lane_conf_s_order(lane: dict
     assert timed[-3:] == ["-m", "timed", "tests/unit"]
     assert f"pytest-xdist=={pin('PYTEST_XDIST_VERSION')}" in spread
     assert f"execnet=={pin('EXECNET_VERSION')}" in spread
-    assert summary["e2e_jobs"] == "8" and summary["unit_jobs"] == "8"
+    assert summary["e2e_jobs"] == "4" and summary["unit_jobs"] == "8"
     steps = {s["name"]: s for s in summary["steps"]}
     assert all(steps[n]["status"] == "pass" for n in ("e2e", "unit", "gounit"))
     assert summary["exit"] == 0

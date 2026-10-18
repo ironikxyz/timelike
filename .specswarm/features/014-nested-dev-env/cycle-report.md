@@ -673,3 +673,111 @@ each criterion is `unconfirmed` for this commit. 13s0c and 13s0d ran no e2e cell
 **retired_prompts_seen:** none.
 
 **After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.
+
+## Cycle 5 — bridge/sends/13-rev17-20261017-035606.md
+
+**Written:** 2026-10-18T05:28:53Z (read from the clock). Attended, not in dispatch mode. The same send as Cycles 1–4, after
+**lane 13s0e** on `367bc31` (`E2E_JOBS=4 LANE_STEPS_TOGETHER=0`). The feedback is
+`../bridge/feedback/13-20261018-051500-lane-13s0e-e2e-green-lint-e501.md`: e2e 733 of 733 ok, the build and the scan
+pass, lint fails on Cycle 4's new unit (E501), and 002's bench unit fails again. This cycle fixes A, applies B, and
+reads C from the log. It is on `014-nested-dev-env`, in one commit after `367bc31`, with this report. No `/specswarm`
+command ran: no revision moved, so the spec, plan and `audited_against [8, 17]` stand. tasks.md gains T036–T038, and
+decisions.md gains § Cycle 5.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261017-035606.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 0 |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`.
+
+**reconcile_mode:** `scoped`. No prompt or discovery revision moved since Cycle 4.
+
+**What changed, by the feedback's items:**
+- **A · E501 in `tests/unit/test_build_one_image_at_a_time.py`:** the four assertion messages are wrapped, and no
+  assertion changed. ruff 0.16.7, on this host, passes `check` and `format --check` over the lint's paths (`tools
+  tests scan bench scripts`). The lane pins 0.16.9.
+- **B · `E2E_JOBS`' default is 4, on the mentor's ruling** (`tests/run.sh`, with the reason beside it).
+  - **Where the old 8 came from:** the lane-speed maintenance cycle
+    (`.specswarm/maintenance/lane/cycle-report.md`). It was chosen from a schedule estimate made from per-file times
+    on `c09f94a`: about 752 s at 8 or more, about 953 s at 4. It did not come from runs on the Docker host, and that
+    report said the default should move if 8 proved flaky, on the mentor's call.
+  - **The evidence for 4:** 13s0e at 4 was clean, with e2e taking 2142 s. 13s0b at 8 had 2 not ok and a `setup_file`,
+    all in the start window, on the same disk.
+  - **Measure again before raising it,** for example once the disk is replaced, as the comment beside the default
+    says.
+  - **Unchanged:** `UNIT_JOBS` (8) and `LANE_STEPS_TOGETHER` (1), because the ruling names only `E2E_JOBS`. 13s0e ran
+    with `LANE_STEPS_TOGETHER=0`, so 13s0f on the defaults would run gounit beside e2e. Passing
+    `LANE_STEPS_TOGETHER=0` again keeps 13s0f the same as 13s0e on everything but the commit.
+  - **`tests/unit/test_lane_run_sh.py`**'s parallel-lane test now expects `--jobs 4`. The README names no number,
+    so it does not change.
+- **C · 002's bench unit (`tests/unit/test_bench_cli.py:137`, `:151`): not fixed, as asked.**
+  - **The cause, as far as the log goes.** 004's Cycle 4 report named the cause of the same `:151` failure in lane
+    12s1 (`.specswarm/features/004-adele-grants/cycle-report.md`, item F). The fixture's fake run uses
+    `--call-limit 2`. A hooked `git commit` in the rejects task went past 2 s under the unit step's load and was
+    counted as a hang. The fake agent's policy then took `--no-verify`, which failed, so the report did not say
+    "Tie".
+  - **This lane's two failures fit that.** Both are on `[gw6]` through the one `full_run` fixture. `:137` (Timelike
+    loses not 0) and `:151` (no Tie in the rejects section) are the same changed ending seen from two tests.
+  - **Not confirmed:** the log truncates the report, so it does not show this lane's ending.
+  - **The fix belongs to 002's unit,** for the maintenance send after 13. Raising its call limit costs every hang
+    task that limit's time.
+
+**criteria_reestablished:** 13s0e ran every e2e cell on `367bc31`. This commit changes no code those cells exercise,
+only a unit's line breaks and the lane's default file count. So each Automated criterion is observed by the mentor on
+`367bc31`, and 13s0f is the run on this commit.
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| 13 · "Bringing up a fixture project's compose file from inside the agent container starts its services" | **observed by the mentor** (lane 13s0e, `367bc31`) | Test: `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`; 151 ok; 153 printed "lock wait 1116 ms (held by up tl-51bd29-twice-lc)" |
+| 13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path" | **observed by the mentor** (lane 13s0e, `367bc31`) | Test: `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats` |
+| 13 · "A request for a privileged container, host networking or process namespace, added capabilities, or a mount outside the workspace is refused by Adele with exit 2" | **observed by the mentor** (lane 13s0e, `367bc31`) | Test: `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats` |
+| 13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent" | **observed by the mentor** (lane 13s0e, `367bc31`) | Test: `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats` |
+| 13 · "Bringing the environment up twice is a no-op the second time" | **observed by the mentor** (lane 13s0e, `367bc31`) | Test: `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats` |
+| 13 · "DEMO: the Agent brings up a compose test environment from inside its container" (D9, Manual) | **unconfirmed** | Nobody has looked; the demo is the mentor's with the operator, after sign-off |
+
+**Cycles 3 and 4, as the lane verified them** (from the feedback):
+- 151, 88 and SC-1's first cell pass.
+- The cold build passes, one image at a time, with uv's raised bound and its check.
+- After the lane, there are no sandbox- or environment-labelled containers and no `timelike-sc8-*` volumes.
+- The lock's holder is named.
+
+**The host lanes, run before this report** (this cycle's code, uncommitted at the time; the commit is the same tree):
+- **`make test-host`, serially:** passed, 05:16:03Z–05:25:38Z; 2584 passed, 13 skipped, in 541.76 s; env-layer 60/60,
+  hook 57/57, handler 33/33.
+- **The same with `-n 8`:** passed, 05:25:38Z–05:27:55Z; 2568 passed, 13 skipped, in 135.98 s, and the 16 `timed`
+  tests passed, run alone.
+- **ruff 0.16.7** `check` and `format --check` over `tools tests scan bench scripts`: all checks passed, and 126
+  files were already formatted.
+- **Not run:** the Docker lane, `make scan`, `make lint` with the pinned ruff 0.16.9, mypy, and shellcheck (which
+  is not on this host).
+
+**not_verified:**
+- **That the pinned ruff 0.16.9 agrees with 0.16.7** on the four wrapped lines. That is the lint step's to show.
+- **Whether `E2E_JOBS=4` stays clean beyond one lane:** 13s0f is the second run.
+- **C's ending in 13s0e:** read as consistent with 12s1's cause, not confirmed.
+- **D9:** the demo is still to come.
+
+**changed_other_features:**
+- **maint-lane-speed:** `E2E_JOBS`' default is 4, and its unit expects 4.
+- **Others:** none.
+
+**process_failures_recorded:**
+- **Cycle 4 committed a lint failure.** It listed `make lint` as not run, but ruff is on this host (`lint-host`'s
+  fallback), and running it would have caught all four lines. From now on, ruff `check` and `format --check` over the
+  lint's paths run before each commit here.
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the next lane has ended. Merge `--no-ff` only after sign-off.

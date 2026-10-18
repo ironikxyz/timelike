@@ -35,12 +35,17 @@ def test_the_makefile_builds_every_compose_image_one_at_a_time() -> None:
     assert m, "the Makefile has no BUILD_SERVICES"
     listed = m.group(1).split()
     assert sorted(listed) == sorted(build_services_in_compose()), (
-        f"BUILD_SERVICES {listed} is not compose.yaml's services with a build section {build_services_in_compose()}"
+        f"BUILD_SERVICES {listed} is not compose.yaml's services with a build section"
+        f" {build_services_in_compose()}"
     )
-    assert listed.index("adele") < listed.index("adele-standin"), "adele-standin must follow adele (shared Go stage)"
+    assert listed.index("adele") < listed.index("adele-standin"), (
+        "adele-standin must follow adele (shared Go stage)"
+    )
     recipe = re.search(r"^build:.*\n((?:\t.*\n?)+)", text, re.MULTILINE).group(1)
     assert "for s in $(BUILD_SERVICES)" in recipe, "build does not loop over BUILD_SERVICES"
-    assert re.search(r"build --build-arg GIT_SHA=\$\(GIT_SHA\) \"\$\$s\"", recipe), "build does not build one service"
+    assert re.search(r"build --build-arg GIT_SHA=\$\(GIT_SHA\) \"\$\$s\"", recipe), (
+        "build does not build one service"
+    )
 
 
 def compile_runs(path: str) -> list[str]:
@@ -63,4 +68,6 @@ def test_the_agent_images_second_compile_waits_for_its_first() -> None:
     final = text[text.index("\nFROM ${DEBIAN_IMAGE}\n") :]
     (run,) = compile_runs("image/Dockerfile")[1:]
     assert run in final, "the second compile is not in the final stage"
-    assert run.startswith("--mount=type=bind,from=runtimes,"), "the final stage's compile does not wait for runtimes"
+    assert run.startswith("--mount=type=bind,from=runtimes,"), (
+        "the final stage's compile does not wait for runtimes"
+    )

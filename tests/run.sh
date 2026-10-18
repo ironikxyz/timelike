@@ -64,8 +64,10 @@ STANDIN_CONTAINER=timelike-adele-standin
 #   LANE_STEPS_TOGETHER  1 (the default) runs gounit beside e2e when E2E_JOBS > 1 and the host has flock: it
 #                holds the e2e lane's lock shared, so e2e's serial files still run alone. 0 runs the steps one
 #                after another. The unit step always runs after e2e (see main).
-# The defaults and the measurements behind them: .specswarm/maintenance/lane/cycle-report.md.
-E2E_JOBS_DEFAULT=8
+# The defaults and the measurements behind them: .specswarm/maintenance/lane/cycle-report.md. E2E_JOBS' 8 came
+# from an estimate there; it is 4 on the mentor's ruling (feedback 13-20261018-051500): on this host the disk, not
+# the CPUs, is the limit, and 13s0e at 4 was clean where 13s0b at 8 was not. Measure again before raising it.
+E2E_JOBS_DEFAULT=4
 UNIT_JOBS_DEFAULT=8
 LANE_SCOPE="${LANE_SCOPE:-full}"
 E2E_JOBS="${E2E_JOBS:-${E2E_JOBS_DEFAULT}}"

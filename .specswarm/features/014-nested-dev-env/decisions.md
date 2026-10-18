@@ -199,3 +199,16 @@ FLAGGED: `make build` builds `agent`, `adele` and `adele-standin` one after anot
 ASSUMED: E2E_JOBS — the default stays 8 (the lane-speed send set it); 13s0e with E2E_JOBS=4 is the recommendation, see the report (confidence: medium)
 ABSENT: no image was built here (no Docker), so neither the raised bound, the guard, the mount nor the build's time is measured; no criterion's bound moved; E2E_JOBS' default is unchanged
 SCOPE: out — image/Dockerfile, bench/vanilla/Dockerfile, bench/driver/Dockerfile, Makefile, tests/run.sh (the build's files, named by the feedback) (task has FLAGGED: yes)
+
+
+## Cycle 5 — lane 13s0e (`../bridge/feedback/13-20261018-051500-lane-13s0e-e2e-green-lint-e501.md`)
+
+### T036–T037: lint's E501 and E2E_JOBS' default
+**Started:** 2026-10-18T05:14:44Z (the cycle's first clock reading) | **Completed:** 2026-10-18T05:16:03Z (the code; records and host lanes after)
+
+INHERITED: Cycle 4's code at `367bc31`; lane 13s0e's logs under `../bridge/`
+ASSUMED: A — the four messages wrapped, no assertion changed; ruff 0.16.7 on this host passes check and format over the lint's paths (the lane pins 0.16.9) (confidence: high)
+FLAGGED: B — the default is 4 on the mentor's ruling. The 8 was chosen in the lane-speed maintenance cycle from a schedule estimate (about 752 s at 8 or more, 953 s at 4), not from runs on the Docker host, and that report said the default should move if 8 was flaky. UNIT_JOBS and LANE_STEPS_TOGETHER's defaults are unchanged: the ruling names only E2E_JOBS (confidence: high)
+ASSUMED: C — 004's Cycle 4 report named the cause of the same failure in lane 12s1: the fake run's `--call-limit 2`, a hooked commit past 2 s under load counted as a hang, then `--no-verify`. 13s0e's two failures are consistent with it; the log truncates the report, so it does not show the ending (confidence: medium)
+ABSENT: C not fixed (the mentor carries it as open item 1); no e2e cell ran here; the lane's pinned ruff 0.16.9 did not run here
+SCOPE: out — tests/run.sh, tests/unit/test_lane_run_sh.py (the lane's files, named by the feedback) (task has FLAGGED: yes)
