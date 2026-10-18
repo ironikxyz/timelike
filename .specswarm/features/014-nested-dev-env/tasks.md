@@ -82,6 +82,50 @@ every criterion is a test). Paths are relative to the repository root.
 - [X] T037 B: `E2E_JOBS`' default 4, on the mentor's ruling (`tests/run.sh`); `tests/unit/test_lane_run_sh.py`'s parallel lane expects 4
 - [X] T038 Host lanes (serial and `-n 8`); Cycle 5's report, with C read from the lane's log; `reboot.md`; the deny-list on the staged tree; commit
 
+## Slice 1 (natural) — `bridge/sends/13-rev17-20261018-120700.md`, branch `modify/014-slice-1`
+
+Plan: `plan.md` § Slice 1 (R12–R22). Tests are requested (H7): one e2e file per slice-1 criterion, Go and pytest
+units beside each change.
+
+### Phase 13: Foundational (blocks every slice-1 story)
+
+- [ ] T039 Ledger: `Recorded` (a performed row with no undo and no expiry) and `SessionEnded`; `Live`, `LiveOf`, `LiveResource`, `LiveRows` count only rows with an expiry (`adele/internal/ledger/ledger.go`, `query.go`); units
+- [ ] T040 Engine: images in `Count` and `Down`; `ImagesByLabel`; `ContainerByAddress` (R18); `Logs` tail; attach for a sandbox (`RunAttached`, `LogConfig: none`); `Build` (classic builder, streamed body, pull watch, step tracking, bound); `Exec` (attached, bounded, exit code) (`adele/internal/engine/engine.go`); units against the fake daemon
+- [ ] T041 [P] `adele/internal/buildctx/`: `.dockerignore` matching, the walk (links as links), the archive, its digest, the Dockerfile scan (bases, refused RUN flags), the build key; units
+- [ ] T042 [P] `adele/internal/devcontainer/`: JSONC with line-numbered errors, variables, translation (image, build, dockerComposeFile), `workspaceMount`/`workspaceFolder` rules, `runArgs` mapping, the refusals; units
+- [ ] T043 Compose: `build:` allowed with R16's checks (slice 0's `build` refusal lifted); `Inject` labels session, grant, requester, one-shot and the devcontainer's primary; the build keys in the hash; `Builds(model)` (`adele/internal/compose/compose.go`); units
+
+### Phase 14: US7, a devcontainer brought up and a command run in it (criterion 7; D22)
+
+- [ ] T044 [US7] `adeled resolve --devcontainer` (translation, then compose config, the filtered model, the dev info); `adeled context` (the archive on stdout) (`adele/cmd/adeled/resolve.go`, `context.go`, `main.go`); units
+- [ ] T045 [US7] Broker up: devcontainer requests, builds (bases checked, reuse by key, the context sandbox piped into the build, the refusals' answers), lifecycle commands after the record, outside Envs' lock (`adele/internal/broker/env.go`); units
+- [ ] T046 [US7] Broker exec: `action: exec`, the target service, user, workdir and env from labels, bounded output, the timeout answer, the ledger row (`env.go`, `broker.go`); units
+- [ ] T047 [US7] Client: `adele env up --devcontainer` and the auto choice; the built and lifecycle lines; `adele env exec` with `passes_exit`, `--timeout` default 100 s for exec (`tools/bin/adele`); units `tests/unit/test_adele_env_cli.py`
+- [ ] T048 [US7] e2e `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; fixtures `tests/e2e/fixtures/nested/devcontainer/`, `devcontainer-build/`
+
+### Phase 15: US8, labels, session end and collection (criterion 8)
+
+- [ ] T049 [US8] The requester from the peer address (`http.go` → `Request.Peer`); `POST /v1/sessions/end`; `POST /v1/envs/collect` and `Broker.Collect`; the reaper's tick runs it (`adele/internal/broker/`, `adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`); units
+- [ ] T050 [US8] Client: `adele session end`, `adele env collect` (`tools/bin/adele`); units
+- [ ] T051 [US8] e2e `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (labels on all four kinds read back, session end, collect, a gone container, 0 collected, ended twice); fixture `tests/e2e/fixtures/nested/build/`
+
+### Phase 16: The failures slice 1 owns, and decision C
+
+- [ ] T052 Readiness per decision C: one-shot labels and last lines read back (`env.go`, `compose.go`); the client's words and conclusion (`tools/bin/adele`); units; every e2e assertion pinning the old words updated
+- [ ] T053 e2e `tests/e2e/devcontainer-and-build-failures-name-their-cause.bats` (a bad devcontainer.json, initializeCommand, features, a build secret, a missing base with nothing pulled, a failed step, a failed lifecycle command, exec into nothing) and `tests/e2e/a-one-shot-is-never-reported-ready-while-it-runs.bats`; fixture `tests/e2e/fixtures/nested/oneshot/`
+
+### Phase 17: Polish
+
+- [ ] T054 The lane: the start's image sweep (`tests/run.sh`); `tests/e2e/lane.conf` lines for the new files; `tests/e2e/nested.bash` helpers (images, labels, a throwaway agent); `nested_teardown` counts images
+- [ ] T055 README: the `adele env` section (devcontainers, builds, exec, collect, session end), the readiness paragraph per decision C, the status block if both slice-1 criteria are met, the reference regenerated
+- [ ] T056 Host lanes (serial and `-n 8`), Go units with -race and vet, ruff; Cycle 6's report (the libcurl re-review's three statements; the specswarm version); `reboot.md`; the deny-list on the staged tree; commit
+
+### Dependencies (slice 1)
+
+T039, T040, T043 → T044–T046, T049. T041, T042 are independent of each other and of T039–T040, and feed T044. The client
+tasks (T047, T050, T052's client half) need only the contract. The e2e files (T048, T051, T053) need the contract and
+the fixtures, and run first in the mentor's lane.
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

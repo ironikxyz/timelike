@@ -45,3 +45,47 @@ Grants keep 12's five keys:
 | `TIMELIKE_HOST_GIT` | the operator, `enforced` by default | agent label `xyz.ironik.timelike.host-git`, agent env, `adele env up` verdict |
 | `TIMELIKE_WORKSPACE_GID` | `scripts/workspace.sh` (the parent's group) | agent `group_add` |
 | `TIMELIKE_DOCKER_GID` | Makefile / lane (`stat` of the socket) | Adele `group_add` |
+
+## Slice 1
+
+### Labels (every object an environment creates: containers, networks, volumes, built images)
+
+| Label | Value | On |
+|---|---|---|
+| `xyz.ironik.timelike.env` | the environment's name | all (slice 0) |
+| `xyz.ironik.timelike.session` | the requesting session (self-declared, validated as in 12) | all |
+| `xyz.ironik.timelike.grant` | the grant it came up under | all |
+| `xyz.ironik.timelike.requester` | the requesting agent container's id, read from the daemon, or `unknown` | all |
+| `xyz.ironik.timelike.one-shot` | `1` on a service another depends on with `service_completed_successfully` | containers |
+| `xyz.ironik.timelike.devcontainer` | `1` on a devcontainer's primary service | containers |
+| `xyz.ironik.timelike.remote-user`, `…workdir`, `…remote-env` | the devcontainer's `remoteUser`, workspace folder and `remoteEnv` (JSON) | the primary container |
+| `xyz.ironik.timelike.build-key` | the build's key (R16) | images |
+| `xyz.ironik.timelike.created` | RFC 3339 | containers (slice 0), images |
+
+### A build
+
+| Field | Rule |
+|---|---|
+| context | absolute, inside the workspace after `EvalSymlinks` (the sandbox) |
+| dockerfile | inside the workspace; its path inside the archive, or `.timelike-dockerfile-<6 hex>` |
+| bases | every `FROM` and `COPY --from` image, after the args; each must be on the daemon |
+| digest | SHA-256 over each archived entry's path, type, mode, link and content, in walk order |
+| key | SHA-256 of digest, dockerfile path, sorted args and target |
+| tag | `<env>-<service>:<key[:12]>` (lowercase; non-`[a-z0-9._-]` characters become `-`) |
+
+### Ledger rows (12's ledger, no schema change)
+
+| Event | outcome | capability | action | resource | Notes |
+|---|---|---|---|---|---|
+| exec | performed | docker.compose | exec | name | no undo, no `expires_at`; `cause` holds the service, the command (≤ 200 characters) and its exit status; never counted live |
+| session end | performed | adele.session | end | the session | grant `(none)`; no undo, no `expires_at`; never counted live |
+| collection | reaped | docker.compose | delete | name | `ref` is the up row; the cause is "session S ended at T (adele session end, ledger #N)" or "session S's agent container ID no longer exists"; 0 left, read back |
+| collection, objects left | reap-failed | docker.compose | delete | name | tried again on the next pass |
+
+`Live`, `LiveOf`, `LiveResource`, `LiveRows` and `Due` count only performed rows with an `expires_at`.
+
+### Readiness (decision C), per service read back
+
+`one_shot` (bool) and, for a container that exited non-zero, `last_lines` (its last 10 log lines). The client's words:
+`ready (healthy)`, `ready (running, ports accept)`, `completed (exit 0)`, `exited N`, `running, no readiness check`, or
+`running (one-shot: waiting for its exit)`.

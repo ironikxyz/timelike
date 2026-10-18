@@ -8,10 +8,10 @@ source_send: bridge/sends/13-rev8-20261017-012727.md
 prompt_revision: 8
 discovery_revision: 16
 audited_against: [8, 17]
-slice: 0
+slice: 1
 ---
 
-# Feature: Nested dev environments (prompt 13, slice 0: skeletal)
+# Feature: Nested dev environments (prompt 13, slices 0–1: skeletal, then natural)
 
 ## Overview
 
@@ -33,8 +33,17 @@ The operator's two decisions for this feature are fixed by the send:
 Up is idempotent, and down removes everything the environment created (P5). Bring-up always concludes with a
 verdict (P2, feature 003).
 
-**Out of scope (later slices):** devcontainers, session and grant labels with a collect command (slice 1), and
-volume snapshots (slice 2).
+**Slice 1 (natural; send `bridge/sends/13-rev17-20261018-120700.md`)** adds:
+- the project's own devcontainer, through slice 0's checked path;
+- builds, brokered the way the operator decided (`../bridge/feedback/13-20261018-120700-item-28-builds-and-session-end.md`);
+- a command run inside an environment (`adele env exec`);
+- session and grant labels on everything an environment creates;
+- an explicit session end (`adele session end`), and collection of the environments whose session has ended;
+- the one-shot readiness correction (the operator's decision C at slice 0's sign-off).
+
+Natural intensity means the common failures too, each with a verdict naming its cause (§ Scenarios 9–12).
+
+**Out of scope (slice 2):** volume snapshots and restore (criterion 9, D31).
 
 **Seams, decided.** Five design points touch compose, other features' contracts, the constitution or the socket. They
 were raised in FOR-MENTOR **Item 27** and answered in `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md` (2026-10-17T03:49:20Z). Each appears below as a decided
@@ -82,6 +91,54 @@ The launch configuration shows which of the two it is.
 
 A bring-up past the grant's `instances` is refused with 12's grant envelope (exit 4), naming the grant, the limit
 and the operator's extend command.
+
+### Scenario 7: a devcontainer, then a command in it (Agent) — D22 (slice 1)
+
+The agent is in a project with a `.devcontainer/devcontainer.json` and runs `adele env up`. Adele parses it in the
+sandbox, translates it into a compose model, checks that model exactly as she checks a compose project, builds its
+image if it has one, and brings it up with the workspace at the same absolute path. The lifecycle commands run inside
+the container, each named in the verdict. The agent then runs `adele env exec -- CMD`. The command runs in the
+devcontainer as its `remoteUser`, its output is bounded, and its exit status is passed through.
+
+### Scenario 8: a build (Agent) (slice 1)
+
+A service has a `build:`. The sandbox archives its context (links as links), resolves its Dockerfile and reports each
+stage's base image. Adele streams the archive to the daemon's build API without opening it. Every base image must
+already be on the daemon. The image is labelled and tagged under the environment, and `down` removes it. A second
+`up` of the unchanged project builds nothing, and a changed Dockerfile builds again.
+
+### Scenario 9: the common failures of a devcontainer or a build (Agent) (slice 1)
+
+- A `devcontainer.json` that does not parse: exit 2, with the line at fault.
+- A setting no grant allows (`initializeCommand`, a `runArgs` entry with no checked mapping, `privileged`, `capAdd`,
+  `securityOpt`, `features`, build secrets, SSH forwarding, a non-default build network, entitlements, an additional
+  context outside the workspace): exit 2 and rule 14's error, naming it.
+- A base image not on the daemon: exit 3, naming the operator's `docker pull`.
+- A build step that fails: exit 1, naming the step, with its last lines. A build past its bound: exit 124, naming
+  the step.
+- A lifecycle command that fails: exit 1, naming the command. The environment stays up, and the verdict gives
+  `down`.
+
+### Scenario 10: a command in an environment (Agent) (slice 1)
+
+`adele env exec [NAME] [--service S] -- CMD` runs CMD in a running container of a live environment, never privileged.
+The output is bounded, the exit status is passed through, and the call is a ledger row. Past its bound it exits 124.
+An environment or service that does not exist exits 3.
+
+### Scenario 11: ending a session, and collection (Agent, Adele) (slice 1)
+
+A session has ended when the agent container that made the request no longer exists, or when it was ended with
+`adele session end`. `adele env collect` runs a collection pass now, and Adele's reaper runs the same pass on its
+interval. Each environment of an ended session is removed, read back from the daemon, and recorded with its cause.
+`collect` with nothing to collect says "0 collected" and exits 0. A second `session end` says the session was already
+ended, and exits 0.
+
+### Scenario 12: a one-shot is never ready while it runs (Agent) (slice 1; decision C)
+
+A service with no healthcheck and no port gives no readiness signal. `up` reports it as running with no readiness
+check, never "ready". If it exits while `up` waits, its exit decides: 0 is completed, and non-zero fails `up` with
+exit 1, naming the service and its last lines. A service another depends on with `condition:
+service_completed_successfully` is a one-shot for certain, and `up` waits for its exit.
 
 ## Functional Requirements
 
@@ -135,7 +192,11 @@ and the operator's extend command.
   - it has none, and it is running and its exposed ports accept a connection from the agent's container;
   - it is a one-shot service, and it exited 0.
 
-  The definition is D-3.
+  The definition is D-3. **Corrected in slice 1 (decision C, the operator, slice 0's sign-off):** a service with no
+  healthcheck and no port is never "ready" while it runs. `up` reports it as running with no readiness check. If it
+  exits while `up` waits, 0 is completed and non-zero fails `up` with exit 1, naming the service and its last lines.
+  A service another service depends on with `condition: service_completed_successfully` is a one-shot for certain:
+  `up` waits for its exit (D-13).
 - **FR-12** Bring-up has a bound, a default of 120 s with an at-most value, both printed. Past it, the command exits
   124. The verdict lists each service's state, and the environment stays until `down` (D-3; at most 600 s).
 
@@ -156,6 +217,68 @@ and the operator's extend command.
   - `ttl` is an environment's longest lifetime;
   - `ports` limits host-published ports;
   - `budget` is required, and slice 0 quotes 0.00.
+
+### Slice 1: devcontainers (D-9)
+
+- **FR-16** `adele env up` brings up a project's devcontainer when the project has `.devcontainer/devcontainer.json`
+  or `.devcontainer.json` and no compose file was named. The file is parsed **in the sandbox** as JSONC (comments,
+  trailing commas). A file that does not parse is exit 2, naming the line at fault.
+- **FR-17** The sandbox translates it into a compose model, and Adele checks and brings up that model exactly as a
+  compose project, so every slice-0 refusal applies identically. Supported: `image`; `build` (`dockerfile`,
+  `context`, `args`, `target`); `dockerComposeFile` with `service` and `runServices`; `containerEnv`, `remoteEnv`
+  (for exec), `containerUser` and `remoteUser`; `workspaceFolder`, and `workspaceMount`, which must keep the
+  workspace at the same absolute path; `mounts`, checked like volumes; `forwardPorts`, as addresses on
+  `timelike-nested` (nothing is published on the host); `overrideCommand`, which keeps the container alive by
+  default; and the lifecycle commands.
+- **FR-18** Refused with exit 2 and rule 14's error: `initializeCommand` (it runs on the host); `runArgs` that do not
+  map to a checked setting, the setting named; `privileged`, `capAdd`, `securityOpt` and the rest of slice 0's list;
+  `features`, which slice 1 does not broker; `appPort`, which publishes on the host.
+- **FR-19** The lifecycle commands (`onCreateCommand`, `updateContentCommand`, `postCreateCommand` on creation;
+  `postStartCommand` on every start) run inside the container as its `remoteUser`, each bounded and named in the
+  verdict. One that fails is exit 1, naming the command; the environment stays up, and the verdict gives `down`.
+  Past its bound it is exit 124, naming it.
+
+### Slice 1: builds (D-8, the operator's decision 1)
+
+- **FR-20** A service's `build:` is built by the daemon from a context archive the sandbox makes. The sandbox has the
+  workspace read-only, no socket, no network, no secret and none of the agent's environment. It archives the context
+  with symlinks as links, never followed, honours `.dockerignore`, resolves the Dockerfile (one outside the workspace
+  is refused) and reports each stage's base image. Adele streams the archive to the build API without opening or
+  parsing it. Which process resolves each path is stated in the plan (cross-stack P002).
+- **FR-21** **A build pulls nothing.** Every base image must be on the daemon before the build starts: a missing one
+  is exit 3, naming the operator's `docker pull`. The plan says how the builder is kept from pulling (R15).
+- **FR-22** Refused with exit 2 and rule 14's error, before any build: build secrets, SSH forwarding, a build network
+  other than the default, entitlements, privileged builds, and additional contexts. A Dockerfile `RUN` asking for a
+  secret or SSH mount, another network, or the insecure security mode is refused the same way.
+- **FR-23** A built image is labelled with the environment, session and grant, and tagged under the environment's
+  name. `down` and collection remove it, read back. An unchanged project builds nothing again; a changed context or
+  Dockerfile builds again (D-12, cross-stack P003).
+- **FR-24** A build has a bound. Past it, it is exit 124, naming the step it was in. A failed step is exit 1, naming
+  the step, with the build's last lines.
+
+### Slice 1: exec
+
+- **FR-25** `adele env exec [NAME] [--service S] -- CMD …` runs CMD in a running container of a live environment, as
+  its `remoteUser` (devcontainer) or its image's user (compose), never privileged. The output is bounded per 001's
+  contract, and the exit status is passed through. Past its bound (feature 03's default) it is exit 124. Each exec is
+  a `performed` ledger row with no undo. An environment or service that does not exist is exit 3.
+
+### Slice 1: labels, session end and collection (D-10, D-11; the operator's decision 2)
+
+- **FR-26** Everything an environment creates carries timelike's session and grant labels beside its environment
+  label: containers, networks, volumes and built images.
+- **FR-27** Adele records the requesting agent container when an environment comes up. She reads it from the daemon
+  (the peer's address on `adele-request`, matched to a timelike-labelled container), never from what the client says.
+- **FR-28** A session has ended when (a) the agent container that made the request no longer exists, or (b) it was
+  ended with `adele session end`. `session end` ends the caller's own session with a ledger row; a second one says it
+  was already ended and exits 0.
+- **FR-29** A collection pass removes every environment whose session has ended, read back from the daemon, and
+  records each removal with its cause ("container gone" or "ended at T"). `adele env collect` runs one now, and
+  Adele's reaper runs the same pass on its interval. Nothing to collect is exit 0, "0 collected". A grant's ttl still
+  reaps whatever outlives it.
+- **FR-30** The exit codes stay slice 0's: 2, a setting no grant allows (or a devcontainer that does not parse); 3, no
+  grant, environment or service by that name, or an image or base image not on the daemon; 4, beyond a grant's
+  limits, with the envelope; 1, the capability failed (a build step, a lifecycle command, a one-shot); 124, a bound.
 
 ## Success Criteria
 
@@ -178,11 +301,24 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
 6. DEMO (D9, Manual): the Agent brings up a compose test environment from inside its container, runs tests against
    it, and tears it down.
 
+Prompt 13's slice-1 criteria, verbatim (slice 1's send):
+
+7. A project's devcontainer definition is brought up and a command is executed inside it.
+8. Everything created carries session and grant labels, and a collect command removes environments whose session has
+   ended.
+9. DEMO (D22, Manual): the Agent brings up a project's devcontainer from inside its container and runs a command in
+   it.
+
+Slice 2's criterion (a volume snapshotted and restored) and D31 are out of scope.
+
 **Measures:**
 - Every addressed service is reachable from the agent's container when `up` returns 0.
 - After `down`, the daemon holds 0 objects labelled with the environment's project.
 - Each refused setting creates 0 objects.
 - The operator-side git runs 0 agent-written hooks or config commands while enforced.
+- Slice 1: every container, network, volume and built image of an environment carries its session and grant labels,
+  read back; after a collection, the daemon holds 0 objects of an ended session's environments, and the ledger has one
+  row per environment collected, with its cause.
 
 ## Key Entities
 
@@ -212,9 +348,27 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
   are given per file in the plan.
 - **D-6 (Q6)** The workspace parent is 2001:2001, mode 2775, created by the operator (read back 2026-10-17T03:53:19Z).
   The agent (uid 1000) writes through `group_add` of the parent's group.
-- **D-7 (plan, FOR-MENTOR Item 28)** `build:` is refused in slice 0, as a forbidden setting (exit 2, naming `build`). Compose builds on the
+- **D-7 (plan, FOR-MENTOR Item 28; superseded in slice 1 by D-8)** `build:` is refused in slice 0, as a forbidden setting (exit 2, naming `build`). Compose builds on the
   client side, so a build would run in Adele's process, which can read her credential: a Dockerfile or build secret
   that is a symlink would be read by her. No slice-0 criterion needs a build; the fixture uses images the lane has.
+
+### Slice 1 (send `bridge/sends/13-rev17-20261018-120700.md`; the operator's decisions in
+`../bridge/feedback/13-20261018-120700-item-28-builds-and-session-end.md`; FOR-MENTOR Item 28 closed)
+
+- **D-8 (decision 1)** Builds: the sandbox makes the context archive; Adele streams it to the daemon's build API
+  without opening it; a build pulls nothing; build secrets, SSH, a non-default network, entitlements and outside
+  contexts are refused; `down` and collection remove what an environment built; a build has a bound (FR-20–FR-24).
+- **D-9 (the mentor's ruling 1)** Devcontainers go through slice 0's checked path: parsed and translated in the
+  sandbox, never the devcontainer CLI (it is Node, and it wants a socket); `features` refused in slice 1
+  (FR-16–FR-19).
+- **D-10 (decision 2)** A session has ended when its requesting container is gone, or when it was ended explicitly;
+  the requesting container is read from the daemon (FR-27, FR-28).
+- **D-11 (the mentor's ruling 3)** Session and grant labels on everything an environment creates, read back in the
+  criterion's test (FR-26).
+- **D-12 (cross-stack P003)** "Unchanged" is decided by the checked model's hash, which for a build includes the
+  digest of its context archive as the sandbox made it, its Dockerfile, args and target (R16).
+- **D-13 (decision C)** The readiness correction in FR-11.
+- **D-14 (the mentor's ruling 2)** `adele env exec` as FR-25.
 
 ## Assumptions
 
@@ -226,3 +380,7 @@ Prompt 13's slice-0 criteria, verbatim (each gets one test named after its disti
 - The agent's existing egress through compose's default network is unchanged until 12 slice 2. The new network
   routes nowhere (D-3).
 - This session has no Docker. Every e2e cell is first run in the mentor's lane.
+- Slice 1: the daemon's classic builder (the build API without a BuildKit session) is available on the host's engine
+  (R15). The lane is the first run of it.
+- Slice 1: the devcontainer fixtures are timelike's own. Real projects' devcontainers are not tried (cross-stack P005;
+  named in the cycle report's `not_verified`).
