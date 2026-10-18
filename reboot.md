@@ -43,8 +43,8 @@ push only on a discharge and the operator's OK (CLAUDE.md rule 5).
     D9 demo with the operator.
   - **Signed off at `49b5e76`** (feedback `../bridge/feedback/13-20261018-113014-slice-0-signed-off.md`): 13s0f
     green apart from one environmental SC-3 cell; D9 observed by the operator; Item 30 closed (approved); README Next
-    `13 slice 1`. The record commit, then the merge `--no-ff` into `master`. **No push, no tag:** `v0.22.0` waits
-    for the mentor's discharge and the operator's OK. Carried: slice 1's one-shot readiness (decision C), Item 28,
+    `13 slice 1`. Record commit `1e592b0`, merged `--no-ff` into `master` as `08df8e2`, discharged; **pushed
+    2026-10-18 with tag `v0.22.0`** (object `b7cd7ea`), on the operator's OK. Carried: slice 1's one-shot readiness (decision C), Item 28,
     open item 1 (002's bench unit).
 
 - **`modify/004-slice-1`** (from `master` `ba3107b`; `public/main` is still `5b9a347`, `v0.20.0`, and the lane-speed
