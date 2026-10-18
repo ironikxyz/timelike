@@ -328,3 +328,11 @@ FLAGGED (delegate): rule (a)'s cell starts a throwaway agent container labelled 
 FLAGGED (delegate): oneshot-fail accepts either path (compose up refusing a failed service_completed_successfully dependency, or the client's rule) and checks each on its own terms, naming on fd 3 which answered (confidence: medium)
 ASSUMED (delegate): the image nobody exists in timelike-agent:local and can run its Python; the classic builder prints "Step 2/2 : RUN false" (confidence: medium)
 ABSENT: no cell runs a build or a lifecycle command past its bound (5 min, 120 s: minutes of timing on a disk-bound host); no new lane.conf serial entry; the lane-start sweep removes built images in nested_sweep, at every lane start
+SCOPE: in (16 changed files)
+
+### T056: host lanes, the cycle report, reboot.md, commit
+**Completed:** 2026-10-18T13:16:41Z
+
+INHERITED: every task above
+ASSUMED: the README status block stands on both criteria being built; the lane shows whether they are met (confidence: medium)
+ABSENT: the Docker lane, scan and lint in their containers; mypy, staticcheck and govulncheck

@@ -899,3 +899,232 @@ NOTE: <repo>/.specswarm/features/014-nested-dev-env/quality-report.json reports 
 - **`quality-report.json`** is written by the analysis into this feature's folder (`overall_state: unknown`) and
   committed here, as 002's was.
 - **The merge is by hand,** `--no-ff`, of this commit, which is the signed-off `49b5e76` plus these records.
+
+## Cycle 6 — bridge/sends/13-rev17-20261018-120700.md
+
+**Written:** 2026-10-18T13:16:41Z (read from the clock). Attended, not in dispatch mode. **13 slice 1 (natural).** It runs from
+`master` at `08df8e2` (slice 0, v0.22.0) on `modify/014-slice-1`.
+- **The sequence:** Item 28 closed first (`cf768d8`), then `/specswarm:modify 014 --from-send
+  bridge/sends/13-rev17-20261018-120700.md`, `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement`
+  (attended, so no `.implement-complete`). **specswarm loaded in this session: 4.0.1-botbaubble.2.44.0** (lore
+  `specswarm` Q002).
+- **This report's path** is the one the send names, and the project's CLAUDE.md names the same one.
+- **Provenance:** modify's row 4. Revision 17 is already in `audited_against [8, 17]`, and neither prompt 13 nor
+  discovery moved, so nothing was appended. `audit-log.md` has a `none` row saying so, `slice` is `1`, and
+  `prompt_revision` stays 8.
+- **What the records gained:**
+  - spec.md: FR-16–FR-30, D-8–D-14, Scenarios 7–12, and FR-11 corrected per decision C;
+  - plan.md § Slice 1, with R12–R22;
+  - data-model.md and contracts/adele-env.md, each § Slice 1;
+  - tasks.md: T039–T056;
+  - decisions.md § Cycle 6;
+  - modify.md and impact-analysis.md: § Cycle 6.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261018-120700.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 1 |
+
+### Group C — written by the code instance
+
+**delegations:** four delegates. Each worked on files of its own, was given the plan's sections and a fixed API, and
+committed nothing; I reviewed and committed what each produced, and its decisions are in decisions.md marked
+`(delegate)`.
+1. `adele/internal/buildctx/`, the archive, `.dockerignore`, digest and Dockerfile scan (T041).
+2. `adele/internal/devcontainer/`, the JSONC parser and the translation (T042).
+3. The client: `tools/bin/adele` and `tests/unit/test_adele_env_slice1_cli.py` (T047, T050, the client half of T052).
+4. The e2e files, fixtures, `nested.bash` and the lane-start image sweep (T048, T051, T053, T054). This delegate found
+   a product defect, below.
+
+**reconcile_mode:** `scoped`. Slice 1's criteria were in prompt 13 from generation, and no revision moved.
+
+**What was built, by the send's sections:**
+- **Devcontainers (the mentor's ruling 1; FR-16–FR-19):**
+  - **Where it runs:** `devcontainer.json` (or `.devcontainer.json`) is parsed in the sandbox as JSONC, translated into
+    compose files there, and resolved by compose. Adele checks and brings up that model as she does a compose project.
+  - **Translated, refused and not run:** every key the ruling lists is translated. `initializeCommand`, `features`,
+    `appPort`, any unlisted key and any `runArgs` without a checked mapping are refused with exit 2.
+    `postAttachCommand` is named as not run.
+  - **Lifecycle commands:** run in the container after the record, each bounded at 120 s and named. One that fails
+    exits 1, and the environment stays up.
+  - **No devcontainer CLI** is used.
+- **Builds (the operator's decision 1; FR-20–FR-24):**
+  - **The archive:** a second sandbox (`adeled context`) archives the context. Links stay links, `.dockerignore` is
+    honoured, and uid and gid are 0.
+  - **The transport:** the archive is read from an attached stream with the log driver set to `none`, and Adele pipes
+    it to `POST /build` without opening it.
+  - **The builder:** the daemon's classic builder (`version=1`, `pull=0`).
+  - **Refused with exit 2:** build secrets, SSH, a non-default network, entitlements, privileged builds and
+    additional contexts, in the compose file or in the Dockerfile's `RUN` flags.
+  - **Images:** labelled and tagged `<env>-<service>:<key12>`, and removed by `down` and collection.
+  - **Bound:** a build has a 5-minute bound, and exits 124 naming the step.
+- **How the builder is kept from pulling** (the operator asked for this to be said). The classic builder pulls a
+  missing base whatever `pull` says, so two guards:
+  - every base (`FROM` and `COPY --from`, after the args) is inspected on the daemon before any build, and a missing
+    one exits 3 naming the operator's `docker pull`;
+  - during the build, Adele cancels the request at the first progress message that is a pull, which stops the build,
+    and also answers exit 3.
+
+  The test is `devcontainer-and-build-failures-name-their-cause.bats`'s missing-base cell: exit 3, and the daemon still
+  has no image of that reference afterwards.
+- **Exec (the mentor's ruling 2; FR-25):** `adele env exec [NAME] [--service S] -- CMD`.
+  - **How it runs:** as the devcontainer's `remoteUser` or the image's user, never privileged.
+  - **Output and exit:** output kept to the last 1 MiB of each stream, and the exit status passed through.
+  - **Bound:** 100 s by default (03's), past which it exits 124. The Engine API cannot stop an exec'd process, and the
+    verdict says so.
+  - **The ledger:** each exec is a performed row with no undo.
+  - **Exit 3:** a missing environment or service.
+- **Labels, session end and collection (the operator's decision 2; the mentor's ruling 3; FR-26–FR-29):**
+  - **Labels:** session, grant and requester labels on every container, network, volume and built image.
+  - **The requester:** read from the daemon by the request's peer address on `adele-request` (Adele's listener sets it,
+    never the body).
+  - **Session end:** `adele session end` writes one ledger row, and a second says "already ended".
+  - **Collection:** `adele env collect` and the reaper's tick run one pass, which removes an ended session's
+    environments, reads them back and records the cause.
+- **Exit codes (the mentor's ruling 4):** unchanged from slice 0, as FR-30 lists.
+- **Decision C (FR-11 corrected):**
+  - A service with no healthcheck and no port is "running, no readiness check", never "ready".
+  - If it exits while up waits, its exit decides.
+  - A service named in another's `depends_on` with `service_completed_successfully` is labelled a one-shot and waited
+    for.
+  - The README's readiness paragraph says the same.
+- **The lane:** the lane's start removes images labelled `xyz.ironik.timelike.env`. The build fixtures are two or three
+  layers on `DEBIAN_IMAGE` or `timelike-agent:local`, and no new file is `serial`.
+
+**Cross-stack rules, as the send asks:**
+- **P002, who resolves each path:**
+  - **The sandbox** resolves the project, a devcontainer's `workspaceMount`, `mounts` and `workspaceFolder`, each
+    build's context and Dockerfile, and every bind source (`EvalSymlinks`; the workspace is at its own path).
+  - **The daemon** resolves bind sources on the host, and reads only the build's tar.
+  - **Adele** reads no workspace file and does not open the tar.
+- **P003, "unchanged":** a build's key is the SHA-256 of the context's digest (each entry's path, type, mode, link and
+  content, never times), the Dockerfile's name in the archive, the sorted args and the target. The model's hash covers
+  each key, so an unchanged project is a no-op and a changed Dockerfile is "up with a different model".
+- **P004:** "collected", "ended", "removed" and the labels are read back from the daemon or the ledger.
+- **P005:** the devcontainer fixtures are timelike's own (see `not_verified`).
+
+**A product defect found before the lane, and fixed.** Compose interpolates the bytes Adele runs once more, so a
+`remote-env` label holding `${containerEnv:X}` made compose refuse the model. The e2e delegate confirmed this with the
+pinned docker-compose v5.6.0. `Inject` now escapes `$` as `$$` in Adele's own label values. A unit covers it, and the
+escaped label round-trips through that docker-compose's `config` here.
+
+**The libcurl re-review** (the send's three statements; the operator decides at sign-off):
+- **Does anything that holds or reaches the socket link libcurl? No.**
+  - **Adele:** her image is unchanged in its binaries (`adeled` and `docker-compose`, Go, static, `FROM scratch`), and
+    she alone holds the socket.
+  - **The sandboxes:** the resolve and context sandboxes run her own image, with no socket, no network and no secret.
+  - **The daemon** links what the host's engine links, as in slice 0.
+- **What new network path does the agent gain? None of its own.**
+  - **Exec** runs a command in a nested container. That container is on `timelike-nested` (internal) and on its
+    project's default network, which has egress as it did in slice 0.
+  - **The agent** has had egress on its own default network since 12 slice 0.
+
+  So exec adds a route to the nested services' own networks, not a new route out.
+- **What can a build's RUN steps reach?**
+  - **The network:** the daemon's default bridge network (`networkmode=default`), so outside addresses, as any
+    `docker build` on the host. A non-default network, `--network` and the insecure mode are refused.
+  - **Files:** only the archive's content, which the agent can already read.
+  - **No socket and no secret:** none is mounted into a build, and secret and SSH mounts are refused.
+
+**criteria_reestablished:** no e2e cell has run on this cycle's code, because there is no Docker here, so every
+criterion is `unconfirmed` for this commit. The lane is the first run.
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| `13 · "Bringing up a fixture project's compose file from inside the agent container starts its services and returns once they are ready"` | **unconfirmed** | `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`, unchanged; its verdict text is unchanged when no service is unchecked (decision C) |
+| `13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path"` | **unconfirmed** | `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`, unchanged; criterion 7's file also reads the devcontainer's bind back |
+| `13 · "is refused by Adele with exit 2 and rule 14's structured error, naming the setting and stating that no grant allows it"` | **unconfirmed** | `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`, unchanged; slice 1's refusals are in the failures file |
+| `13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not run"` | **unconfirmed** | `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`, unchanged |
+| `13 · "Bringing the environment up twice is a no-op the second time, and tearing it down removes every container, network and volume it created"` | **unconfirmed** | `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`, unchanged; teardown now also counts built images |
+| `13 · "A project's devcontainer definition is brought up and a command is executed inside it"` | **unconfirmed** | `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats` (6 cells: image and build forms, exec's status, user, folder and remoteEnv, the same path, exec into nothing) |
+| `13 · "Everything created carries session and grant labels, and a collect command removes environments whose session has ended"` | **unconfirmed** | `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (4 cells: all four kinds labelled, session end twice, collect by end, collect by a gone requester) |
+| `13 · "DEMO: the Agent brings up a compose test environment from inside its container, runs tests against it, and tears it down"` (D9) | **unconfirmed** | observed by the operator on slice 0 (`08df8e2`, transcript `bridge/.d9-demo-20261018T110127Z.txt`); not on this cycle's code |
+| `13 · "DEMO: the Agent brings up a project's devcontainer from inside its container and runs a command in it"` (D22) | **unconfirmed** | the demo is the mentor's with the operator, after the lane |
+
+Beside them: `tests/e2e/devcontainer-and-build-failures-name-their-cause.bats` (8 cells, the failures the send lists)
+and `tests/e2e/a-one-shot-is-never-reported-ready-while-it-runs.bats` (4 cells, decision C).
+
+**The host lanes, run before this report** (this cycle's code; the commit is the same tree):
+- **`make test-host`, serially:** passed, 13:03:42Z–13:13:35Z; 2636 passed, 13 skipped, in 559.95 s; env-layer 60/60,
+  hook 57/57, handler 33/33.
+- **The same with `-n 8`:** passed, 13:13:35Z–13:15:33Z; 2620 passed, 13 skipped, in 114.34 s; and the 16 `timed`
+  tests passed, run alone.
+- **Go 1.27.1:** `go test -race -count=1 -cover ./...` passed in every package.
+  - **Coverage, the new packages:** buildctx 92.5 %, devcontainer 94.9 %.
+  - **Coverage, the changed ones:** compose 92.5 %, ledger 90.7 %, reaper 95.3 %, adeled 82.9 %, engine 66.7 %,
+    broker 39.4 %. The broker's daemon paths are the lane's (tech-stack: Adele's Docker calls are not mocked to
+    reach coverage).
+  - `go vet` and `gofmt` are clean.
+- **ruff 0.16.7** (the lane pins 0.16.9): `check` and `format --check` over `tools tests scan bench scripts` pass.
+- **shellcheck 0.11.0, the lint's pinned version:** clean over `SHELLCHECK_FILES`, 108 files, from the repository
+  root.
+- **bats 1.14.0 `--count`:** 6, 4, 8 and 4 cells in the four new files.
+- **Not run:**
+  - the Docker lane, `make scan` and `make lint` in their containers;
+  - mypy, staticcheck and govulncheck over Adele's code.
+
+**not_verified:**
+- **Every e2e cell**, and so both slice-1 criteria and decision C on a daemon: no Docker here.
+- **That the host engine still offers the classic builder**, and its progress messages' exact text (the step line,
+  the pull messages that stop a build).
+- **Attach over the unix socket** (the context sandbox's stream and exec's): driven against a fake daemon only.
+- **That a throwaway container can join the stack's networks and be found by its address** (rule (a)'s cell).
+- **Real projects' devcontainers** (cross-stack P005). The fixtures are timelike's own, and these were not tried:
+  - Microsoft's `devcontainers/images` and `devcontainers/templates`;
+  - any devcontainer that uses `features`, which are refused in slice 1;
+  - the older top-level `dockerFile`/`context` form, which is refused as unknown keys;
+  - a compose-form devcontainer whose `forwardPorts` names a service its files do not have.
+- **A build or a lifecycle command past its bound** (5 min, 120 s): no cell waits that long on this host.
+- **An exec past its bound stops nothing**, as the verdict says. Not shown that the process is then removed only by
+  `down`.
+- **Two ups of one name that both build:** the second is refused or finds the first's image. Reasoned, not run.
+- **The client verdict's width:** an up verdict with a long name, "devcontainer," and the unchecked clause can pass
+  200 columns, and agentio then cuts it with its marker.
+
+**changed_other_features:**
+- **004 (12):**
+  - the ledger's live queries count only performed rows with an expiry, so an exec or a session end is never live
+    (`Live`, `LiveOf`, `LiveResource`, `LiveRows` and `Due`);
+  - one new writer, `Recorded`;
+  - `adeled ledger` prints such a row by its cause;
+  - the reaper gains an `After` hook on its tick.
+- **001 (agentio):** none in agentio itself. The `adele` tool switches agentio's `passes_exit` on for its exec verb at
+  run time, and its manifest does not declare it.
+- **maint-lane-speed (`tests/run.sh`):** the lane-start sweep also removes built images labelled
+  `xyz.ironik.timelike.env`.
+- **The Makefile:** the four new bats files are in `SHELLCHECK_FILES`.
+- **README:**
+  - the status block (23 of 38; row 13 "slices 0–1 of 0–2"; Next left as it is);
+  - the `adele env` section: builds, devcontainers, exec, sessions and collection, and the readiness paragraph per
+    decision C;
+  - the reference regenerated.
+
+  The previous update's 13 marks were cleared first, per the operator's rule.
+  - **Marked:** row 13's status, the first Status sentence, and the readiness sentences. Also the refusal paragraph's
+    build sentence, and the four new paragraphs (Builds, Devcontainers, Running a command, Sessions and collection).
+  - **Unmarked (code blocks cannot be marked):** two examples changed, `down`'s comment and the new block of four
+    commands.
+  - **In the generated reference:** `adele`.
+- **Others:** none.
+
+**process_failures_recorded:**
+- **Earlier cycles said shellcheck was not on this host.** It was installed in the session's scratchpad venv. This
+  cycle ran it over the lint's whole file list, 108 files, clean, with the version the lane pins (0.11.0).
+- **The four new bats files were not in `SHELLCHECK_FILES`** when they were committed (`6abb1ea`). They were added in
+  the next commit.
+- **A product defect was found before the lane** by a delegate reading compose's behaviour (the `$` in a label), not
+  by a test of mine.
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the lane has ended. Merge `--no-ff` only after sign-off. The
+mentor runs the lane, then the D22 demo with the operator, then the libcurl re-review at sign-off.
