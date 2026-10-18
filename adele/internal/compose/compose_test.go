@@ -52,7 +52,15 @@ func TestCheckRefusesEachForbiddenSettingNamingIt(t *testing.T) {
 		{`"external_links": ["other:db"]`, "external_links"},
 		{`"volumes_from": ["container:other"]`, "volumes_from"},
 		{`"container_name": "timelike-agent"`, "container_name"},
-		{`"build": {"context": "/w/ws1/p"}`, "build"},
+		{`"build": {"context": "/w/ws1/p", "secrets": [{"source": "s"}]}`, "build secrets"},
+		{`"build": {"context": "/w/ws1/p", "ssh": ["default"]}`, "build ssh"},
+		{`"build": {"context": "/w/ws1/p", "network": "host"}`, "build network"},
+		{`"build": {"context": "/w/ws1/p", "entitlements": ["network.host"]}`, "build entitlements"},
+		{`"build": {"context": "/w/ws1/p", "privileged": true}`, "build privileged"},
+		{`"build": {"context": "/w/ws1/p", "additional_contexts": {"x": "/w/ws1/q"}}`, "build additional_contexts"},
+		{`"build": {"context": "/w/ws1/p", "cache_from": ["x"]}`, "build.cache_from"},
+		{`"build": {"context": "/etc"}`, "build.context"},
+		{`"build": {"context": "/w/ws1/p", "labels": {"xyz.ironik.timelike.env": "spoof"}}`, "build.labels"},
 		{`"labels": {"xyz.ironik.timelike.env": "spoof"}`, "labels"},
 		{`"deploy": {"resources": {"reservations": {"devices": [{"capabilities": ["gpu"]}]}}}`, "deploy.resources.reservations.devices"},
 		{`"volumes": [{"type": "bind", "source": "/etc", "target": "/etc"}]`, "volumes"},
@@ -142,7 +150,7 @@ func TestInjectLabelsEverythingAndJoinsTheSharedNetwork(t *testing.T) {
 	m := model(t, `{"name": "orig", "services": {"db": {"image": "debian:x", "env_file": [{"path": "/w/ws1/.env"}], "pull_policy": "always", "expose": ["5432"]},
 	  "solo": {"image": "debian:x", "network_mode": "none"}}, "volumes": {"data": {}}}`)
 	created := time.Date(2026, 10, 17, 4, 0, 0, 0, time.UTC)
-	raw, err := Inject(m, "tl-p-abc123", created, time.Hour, Hash(m))
+	raw, err := Inject(m, "tl-p-abc123", created, time.Hour, Hash(m), Meta{Session: "s1", Grant: "g", Requester: "agent1"})
 	if err != nil {
 		t.Fatal(err)
 	}

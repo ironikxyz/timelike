@@ -254,3 +254,13 @@ FLAGGED (delegate): Translate returns a refusal as `*RefusalError` wrapping `*co
 FLAGGED (delegate): more than one of image, build and dockerComposeFile is refused, naming the second; a build key other than dockerfile, context, args and target is refused as `build.<key>`; a value of the wrong JSON type is refused, naming its key (confidence: high)
 ASSUMED (delegate): `-v NAME:/x` is a named volume, declared at the top level; `-v ./rel:/x` is refused; a relative source in `mounts` is left to compose, which makes it absolute against the project directory, and slice 0's check then judges it (confidence: medium)
 ABSENT: the legacy top-level `dockerFile` and `context` keys are refused as unknown, not translated; a compose-form forwardPorts naming a service not in the files is left to compose config's own error
+SCOPE: in (3 changed files)
+
+### T043: compose — builds checked, slice 1's labels, one-shots, build keys in the hash
+**Started:** 2026-10-18T12:29:44Z | **Completed:** 2026-10-18T12:31:15Z
+
+INHERITED: slice 0's refusal list and Inject (T005, Cycle 1); R16's allowed and refused build keys
+FLAGGED: slice 0's `build` refusal (D-7) is lifted. A build is checked by key: context, dockerfile, args, target and labels are brokered; secrets, ssh, entitlements, privileged and additional_contexts are refused under the names the operator's decision gives them ("build secrets", …); a network other than default is "build network"; any other key is refused as `build.<key>`. Chose an allow-list over the decision's refuse-list alone, so a build key compose adds later is refused until someone looks at it (confidence: high)
+ASSUMED: compose's config makes a build's context absolute and leaves a relative dockerfile relative to it; Builds joins them (confidence: medium — compose's normalised output is not read here)
+ASSUMED: a one-shot for certain is exactly a service another names in depends_on with condition service_completed_successfully, in the resolved model's map form (confidence: high)
+ABSENT: Inject's requester is "unknown" until T045/T049 pass the real one; slice 0's broker call keeps compiling with session and grant

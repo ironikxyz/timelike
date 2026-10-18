@@ -321,7 +321,7 @@ func (b *Broker) envUp(ctx context.Context, req Request) Outcome {
 	}
 
 	created := b.now().Truncate(time.Second)
-	bytesUp, err := compose.Inject(model, p.Name, created, ttl, hash)
+	bytesUp, err := compose.Inject(model, p.Name, created, ttl, hash, compose.Meta{Session: req.Session, Grant: g.Name, Requester: "unknown"})
 	if err != nil {
 		return envFail(http.StatusInternalServerError, "cannot write the checked model: "+err.Error(), "")
 	}

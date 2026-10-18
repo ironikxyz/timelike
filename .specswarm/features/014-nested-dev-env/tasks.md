@@ -93,7 +93,7 @@ units beside each change.
 - [X] T040 Engine: images in `Count` and `Down`; `ImagesByLabel`; `ContainerByAddress` (R18); `Logs` tail; attach for a sandbox (`RunAttached`, `LogConfig: none`); `Build` (classic builder, streamed body, pull watch, step tracking, bound); `Exec` (attached, bounded, exit code) (`adele/internal/engine/engine.go`); units against the fake daemon
 - [X] T041 [P] `adele/internal/buildctx/`: `.dockerignore` matching, the walk (links as links), the archive, its digest, the Dockerfile scan (bases, refused RUN flags), the build key; units
 - [X] T042 [P] `adele/internal/devcontainer/`: JSONC with line-numbered errors, variables, translation (image, build, dockerComposeFile), `workspaceMount`/`workspaceFolder` rules, `runArgs` mapping, the refusals; units
-- [ ] T043 Compose: `build:` allowed with R16's checks (slice 0's `build` refusal lifted); `Inject` labels session, grant, requester, one-shot and the devcontainer's primary; the build keys in the hash; `Builds(model)` (`adele/internal/compose/compose.go`); units
+- [X] T043 Compose: `build:` allowed with R16's checks (slice 0's `build` refusal lifted); `Inject` labels session, grant, requester, one-shot and the devcontainer's primary; the build keys in the hash; `Builds(model)` (`adele/internal/compose/compose.go`); units
 
 ### Phase 14: US7, a devcontainer brought up and a command run in it (criterion 7; D22)
 
