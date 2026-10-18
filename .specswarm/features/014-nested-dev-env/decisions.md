@@ -244,3 +244,13 @@ FLAGGED (delegate): WriteTar re-checks each entry's type, mode, link, size and c
 FLAGGED (delegate): RUN --mount=from=IMAGE also counts as a base, and Bases lists every stage's images, those after the target included (conservative: a missing one is refused even when the classic builder would not reach it) (confidence: medium)
 ASSUMED (delegate): an excluded directory is skipped whole only when no exception could reach below it; otherwise walked, its own entry left out (confidence: medium)
 ABSENT: heredocs are not parsed (the classic builder has none); the injected Dockerfile's name is not checked for a collision with a real file; .dockerignore beside a Dockerfile (Dockerfile.dockerignore) is not read
+SCOPE (T040–T041, one commit 7739f1a): out — adele/internal/engine/engine_test.go, adele/internal/engine/slice1.go, adele/internal/engine/slice1_test.go (3 of 10 changed files) (task has FLAGGED: yes)
+
+### T042: `adele/internal/devcontainer/` (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:29:20Z
+
+INHERITED: plan R12–R13, given to a delegate with the exported API fixed
+FLAGGED (delegate): Translate returns a refusal as `*RefusalError` wrapping `*compose.Refusal` (which is not an error), rather than a third return value (confidence: high)
+FLAGGED (delegate): more than one of image, build and dockerComposeFile is refused, naming the second; a build key other than dockerfile, context, args and target is refused as `build.<key>`; a value of the wrong JSON type is refused, naming its key (confidence: high)
+ASSUMED (delegate): `-v NAME:/x` is a named volume, declared at the top level; `-v ./rel:/x` is refused; a relative source in `mounts` is left to compose, which makes it absolute against the project directory, and slice 0's check then judges it (confidence: medium)
+ABSENT: the legacy top-level `dockerFile` and `context` keys are refused as unknown, not translated; a compose-form forwardPorts naming a service not in the files is left to compose config's own error
