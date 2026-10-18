@@ -424,8 +424,9 @@ compose_up() {
 }
 
 # shellcheck disable=SC2329 # invoked from compose_up
-# nested_sweep — remove every container, network and volume carrying timelike's environment or sandbox label
-# (feature 13), and nothing else: the host's rule is that timelike removes only its own.
+# nested_sweep — remove every container, network, volume and built image carrying timelike's environment or sandbox
+# label (feature 13), and nothing else: the host's rule is that timelike removes only its own. It runs at the lane's
+# start (compose_up), before every e2e lane, serial or parallel, so the images are swept where the sandboxes are.
 nested_sweep() {
   local ids
   ids="$(docker ps -aq --filter label=xyz.ironik.timelike.env; docker ps -aq --filter label=xyz.ironik.timelike.sandbox)" || return 1
@@ -437,6 +438,11 @@ nested_sweep() {
   ids="$(docker volume ls -q --filter label=xyz.ironik.timelike.env)" || return 1
   # shellcheck disable=SC2086
   [[ -z "${ids}" ]] || docker volume rm ${ids} >/dev/null || return 1
+  # Feature 13 slice 1 (014 plan R16, R22): images an environment's build made (tagged tl-*), labelled with it.
+  # After the containers, which may run them. One id per image: an image with two tags is listed twice.
+  ids="$(docker image ls -q --filter label=xyz.ironik.timelike.env | sort -u)" || return 1
+  # shellcheck disable=SC2086
+  [[ -z "${ids}" ]] || docker image rm -f ${ids} >/dev/null || return 1
 }
 
 # shellcheck disable=SC2329 # invoked from compose_up, itself invoked indirectly by step

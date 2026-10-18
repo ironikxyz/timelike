@@ -316,3 +316,15 @@ INHERITED: the send's README status block; the client's verbs and verdicts (T047
 FLAGGED: the status block is applied now, on both slice-1 criteria being built with their cells written, as slice 0's T019 applied its block before its lane ran; the lane is what shows they are met (confidence: medium)
 ASSUMED: the Status paragraph's other sentences stay true ("Features 02, 03, 07–13 and 15 have their first slice or slices") and the Next line is left as it is, as the send says (confidence: high)
 ABSENT: the two changed command examples sit in code blocks, which cannot be marked; slice 0's 13 marks were removed first, per the operator's rule
+SCOPE: out — README.md (1 of 1 changed files) (task has FLAGGED: yes)
+
+### T048, T051, T053, T054, T052 (e2e half): the slice-1 cells, fixtures and lane (delegated), and the label fix they found
+**Started:** 2026-10-18T12:43:00Z | **Completed:** 2026-10-18T13:02:42Z
+
+INHERITED: every verdict, error and ledger cause from tools/bin/adele and the broker (T045–T049), read from the code by the delegate
+FLAGGED: a defect the cells were written to find, confirmed with the pinned docker-compose v5.6.0's config here: compose interpolates the bytes Adele runs once more, so a remote-env label holding ${containerEnv:X} made compose refuse the model. Inject now escapes $ as $$ in Adele's own label values, and the escaped label round-trips through compose's config (confidence: high)
+FLAGGED (delegate): the reaper runs the same collection pass every 5 s and can win the race with a cell's `adele env collect`; the cells assert the ledger row and the daemon either way, and say on fd 3 which pass collected (confidence: high)
+FLAGGED (delegate): rule (a)'s cell starts a throwaway agent container labelled as the agent is, on the agent's own adele-request network and timelike-nested, so Adele finds it by its address; its removal is what ends the session (confidence: medium — that a non-compose container can join those networks and resolve adele is the lane's)
+FLAGGED (delegate): oneshot-fail accepts either path (compose up refusing a failed service_completed_successfully dependency, or the client's rule) and checks each on its own terms, naming on fd 3 which answered (confidence: medium)
+ASSUMED (delegate): the image nobody exists in timelike-agent:local and can run its Python; the classic builder prints "Step 2/2 : RUN false" (confidence: medium)
+ABSENT: no cell runs a build or a lifecycle command past its bound (5 min, 120 s: minutes of timing on a disk-bound host); no new lane.conf serial entry; the lane-start sweep removes built images in nested_sweep, at every lane start

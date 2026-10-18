@@ -1,0 +1,18 @@
+# Decision C, the client's own rule (feature 13 slice 1, Scenario 12; tools/bin/adele readiness): a service with no
+# healthcheck and no port that exits non-zero while up waits fails up with exit 1, naming it and its last lines.
+#   - slow keeps up waiting: its healthcheck passes only after 30 s, inside a 60 s start period, so it is "starting";
+#   - broke has no healthcheck and no port; it prints a line and exits 1 after 1 s, long before slow is healthy.
+# Nothing here is a time the cell asserts: 30 s is only room, so that broke's exit comes while up still waits.
+services:
+  slow:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "-c", "sleep 30; touch /tmp/ok; exec sleep infinity"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ok"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+      start_period: 60s
+  broke:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "-c", "sleep 1; echo broke: the fixture says so; exit 1"]

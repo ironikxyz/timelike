@@ -101,22 +101,22 @@ units beside each change.
 - [X] T045 [US7] Broker up: devcontainer requests, builds (bases checked, reuse by key, the context sandbox piped into the build, the refusals' answers), lifecycle commands after the record, outside Envs' lock (`adele/internal/broker/env.go`); units
 - [X] T046 [US7] Broker exec: `action: exec`, the target service, user, workdir and env from labels, bounded output, the timeout answer, the ledger row (`env.go`, `broker.go`); units
 - [X] T047 [US7] Client: `adele env up --devcontainer` and the auto choice; the built and lifecycle lines; `adele env exec` with `passes_exit`, `--timeout` default 100 s for exec (`tools/bin/adele`); units `tests/unit/test_adele_env_cli.py`
-- [ ] T048 [US7] e2e `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; fixtures `tests/e2e/fixtures/nested/devcontainer/`, `devcontainer-build/`
+- [X] T048 [US7] e2e `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; fixtures `tests/e2e/fixtures/nested/devcontainer/`, `devcontainer-build/`
 
 ### Phase 15: US8, labels, session end and collection (criterion 8)
 
 - [X] T049 [US8] The requester from the peer address (`http.go` → `Request.Peer`); `POST /v1/sessions/end`; `POST /v1/envs/collect` and `Broker.Collect`; the reaper's tick runs it (`adele/internal/broker/`, `adele/internal/reaper/reaper.go`, `adele/cmd/adeled/serve.go`); units
 - [X] T050 [US8] Client: `adele session end`, `adele env collect` (`tools/bin/adele`); units
-- [ ] T051 [US8] e2e `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (labels on all four kinds read back, session end, collect, a gone container, 0 collected, ended twice); fixture `tests/e2e/fixtures/nested/build/`
+- [X] T051 [US8] e2e `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` (labels on all four kinds read back, session end, collect, a gone container, 0 collected, ended twice); fixture `tests/e2e/fixtures/nested/build/`
 
 ### Phase 16: The failures slice 1 owns, and decision C
 
-- [ ] T052 Readiness per decision C: one-shot labels and last lines read back (`env.go`, `compose.go`); the client's words and conclusion (`tools/bin/adele`); units; every e2e assertion pinning the old words updated
-- [ ] T053 e2e `tests/e2e/devcontainer-and-build-failures-name-their-cause.bats` (a bad devcontainer.json, initializeCommand, features, a build secret, a missing base with nothing pulled, a failed step, a failed lifecycle command, exec into nothing) and `tests/e2e/a-one-shot-is-never-reported-ready-while-it-runs.bats`; fixture `tests/e2e/fixtures/nested/oneshot/`
+- [X] T052 Readiness per decision C: one-shot labels and last lines read back (`env.go`, `compose.go`); the client's words and conclusion (`tools/bin/adele`); units; every e2e assertion pinning the old words updated
+- [X] T053 e2e `tests/e2e/devcontainer-and-build-failures-name-their-cause.bats` (a bad devcontainer.json, initializeCommand, features, a build secret, a missing base with nothing pulled, a failed step, a failed lifecycle command, exec into nothing) and `tests/e2e/a-one-shot-is-never-reported-ready-while-it-runs.bats`; fixture `tests/e2e/fixtures/nested/oneshot/`
 
 ### Phase 17: Polish
 
-- [ ] T054 The lane: the start's image sweep (`tests/run.sh`); `tests/e2e/lane.conf` lines for the new files; `tests/e2e/nested.bash` helpers (images, labels, a throwaway agent); `nested_teardown` counts images
+- [X] T054 The lane: the start's image sweep (`tests/run.sh`); `tests/e2e/lane.conf` lines for the new files; `tests/e2e/nested.bash` helpers (images, labels, a throwaway agent); `nested_teardown` counts images
 - [X] T055 README: the `adele env` section (devcontainers, builds, exec, collect, session end), the readiness paragraph per decision C, the status block if both slice-1 criteria are met, the reference regenerated
 - [ ] T056 Host lanes (serial and `-n 8`), Go units with -race and vet, ruff; Cycle 6's report (the libcurl re-review's three statements; the specswarm version); `reboot.md`; the deny-list on the staged tree; commit
 

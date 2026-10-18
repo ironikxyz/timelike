@@ -1,0 +1,23 @@
+// timelike's fixture devcontainer, image form (feature 13 slice 1, criterion 7; 014 plan R12, R13, R22). JSONC on
+// purpose: comments of both kinds and trailing commas, which the sandbox blanks before it decodes.
+// A devcontainer.json has no .env, so the cell writes the image's reference where @AGENT_IMAGE@ stands
+// (nested.bash: nested_files). It is the agent's own image, already on the daemon: nothing is pulled, and it has an
+// interpreter to serve the forwarded port.
+{
+  "name": "timelike nested fixture",
+  "image": "@AGENT_IMAGE@",
+  /* The project directory, at its own absolute path: the translation keeps criterion 2's rule. */
+  "workspaceFolder": "${localWorkspaceFolder}",
+  // exec and the lifecycle commands run as this user, which is not the image's own (agent).
+  "remoteUser": "nobody",
+  "remoteEnv": {
+    "TL_GREETING": "hello from remoteEnv",
+  },
+  // An address on timelike-nested, probed from the agent's container; nothing is published on the host.
+  "forwardPorts": [8080],
+  // Written into the workspace folder as the remote user; the cell reads it from the agent's side.
+  "postCreateCommand": "id -un > .tl-postcreate",
+  "postStartCommand": "nohup /opt/timelike/python/bin/python3 -I -m http.server 8080 --directory /tmp >/dev/null 2>&1 &",
+  // Never run (there is no attach); named in the verdict.
+  "postAttachCommand": "echo attached",
+}

@@ -594,10 +594,13 @@ func Inject(model Model, name string, created time.Time, ttl time.Duration, hash
 			labels[engine.LabelOneShot] = "1"
 		}
 		if svc == meta.Primary && meta.Primary != "" {
+			// compose interpolates the bytes it is given once more, so a value of Adele's own that holds a $ (remoteEnv's
+			// ${containerEnv:X}, kept for exec) is escaped as $$, which compose reads back as $ (lane-free finding,
+			// slice 1: compose up refused the label as an invalid interpolation).
 			labels[engine.LabelDevcontainer] = "1"
-			labels[engine.LabelRemoteUser] = meta.RemoteUser
-			labels[engine.LabelWorkdir] = meta.Workdir
-			labels[engine.LabelRemoteEnv] = meta.RemoteEnv
+			labels[engine.LabelRemoteUser] = escapeDollar(meta.RemoteUser)
+			labels[engine.LabelWorkdir] = escapeDollar(meta.Workdir)
+			labels[engine.LabelRemoteEnv] = escapeDollar(meta.RemoteEnv)
 		}
 		s["labels"] = labels
 		if str(s["network_mode"]) != "" {
@@ -738,3 +741,6 @@ func Outside(msg, ws string) *Refusal {
 	}
 	return nil
 }
+
+// escapeDollar escapes $ for compose's interpolation of the bytes Adele runs.
+func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$") }

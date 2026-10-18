@@ -82,3 +82,16 @@ func TestInjectLabelsSessionGrantRequesterOneShotsAndTheDevcontainer(t *testing.
 		}
 	}
 }
+
+// A remoteEnv holding ${containerEnv:X} reaches compose escaped, so compose's interpolation reads it back unchanged.
+func TestInjectEscapesTheDollarsInAdelesOwnLabels(t *testing.T) {
+	m := model(t, `{"services": {"dev": {"image": "debian:x"}}}`)
+	raw, err := Inject(m, "tl-p-1", time.Unix(0, 0), time.Hour, "h", Meta{Primary: "dev", RemoteEnv: `{"P":"${containerEnv:PATH}:/x"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := model(t, string(raw))["services"].(map[string]any)["dev"].(map[string]any)["labels"].(map[string]any)
+	if l[engine.LabelRemoteEnv] != `{"P":"$${containerEnv:PATH}:/x"}` {
+		t.Fatalf("remote-env label %q", l[engine.LabelRemoteEnv])
+	}
+}
