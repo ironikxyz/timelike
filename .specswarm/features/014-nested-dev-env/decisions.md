@@ -421,3 +421,5 @@ ASSUMED: a pause that does not read back paused unpauses every user and writes n
 ASSUMED: restore's users include paused and restarting containers, thawed before the stop, so a restore never writes under a running process (confidence: medium)
 ASSUMED: Adele's own readiness read for a restore is the daemon's state and healthcheck, at most 60 s; the client then probes ports from the agent's container as up does (cross-stack P001) (confidence: high)
 ABSENT: no run against a daemon (the fake daemon here checks the order of acts, not the daemon's answers); the restore of a volume while another environment's service mounts it is impossible by construction (only own volumes) and not tested
+SCOPE: in (7 changed files)
+FLAGGED: Adele's own readiness read after a restore waits only until each started service is running again (10 s at most) and records the health it then reads; waiting for readiness is the client's alone, as up's is — chose that over Adele waiting up to 60 s for healthchecks, which put a second wait in front of the client's --wait (confidence: high)

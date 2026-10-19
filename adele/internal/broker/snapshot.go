@@ -33,7 +33,7 @@ const (
 	SnapshotTimeout = 5 * time.Minute  // a copy, either way
 	HelperTimeout   = 2 * time.Minute  // a measure or a digest
 	StopWait        = 10 * time.Second // a service stopped for a restore
-	ReadyWait       = 60 * time.Second // how long Adele reads a restored service's healthcheck back
+	ReadyWait       = 10 * time.Second // how long Adele waits for a restored service to be running again
 	MaxNote         = 200
 )
 
@@ -770,8 +770,9 @@ func nonNilStrings(l []string) []string {
 	return l
 }
 
-// readBack waits, bounded, for each service's state as the daemon reports it: healthy for one with a healthcheck,
-// running for one without. It returns what it last read (healthy, running, starting, unhealthy, exited N).
+// readBack waits, bounded, until each started service is running (or has exited) as the daemon reports it, and
+// returns what it read: its healthcheck's state where it has one (healthy, starting, unhealthy), else running, or
+// exited N. Waiting for readiness is the client's, from the agent's container, as up's is (R27 step 7).
 func (e *Envs) readBack(ctx context.Context, name string, services []string) map[string]string {
 	out := map[string]string{}
 	until := time.Now().Add(ReadyWait)
@@ -794,7 +795,7 @@ func (e *Envs) readBack(ctx context.Context, name string, services []string) map
 				}
 			}
 			out[want] = word
-			done = done && (word == "healthy" || word == "running" || strings.HasPrefix(word, "exited"))
+			done = done && word != "gone" && word != "created" && word != "restarting"
 		}
 		if done || time.Now().After(until) {
 			return out
