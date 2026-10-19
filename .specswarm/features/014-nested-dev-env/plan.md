@@ -437,3 +437,248 @@ README.md                          the adele env section, the readiness paragrap
 | Attach instead of logs | The log driver re-encodes stdout as JSON strings (binary is mangled) and writes it to the host's disk | Reading the archive back from the sandbox's logs |
 | Watching the build for a pull | The classic builder pulls a missing base whatever `pull` says | Trusting the pre-check alone (a prune between check and build) |
 | A translation, not the devcontainer CLI | The mentor's ruling: the CLI is Node and wants a socket | — |
+
+---
+
+# Slice 2 (hardened) — `bridge/sends/13-rev17-20261019-034239.md`
+
+**Branch:** `modify/014-slice-2` (from `master` at `295824e`, v0.23.0) · **Decisions:** the operator's two
+(2026-10-19) and the mentor's seven rulings, in the send · **specswarm:** 4.0.1-botbaubble.2.44.0
+
+## Summary
+
+An environment's named volumes can be snapshotted and restored, through Adele, under the grant:
+- `adele env snapshot|snapshots|restore|snapshot-rm` on the agent's side (R31);
+- on Adele's side, a snapshot is a volume on the daemon that she creates and labels like the rest of the
+  environment, filled by a throwaway helper from her own image (R23–R25);
+- a volume in use is copied with its users paused (R26). Restore stops them, replaces the contents, starts them and
+  waits for readiness (R27);
+- every pause and stop is recorded before it is made, so a crash never leaves a service paused or stopped (R28);
+- the snapshot's digest is recorded when it is taken and checked both ways (R24);
+- the cap comes from the grant (R29), and nothing a snapshot creates outlives its environment (R30).
+
+The two D22 observations (A: verdicts past 200 columns; B: "ports probed" when nothing was) are fixed in the client
+(R32).
+
+## Technical Context (slice 2)
+
+| Item | Value |
+|---|---|
+| Languages | unchanged: Go (Adele), Python (the client), Bash (the lane) |
+| Dependencies | **none new.** Go stdlib (`io/fs`, `syscall` for owners, times and links, `crypto/sha256`). The Engine API's volume, pause, unpause, stop and start endpoints over the existing client |
+| Storage | 12's ledger: **no schema change.** One new writer (a performed row with an undo and no expiry), one ending writer for a pause or a stop, and queries by action. The snapshot's record (digest, bytes, files) is in its row's undo document, beside the removal it names |
+| Testing | go test: the copy, digest and measure package against temp trees (owners and modes where the test runs as root, skipped and said otherwise); the broker's snapshot, restore, refusals, recovery and orphan passes against the fake daemon; grants' new keys; pytest: the four verbs, the confirm protocol, verdict widths; bats e2e: the criterion's file, the failures file, the recovery file |
+| Bounds | a snapshot's copy `SnapshotTimeout` 5 min; a restore's copy the same; the measure and digest helpers 2 min; a stop 10 s per container; a restore's readiness the client's `--wait` (120 s default, as `up`) |
+| Unknowns | not verifiable here (no Docker): pause and unpause read back on the host's engine; a helper's capabilities enough for a database's owners; tmpfs volumes on the host's engine |
+
+## Constitution Check (slice 2)
+
+| Principle | Check | Result |
+|---|---|---|
+| P1 | The agent snapshots and restores its environment's data itself; over the cap, the operator's exact command | ✅ |
+| P2 | Every snapshot, restore and removal has a bound and a verdict naming its cause: a full store, a killed helper, a mismatched digest, a service not ready | ✅ |
+| P3 | `adele env snapshot…` follows the `<tool> <verb>` habit; the announcement and `--agent-info` say these are an environment's volumes, where `snapshot`/`undo` are the workspace's (R31) | ✅ |
+| P4 | Only through Adele, under the grant's cap; the helper has no network, no socket and no secret; Adele never opens volume contents | ✅ |
+| P5 | The point of the slice: an environment's data back to a prior state, by the agent | ✅ |
+| P6 | No claim of value | n/a |
+| P7 | Shell commands only | ✅ |
+| H1 | No socket in the agent; the helper is a sandbox from Adele's image with named capabilities only (R25) | ✅ |
+| H2 | Exit codes as slice 0's (FR-43); restore's exit 4 is the confirm envelope, the cap's is the grant envelope | ✅ |
+| H3 | "Taken", "restored", "unpaused" and "removed" are read back: digests, the daemon's state, the daemon's volume list (cross-stack P003, P004) | ✅ |
+| H5 | stdlib only | ✅ |
+| H7 | One file per criterion (the snapshot criterion), the failures file, the recovery file; D31 Manual | ✅ |
+
+## Research (slice 2): R23–R33
+
+### R23 · Where a snapshot lives
+
+A snapshot is one volume on the daemon, named `<env>-snap-<id>` (`id` is 8 hex, random), created by Adele:
+- **labels:** `…env=<env>` (so slice 0's `down` and every collection remove it with the environment), `…snapshot=<id>`,
+  `…snapshot-of=<the source volume's daemon name>`, `…session`, `…grant`, `…requester`, `…created`, and the compose
+  project label left empty so compose never counts it as its own;
+- **the record** is the snapshot's ledger row (R24), not the volume: a volume's labels are fixed when it is made,
+  before its digest is known, and the record must not live where the content it vouches for lives;
+- a snapshot volume with no record is **partial** (a copy cut short by Adele's death). It is never listed, and R30
+  removes it.
+
+The store is a plain local volume. A grant may set `snapshot-store = tmpfs`: the volume is a tmpfs of the cap's
+size, held in memory and lost when the daemon restarts. It exists so a store can be bounded, which is how the
+disk-full cell fills a store without touching the host's disk (R33); the README says what it costs.
+
+### R24 · The digest, and what "whole" means
+
+The helper walks a tree in lexical order and hashes one line per entry: its relative path, type, mode bits
+(including setuid, setgid, sticky), uid, gid, mtime (seconds and nanoseconds), and for a regular file its size and
+the SHA-256 of its content, for a link its target, for a hard link the path it shares an inode with. The root's own
+mode, owner and times are its first line. The digest is SHA-256 over the lines. The byte count is the sum of regular
+files' sizes; the file count is the entries other than the root.
+- **Snapshot:** the helper copies the source to the snapshot volume, then digests the copy. Adele keeps the
+  snapshot only when the source's digest during the copy equals the copy's read back.
+- **Restore:** before anything is stopped, a helper digests the snapshot volume, and Adele compares it with the
+  record. A mismatch is exit 1, nothing stopped. After the copy, the target's digest must equal the record.
+- **Not copied, and said:** sockets (they cannot be copied; the count is in the record and the verdict). A device node
+  is refused (exit 1 naming it): making one needs `MKNOD`, which the helper does not get. Extended attributes and ACLs
+  are not kept (`not_verified`).
+- A file that changes during the copy cannot happen to a paused service's files. It can happen to a volume no running
+  service mounts but a stopped one does, which nothing writes.
+
+### R25 · The helper
+
+`adeled volume measure|copy|digest|restore`, run by `engine.Run` as a sandbox from Adele's own image:
+- network none, no socket, no secret, read-only root, `no-new-privileges`, its `/tmp` a small tmpfs, memory and
+  pids bounded, `LogConfig` none;
+- the source mounted read-only at `/src`, the target (if any) at `/dst`;
+- **user 0, with all capabilities dropped and these added, each for one reason:**
+  - `CHOWN`, to give each copied entry its owner and group;
+  - `DAC_READ_SEARCH`, to read a database's files and directories whatever their modes (a 0700 directory owned by
+    uid 999);
+  - `DAC_OVERRIDE`, to write into directories the copy has already given to another owner;
+  - `FOWNER`, to set modes and times on entries it does not own;
+  - `FSETID`, so setting a mode keeps a setgid or setuid bit after the owner changes;
+- labelled `…sandbox=volume`, so the sandbox sweep removes one left behind, and named `tl-sandbox-<env>-vol-<hex>`,
+  which is how the lane's kill cell finds it.
+
+Its answer is one JSON line on stdout (`digest`, `bytes`, `files`, `sockets`, and for a copy `copy_digest`). Its exits
+are its own: 0 done; 10 the bytes are past `--max-bytes` (nothing written: it measures before it writes); 11 no space
+in the target; 12 an entry it will not copy (a device); 1 anything else. Adele reads both.
+
+### R26 · Snapshot, in order
+
+Under Envs' lock (`snapshot NAME`), so no `up`, `down` or restore of any environment interleaves:
+1. the environment is live and its volume is one of its own named volumes (FR-32), else exit 3;
+2. the cap (R29): the helper measures the source, unpaused and read-only, and a snapshot past the cap is refused, with
+   nothing written;
+3. the users: the environment's running containers whose mounts include the volume;
+4. **a pause row first** (R28), then pause each, read back paused;
+5. create the snapshot volume, run the copy (`--max-bytes` the cap left, so a volume that grew since step 2 fails
+   rather than passes the cap);
+6. **unpause, whatever happened**, read back running; end the pause row;
+7. a failed copy: remove the snapshot volume, read back gone, exit 1 naming the cause;
+8. the digests equal: the snapshot row, then the answer.
+
+### R27 · Restore, in order
+
+`--dry-run`, and a call without `--yes`, get the plan from Adele (`dry_run: true`): the volume, the snapshot, the
+services that would be stopped. Nothing is checked that changes anything, and no row is written. With `--yes`, under
+Envs' lock:
+1. the snapshot is this environment's, and its source volume is still one of this environment's volumes (FR-32);
+2. the snapshot's digest is checked against its record, before anything is stopped;
+3. **a stop row first**, then stop the users (10 s each), read back exited;
+4. the restore helper empties the target (not its root) and copies the snapshot in; the target's digest must equal
+   the record;
+5. **start the stopped services, whatever happened**, read back; end the stop row;
+6. Adele waits, bounded, for each started service's healthcheck as the daemon reports it, and records what she read:
+   the restore row names the snapshot, the services stopped, and that readiness;
+7. the answer carries the services, and the client then waits for readiness exactly as `up` does, probing ports from
+   the agent's container (cross-stack P001), with `up`'s verdict.
+
+A copy that fails at step 4 leaves the volume partial: the services are started again (step 5), the verdict says the
+contents are partial and names `restore` again and `down`. A service that is not ready after a restore is exit 1;
+the data stays restored.
+
+### R28 · Never left paused, never left stopped
+
+A pause row and a stop row are performed rows whose undo is the unpause or the start, naming the containers, written
+**before** the pause or stop. Each is ended by a row referring to it once the unpause or start reads back. A pass at
+Adele's start and on every reaper tick (the slice-1 `After` hook) takes every open pause or stop row, unpauses or
+starts whichever of its containers the daemon still has paused or stopped, and ends the row with the cause ("Adele
+stopped while it was paused; unpaused, read back running"). The daemon cannot label a running container, so "labelled
+when paused" (the send) is kept by the ledger instead, and the cycle report says so.
+
+### R29 · The cap
+
+The grant file gains two optional keys (absent means the default): `snapshots`, a size (`1GiB`, `256MiB`, `64KiB`,
+`0`), default **1 GiB**, the bytes of snapshots one environment may hold; and `snapshot-store` (R23). `adeled extend
+GRANT snapshots SIZE` raises it. "Used" is the sum of the recorded bytes of the environment's snapshots that still
+have a volume. A refusal is the grant envelope: `limit: snapshots`, allowed "1 GiB (300 MiB used)", needed "volume
+db-data: 900 MiB", and the operator's command with the size that would allow it.
+
+### R30 · Nothing outlives its environment
+
+- `down` and collection already remove every volume labelled with the environment. They now count snapshot volumes
+  apart (`snapshots` in the counts), and end each snapshot's row with the cause.
+- The pass of R28 also: ends the row of every snapshot whose volume the daemon no longer has ("gone"); removes a
+  snapshot volume whose environment has no live row and no containers, ending its row ("orphan: its environment is
+  gone"); removes a snapshot volume with no record that is older than its bound, with a row ("partial: the copy was
+  cut short").
+- The lane-start sweep removes every volume labelled `…env`, which snapshot volumes are.
+
+### R31 · The client
+
+`adele env snapshot [NAME] VOLUME [--note TEXT]`, `snapshots [NAME]`, `restore [NAME] SNAPSHOT [--yes] [--dry-run]
+[--wait S]`, `snapshot-rm [NAME] SNAPSHOT [--yes]`, each on agentio like the rest of `adele env`.
+- **Confirm:** restore and snapshot-rm cannot be undone from what the tool shows, so both use rule 9's confirm
+  protocol (`confirmation_required`, the agent's own command with `--yes`). The send names it for restore; snapshot-rm
+  deletes the only copy of a past state, which is rule 9's own case. `adele` declares the grant envelope too: the
+  cap's exit 4 is the grant's, a restore's is the confirmation's, and each says which.
+- **The announcement and `--agent-info`** say these work on a nested environment's **volumes** and that the
+  workspace's files are `snapshot` and `undo` (feature 07), in both directions (P3).
+
+### R32 · D22's observations
+
+- **A.** The unchanged `up`'s verdict passed 200 columns. Every `up`, `restore` and `snapshot` verdict is built to fit
+  at a 30-character environment name (`tl-` and a project name of 20 and its hash), and a unit asserts the longest
+  of each at that length.
+- **B.** "ports probed from the agent container" only when a port was probed; otherwise the clause is absent.
+
+### R33 · The lane
+
+- **The criterion's fixture** is a small service on `DEBIAN_IMAGE` that keeps its data (a few KB of files) on a named
+  volume owned by a non-root uid, so owners are exercised; the cell snapshots it, changes the data, restores and
+  reads the data and the owners back.
+- **The disk-full cell** uses the lane grant `nested-snapfull` (`snapshot-store = tmpfs`, `snapshots = 1MiB`) and a
+  volume of a few hundred one-byte files: under the cap by bytes, past the tmpfs's 1 MiB by pages, so the copy meets
+  `ENOSPC` in memory and never touches the host's disk.
+- **The kill cell** kills the copy helper from the runner (`docker kill`, by its name), which is the "Adele or her
+  helper dies" case; Adele's own death is the serial file's (stop and start Adele, as 12's reaper cells do).
+- **The cap cell** uses the lane grant `nested-snapcap` (`snapshots = 64KiB`).
+- No new serial file unless Adele must be stopped; the recovery cell that stops Adele goes in the existing serial
+  group with its reason.
+
+## Data model additions (slice 2)
+
+See `data-model.md` § Slice 2.
+
+## Contract additions (slice 2)
+
+See `contracts/adele-env.md` § Slice 2.
+
+## Tech Stack Compliance Report (slice 2)
+<!-- Auto-generated by SpecSwarm tech stack validation -->
+
+### ✅ Approved Technologies (already in stack)
+Go (stdlib), Python (stdlib, agentio), Bash, Docker, bats-core, pytest, go test.
+
+### ➕ New Technologies (auto-added)
+None.
+
+### ⚠️ Conflicting Technologies (require approval)
+None.
+
+### ❌ Prohibited Technologies (cannot use)
+None used.
+
+## Project Structure (slice 2, changed or new)
+
+```
+adele/internal/volcopy/            new: measure, copy, digest and restore of a tree (owners, modes, times, links)
+adele/cmd/adeled/volume.go         new: `adeled volume measure|copy|digest|restore`, the helper's entrypoint
+adele/internal/engine/             volumes created and removed; pause, unpause, stop, start; mounts on inspect; a sandbox's capabilities; snapshots in counts
+adele/internal/broker/snapshot.go  new: snapshot, snapshots, restore, snapshot-rm; the recovery and orphan pass
+adele/internal/broker/{broker,env,collect}.go  the actions; down and collection end snapshot rows
+adele/internal/grants/             `snapshots` and `snapshot-store`, optional; extend snapshots
+adele/internal/ledger/             Kept (performed with an undo, no expiry); Ended; queries by action
+adele/cmd/adeled/serve.go          the recovery pass at start and on the tick
+tools/bin/adele                    env snapshot|snapshots|restore|snapshot-rm; the confirm protocol; D22 A and B
+tests/e2e/…                        the criterion's file, the failures file, the recovery file; fixtures; lane grants
+README.md                          snapshots and restore, the cap and its default, pausing, and how they differ from the workspace's snapshot and undo
+```
+
+## Complexity Tracking (slice 2)
+
+| Addition | Why | Simpler alternative rejected |
+|---|---|---|
+| A helper container per copy | The ruling: Adele never opens volume contents, and the copy needs capabilities her serving process must not hold | Adele reading the volume through a bind of the daemon's volume directory (a host path, and her own process opening the data) |
+| The record in the ledger, not on the volume | Labels are fixed at creation, before the digest exists, and a record beside the content it vouches for proves nothing | A manifest file in the snapshot volume |
+| Pause and stop rows before the act | The daemon cannot label a running container, and a crash between pause and unpause must be found | Unpausing every paused timelike container at start (it would unpause what the agent paused itself) |
+| `snapshot-store = tmpfs` | A store bounded in memory is the only way the disk-full case is real without filling the host's disk | Simulating ENOSPC in the helper (tests a branch, not a full store) |

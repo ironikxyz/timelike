@@ -65,3 +65,28 @@ sign-off (a one-shot is never ready while it runs).
 
 **Breaking changes:** none for a built feature's callers. A compose project with a `build:` now builds where slice 0
 refused it, which is the point of the slice.
+
+## Cycle 9 — slice 2 (hardened), send `bridge/sends/13-rev17-20261019-034239.md`
+
+**What changes:** the slice-2 criterion (a named volume snapshotted and restored) and D31 come into scope (`slice:
+2`). No revision moved: prompt 13 and discovery are at 17, as at slice 0's send, so the body is not superseded and
+nothing is regenerated. The criterion was in the prompt from generation, so the spec gains it with its scenarios,
+FR-31–FR-44 and D-15–D-20.
+
+**Functional changes:**
+- **F010, snapshots** (FR-31–FR-37, D-15, D-17, D-18): `adele env snapshot|snapshots|snapshot-rm`; a snapshot is a
+  labelled volume on the daemon, filled by a helper from Adele's image, with its digest recorded and read back; the
+  users of an in-use volume paused for the copy; the grant's cap.
+- **F011, restore** (FR-38, D-16): the confirm protocol; the digest checked before anything stops; stop, replace,
+  start, readiness as `up`'s.
+- **F012, hardening** (FR-39–FR-41): a failed copy removes its partial snapshot and unpauses; a recorded pause or stop
+  is undone by Adele's next start or reaper pass; snapshots go with their environment; orphans and partials are
+  removed with a row.
+- **F013, D22's observations** (FR-44, D-20): verdict widths, and "ports probed" only when probed.
+
+**Contract changes, all additive:** four actions on `docker.compose`; two optional grant keys; `snapshots` in down's
+and collection's counts; the ledger gains a writer for a performed row with an undo and no expiry, and one for the
+row ending a pause or a stop. No schema change.
+
+**Breaking changes:** none. An `up` verdict loses a clause it printed falsely (B), and long verdicts are shortened (A);
+every e2e assertion pinning the old words is updated in the same task.
