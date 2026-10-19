@@ -20,6 +20,14 @@ Adele, waits until each service is ready (probing its ports from this container)
 Adele resolves the project in a sandbox, refuses settings that escape a container (exit 2: no grant
 allows them) and runs only what she checked (.specswarm/features/014-nested-dev-env/).
 
+Feature 13 slice 1: `adele env up` also brings up a project's devcontainer (`--devcontainer`, or chosen
+when no compose file is named or present and the project has one), builds what it names with nothing
+pulled, and names each build and lifecycle command; a service with no readiness signal is "running, no
+readiness check", never ready (decision C). `adele env exec [NAME] -- CMD` runs a command in an environment
+and passes its exit status through, as 03's `run` does; `adele env collect` removes the environments of
+ended sessions now; `adele session end` ends this session (014 contracts/adele-env.md § Slice 1, plan
+R12-R20).
+
 Design: .specswarm/features/004-adele-grants/ (spec, research R6-R8, contracts/adele-cli.md and
 adele-http.md).
 """
@@ -40,6 +48,8 @@ import agentio
 DEFAULT_URL = "http://adele:8480"
 URL_ENV = "TIMELIKE_ADELE_URL"
 DEFAULT_TIMEOUT_S = 30.0
+EXEC_TIMEOUT_S = 100.0  # env exec's bound by default: feature 03's run default (014 plan R17)
+EXEC_HTTP_SLACK_S = 30.0  # Adele's answer may follow the command's bound by this much
 STATUS_TIMEOUT_S = 3.0  # the conformance probe must conclude well inside conform's 10 s (R8)
 VANTAGE = "from the agent container"  # H3: a reachability claim names where it was made
 # Where the record lives, named in status's verdict (Item 26 Q2, the mentor: the D8 interview found the
@@ -57,6 +67,11 @@ ENV_POLL_S = 0.5
 ENV_PROBE_S = 1.0
 WORKSPACE_ENV = "TIMELIKE_WORKSPACE"
 _ENV_NAME_RE = re.compile(r"^tl-[a-z0-9][a-z0-9-]{0,59}$")
+ENV_VERBS = ("up", "status", "down", "exec", "collect")
+# 014 plan R12: a project whose root holds one of these is a compose project, unless --devcontainer.
+COMPOSE_FILES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+DEVCONTAINER_FILES = (".devcontainer/devcontainer.json", ".devcontainer.json")
+LAST_LINES_MAX = 300  # the characters of a failure's last lines a one-line error carries
 
 TOOL = agentio.Tool(
     name="adele",
@@ -66,26 +81,37 @@ TOOL = agentio.Tool(
         "adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)",
         "adele grants                  # the grants she applies: limits, spent, live",
         "adele request standin.box create --name NAME [--ttl 1h] [--port 8080 ...] [--grant G]",
-        "adele env up [DIR] [-f FILE] [--profile P] [--wait 120]  # the project's compose environment, ready",
+        "adele env up [DIR] [--devcontainer] [-f FILE] [--profile P] [--wait 120]  # compose or devcontainer",
         "adele env status [NAME] | adele env down [NAME|DIR]  # each service, its address; remove it all",
+        "adele env exec [NAME] [--service S] [--timeout 100] -- CMD [ARG]...  # exits with CMD's status",
+        "adele env collect | adele session end  # remove ended sessions' environments; end this session",
         "exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)",
         "extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);",
         "every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)",
     ],
     probe=("status",),
     grant_envelope=True,  # exit 4 is the grant envelope; not --yes-confirmed (discovery revision 10)
+    # `env exec`'s command follows `--` (feature 010's split, before argparse). Its exit is passed through
+    # by that verb alone: see env_exec. passes_exit is not declared Tool-wide: it would split every verb's
+    # argv at its first plain word, and have conform wrap a local command adele does not run.
+    takes_command=True,
     exit_codes={
         agentio.EXIT_OK: "ok",
-        agentio.EXIT_FAILURE: "unreachable, or the capability failed",
-        agentio.EXIT_USAGE: "usage; or name one with --grant; env: a setting no grant allows",
-        agentio.EXIT_NOT_FOUND: "no grant or environment by that name; env: an image not on the daemon",
+        agentio.EXIT_FAILURE: "unreachable, or the capability failed (env up: a build, lifecycle command"
+        " or service)",
+        agentio.EXIT_USAGE: "usage; or name one with --grant; env: a setting no grant allows, a bad"
+        " devcontainer.json",
+        agentio.EXIT_NOT_FOUND: "no grant, environment or service by that name; env: an image not on the"
+        " daemon",
         agentio.EXIT_CONFIRM: "beyond the grant, nothing performed",
-        agentio.EXIT_TIMEOUT: "own limit fired (env up: not ready within --wait)",
+        agentio.EXIT_TIMEOUT: "own limit fired (env up: not ready within --wait, a build or lifecycle bound;"
+        " env exec: --timeout)",
     },
     manifest_extra=lambda: {
         "url_env": URL_ENV,
         "default_url": DEFAULT_URL,
         "default_timeout_s": DEFAULT_TIMEOUT_S,
+        "exec_default_timeout_s": EXEC_TIMEOUT_S,
         "capabilities": ["standin.box", "docker.compose"],
         "env_wait_s": ENV_WAIT_S,
         "env_wait_max_s": ENV_WAIT_MAX_S,
@@ -96,12 +122,14 @@ TOOL = agentio.Tool(
 def configure(p: argparse.ArgumentParser) -> None:
     # Optional to argparse, required by main(): a required positional would make argparse refuse
     # --help and --agent-info before agentio handles them.
-    p.add_argument("verb", nargs="?", choices=("status", "grants", "request", "env"), metavar="VERB")
+    p.add_argument(
+        "verb", nargs="?", choices=("status", "grants", "request", "env", "session"), metavar="VERB"
+    )
     p.add_argument(
         "capability",
         nargs="?",
         metavar="CAPABILITY",
-        help="request's capability; status: a HOST; env: up|status|down",
+        help="request's capability; status: a HOST; env: up|status|down|exec|collect; session: end",
     )
     p.add_argument(
         "action", nargs="?", metavar="ACTION", help="request's action; env: a DIR or an environment NAME"
@@ -111,13 +139,21 @@ def configure(p: argparse.ArgumentParser) -> None:
     p.add_argument("--port", type=int, action="append", default=[], metavar="P", help="a port it exposes")
     p.add_argument("--grant", metavar="G", help="the grant to use (default: the one that allows it)")
     p.add_argument(
-        "--timeout", type=float, default=DEFAULT_TIMEOUT_S, metavar="S", help="give up after S seconds"
+        "--timeout",
+        type=float,
+        default=None,  # resolved per verb in main(): DEFAULT_TIMEOUT_S, or EXEC_TIMEOUT_S for env exec
+        metavar="S",
+        help=f"give up after S seconds (default {DEFAULT_TIMEOUT_S:g}; env exec: {EXEC_TIMEOUT_S:g})",
     )
     p.add_argument(
         "-f", "--file", action="append", default=[], metavar="FILE", help="env: a compose file in DIR"
     )
     p.add_argument("--profile", action="append", default=[], metavar="P", help="env: a compose profile")
     p.add_argument("--project", metavar="NAME", help="env: the environment's name (default: from DIR)")
+    p.add_argument(
+        "--devcontainer", action="store_true", help="env up: the project's devcontainer, not its compose file"
+    )
+    p.add_argument("--service", metavar="S", help="env exec: the service to run in (default: its only one)")
     p.add_argument(
         "--wait",
         type=float,
@@ -367,6 +403,12 @@ def answered_error(reply: Reply) -> agentio.ToolError:
 
 
 def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    if args.timeout is None:
+        args.timeout = (
+            EXEC_TIMEOUT_S if (args.verb, args.capability) == ("env", "exec") else DEFAULT_TIMEOUT_S
+        )
+    if args.command and (args.verb, args.capability) != ("env", "exec"):
+        raise agentio.UsageError("`--` and a command belong to env exec", "e.g. adele env exec -- ls -la")
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         raise agentio.UsageError("--timeout must be more than 0", "e.g. --timeout 30")
     if args.verb is None:
@@ -381,6 +423,8 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         return grants(args.timeout)
     if args.verb == "env":
         return env(args, ctx)
+    if args.verb == "session":
+        return session(args)
     return request(args, ctx)
 
 
@@ -432,12 +476,19 @@ def env_name(args: argparse.Namespace, directory: str | None) -> str:
 
 def env(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     sub = args.capability
-    if sub not in ("up", "status", "down"):
+    if sub not in ENV_VERBS:
         raise agentio.UsageError(
-            f"env has no verb {sub!r}", "use adele env up, adele env status or adele env down"
+            f"env has no verb {sub!r}",
+            "use adele env up, adele env status, adele env down, adele env exec or adele env collect",
         )
     if sub == "status":
         return env_status(args.action, args.timeout)
+    if sub == "collect":
+        if args.action is not None:
+            raise agentio.UsageError("env collect takes no NAME", "run adele env collect")
+        return env_collect(args.timeout)
+    if sub == "exec":
+        return env_exec(args, ctx)
     ws = workspace()
     if sub == "down":
         if args.action and _ENV_NAME_RE.match(args.action):
@@ -458,6 +509,8 @@ def env_payload(args: argparse.Namespace, action: str, name: str, directory: str
     }
     if directory:
         req["params"].update({"dir": directory, "files": list(args.file), "profiles": list(args.profile)})
+        if action == "up" and wants_devcontainer(args, directory):
+            req["params"]["devcontainer"] = True
     if req["grant"] is None:
         req["grant"] = ""
     if req["params"]["ttl"] is None:
@@ -468,12 +521,46 @@ def env_payload(args: argparse.Namespace, action: str, name: str, directory: str
     return req
 
 
-def env_refused(ctx: agentio.Context, payload: dict[str, Any], reply: Reply) -> agentio.Result:
+def wants_devcontainer(args: argparse.Namespace, directory: str) -> bool:
+    """014 plan R12 "Which file": --devcontainer, or no -f, no root compose file and a devcontainer.json. The
+    sandbox checks again: this is a request, not a fact."""
+    if args.devcontainer:
+        return True
+    if args.file or any(os.path.isfile(os.path.join(directory, f)) for f in COMPOSE_FILES):
+        return False
+    return any(os.path.isfile(os.path.join(directory, f)) for f in DEVCONTAINER_FILES)
+
+
+def _last(lines: Any) -> str:
+    """A failure's last lines on one line, joined with " · ", at most LAST_LINES_MAX characters, the end
+    kept."""
+    if not isinstance(lines, list):
+        return ""
+    text = " · ".join(str(x).strip() for x in lines if str(x).strip())
+    return text if len(text) <= LAST_LINES_MAX else "…" + text[-(LAST_LINES_MAX - 1) :]
+
+
+def env_refused(
+    ctx: agentio.Context, payload: dict[str, Any], reply: Reply, scope: str = "up"
+) -> agentio.Result:
     """A 422 is a refusal no grant limit describes (revision 17); a 403, a grant limit's envelope (exit 4)."""
     body = reply.body
     if reply.status == 422:
         setting, svc, value = str(body.get("setting", "?")), body.get("service"), body.get("value")
         where = f" (service {svc}: {value})" if svc else (f" ({value})" if value else "")
+        if body.get("refusal") == "image" and setting == "FROM":
+            # 014 FR-21: a build pulls nothing, so a base image not on the daemon is the operator's pull.
+            raise agentio.ToolError(
+                agentio.EXIT_NOT_FOUND,
+                f"base image {value} is not on the daemon, and a build pulls nothing{where}",
+                str(body.get("remediation", "the operator pulls it on the host")),
+            )
+        if setting == "devcontainer.json":
+            # 014 FR-16: a devcontainer.json that does not parse is rule 14's usage error, naming the line.
+            raise agentio.UsageError(
+                f"devcontainer.json {value or 'does not parse'}",
+                str(body.get("remediation") or "fix it, then run adele env up again"),
+            )
         if body.get("refusal") == "image":
             # FOR-MENTOR Item 29: the grant envelope is false of a missing image; exit 3, provisional.
             raise agentio.ToolError(
@@ -497,7 +584,7 @@ def env_refused(ctx: agentio.Context, payload: dict[str, Any], reply: Reply) -> 
     return agentio.grant_required(
         ctx,
         target="docker.compose",
-        scope="up",
+        scope=scope,
         grant=grant,
         limit={k: str(limit.get(k)) for k in ("name", "allowed", "needed")},
         extend=extend,
@@ -517,7 +604,9 @@ def _probe(host: str, port: int) -> bool:
 
 
 def readiness(svc: dict[str, Any]) -> tuple[str, str]:
-    """(ready | completed | failed | waiting, words) for one service, read back; ports probed from here."""
+    """(ready | completed | failed | waiting | unchecked, words) for one service, read back; ports probed from
+    here. Decision C (014 plan R20): a running service with no healthcheck and no port gives no readiness
+    signal, so it is "unchecked", never ready; a one-shot among them is waited for until it exits."""
     state, health = str(svc.get("state", "")), str(svc.get("health") or "")
     if state == "exited":
         code = svc.get("exit_code")
@@ -526,10 +615,15 @@ def readiness(svc: dict[str, Any]) -> tuple[str, str]:
         return ("ready", "ready (healthy)") if health == "healthy" else ("waiting", f"{state} ({health})")
     if state != "running":
         return "waiting", state or "not created"
-    closed = [p for p in svc.get("ports") or [] if not _probe(str(svc.get("alias")), int(p))]
-    if closed:
-        return "waiting", "running, port " + ",".join(str(p) for p in closed) + " not accepting yet"
-    return "ready", "ready (running" + (", ports accept" if svc.get("ports") else "") + ")"
+    ports = svc.get("ports") or []
+    if ports:
+        closed = [p for p in ports if not _probe(str(svc.get("alias")), int(p))]
+        if closed:
+            return "waiting", "running, port " + ",".join(str(p) for p in closed) + " not accepting yet"
+        return "ready", "ready (running, ports accept)"
+    if svc.get("one_shot") is True:
+        return "waiting", "running (one-shot: waiting for its exit)"
+    return "unchecked", "running, no readiness check"
 
 
 def _addresses(svc: dict[str, Any]) -> list[str]:
@@ -573,9 +667,12 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
         raise unreachable(reply, args.timeout)
     if reply.status in (403, 422):
         return env_refused(ctx, payload, reply)
+    if reply.status in (502, 504) and isinstance(reply.body.get("build"), dict):
+        raise build_failed(name, reply)
     if reply.status != 200:
         raise answered_error(reply)
     body = reply.body
+    lifecycle_failed(name, body)
     outcome = str(body.get("outcome"))
     services: list[dict[str, Any]] = [s for s in body.get("services") or [] if isinstance(s, dict)]
     states: list[tuple[dict[str, Any], str, str]] = []
@@ -584,13 +681,14 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
         failed = [st for st in states if st[1] == "failed"]
         if failed:
             s, _, words = failed[0]
+            last = _last(s.get("last_lines"))
             raise agentio.ToolError(
                 agentio.EXIT_FAILURE,
                 f"{name}: service {s.get('service')} {words}, read back from the daemon; it will not become"
-                " ready",
+                " ready" + (f" (last lines: {last})" if last else ""),
                 f"look at the project's service; the environment is still up: {down}",
             )
-        if services and all(st[1] in ("ready", "completed") for st in states):
+        if services and all(st[1] in ("ready", "completed", "unchecked") for st in states):
             break
         left = deadline - time.monotonic()
         if left <= 0:
@@ -612,6 +710,7 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
             services = [s for s in got.body["services"] if isinstance(s, dict)]
     took = time.monotonic() - start
     lines = [_service_line(s, words) for s, _, words in states]
+    lines += _up_extra_lines(body)
     unset = [str(u) for u in body.get("unset") or []]
     if unset:
         lines.append(
@@ -620,9 +719,15 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
         )
     # Rule 13: the verdict fits 200 columns with a lane's names; the grant and expiry go on the first line.
     said = ", unchanged (nothing created or recorded)" if outcome == "unchanged" else ""
+    n_ready = sum(st[1] in ("ready", "completed") for st in states)
+    n_unchecked = sum(st[1] == "unchecked" for st in states)
+    counts = [f"{n_ready} ready"] if n_ready or not n_unchecked else []
+    if n_unchecked:
+        counts.append(f"{n_unchecked} running with no readiness check")  # never counted ready (decision C)
+    kind = "devcontainer, " if body.get("kind") == "devcontainer" else ""
     verdict = (
-        f"up {name}: {len(states)} ready{said} in {took:.1f} s of {args.wait:g} s · read back, ports probed"
-        f" {VANTAGE} · local: no cost · host git {body.get('host_git') or 'unknown'}"
+        f"up {name}: {kind}{', '.join(counts)}{said} in {took:.1f} s of {args.wait:g} s · read back, ports"
+        f" probed {VANTAGE} · local: no cost · host git {body.get('host_git') or 'unknown'}"
     )
     lines.insert(
         0, f"grant {body.get('grant')} · expires {body.get('expires_at')} · down: adele env down {name}"
@@ -630,6 +735,80 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
     return agentio.Result(
         "adele", "env up", verdict, lines=lines, data=env_data(body, name, states, args.wait, took)
     )
+
+
+def _entries(body: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    return [e for e in body.get(key) or [] if isinstance(e, dict)]
+
+
+def build_failed(name: str, reply: Reply) -> agentio.ToolError:
+    """014 FR-24: a build past its bound is 124 naming its step; a failed step is 1, with its last lines.
+    The step is Adele's words for it, the instruction as the Dockerfile has it and its position there: never
+    the daemon's "Step N/M", whose M counts the LABEL steps it adds for Adele's labels (lane 13s1a)."""
+    build: dict[str, Any] = reply.body["build"]
+    service, step = build.get("service"), build.get("step")
+    remedy = str(reply.body.get("remediation") or "")
+    if reply.status == 504 and reply.body.get("timed_out") is True:
+        return agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"{name}: build of {service} did not finish within its bound (at {step})",
+            remedy or f"adele env status {name} shows what is up; adele env down {name} removes it",
+        )
+    raw_lines = build.get("last_lines")
+    lines: list[Any] = raw_lines if isinstance(raw_lines, list) else []
+    last = _last([*lines, build.get("message") or ""])
+    return agentio.ToolError(
+        agentio.EXIT_FAILURE,
+        f"{name}: build of {service} failed at {step}" + (f": {last}" if last else ""),
+        remedy or f"fix that step and run adele env up again; adele env down {name} removes what is up",
+    )
+
+
+def lifecycle_failed(name: str, body: dict[str, Any]) -> None:
+    """014 FR-19: a lifecycle command past its bound is 124 and one that failed is 1, each naming the
+    command. The environment is still a performed one, so it stays up and the remediation gives down."""
+    down = f"the environment stays up; remove it with adele env down {name}"
+    entries = _entries(body, "lifecycle")
+    late = [e for e in entries if e.get("timed_out") is True]
+    if late:
+        raise agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"{name}: lifecycle command {late[0].get('name')} did not finish within its bound",
+            down,
+        )
+    bad = [e for e in entries if e.get("exit_code") != 0]
+    if bad:
+        e = bad[0]
+        last = _last(e.get("last_lines"))
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{name}: lifecycle command {e.get('name')} exited {e.get('exit_code')}"
+            + (f" (last lines: {last})" if last else ""),
+            down,
+        )
+
+
+def _up_extra_lines(body: dict[str, Any]) -> list[str]:
+    """Slice 1's lines below the services: each build, each lifecycle command, what was not run, and a
+    requester Adele could not find (014 plan R12, R13, R15, R18)."""
+    lines: list[str] = []
+    for b in _entries(body, "built"):
+        if b.get("reused") is True:
+            lines.append(f"reused {b.get('service')}: {b.get('image')} (unchanged)")
+        else:
+            secs = b.get("seconds")
+            took = f"{secs:.1f}" if isinstance(secs, int | float) and not isinstance(secs, bool) else "?"
+            lines.append(f"built {b.get('service')}: {b.get('image')} in {took} s (nothing pulled)")
+    lines += [f"{e.get('name')}  exit {e.get('exit_code')}" for e in _entries(body, "lifecycle")]
+    not_run = [str(n) for n in body.get("not_run") or []]
+    if not_run:
+        lines.append("not run: " + ", ".join(not_run))
+    requester = body.get("requester")
+    if isinstance(requester, dict) and "unknown" in requester:
+        lines.append(
+            f"requester: unknown ({requester.get('unknown')}) — only adele session end or the ttl can end it"
+        )
+    return lines
 
 
 def env_data(
@@ -644,12 +823,17 @@ def env_data(
         "name": name,
         "outcome": body.get("outcome"),
         "ready": ready,
+        "kind": body.get("kind"),
         "grant": body.get("grant"),
         "expires_at": body.get("expires_at"),
         "ledger_id": body.get("ledger_id"),
         "undo": body.get("undo"),
         "host_git": body.get("host_git"),
         "unset": body.get("unset") or [],
+        "requester": body.get("requester"),
+        "built": _entries(body, "built"),
+        "lifecycle": _entries(body, "lifecycle"),
+        "not_run": [str(n) for n in body.get("not_run") or []],
         "wait_s": wait,
         "seconds": round(took, 3),
         # Adele's own share, measured by her: the sandbox's phases, the lock, compose (lane 13s0a, item A).
@@ -658,6 +842,8 @@ def env_data(
         "services": [
             {
                 **{k: s.get(k) for k in ("service", "state", "health", "exit_code", "alias", "ports")},
+                "one_shot": s.get("one_shot") is True,
+                "last_lines": [str(x) for x in s.get("last_lines") or []],
                 "ready": st,
                 "addresses": _addresses(s),
             }
@@ -685,7 +871,9 @@ def env_down(name: str, timeout: float) -> agentio.Result:
     r = reply.body.get("removed") or {}
     verdict = (
         f"down {name}: removed {r.get('containers', 0)} containers, {r.get('networks', 0)} networks,"
-        f" {r.get('volumes', 0)} volumes; 0 left, read back from the daemon"
+        f" {r.get('volumes', 0)} volumes"
+        + (f", {r['images']} images" if r.get("images") else "")
+        + "; 0 left, read back from the daemon"  # built images (slice 1) only when there were any
     )
     return agentio.Result("adele", "env down", verdict, data={"name": name, **reply.body})
 
@@ -711,6 +899,230 @@ def env_status(name: str | None, timeout: float) -> agentio.Result:
     return agentio.Result(
         "adele", "env status", verdict, lines=lines, data={"envs": envs, "count": len(envs)}
     )
+
+
+# ── adele env exec, env collect, session end (feature 13, slice 1) ──────────────────────────────
+
+
+def _caller() -> dict[str, Any]:
+    """The session and, when set, the agent's name: who asks (attribution only, 004 slice 1)."""
+    who: dict[str, Any] = {"session": agentio.session_id()}
+    agent = agentio.agent_name()
+    if agent is not None:
+        who["agent"] = agent
+    return who
+
+
+def _exit_status(value: Any) -> int | None:
+    ok = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 255
+    return value if ok else None
+
+
+def _text_lines(value: Any) -> list[str]:
+    return str(value).splitlines() if isinstance(value, str) and value else []
+
+
+def env_exec(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    """014 FR-25, plan R17: run a command in a running container of a live environment, through Adele, and
+    exit with its own status, as 03's `run` does (Result.cause "command", command_exit)."""
+    command = [str(c) for c in args.command or []]
+    if not command:
+        raise agentio.UsageError("env exec needs a command after --", "e.g. adele env exec -- ls -la")
+    if args.action and _ENV_NAME_RE.match(args.action):
+        name = args.action
+    else:
+        name = env_name(args, project_dir(args.action, workspace()))
+    if args.service is not None and not args.service:
+        raise agentio.UsageError("--service is empty", "name a service, e.g. --service web")
+    bound = args.timeout
+    params: dict[str, Any] = {"name": name, "ttl": "", "ports": []}
+    if args.service:
+        params["service"] = args.service
+    params.update({"cmd": command, "timeout_s": bound})
+    payload = {**_caller(), "grant": "", "capability": "docker.compose", "action": "exec", "params": params}
+    down = f"adele env down {name}"
+    started = time.monotonic()
+    reply = call("POST", "/v1/requests", bound + EXEC_HTTP_SLACK_S, payload)
+    took = time.monotonic() - started
+    body = reply.body
+    if reply.timed_out:
+        raise agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"Adele did not answer the exec in {name} within {bound + EXEC_HTTP_SLACK_S:g} s ({VANTAGE});"
+            " the command may still be running in the container",
+            f"the Engine API cannot stop an exec'd process; {down} removes the container",
+        )
+    if reply.status == 0:
+        raise unreachable(reply, bound + EXEC_HTTP_SLACK_S)
+    service = str(body.get("service") or args.service or "?")
+    if reply.status == 504 and body.get("timed_out") is True:
+        lines = _text_lines(body.get("stdout")) + _text_lines(body.get("stderr"))
+        return agentio.Result(
+            "adele",
+            "env exec",
+            f"exec {name} {service}: past its {bound:g} s bound; it may still be running in the container"
+            f" (the Engine API cannot stop an exec'd process) · {down} removes it",
+            lines=lines,
+            data=_exec_data(name, service, command, bound, took, body),
+            exit=agentio.EXIT_TIMEOUT,
+            cause="timeout",
+            command_exit=None,
+        )
+    if reply.status == 403:
+        return env_refused(ctx, payload, reply, scope="exec")
+    if reply.status == 404:
+        raise agentio.ToolError(
+            agentio.EXIT_NOT_FOUND,
+            str(body.get("error") or f"no live environment {name}, or no container for its service"),
+            str(body.get("remediation") or "adele env status lists the live environments and their services"),
+        )
+    if reply.status == 409:
+        names = [str(s) for s in body.get("services") or []]
+        raise agentio.UsageError(
+            f"{name} has more than one service and none was named"
+            + (f": {', '.join(names)}" if names else ""),
+            f"name one with --service, e.g. --service {names[0] if names else 'web'}",
+        )
+    if reply.status == 502:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            str(body.get("error") or f"the container of {service} in {name} is not running"),
+            str(body.get("remediation") or f"adele env status {name} shows its state; {down} removes it"),
+        )
+    if reply.status != 200:
+        raise answered_error(reply)
+    code = _exit_status(body.get("exit_code"))
+    if code is None:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele ran the command in {name} {service}, but her answer has no exit status"
+            f" ({body.get('exit_code')!r})",
+            "nothing is passed through as the command's; adele env status shows the environment",
+        )
+    user = str(body.get("user") or "") or "the image's user"
+    verdict = f"exec {name} {service} as {user}: exit {code} in {took:.1f} s"
+    raw_dropped = body.get("dropped")
+    dropped: dict[str, Any] = raw_dropped if isinstance(raw_dropped, dict) else {}
+    d_out, d_err = int(dropped.get("stdout") or 0), int(dropped.get("stderr") or 0)
+    if d_out or d_err:
+        verdict += (
+            f" · dropped {d_out} bytes of stdout, {d_err} of stderr (Adele keeps the last 1 MiB of each)"
+        )
+    # agentio admits an exit outside its six only from a tool that declares passes_exit. adele declares it for
+    # no other verb (it would change how every verb's argv is split, after parsing is done here), so it is
+    # declared on this one result, after parsing: _emit_result is the only reader left.
+    ctx.tool.passes_exit = True
+    return agentio.Result(
+        "adele",
+        "env exec",
+        verdict,
+        lines=_text_lines(body.get("stdout")) + _text_lines(body.get("stderr")),
+        data=_exec_data(name, service, command, bound, took, body),
+        exit=code,
+        cause="command",
+        command_exit=code,
+    )
+
+
+def _exec_data(
+    name: str, service: str, command: list[str], bound: float, took: float, body: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "service": service,
+        "user": body.get("user"),
+        "cmd": command,
+        "exit_code": body.get("exit_code"),
+        "timed_out": body.get("timed_out") is True,
+        "dropped": body.get("dropped"),
+        "ledger_id": body.get("ledger_id"),
+        "timeout_s": bound,
+        "seconds": round(took, 3),
+        "stdout_lines": len(_text_lines(body.get("stdout"))),
+        "stderr_lines": len(_text_lines(body.get("stderr"))),
+    }
+
+
+def _removed(r: Any) -> str:
+    if not isinstance(r, dict):
+        return f"removed {r}"
+    return (
+        f"removed {r.get('containers', 0)} containers, {r.get('networks', 0)} networks,"
+        f" {r.get('volumes', 0)} volumes" + (f", {r['images']} images" if r.get("images") else "")
+    )
+
+
+def _left(left: Any) -> str:
+    if isinstance(left, list):
+        return f"{len(left)} left" + (": " + ", ".join(str(x) for x in left) if left else "")
+    if isinstance(left, dict):
+        return "left: " + ", ".join(f"{v} {k}" for k, v in left.items())
+    return f"{left} left"
+
+
+def env_collect(timeout: float) -> agentio.Result:
+    """014 FR-29, plan R19: one collection pass now, the reaper's own; each removal read back by Adele."""
+    t = max(timeout, 120.0)
+    reply = call("POST", "/v1/envs/collect", t, _caller())
+    if reply.status == 0:
+        raise unreachable(reply, t)
+    if reply.status != 200:
+        raise answered_error(reply)
+    collected, failed = _entries(reply.body, "collected"), _entries(reply.body, "failed")
+    said = "; ".join(f"{c.get('name')}: {c.get('cause')}" for c in collected)
+    verdict = f"collect: {len(collected)} collected" + (f" ({said})" if said else "")
+    verdict += f" · {len(failed)} failed"
+    if failed:
+        verdict += " (" + "; ".join(f"{f.get('name')}: {f.get('cause')}" for f in failed) + ")"
+    verdict += " · read back from the daemon"
+    lines = [
+        f"collected {c.get('name')}: {c.get('cause')} · {_removed(c.get('removed'))}"
+        f" · ledger #{c.get('ledger_id')}"
+        for c in collected
+    ]
+    lines += [
+        f"failed {f.get('name')}: {f.get('cause')} · {_left(f.get('left'))} — tried again on the next pass"
+        for f in failed
+    ]
+    data = {"collected": collected, "failed": failed, "count": len(collected)}
+    return agentio.Result(
+        "adele",
+        "env collect",
+        verdict,
+        lines=lines,
+        data=data,
+        exit=agentio.EXIT_FAILURE if failed else agentio.EXIT_OK,
+    )
+
+
+def session(args: argparse.Namespace) -> agentio.Result:
+    """014 FR-28, plan R19: `adele session end` ends the caller's own session with a ledger row, read back.
+    A second one says it was already ended, and is exit 0."""
+    if args.capability != "end" or args.action is not None:
+        raise agentio.UsageError(
+            f"session has no verb {' '.join(x for x in (args.capability, args.action) if x)!r}",
+            "use adele session end",
+        )
+    reply = call("POST", "/v1/sessions/end", args.timeout, _caller())
+    if reply.status == 0:
+        raise unreachable(reply, args.timeout)
+    if reply.status != 200:
+        raise answered_error(reply)
+    body = reply.body
+    sid, at, row = body.get("session") or agentio.session_id(), body.get("ended_at"), body.get("ledger_id")
+    outcome = body.get("outcome")
+    if outcome == "ended":
+        verdict = f"session {sid} ended at {at} (ledger #{row})"
+    elif outcome == "already ended":
+        verdict = f"session {sid} was already ended at {at} (ledger #{row}); nothing new recorded"
+    else:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele answered session end with outcome {outcome!r}, neither ended nor already ended",
+            "ask the operator to check her ledger: adeled ledger",
+        )
+    data = {"session": sid, "outcome": outcome, "ended_at": at, "ledger_id": row}
+    return agentio.Result("adele", "session end", verdict, data=data)
 
 
 if __name__ == "__main__":

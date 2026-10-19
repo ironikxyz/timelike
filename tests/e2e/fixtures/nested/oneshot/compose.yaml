@@ -1,0 +1,19 @@
+# Decision C (feature 13 slice 1; spec FR-11 corrected, Scenario 12; 014 plan R20). Three services, none with a
+# healthcheck or a port:
+#   - idle keeps running and gives no readiness signal: never "ready", reported as running with no readiness check;
+#   - seed is a one-shot for certain (app depends on it with service_completed_successfully): it runs 3 s, then
+#     exits 0, and up waits for its exit;
+#   - app starts once seed has completed, and keeps running like idle.
+services:
+  idle:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+  seed:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "-c", "sleep 3; echo seeded"]
+  app:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+    depends_on:
+      seed:
+        condition: service_completed_successfully

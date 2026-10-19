@@ -1,0 +1,18 @@
+# timelike's fixture for a compose build (feature 13 slice 1, criterion 8; 014 plan R16, R21, R22). One built service
+# with a named volume and one image service, so the environment has every kind of object: containers, its default
+# network, a volume and a built image. The base is FIXTURE_IMAGE (the lane's DEBIAN_IMAGE), from the project's .env,
+# which the cell writes: the agent's environment is not read (D-1), and nothing is pulled.
+services:
+  app:
+    build:
+      context: .
+      args:
+        BASE: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+    volumes:
+      - data:/data
+  side:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+volumes:
+  data:

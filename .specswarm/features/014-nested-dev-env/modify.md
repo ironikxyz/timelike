@@ -27,3 +27,41 @@ sentence. The correction follows the re-send.
   prompt 13 since revision 8). `prompt_revision` stays 8.
 
 **Breaking changes:** none to any built feature. Nothing past the spec existed when revision 17 landed.
+
+## Cycle 6 — `bridge/sends/13-rev17-20261018-120700.md` (slice 1, natural)
+
+**Created:** 2026-10-18T12:17:01Z (read from the clock) · **Branch:** `modify/014-slice-1` from `master` at `08df8e2` (slice 0,
+v0.22.0) · **Provenance:** modify's row 4. Revision 17 is already in `audited_against`, and neither prompt 13 nor
+discovery moved since slice 0's send, so nothing is appended. Slice 1's criteria were in the prompt from generation:
+the body is not false (not SUPERSEDED), and this cycle brings them into scope. `prompt_revision` stays 8.
+
+**Why it changes:** the send's slice 1. The operator decided Item 28 (builds) and what ends a session
+(`../bridge/feedback/13-20261018-120700-item-28-builds-and-session-end.md`), and gave decision C at slice 0's
+sign-off (a one-shot is never ready while it runs).
+
+**Changes:**
+- **F004, devcontainers** (FR-16–FR-19, D-9): parsed as JSONC and translated into a compose model in the sandbox,
+  then checked and brought up as a compose project. Lifecycle commands run in the container, bounded and named.
+- **F005, builds** (FR-20–FR-24, D-8): the sandbox archives each context; Adele streams it to the daemon's build API
+  unopened; nothing is pulled; the refusals; the image labelled, tagged under the environment and removed by `down`;
+  a bound. slice 0's `build:` refusal (D-7) is lifted, and its remediation text goes.
+- **F006, `adele env exec`** (FR-25, D-14).
+- **F007, labels, session end and collection** (FR-26–FR-29, D-10, D-11): session and grant labels on every object;
+  the requesting container read from the daemon; `adele session end`; `adele env collect` and the reaper's pass.
+- **F008, readiness** (FR-11 corrected, D-13, decision C): a service with no readiness signal is "running, no
+  readiness check", never "ready"; a certain one-shot is waited for.
+- **F009, the lane:** the lane's start sweeps leftover built images by timelike's labels; build fixtures from images
+  the lane already has.
+
+**Contract changes, all additive except one:**
+- New: `exec` and `collect` on `docker.compose`; `POST /v1/sessions/end`; `adele env exec|collect`,
+  `adele session end`; up's answer gains `requester`, `lifecycle`, `built` and per-service `one_shot` and
+  `kind`.
+- **The one behaviour change:** `up` no longer reports a running service with no healthcheck and no port as
+  "ready". It is "running, no readiness check", and up still exits 0 for it; a certain one-shot is waited for. This
+  is decision C's correction. Every e2e assertion pinning the old words is updated in the same task.
+- The ledger gains one writer (a performed row with no undo and no expiry, for an exec and a session end). Live
+  counts, `instances` and the reaper's due list exclude rows with no expiry. No schema change.
+
+**Breaking changes:** none for a built feature's callers. A compose project with a `build:` now builds where slice 0
+refused it, which is the point of the slice.

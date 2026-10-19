@@ -42,6 +42,14 @@ const ActionDelete = "delete"
 // OperatorSession is the session recorded on an extended row.
 const OperatorSession = "operator"
 
+// Feature 13 slice 1: a session's explicit end is a Recorded row of CapabilitySession with action ActionEnd and the
+// session as its resource. NoGrant is its grant: not a valid grant name, so never a grant's.
+const (
+	CapabilitySession = "adele.session"
+	ActionEnd         = "end"
+	NoGrant           = "(none)"
+)
+
 // Limits names the limits an extension may change (contracts/adele-http.md).
 var Limits = []string{"capabilities", "ttl", "ports", "instances", "budget"}
 
@@ -144,6 +152,22 @@ func (l *Ledger) Performed(r Row) (int64, error) {
 	}
 	r.Outcome = OutcomePerformed
 	r.Ref, r.Cause, r.Attempts, r.Host, r.Extend = nil, "", nil, "", ""
+	return l.append(r)
+}
+
+// Recorded appends a performed row that made nothing that lives on: an exec in an environment, or a session's
+// end (feature 13 slice 1). Grant, Session, Capability, Action and Resource are required; it has no undo and no
+// expires_at, so no live count, instance limit or reap ever sees it. Cause says what was done. At defaults to now.
+func (l *Ledger) Recorded(r Row) (int64, error) {
+	if err := required(map[string]string{"grant": r.Grant, "session": r.Session,
+		"capability": r.Capability, "action": r.Action, "resource": r.Resource}); err != nil {
+		return 0, err
+	}
+	if r.CostCents != nil && *r.CostCents < 0 {
+		return 0, fmt.Errorf("%w: cost_cents is negative", ErrInvalid)
+	}
+	r.Outcome = OutcomePerformed
+	r.ExpiresAt, r.Undo, r.Ref, r.Attempts, r.Host, r.Extend = nil, "", nil, nil, "", ""
 	return l.append(r)
 }
 

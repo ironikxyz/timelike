@@ -1,0 +1,13 @@
+# Decision C's failing one-shot (feature 13 slice 1, Scenario 12): seed, which app depends on with
+# service_completed_successfully, prints a line and exits 1. Compose itself refuses to start app then, so Adele's
+# compose up fails and she removes what it created (014 plan R20; broker/env.go, compose up failed).
+services:
+  seed:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "-c", "echo seed failed: no fixture data; exit 1"]
+  app:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sleep", "infinity"]
+    depends_on:
+      seed:
+        condition: service_completed_successfully

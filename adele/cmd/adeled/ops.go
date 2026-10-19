@@ -132,6 +132,10 @@ func rowLine(r ledger.Row) string {
 	}
 	switch r.Outcome {
 	case ledger.OutcomePerformed:
+		if r.ExpiresAt == nil { // an exec or a session end: it made nothing that lives on (feature 13 slice 1)
+			s += fmt.Sprintf(" %s.%s resource=%s cause=%q", r.Capability, r.Action, r.Resource, r.Cause)
+			break
+		}
 		s += fmt.Sprintf(" %s.%s resource=%s cost=%s expires=%s undo=%s", r.Capability, r.Action, r.Resource,
 			grants.FormatMoney(deref(r.CostCents)), r.ExpiresAt.UTC().Format(time.RFC3339), r.Undo)
 	case ledger.OutcomeRefused:

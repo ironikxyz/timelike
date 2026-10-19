@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -36,6 +37,8 @@ func (b *Broker) Handler() http.Handler {
 	mux.HandleFunc("/v1/denials", b.only(http.MethodGet, b.denials))
 	mux.HandleFunc("/v1/envs", b.only(http.MethodGet, b.envs))
 	mux.HandleFunc("/v1/envs/", b.only(http.MethodGet, b.envs))
+	mux.HandleFunc("/v1/envs/collect", b.only(http.MethodPost, b.collect))    // slice 1: a collection pass now
+	mux.HandleFunc("/v1/sessions/end", b.only(http.MethodPost, b.sessionEnd)) // slice 1: the caller's session ends
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "no such path"})
 	})
@@ -131,6 +134,9 @@ func (b *Broker) requests(w http.ResponseWriter, r *http.Request) {
 			"remediation": "use the adele client: adele request …"})
 		return
 	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		req.Peer = host // read by Adele's listener, never from the body (slice 1, R18)
+	}
 	if req.Capability == grants.CapDockerCompose {
 		// A bring-up resolves in a sandbox and runs compose: longer than the server's write timeout allows
 		// (feature 13). The client's own bound concludes it.
@@ -140,8 +146,9 @@ func (b *Broker) requests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out.Status, out.Body)
 }
 
-// EnvWriteTimeout bounds one environment request's answer: the sandbox and compose, with room.
-const EnvWriteTimeout = SandboxTimeout + ComposeTimeout + time.Minute
+// EnvWriteTimeout bounds one environment request's answer: the sandbox, the builds, compose and the lifecycle
+// commands (slice 1), with room. The agent's own --wait concludes it first.
+const EnvWriteTimeout = 30 * time.Minute
 
 // envs serves GET /v1/envs and GET /v1/envs/NAME: read-only, read back from the daemon by label (feature 13).
 func (b *Broker) envs(w http.ResponseWriter, r *http.Request) {

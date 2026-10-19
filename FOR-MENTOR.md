@@ -1654,7 +1654,14 @@ directory.
 
 ## Item 28 — Feature 13 slice 0 (`014-nested-dev-env`, Cycle 1): `build:` is refused in slice 0 (does not block a criterion)
 
-**Status:** open. Raised 2026-10-17T04:01:16Z (read from the clock) on `014-nested-dev-env`, while planning, after Item 27's answer.
+**Status:** closed 2026-10-18T12:10:38Z (read from the clock), answered in
+`../bridge/feedback/13-20261018-120700-item-28-builds-and-session-end.md`: the operator chose neither (a) nor (b). The
+config sandbox archives each build's context as a tar (symlinks as links, never followed) and reports each stage's
+`FROM`; Adele streams the bytes to the daemon's build API without opening them; a build pulls nothing (a missing base
+image exits 3); build secrets, SSH forwarding, a non-default build network, entitlements and additional contexts
+outside the workspace are refused with exit 2; down and collection remove the images an environment built; a build
+has a bound (exit 124). Built in 13 slice 1 (`modify/014-slice-1`). Raised 2026-10-17T04:01:16Z (read from the
+clock) on `014-nested-dev-env`, while planning, after Item 27's answer.
 
 **What was found.** Item 27's answer says images built from a `build:` carry timelike's labels and are removed by
 `down`. While planning the up path, I found that Compose builds on the **client** side: it reads the Dockerfile and

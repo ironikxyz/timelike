@@ -212,3 +212,141 @@ FLAGGED: B — the default is 4 on the mentor's ruling. The 8 was chosen in the 
 ASSUMED: C — 004's Cycle 4 report named the cause of the same failure in lane 12s1: the fake run's `--call-limit 2`, a hooked commit past 2 s under load counted as a hang, then `--no-verify`. 13s0e's two failures are consistent with it; the log truncates the report, so it does not show the ending (confidence: medium)
 ABSENT: C not fixed (the mentor carries it as open item 1); no e2e cell ran here; the lane's pinned ruff 0.16.9 did not run here
 SCOPE: out — tests/run.sh, tests/unit/test_lane_run_sh.py (the lane's files, named by the feedback) (task has FLAGGED: yes)
+
+
+## Cycle 6 — slice 1 (`bridge/sends/13-rev17-20261018-120700.md`; branch `modify/014-slice-1`)
+
+### T039: the ledger's Recorded writer, SessionEnded, live queries need an expiry
+**Started:** 2026-10-18T12:23:47Z | **Completed:** 2026-10-18T12:25:00Z
+
+INHERITED: slice 0's ledger at `08df8e2` (schema 2), and the plan's R17 and R19
+FLAGGED: an exec and a session end are performed rows (the send: "performed, no undo") with no expiry, so the one condition every live query shares, `unended`, now also requires `expires_at IS NOT NULL`. Chose that over a new outcome (a schema change) or filtering by action in each query (four places to keep in step). Every performed row before slice 1 has an expiry, because Performed requires one (confidence: high)
+ASSUMED: a session end is under no grant, and the grant column is NOT NULL, so it records grant `(none)`, which no grant can be named (grant names are lowercase letters, digits and -) (confidence: high)
+ABSENT: no schema change and no migration; `adeled ledger` prints a performed row with no expiry by its cause, not with a cost or undo; the JSON form already prints null expiry and undo
+SCOPE: out — adele/internal/ledger/recorded_test.go (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T040: the engine's builds, exec, attach, images and agents
+**Started:** 2026-10-18T12:25:37Z | **Completed:** 2026-10-18T12:28:54Z
+
+INHERITED: slice 0's engine client (unix socket, label-filtered lists, Run, removeLate) — from T004 and Cycle 3
+FLAGGED: the context sandbox's stdout is read from an attached, upgraded stream with the container's log driver set to none, not from its logs as `Run` reads the resolve sandbox's. The json-file driver re-encodes output as JSON strings (binary is mangled) and writes it to the host's disk, which this host can least afford (cross-stack P006) (confidence: high for the reason; the attach over the unix socket is untried against a real daemon)
+FLAGGED: builds use the classic builder (`version=1`), the only one the build API offers with a plain tar body and no BuildKit session. It pulls a missing base whatever `pull=0` says, so `Build` cancels the request at the first progress message that is a pull (R15's second guard). The message prefixes are the classic builder's as remembered, not read from a daemon here (confidence: medium)
+FLAGGED: the Engine API has no call to stop an exec'd process. Exec's bound ends the call (`TimedOut`), and the caller says the process may still run and that `down` removes the container (confidence: high)
+ASSUMED: the requester is the agent-labelled container whose address on a network named `adele-request` (or `*_adele-request`, compose's project prefix) equals the request's peer (confidence: high)
+ABSENT: no image is pulled, tagged or removed outside an environment's label; the classic builder's own intermediate containers are left to forcerm; no exec kill; units against the fake daemon only (no Docker here)
+
+### T041: `adele/internal/buildctx/` (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:28:54Z
+
+INHERITED: plan R14–R16 and data-model § A build, given to a delegate with the exported API fixed
+FLAGGED (delegate): mode bits in the header and the digest keep setuid, setgid and sticky as well as the permissions, as the CLI does (confidence: high)
+FLAGGED (delegate): WriteTar re-checks each entry's type, mode, link, size and content hash against the walk, so an archive never carries a digest that does not describe it; a file changed between resolve and build fails the build (confidence: high)
+FLAGGED (delegate): RUN --mount=from=IMAGE also counts as a base, and Bases lists every stage's images, those after the target included (conservative: a missing one is refused even when the classic builder would not reach it) (confidence: medium)
+ASSUMED (delegate): an excluded directory is skipped whole only when no exception could reach below it; otherwise walked, its own entry left out (confidence: medium)
+ABSENT: heredocs are not parsed (the classic builder has none); the injected Dockerfile's name is not checked for a collision with a real file; .dockerignore beside a Dockerfile (Dockerfile.dockerignore) is not read
+SCOPE (T040–T041, one commit 7739f1a): out — adele/internal/engine/engine_test.go, adele/internal/engine/slice1.go, adele/internal/engine/slice1_test.go (3 of 10 changed files) (task has FLAGGED: yes)
+
+### T042: `adele/internal/devcontainer/` (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:29:20Z
+
+INHERITED: plan R12–R13, given to a delegate with the exported API fixed
+FLAGGED (delegate): Translate returns a refusal as `*RefusalError` wrapping `*compose.Refusal` (which is not an error), rather than a third return value (confidence: high)
+FLAGGED (delegate): more than one of image, build and dockerComposeFile is refused, naming the second; a build key other than dockerfile, context, args and target is refused as `build.<key>`; a value of the wrong JSON type is refused, naming its key (confidence: high)
+ASSUMED (delegate): `-v NAME:/x` is a named volume, declared at the top level; `-v ./rel:/x` is refused; a relative source in `mounts` is left to compose, which makes it absolute against the project directory, and slice 0's check then judges it (confidence: medium)
+ABSENT: the legacy top-level `dockerFile` and `context` keys are refused as unknown, not translated; a compose-form forwardPorts naming a service not in the files is left to compose config's own error
+SCOPE: in (3 changed files)
+
+### T043: compose — builds checked, slice 1's labels, one-shots, build keys in the hash
+**Started:** 2026-10-18T12:29:44Z | **Completed:** 2026-10-18T12:31:15Z
+
+INHERITED: slice 0's refusal list and Inject (T005, Cycle 1); R16's allowed and refused build keys
+FLAGGED: slice 0's `build` refusal (D-7) is lifted. A build is checked by key: context, dockerfile, args, target and labels are brokered; secrets, ssh, entitlements, privileged and additional_contexts are refused under the names the operator's decision gives them ("build secrets", …); a network other than default is "build network"; any other key is refused as `build.<key>`. Chose an allow-list over the decision's refuse-list alone, so a build key compose adds later is refused until someone looks at it (confidence: high)
+ASSUMED: compose's config makes a build's context absolute and leaves a relative dockerfile relative to it; Builds joins them (confidence: medium — compose's normalised output is not read here)
+ASSUMED: a one-shot for certain is exactly a service another names in depends_on with condition service_completed_successfully, in the resolved model's map form (confidence: high)
+ABSENT: Inject's requester is "unknown" until T045/T049 pass the real one; slice 0's broker call keeps compiling with session and grant
+SCOPE: in (4 changed files)
+
+### T044: `adeled resolve --devcontainer`, the build scan, `adeled context`
+**Started:** 2026-10-18T12:31:38Z | **Completed:** 2026-10-18T12:36:02Z
+
+INHERITED: devcontainer.Translate (T042), buildctx (T041), compose.Builds (T043)
+FLAGGED: an oversize context or an unreadable Dockerfile is the resolve document's error (Adele's 400, the client's exit 2 with the remedy), not plan R14's exit 1: it is the request that must change (a .dockerignore), not the capability that failed (confidence: medium)
+FLAGGED: the context sandbox writes only the archive to stdout and one JSON line with its digest to stderr, so Adele can tell an archive that is not the one resolve keyed (a file changed between the two sandboxes) and keep no image built from it (confidence: high)
+ASSUMED: the devcontainer's generated compose files go in the sandbox's own /tmp (its tmpfs), which compose reads with the project directory the translation names (confidence: high)
+ABSENT: the resolve sandbox does not check that a build's bases exist (Adele does, on the daemon); runServices' filter keeps the depends_on closure only
+SCOPE: out — adele/cmd/adeled/resolve_slice1_test.go (1 of 4 changed files) (task has FLAGGED: yes)
+
+### T045–T046: the broker's builds, lifecycle commands and exec
+**Started:** 2026-10-18T12:36:30Z | **Completed:** 2026-10-18T12:39:45Z
+
+INHERITED: the engine's Build, RunStream, Exec and Agents (T040); the resolve document's builds and devcontainer (T044); Inject's Meta (T043)
+FLAGGED: everything a build could be refused for is checked before it builds: the grant's static limits, a live environment of the name with another model (409), and every base image (exit 3). The builds then run before Envs' lock, because they can take minutes and the lock serialises every bring-up; the lock's own checks run again after, and a refusal there (instances, budget, a missing image, the network) removes what this request built (confidence: medium — two ups of one name can both build, and the second is then refused or found unchanged)
+FLAGGED: an unchanged build is the image tagged `<env>-<service>:<key[:12]>` carrying that key and the environment's label, which is reused with no build. A context archive whose digest is not the one resolve keyed keeps no image, and the answer is a 409 to bring it up again (confidence: high)
+FLAGGED: lifecycle commands run after the environment is recorded and Envs' lock is released, in the primary container, as its remote user, in its workspace folder, with remoteEnv; they stop at the first that fails or passes its 120 s bound. A command that cannot be run at all is reported as exit 126 under the name "lifecycle" (confidence: medium)
+FLAGGED: exec picks the named service, else the devcontainer's primary, else the only service, else answers 409 listing the services; a container that is not running is a 502 naming its state; the row records service, user, command (≤ 200 characters) and its end, with the environment's grant (confidence: high)
+ASSUMED: the requester is read before the lock, once per up, from the daemon's list of agent-labelled containers by the request's peer address (http.go sets Request.Peer from RemoteAddr; it is `json:"-"`, so the body cannot set it) (confidence: high)
+ABSENT: no unit drives the daemon side of a build, a lifecycle command or an exec (tech-stack: Adele's Docker calls are not mocked to reach coverage; the lane's cells do); EnvWriteTimeout is 30 min so the server never cuts a long build, and the agent's --wait concludes it first
+SCOPE: out — adele/internal/engine/slice1.go (1 of 6 changed files) (task has FLAGGED: yes)
+
+### T047, T050, T052 (client half): the client's devcontainer choice, exec, collect, session end, readiness per decision C (delegated)
+**Started:** 2026-10-18T12:23:00Z | **Completed:** 2026-10-18T12:40:31Z
+
+INHERITED: the contract § Slice 1 and plan R12, R13, R17, R19, R20, given to a delegate
+FLAGGED (delegate): exec passes its command's exit status through by setting the tool's `passes_exit` for that verb only, after parsing, which agentio reads in one place (the exit-vocabulary check); declaring it Tool-wide would split every verb's arguments at its first word and make conform wrap a command adele does not run. The tool is declared `takes_command` instead, so `--` splits the command, and `--` on any other verb is a usage error. The manifest therefore understates exec (no passes_exit declared) rather than overstate the tool (confidence: medium)
+FLAGGED (delegate): `--timeout` resolves per verb: 100 s for exec (feature 03's run default), 30 s for every other verb, unchanged (confidence: high)
+ASSUMED (delegate): "N ready" counts ready and completed services; "running, no readiness check" never counts, and the verdict is slice 0's exactly when nothing is unchecked (confidence: high)
+FLAGGED: down's verdict and collect's lines name built images only when there were any, so slice 0's pinned verdict is unchanged (confidence: high)
+ABSENT: the README's generated reference is stale until T055 (test_readme_reference fails until then); an up verdict with a long name, "devcontainer," and the unchecked clause can pass 200 columns, and agentio cuts it with its marker
+SCOPE: out — tests/unit/test_adele_env_slice1_cli.py (1 of 2 changed files) (task has FLAGGED: yes)
+
+### T049: the requester, session end, the collection pass and the reaper's tick
+**Started:** 2026-10-18T12:40:45Z | **Completed:** 2026-10-18T12:42:21Z
+
+INHERITED: Request.Peer and the requester label (T045); the ledger's Recorded and SessionEnded (T039); the engine's Agents and Down with images (T040)
+FLAGGED: a pass collects an environment when its ledger session has an end row (b), or when its containers' requester label names an agent container the daemon's list no longer has (a); an environment whose requester is unknown, or that has none (slice 0's), is left to session end and the ttl. Chose the ledger's session over the session label as the authority, because the ledger is what records who asked and the label is read back only to find the requester (confidence: high)
+FLAGGED: a collected environment is a reaped row with the cause and the counts removed, read back with 0 left; anything left is a reap-failed row, tried again on the next pass, so the reaper's own given-up logic is not involved (confidence: medium)
+ASSUMED: the reaper's After hook runs on its existing tick (5 s by default) and lists the daemon only while there are live environments (confidence: high)
+ABSENT: no unit drives the daemon side of a collection (the lane's cells do); no unit runs the reaper's After hook through Run; collect needs no grant, since it only removes what an ended session left
+SCOPE: in (5 changed files)
+
+### T055: README
+**Started:** 2026-10-18T12:43:45Z | **Completed:** 2026-10-18T12:44:50Z
+
+INHERITED: the send's README status block; the client's verbs and verdicts (T047, T050, T052); the operator's mark rule (clear the last update's marks first)
+FLAGGED: the status block is applied now, on both slice-1 criteria being built with their cells written, as slice 0's T019 applied its block before its lane ran; the lane is what shows they are met (confidence: medium)
+ASSUMED: the Status paragraph's other sentences stay true ("Features 02, 03, 07–13 and 15 have their first slice or slices") and the Next line is left as it is, as the send says (confidence: high)
+ABSENT: the two changed command examples sit in code blocks, which cannot be marked; slice 0's 13 marks were removed first, per the operator's rule
+SCOPE: out — README.md (1 of 1 changed files) (task has FLAGGED: yes)
+
+### T048, T051, T053, T054, T052 (e2e half): the slice-1 cells, fixtures and lane (delegated), and the label fix they found
+**Started:** 2026-10-18T12:43:00Z | **Completed:** 2026-10-18T13:02:42Z
+
+INHERITED: every verdict, error and ledger cause from tools/bin/adele and the broker (T045–T049), read from the code by the delegate
+FLAGGED: a defect the cells were written to find, confirmed with the pinned docker-compose v5.6.0's config here: compose interpolates the bytes Adele runs once more, so a remote-env label holding ${containerEnv:X} made compose refuse the model. Inject now escapes $ as $$ in Adele's own label values, and the escaped label round-trips through compose's config (confidence: high)
+FLAGGED (delegate): the reaper runs the same collection pass every 5 s and can win the race with a cell's `adele env collect`; the cells assert the ledger row and the daemon either way, and say on fd 3 which pass collected (confidence: high)
+FLAGGED (delegate): rule (a)'s cell starts a throwaway agent container labelled as the agent is, on the agent's own adele-request network and timelike-nested, so Adele finds it by its address; its removal is what ends the session (confidence: medium — that a non-compose container can join those networks and resolve adele is the lane's)
+FLAGGED (delegate): oneshot-fail accepts either path (compose up refusing a failed service_completed_successfully dependency, or the client's rule) and checks each on its own terms, naming on fd 3 which answered (confidence: medium)
+ASSUMED (delegate): the image nobody exists in timelike-agent:local and can run its Python; the classic builder prints "Step 2/2 : RUN false" (confidence: medium)
+ABSENT: no cell runs a build or a lifecycle command past its bound (5 min, 120 s: minutes of timing on a disk-bound host); no new lane.conf serial entry; the lane-start sweep removes built images in nested_sweep, at every lane start
+SCOPE: in (16 changed files)
+
+### T056: host lanes, the cycle report, reboot.md, commit
+**Completed:** 2026-10-18T13:16:41Z
+
+INHERITED: every task above
+ASSUMED: the README status block stands on both criteria being built; the lane shows whether they are met (confidence: medium)
+ABSENT: the Docker lane, scan and lint in their containers; mypy, staticcheck and govulncheck
+
+## Cycle 7 — lane 13s1a (`../bridge/feedback/13-20261018-173253-lane-13s1a-build-step-verdict-and-mypy.md`; branch `modify/014-slice-1`)
+
+### T057–T058: mypy's union-attr, and the failed build step in the Dockerfile's terms
+**Started:** 2026-10-18T17:47:10Z (the cycle's first clock reading) | **Completed:** 2026-10-18T17:53:26Z (the code; records and host lanes after)
+
+INHERITED: Cycle 6's code at `b209824`; lane 13s1a's logs under `../bridge/` (196's verdict read from `.make-test-13s1a.log`)
+ASSUMED: A — `dropped` read once into a local and narrowed by `isinstance`; mypy 2.3.1 (the version `pins.env` gives the lint) on this host over `pyproject.toml`'s files then also flagged the new `last_lines` line, narrowed the same way; it reports no issues in 39 files (confidence: high)
+ASSUMED: the six steps are Adele's six labels. Read in moby v28.5.1's source (`builder/dockerfile/builder.go`, `buildLabelOptions`): one `LABEL` command per `labels` entry, appended to the last stage, counted in "Step N/M" (`totalCommands`). The lane's daemon version is not in its logs; 2 + 6 = 8 matches (confidence: high)
+FLAGGED: B — the step is named by its position N among the Dockerfile's own instructions and its text, never the daemon's M; chose to compute nothing from M (no M minus the label count) over deriving the Dockerfile's total, because steps are numbered in the Dockerfile's order with label steps last, so N is right on any daemon, while a total would depend on how a daemon version adds labels. A label step is recognised as `LABEL <a request key>=` (buildkit v0.25.1's `NewLabelCommand` text) and said as "the labels Adele adds after the Dockerfile's last instruction" (confidence: high)
+FLAGGED: the lines kept are the failing step's own, with the daemon's `--->` and `Removing intermediate container` lines dropped; the daemon's error (`message`, e.g. "The command '…' returned a non-zero code: 1") follows them in the client's one line, because a step that prints nothing (`RUN false`) otherwise says nothing of why (confidence: high)
+ASSUMED: 196's cell asserts the instruction and its position, the daemon's message with the command left as a wildcard, and that no `Step ` or `--->` is in the line (confidence: high)
+ABSENT: no Docker here, so 196 has not run against a daemon; no broker unit drives a failed build (the engine units and 196 cover the mapping); C (002's bench probe) not touched, as ruled; the spec's FR-24 ("naming the step") left as it stands, since it is still true
+SCOPE: in (6 changed files) (task has FLAGGED: yes)

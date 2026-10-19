@@ -90,8 +90,9 @@ func (l *Ledger) Spent(grant string) (int64, error) {
 	return n, nil
 }
 
-// unended is the condition that a performed row p has no reaped or gone row: its resource may still exist.
-const unended = `NOT EXISTS (SELECT 1 FROM ledger e WHERE e.ref = p.id AND e.outcome IN ('reaped', 'gone'))`
+// unended is the condition that a performed row p made something that may still exist: it has an expiry (an exec
+// and a session end are performed rows with none, feature 13 slice 1, and never live) and no reaped or gone row.
+const unended = `p.expires_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ledger e WHERE e.ref = p.id AND e.outcome IN ('reaped', 'gone'))`
 
 // Live returns the count of grant's performed rows whose resource has not been reaped or found gone
 // (FR-34). Spent is unchanged by a reap: money spent stays spent.
@@ -239,4 +240,18 @@ func prefixed(alias string) string {
 		s += alias + "." + c
 	}
 	return s
+}
+
+// SessionEnded returns the row that ended session (a Recorded row of CapabilitySession, action end), and whether
+// there is one (feature 13 slice 1, the operator's decision 2(b)).
+func (l *Ledger) SessionEnded(session string) (Row, bool, error) {
+	rows, err := l.query(`SELECT `+prefixed("p")+` FROM ledger p WHERE p.outcome = ? AND p.capability = ? AND p.action = ? AND
+		p.resource = ? ORDER BY p.id LIMIT 1`, OutcomePerformed, CapabilitySession, ActionEnd, session)
+	if err != nil {
+		return Row{}, false, err
+	}
+	if len(rows) == 0 {
+		return Row{}, false, nil
+	}
+	return rows[0], true, nil
 }

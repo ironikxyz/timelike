@@ -1,0 +1,9 @@
+// timelike's fixture devcontainer, build form (feature 13 slice 1, criterion 7; 014 plan R14-R16, R22).
+// The cell writes the lane's DEBIAN_IMAGE where @DEBIAN_IMAGE@ stands (a devcontainer.json has no .env): a base the
+// daemon already has, so the build pulls nothing. Two layers; the host's disk is slow.
+{
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {"BASE": "@DEBIAN_IMAGE@"},
+  },
+}
