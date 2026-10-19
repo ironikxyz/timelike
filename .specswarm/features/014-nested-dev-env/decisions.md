@@ -361,3 +361,14 @@ FLAGGED: the snapshot's record (digest, bytes, files) lives in its row's undo do
 ASSUMED: an ending is any row whose ref is the hold or snapshot (an unpause, a start, or a reaped/gone removal), checked in one transaction so a request and the recovery pass end a hold once (confidence: high)
 ASSUMED: snapshot rows' resource is `ENV/ID`, matched by prefix length, so tl-a-1 never lists tl-a-10's (confidence: high)
 ABSENT: no schema change, and no reader of the undo's record yet (T064 is the first)
+SCOPE: out — adele/internal/ledger/slice2.go (1 of 3 changed files) (task has FLAGGED: yes) — the new writers went in a file of their own beside ledger.go and query.go, which tasks.md named
+
+### T061: grants' optional snapshots and snapshot-store keys
+**Started:** 2026-10-19T04:08:00Z | **Completed:** 2026-10-19T04:02:06Z
+
+INHERITED: T060's `snapshots` among the ledger's extendable limits
+FLAGGED: the default cap is 1 GiB per environment — chose 1 GiB over 256 MiB because a development database's volume is commonly hundreds of MiB, and over unlimited because T2 asks for a capped scope; the README and the spec give it (confidence: medium)
+FLAGGED: `snapshot-store = tmpfs` is a grant key (the operator's), not an Adele setting — chose a grant key over an environment variable on Adele because the lane needs one bounded store for the disk-full cell without making every other cell's snapshots tmpfs, and over simulating ENOSPC because a simulated full store tests a branch, not a store; it is also a real choice for an operator who wants snapshots bounded in memory (confidence: medium)
+ASSUMED: a size needs a unit unless it is 0 (`64` alone is refused), so a cap is never misread by a factor of 1024 (confidence: high)
+ASSUMED: TestLoadValid's expected grant gains the two defaults: a grant that leaves the keys out gets them, which is the change, so the expectation moved and no assertion was loosened (confidence: high)
+ABSENT: snapshot-store is not extendable (it is where, not how much); no KB/MB (decimal) units
