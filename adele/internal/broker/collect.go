@@ -142,8 +142,8 @@ func (b *Broker) Collect(ctx context.Context) (collected, failed []Collected, er
 		removed, left, derr := e.Engine.Down(context.WithoutCancel(ctx), row.Resource)
 		e.unlock()
 		c := Collected{Name: row.Resource, Session: row.Session, Cause: cause, Removed: removed}
-		outcome, words := ledger.OutcomeReaped, fmt.Sprintf("collected: %s; %d containers, %d networks, %d volumes, %d images removed; 0 left, read back from the daemon",
-			cause, removed.Containers, removed.Networks, removed.Volumes, removed.Images)
+		outcome, words := ledger.OutcomeReaped, fmt.Sprintf("collected: %s; %d containers, %d networks, %d volumes, %d images, %d snapshots removed; 0 left, read back from the daemon",
+			cause, removed.Containers, removed.Networks, removed.Volumes, removed.Images, removed.Snapshots)
 		if derr != nil || left.Total() > 0 {
 			l := left
 			c.Left = &l
@@ -159,6 +159,9 @@ func (b *Broker) Collect(ctx context.Context) (collected, failed []Collected, er
 			return collected, failed, rerr
 		}
 		c.LedgerID = id
+		if outcome == ledger.OutcomeReaped && removed.Snapshots > 0 {
+			b.endSnapshots(row.Resource, "removed with its environment, collected: "+cause+"; read back gone")
+		}
 		if outcome == ledger.OutcomeReaped {
 			collected = append(collected, c)
 		} else {

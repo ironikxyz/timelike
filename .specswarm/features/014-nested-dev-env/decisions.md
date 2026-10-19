@@ -406,3 +406,18 @@ ABSENT (delegate): no real ENOSPC was produced — the copyContent seam (volcopy
 ABSENT (delegate): extended attributes and ACLs are not copied (R24 says so); nothing in this task records that in a verdict
 ABSENT (delegate): no run inside the helper's real sandbox (no Docker on this host): the capability set, read-only /src and the tmpfs store are untested by this task
 FLAGGED: the review kept every delegate choice; plan R24's "exit 1" for a device was corrected to the helper's exit 12 (the snapshot itself is exit 1), so the plan agrees with R25 and the code (confidence: high)
+SCOPE: out — adele/cmd/adeled/volume_test.go (1 of 8 changed files) (task has FLAGGED: yes)
+
+### T064–T066: the broker's snapshot, snapshots, restore, snapshot-rm; the recovery and orphan pass; down and collection end snapshot rows
+**Started:** 2026-10-19T04:04:32Z (T063's commit) | **Completed:** 2026-10-19T04:15:51Z
+
+INHERITED: T060's Kept and Ended, T061's cap and store, T062's helper protocol, T063's engine calls
+FLAGGED: every snapshot, restore and removal holds Envs' lock for its whole length, the copy included — chose one lock over a per-environment one because slice 0's lock already serialises every up across environments and a second locking scheme beside it is a new way to deadlock; the cost is that an up waits behind a long copy, and the lock's holder is named in its timings (confidence: medium)
+FLAGGED: the snapshot is measured before anything is paused (the cap refuses with nothing written), and the copy is given the cap left as --max-bytes, so a volume that grew between the two fails rather than passing the cap (confidence: high)
+FLAGGED: a restore starts its services again even when the copy failed partway, and says the contents are partial — chose starting over leaving them stopped because R28's rule is that nothing Adele holds is left held, and a stopped service with no verdict naming it is worse than a running one on data the verdict calls partial (confidence: medium)
+FLAGGED: the recovery pass at Adele's start first removes every volume helper still running — they are a stopped Adele's, and the partial snapshot one holds open cannot be removed while it runs; on a tick it removes nothing running, and a record-less volume is partial only once older than a copy's bound and a minute (found from the e2e delegate's restart cell; confidence: high)
+FLAGGED: the recovery pass takes Envs' lock, so it can never undo the hold of a snapshot in progress (confidence: high)
+ASSUMED: a pause that does not read back paused unpauses every user and writes nothing; a container the agent paused itself is not a user (only running ones are paused), so Adele never unpauses what she did not pause (confidence: high)
+ASSUMED: restore's users include paused and restarting containers, thawed before the stop, so a restore never writes under a running process (confidence: medium)
+ASSUMED: Adele's own readiness read for a restore is the daemon's state and healthcheck, at most 60 s; the client then probes ports from the agent's container as up does (cross-stack P001) (confidence: high)
+ABSENT: no run against a daemon (the fake daemon here checks the order of acts, not the daemon's answers); the restore of a volume while another environment's service mounts it is impossible by construction (only own volumes) and not tested

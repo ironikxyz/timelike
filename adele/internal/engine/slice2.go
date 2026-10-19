@@ -101,3 +101,24 @@ func (c *Client) State(ctx context.Context, id string) (string, error) {
 	}
 	return in.State.Status, err
 }
+
+// RemoveSandboxes removes every sandbox of kind the daemon has, running or not, and returns how many. At Adele's
+// start, a volume helper still running is a stopped Adele's: nothing of hers will read its answer, and the partial
+// snapshot it holds open cannot be removed while it runs (R30).
+func (c *Client) RemoveSandboxes(ctx context.Context, kind string) (int, error) {
+	var out []struct {
+		ID string `json:"Id"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/containers/json?all=1&filters="+labelFilter(LabelSandbox+"="+kind), nil, &out,
+		http.StatusOK); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, s := range out {
+		if err := c.remove(ctx, s.ID); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}

@@ -177,6 +177,8 @@ func (b *Broker) handleEnv(ctx context.Context, req Request) Outcome {
 		return b.envDown(ctx, req)
 	case "exec":
 		return b.envExec(ctx, req)
+	case "snapshot", "snapshots", "restore", "snapshot-rm":
+		return b.handleSnapshot(ctx, req) // slice 2
 	}
 	return b.envUp(ctx, req)
 }
@@ -629,8 +631,8 @@ func (b *Broker) envDown(ctx context.Context, req Request) Outcome {
 	}
 	body := map[string]any{"outcome": "ended", "resource": name, "removed": removed, "left": 0}
 	if live {
-		cause := fmt.Sprintf("taken down by session %s (adele env down): %d containers, %d networks, %d volumes, %d images removed; 0 left, read back from the daemon",
-			req.Session, removed.Containers, removed.Networks, removed.Volumes, removed.Images)
+		cause := fmt.Sprintf("taken down by session %s (adele env down): %d containers, %d networks, %d volumes, %d images, %d snapshots removed; 0 left, read back from the daemon",
+			req.Session, removed.Containers, removed.Networks, removed.Volumes, removed.Images, removed.Snapshots)
 		b.mu.Lock()
 		id, wrote, err := b.Ledger.Reap(row.ID, ledger.OutcomeReaped, cause, 1, b.now())
 		b.mu.Unlock()
@@ -640,6 +642,9 @@ func (b *Broker) envDown(ctx context.Context, req Request) Outcome {
 		if wrote {
 			body["ledger_id"] = id
 		}
+	}
+	if removed.Snapshots > 0 {
+		b.endSnapshots(name, fmt.Sprintf("removed with its environment by adele env down (session %s); read back gone", req.Session))
 	}
 	return Outcome{http.StatusOK, body}
 }

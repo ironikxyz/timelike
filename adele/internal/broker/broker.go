@@ -53,7 +53,19 @@ type Params struct {
 	Service      string   `json:"service,omitempty"`
 	Cmd          []string `json:"cmd,omitempty"`
 	TimeoutS     float64  `json:"timeout_s,omitempty"`
+	// Slice 2: a snapshot's volume and note; restore's and snapshot-rm's snapshot; restore's dry run.
+	Volume   string `json:"volume,omitempty"`
+	Note     string `json:"note,omitempty"`
+	Snapshot string `json:"snapshot,omitempty"`
+	DryRun   bool   `json:"dry_run,omitempty"`
 }
+
+// envActions are docker.compose's actions (slices 0-2).
+var envActions = map[string]bool{"up": true, "down": true, "exec": true, "snapshot": true, "snapshots": true,
+	"restore": true, "snapshot-rm": true}
+
+// snapshotRe is a snapshot's id: s- and 8 hex (slice 2).
+var snapshotRe = regexp.MustCompile(`^s-[0-9a-f]{8}$`)
 
 // Upstream is the capability Adele performs with her credential: the stand-in in slice 0.
 type Upstream interface {
@@ -137,9 +149,12 @@ func validate(req Request) (Outcome, bool) {
 	case !grants.KnownCapabilities[req.Capability]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("Adele knows no capability %q", req.Capability),
 			"Adele knows: "+grants.KnownList, nil), true
-	case req.Capability == grants.CapDockerCompose && req.Action != "up" && req.Action != "down" && req.Action != "exec":
+	case req.Capability == grants.CapDockerCompose && !envActions[req.Action]:
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
-			"the actions are up, down and exec", nil), true
+			"the actions are up, down, exec, snapshot, snapshots, restore and snapshot-rm", nil), true
+	case (req.Action == "restore" || req.Action == "snapshot-rm") && !snapshotRe.MatchString(req.Params.Snapshot):
+		return fail(http.StatusBadRequest, fmt.Sprintf("bad snapshot id %q", req.Params.Snapshot),
+			"a snapshot id is s- and 8 hex digits; list them with adele env snapshots", nil), true
 	case req.Capability != grants.CapDockerCompose && req.Action != "create":
 		return fail(http.StatusBadRequest, fmt.Sprintf("%s has no action %q", req.Capability, req.Action),
 			"the action is create", nil), true

@@ -104,7 +104,12 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		return exitUsage
 	}
 	if b.Envs != nil { // feature 13 slice 1: the reaper's tick also collects ended sessions' environments (R19)
-		reap.After = func(ctx context.Context, log io.Writer) { logCollected(b, ctx, log) }
+		// Slice 2 (R28, R30): on every tick, what a snapshot or restore left held, partial or orphaned. The first pass
+		// is before serving (below), as a start.
+		reap.After = func(ctx context.Context, log io.Writer) {
+			logCollected(b, ctx, log)
+			b.Recover(ctx, false, log)
+		}
 	}
 	ln, err := net.Listen("tcp", e.get("ADELE_LISTEN"))
 	if err != nil {
@@ -119,6 +124,11 @@ func serve(e env, stderr io.Writer, ready chan<- string) int {
 		ln.Addr(), len(b.Grants.Grants), b.Grants.Names(), revision, reapEvery(reap), envsLine(b.Envs))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
+	if b.Envs != nil {
+		// Slice 2's first recovery pass (R28, R30), as a start: no copy of this Adele's can be running yet, and a
+		// request waits for it behind Envs' lock. Beside serving, so a slow daemon never holds up health.
+		go b.Recover(ctx, true, stderr)
+	}
 	if ready != nil { // after NotifyContext: a signal sent on ready is handled, never fatal
 		ready <- ln.Addr().String()
 	}
