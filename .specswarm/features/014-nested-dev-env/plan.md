@@ -518,7 +518,7 @@ files' sizes; the file count is the entries other than the root.
 - **Restore:** before anything is stopped, a helper digests the snapshot volume, and Adele compares it with the
   record. A mismatch is exit 1, nothing stopped. After the copy, the target's digest must equal the record.
 - **Not copied, and said:** sockets (they cannot be copied; the count is in the record and the verdict). A device node
-  is refused (exit 1 naming it): making one needs `MKNOD`, which the helper does not get. Extended attributes and ACLs
+  is refused (the helper's exit 12, naming it; the snapshot is exit 1): making one needs `MKNOD`, which the helper does not get. Extended attributes and ACLs
   are not kept (`not_verified`).
 - A file that changes during the copy cannot happen to a paused service's files. It can happen to a volume no running
   service mounts but a stopped one does, which nothing writes.
