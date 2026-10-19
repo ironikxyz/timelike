@@ -732,7 +732,7 @@ Every tool also answers `--agent-info` with its manifest (JSON), and `timelike t
 
 ```text
 adele: adele [help]
-ask Adele to perform a reaching action within the operator's grant; never see a credential
+ask Adele to perform a reaching action within the operator's grant; never see a credential; adele env snapshot|restore: a nested environment's Docker volumes (the workspace's files: snapshot, undo)
 usage:
   adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live
@@ -741,7 +741,11 @@ usage:
   adele env status [NAME] | adele env down [NAME|DIR]  # each service, its address; remove it all
   adele env exec [NAME] [--service S] [--timeout 100] -- CMD [ARG]...  # exits with CMD's status
   adele env collect | adele session end  # remove ended sessions' environments; end this session
-  exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)
+  adele env snapshot [NAME] VOLUME [--note T] | adele env snapshots [NAME]  # an env's Docker volumes
+  adele env restore [NAME] SNAPSHOT [--yes|--dry-run] [--wait 120] | adele env snapshot-rm [NAME] S
+    (the workspace's own files are snapshot and undo; these are a nested environment's volumes)
+  exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command);
+    or env restore / snapshot-rm without --yes: stdout is the confirmation envelope (your command)
   extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);
   every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)
 options:
@@ -751,6 +755,8 @@ options:
   --agent-info  machine-readable manifest
   --limit  output cap in lines; 0 = no cap
   --verbose  add timing; warn about event-log failures
+  --dry-run  show the plan, change nothing
+  --yes  confirm the mutation
   --name  the resource's name
   --ttl  its lifetime, e.g. 30m or 1h (default: the grant's ttl)
   --port  a port it exposes
@@ -761,8 +767,9 @@ options:
   --project  env: the environment's name (default: from DIR)
   --devcontainer  env up: the project's devcontainer, not its compose file
   --service  env exec: the service to run in (default: its only one)
-  --wait  env up: ready within S s (at most 600)
-exit codes: 0 ok, 1 unreachable, or the capability failed (env up: a build, lifecycle command or service), 2 usage; or name one with --grant; env: a setting no grant allows, a bad devcontainer.json, 3 no grant, environment or service by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed, 124 own limit fired (env up: not ready within --wait, a build or lifecycle bound; env exec: --timeout)
+  --wait  env up, restore: ready within S s (at most 600)
+  --note  env snapshot: a note kept with it (at most 200)
+exit codes: 0 ok, 1 unreachable, or the capability failed (env up: a build, lifecycle command or service; env restore: a service not ready), 2 usage; or name one with --grant; env: a setting no grant allows, a bad devcontainer.json, 3 no grant, environment, service, volume or snapshot by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed; or env restore, snapshot-rm without --yes, 124 own limit fired (env up: not ready within --wait, a build or lifecycle bound; env exec: --timeout)
 ```
 
 ### `edit`
@@ -945,7 +952,7 @@ exit codes: 0 ok, 1 died, refused, or processes survived a stop, 2 usage, 3 no s
 
 ```text
 snapshot: workspace [help]
-take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it
+take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it; a nested environment's Docker volumes: adele env snapshot
 usage:
   snapshot [-m TEXT]       # take one: prints its id, file count and size, and what was left out
   snapshot list            # this workspace's snapshots, newest first
@@ -1033,7 +1040,7 @@ exit codes: 0 every tool conforms, 1 a tool fails a check, or none was found, 2 
 
 ```text
 undo: workspace [help]
-restore the workspace to a snapshot (the newest by default); dry run first, verified after
+restore the workspace to a snapshot (the newest by default); dry run first, verified after; a nested environment's Docker volumes: adele env restore
 usage:
   undo --dry-run           # list exactly what a restore would change; change nothing
   undo --yes               # restore the newest snapshot, verify it, keep the replaced state

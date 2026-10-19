@@ -90,7 +90,7 @@ def test_a_service_with_no_readiness_check_does_not_block_and_is_never_counted_r
     no_traceback(r)
     assert r.returncode == 0, r.stderr
     head = r.stdout.splitlines()[1]
-    assert head.startswith(f"verdict: up {NAME}: 1 ready, 1 running with no readiness check in "), head
+    assert head.startswith(f"verdict: up {NAME}: 1 ready, 1 running, no readiness check in "), head
     assert "worker  running, no readiness check" in r.stdout
     assert not [s for s in adele.received() if s.method == "GET"]  # concluded at once: nothing polled
     doc = doc_of(up(py, scratch, adele, ws, "--json"))
@@ -111,7 +111,7 @@ def test_a_devcontainer_with_no_readiness_check_names_both(
     r = up(py, scratch, adele, ws)
     assert r.returncode == 0, r.stderr
     head = r.stdout.splitlines()[1]
-    assert head.startswith(f"verdict: up {NAME}: devcontainer, 1 running with no readiness check in "), head
+    assert head.startswith(f"verdict: up {NAME}: devcontainer, 1 running, no readiness check in "), head
 
 
 def test_a_one_shot_is_waited_for_until_it_exits_0(

@@ -320,6 +320,22 @@ def test_grant_client_cannot_be_mutating() -> None:
     assert ok.envelopes() == ["grant_required"] and ok.codes()[4].startswith("beyond the grant")
 
 
+def test_a_grant_client_that_declares_confirm_protocol_prints_both_envelopes() -> None:
+    """014 slice 2 (plan R31): a grant client whose verbs include ones rule 9 binds (adele env restore,
+    snapshot-rm) declares confirm_protocol=True explicitly; it then gets --yes and both envelopes. Only the
+    explicit declaration admits the pair: mutating alone still means a grant client confirmed by --yes."""
+    t = agentio.Tool("x", "t", "s", mutating=True, confirm_protocol=True, grant_envelope=True)
+    assert t.confirm_protocol is True
+    assert t.envelopes() == ["confirmation_required", "grant_required"]
+    assert t.codes()[4] == "beyond the grant (the operator extends it), or confirmation required (--yes)"
+    assert "--yes" in agentio._long_flags(agentio._parser(t, None))
+    words = {0: "ok", 4: "the tool's own words"}
+    own = agentio.Tool(
+        "x", "t", "s", mutating=True, confirm_protocol=True, grant_envelope=True, exit_codes=words
+    )
+    assert own.codes()[4] == "the tool's own words"
+
+
 # ── rule 14 applied to exit 4 (plan's ruling on Item 14 (b), 2026-10-16; 004 Cycle 3) ────────────────
 
 

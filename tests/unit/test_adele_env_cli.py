@@ -128,8 +128,8 @@ def test_up_returns_once_each_service_is_ready_listing_its_address(
     head = r.stdout.splitlines()[1]
     assert head.startswith(f"verdict: up {NAME}: 3 ready in ") and len(head) <= 200
     assert "read back, ports probed from the agent container" in head
-    assert head.endswith("local: no cost · host git enforced")
-    assert r.stdout.splitlines()[2].startswith("grant env · expires 2026-10-17T06:00:00Z")
+    assert head.endswith("· host git enforced")  # 014 R32 A: the cost is on the grant's line
+    assert r.stdout.splitlines()[2].startswith("grant env · expires 2026-10-17T06:00:00Z · local: no cost")
     assert f"127.0.0.1:{listener}" in r.stdout and "completed (exit 0)" in r.stdout
     sent = next(s for s in adele.received() if s.method == "POST").body
     assert sent["capability"] == "docker.compose" and sent["action"] == "up"
@@ -184,7 +184,8 @@ def test_a_repeat_up_says_it_created_nothing(py: str, scratch: Path, adele: Fake
     adele.answer("POST", "/v1/requests", 200, body)
     r = up(py, scratch, adele, ws)
     head = r.stdout.splitlines()[1]
-    assert r.returncode == 0 and "1 ready, unchanged (nothing created or recorded)" in head
+    assert r.returncode == 0 and head.startswith(f"verdict: up {NAME}: unchanged, 1 ready in "), head
+    assert r.stdout.splitlines()[3] == "unchanged: it was already up as asked; nothing created or recorded"
     long_name = "tl-" + "a" * 22 + "-cell"
     assert len(head.replace(NAME, long_name)) <= 200
 

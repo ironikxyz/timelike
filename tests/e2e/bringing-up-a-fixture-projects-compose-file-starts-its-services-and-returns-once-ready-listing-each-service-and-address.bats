@@ -27,7 +27,8 @@ check_up_ready() {
   env_run "$style" "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
   [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 3 ready in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
-  assert_output_has "read back, ports probed from the agent container · local: no cost · host git enforced"
+  assert_output_has "read back, ports probed from the agent container · host git enforced"
+  assert_output_has " · local: no cost · down: adele env down ${NP_NAME}"
   assert_output_has "db  ready (healthy)"
   assert_output_has "web  ready (running, ports accept)  web.${NP_NAME}:8080"
   assert_output_has "job  completed (exit 0)"

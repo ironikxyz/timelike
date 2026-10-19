@@ -45,7 +45,8 @@ check_devcontainer_up_and_exec() {
   env_run "$style" "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
   [[ "${lines[1]}" == "verdict: up ${NP_NAME}: devcontainer, 1 ready in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
-  assert_output_has "read back, ports probed from the agent container · local: no cost · host git enforced"
+  assert_output_has "read back, ports probed from the agent container · host git enforced"
+  assert_output_has " · local: no cost · down: adele env down ${NP_NAME}"
   assert_output_has "devcontainer  ready (running, ports accept)  devcontainer.${NP_NAME}:8080"
   assert_output_has "postCreateCommand  exit 0"
   assert_output_has "postStartCommand  exit 0"
@@ -95,8 +96,10 @@ check_devcontainer_up_and_exec() {
   devcontainer_project dc-build devcontainer-build
   env_run c "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: devcontainer, 1 running with no readiness check in "* ]] ||
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: devcontainer, 1 running, no readiness check in "* ]] ||
     { echo "verdict: ${lines[1]}" >&2; return 1; }
+  # D22 B (014 FR-44): no port was probed, so the verdict says none was.
+  [[ "${lines[1]}" != *"ports probed"* ]] || { echo "verdict claims a probe: ${lines[1]}" >&2; return 1; }
   assert_output_has "devcontainer  running, no readiness check"
   assert_output_has "built devcontainer: ${NP_NAME}-devcontainer:"
   assert_output_has " s (nothing pulled)"
@@ -112,8 +115,9 @@ check_devcontainer_up_and_exec() {
   # Unchanged: nothing built, created or recorded; the image is reused, by its key.
   env_run c "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: devcontainer, 1 running with no readiness check, unchanged (nothing created or recorded) in "* ]] ||
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: unchanged, devcontainer, 1 running, no readiness check in "* ]] ||
     { echo "second verdict: ${lines[1]}" >&2; return 1; }
+  assert_output_has "unchanged: it was already up as asked; nothing created or recorded"
   assert_output_has "reused devcontainer: ${tag} (unchanged)"
   [[ "$output" != *"built devcontainer:"* ]] || { echo "the second up built again: $output" >&2; return 1; }
   [[ "$(nested_image_count "$NP_NAME")" == 1 ]]
