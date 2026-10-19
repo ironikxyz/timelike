@@ -491,3 +491,15 @@ SCOPE: in (1 changed files)
 INHERITED: every task above
 ASSUMED: the README status block stands on criterion 10 being built; the lane shows whether it is met (confidence: medium)
 ABSENT: the Docker lane, scan and lint in their containers; govulncheck; D31
+
+### Lane 13s2a: defects A and B (`../bridge/feedback/13-20261019-062941-lane-13s2a-two-defects.md`)
+**Started:** 2026-10-19T08:00:53Z (read from the clock, after the cause of A was found) | **Completed:** in the commit that carries this entry
+
+INHERITED: T067's `adele` summary (`4f1cd9e`); slice 1's collection pass (R19) and slice 2's tick (R28, R30)
+FLAGGED: A — `adele`'s new summary made its announcement line 209 columns; `--write` writes a line whole and `--json` cuts content lines at rule 13's 200 (with `cut_lines`), so the installed file and `timelike announce --json` differed at line 6. Chose to shorten the summary (to 196 columns as a line: "ask Adele for …", and "workspace files"; it keeps the two phrases the slice-2 unit pins, P3's "snapshot, undo" among them) and make generation refuse any line past 200 (so the image build names it, as it does the 60-line bound) over exempting the announcement from rule 13's cut in `--json`, because the cut is the contract's and an exemption would let a long line reach a harness uncut (confidence: high)
+FLAGGED: B — `#0` is `Ledger.Reap`'s `wrote=false`: the row had already been ended by another pass. Her log's `collected` lines are the tick's (`logCollected`; the request logs nothing), so the request wrote the rows and the tick, having read the same live rows, waited on Envs' lock, removed nothing and reported a row it did not write. Chose one pass at a time (`collectMu`) plus reporting the winner's row (`ReapOf`, `already_recorded`) for the one reaper outside the mutex (the ttl reaper), over making the tick skip collection while a request runs, because a skipped tick is a pass that silently did not happen (confidence: high)
+FLAGGED: B — the collect request gets its own write deadline, `CollectWriteTimeout` = 10 min, and the pass starts no removal after `CollectBound` = 5 min from its call (waiting for another pass included); what it leaves is a `failed` entry naming the bound, collected by the next pass. Chose a bound below compose's 30 min because a collect has no build or bring-up in it; the client waits 660 s, with a timeout verdict naming her pass bound (confidence: medium)
+ASSUMED: the units scale the server's 30 s write timeout to 200 ms and each removal to 300 ms; the control (the deadline line removed) fails the same unit, so the scaled run tests the same path (confidence: high)
+ABSENT: the lane's own ledger was not read back (no Docker here); that a reaped row was written is established from the code (`wrote=false` returns only when a reaped or gone row of that ref exists) and by the units against a fake daemon
+ABSENT: no `make test-partial` loops of the two e2e files: this host has no Docker
+ABSENT: item 5 of `13-20261019-044841-cycle-9-report-read.md` (the restore row's description) is not in this commit; the user named items 1 and 2

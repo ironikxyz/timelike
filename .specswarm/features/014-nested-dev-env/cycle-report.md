@@ -1635,3 +1635,77 @@ helper, collection), and the serial `tests/e2e/adele-restarted-mid-snapshot-unpa
 **After this report:** no commits until the mentor says the lane has ended. The mentor runs the lane, then D31 with
 the operator. Merge `--no-ff` only after the operator's OK, given in the mentor's session and written into the
 sign-off file; push and tag only when that file says so.
+
+### Cycle 9 — lane 13s2a addendum
+
+**Written:** 2026-10-19T08:12:41Z (read from the clock), from the mentor's
+`../bridge/feedback/13-20261019-062941-lane-13s2a-two-defects.md`, with items 1 and 2 of
+`../bridge/feedback/13-20261019-044841-cycle-9-report-read.md`. Append-only: nothing above is changed. The lane ran
+on `661016a`; the fixes are in the commit that carries this addendum.
+
+**Defect A: the announcement did not regenerate equal (e2e 143, 144).**
+- **What it was:** T067 lengthened `adele`'s `--agent-info` summary, so its `## Tools` line (line 6) was 209
+  columns. `timelike announce --write` (the image build) writes a line whole. `--json` applies rule 13's 200-column
+  cut to content lines (discovery revision 12), so its line 6 ended `…[cut 9 bytes]` and the file and the JSON
+  differed there. The cell's summary checks passed because they read the file and the manifest, neither of them cut.
+- **The fix:**
+  - The summary is shorter, and its line is 196 columns. It keeps "a nested environment's Docker volumes" and
+    P3's "snapshot, undo", which a slice-2 unit pins.
+  - Generation now refuses any line past 200 columns, naming it, as it already refuses a 61st line. So the image
+    build fails at the cause instead of the cell.
+  - The README reference is regenerated.
+- **Units:** `test_announce_line_over_rule_13s_columns_fails`, and `test_announce_json_lines_equal_what_write_wrote`
+  (no `cut_lines`).
+
+**Defect B: `adele env collect` outlived the server's 30 s write timeout (e2e 280, `-lc`).**
+- **What it was, in three parts:**
+  - **No bound of its own.** `POST /v1/envs/collect` ran under `serve.go`'s 30 s `WriteTimeout`, and slice 2's
+    heavier removals took the `-lc` pass past it.
+  - **Two passes at once.** The tick's pass (`logCollected`, then `Recover`) and the request's read the same live
+    rows and queued on Envs' lock, which lengthened the request too.
+  - **`#0`.** It is `Ledger.Reap`'s `wrote=false`, which it returns only when a reaped or gone row of that ref
+    already exists. Her log's `collected` lines are all the tick's, because the request logs nothing. So the request
+    wrote the reaped rows, and the tick then removed nothing and reported a row it did not write.
+  - **Not read back:** the lane's own ledger. That needs Docker; `adeled ledger` in her container would show it. The
+    inference rests on the code path above and on the units below.
+- **The fix:**
+  - **One pass at a time:** `Broker.collectMu`.
+  - **The loser reports the winner's row:** when a pass finds a row already ended (the TTL reaper is outside the
+    mutex), it reports that row's id and cause (`ReapOf`, `already_recorded`). The client prints
+    "(recorded by another pass)" and her log prints "by another pass".
+  - **A bound that fits the work:**
+    - A pass starts no removal 5 min after its call, waiting included (`CollectBound`). What it leaves is a `failed`
+      entry naming the bound, which the next pass collects.
+    - The request's answer has its own write deadline of 10 min (`CollectWriteTimeout`).
+    - The client waits 660 s, and its timeout verdict names her 5 min pass bound.
+    - A unit pairs the client's constants with the Go constants.
+- **Units, each failing with its fix taken out:**
+  - **`TestACollectIsAnsweredPastTheServersWriteTimeout`:** the server's write timeout scaled to 200 ms, two
+    removals of 300 ms each, still answered 200 with both collected.
+  - **`TestTwoPassesAtOnceRemoveAndRecordEachEnvironmentOnce`.**
+  - **`TestAPassThatAnotherReaperBeatReportsThatReapersRow`.**
+  - Plus the ledger's `TestReapOfReadsBackTheEndingNotAFailedAttempt`, and two client units.
+- **Left as it is:** the cell's own `PLUMBING_TIMEOUT` (300 s) is below the client's 660 s. A pass that hits its
+  bound would end the cell first. A normal pass is well inside both.
+
+**Items 1 and 2 of the report-read file (README), in this commit rather than the sign-off record commit:**
+- **Item 1:** the Status paragraph's third sentence is the mentor's text, marked. The fourth is unchanged.
+- **Item 2:** one sentence in the copy paragraph, inside its existing mark: extended attributes and ACLs are not
+  kept, a sparse file is copied whole, and a device node is refused, naming it.
+- **Not here:** item 5 (the restore row's description), because only items 1 and 2 were asked for.
+
+**Load-only failures (the lane's 27 unit failures and errors; 311, 454):** not touched, as the mentor ruled.
+
+**Results here** (on the fixed tree; no Docker on this host):
+- **Go 1.27.1:** gofmt clean; `go vet` and staticcheck v0.8.1 clean; `go test -race -count=1 -cover ./...` passes in
+  every package (broker 58.0 %, ledger 91.1 %).
+- **Host lint at its pins:** ruff 0.16.9 check and format, mypy 2.3.1 (39 files), and shellcheck 0.11.0 are clean.
+- **The host lane, serially:** passed, 08:12:17Z–08:22:19Z; 2683 passed, 13 skipped, in 569.01 s; env-layer 60/60,
+  hook 57/57, handler 33/33.
+- **First run, before the second wording:** one failure. It was the slice-2 unit pinning the summary's words, and
+  the first shortening had dropped them.
+- **Not run:** `make test-partial` loops of the labels/collect file and the announcement file. This host has no
+  Docker, so the next lane is their first run.
+
+**process_failures_recorded:** the first shortening of the summary dropped two pinned phrases. The host lane caught
+it before the commit. The summary's pins should have been grepped first, as for verdict text.

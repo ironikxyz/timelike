@@ -49,7 +49,7 @@ Whether it works is a measured claim: see Status.
 
 <mark>**24 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
-Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–13 and 15 have their first slice or slices.
+<mark>Features 01, 04, 05, 06 and 13 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.</mark>
 Features 14, 16 and 17 are not started.
 
 **Next:** 13 slice 2.
@@ -689,7 +689,8 @@ own volumes. The services that mount the volume are paused for the copy and unpa
 the verdict says which were paused and for how long: the copy is one moment in time, the state a power cut would
 leave, which databases are built to recover from. Adele never opens the volume herself. A helper from her own image
 copies it with no network, no socket and no secret, keeping owners, modes, times and links, and records the copy's
-digest, size and file count.</mark>
+digest, size and file count. It does not keep extended attributes or ACLs, it copies a sparse file whole, and it
+refuses a device node, naming it.</mark>
 
 <mark>**Restore and the cap.** `adele env restore SNAPSHOT` checks the snapshot against its recorded digest before it
 stops anything, then stops the services that mount the volume, replaces its contents, starts them and waits for
@@ -759,7 +760,7 @@ Every tool also answers `--agent-info` with its manifest (JSON), and `timelike t
 
 ```text
 adele: adele [help]
-ask Adele to perform a reaching action within the operator's grant; never see a credential; adele env snapshot|restore: a nested environment's Docker volumes (the workspace's files: snapshot, undo)
+ask Adele for a reaching action within the operator's grant; never see a credential; a nested environment's Docker volumes: adele env snapshot|restore (workspace files: snapshot, undo)
 usage:
   adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live

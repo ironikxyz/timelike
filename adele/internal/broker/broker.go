@@ -97,6 +97,7 @@ type Broker struct {
 	Revision  string
 	Envs      *Envs // the docker.compose capability; nil when Adele has no daemon (feature 13)
 	mu        sync.Mutex
+	collectMu sync.Mutex // one collection pass at a time: the agent's request and the reaper's tick (lane 13s2a)
 }
 
 // Outcome is the HTTP status and JSON body for one request (contracts/adele-http.md).

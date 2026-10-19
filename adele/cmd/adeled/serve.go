@@ -221,7 +221,12 @@ func envsLine(e *broker.Envs) string {
 func logCollected(b *broker.Broker, ctx context.Context, log io.Writer) {
 	collected, failed, err := b.Collect(ctx)
 	for _, c := range collected {
-		fmt.Fprintf(log, "adeled: collected %s (session %s): %s — recorded as #%d\n", c.Name, c.Session, c.Cause, c.LedgerID)
+		by := ""
+		if c.Already {
+			by = " by another pass"
+		}
+		fmt.Fprintf(log, "adeled: collected %s (session %s): %s — recorded as #%d%s\n", c.Name, c.Session, c.Cause,
+			c.LedgerID, by)
 	}
 	for _, c := range failed {
 		fmt.Fprintf(log, "adeled: collecting %s (session %s) failed: %s — tried again on the next pass\n", c.Name, c.Session, c.Cause)

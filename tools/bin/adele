@@ -86,6 +86,10 @@ CONFIRMED_VERBS = ("restore", "snapshot-rm")  # rule 9 binds these two: --yes, -
 # each) and her own bounded wait for healthchecks (014 plan, Technical Context: Bounds), with room.
 SNAPSHOT_HTTP_S = 900.0
 SNAPSHOT_RM_HTTP_S = 120.0  # a volume's removal, read back gone
+# A collect's answer (lane 13s2a): Adele's pass starts no removal after 5 min, and answers within 10 min
+# (broker.CollectBound, CollectWriteTimeout); this waits a minute past that.
+COLLECT_PASS_S = 300.0
+COLLECT_HTTP_S = 660.0
 NOTE_MAX = 200  # a snapshot's note, in characters (contract § Slice 2)
 # 014 plan R12: a project whose root holds one of these is a compose project, unless --devcontainer.
 COMPOSE_FILES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -95,9 +99,8 @@ LAST_LINES_MAX = 300  # the characters of a failure's last lines a one-line erro
 TOOL = agentio.Tool(
     name="adele",
     target="adele",
-    summary="ask Adele to perform a reaching action within the operator's grant; never see a credential;"
-    " adele env snapshot|restore: a nested environment's Docker volumes (the workspace's files:"
-    " snapshot, undo)",
+    summary="ask Adele for a reaching action within the operator's grant; never see a credential;"
+    " a nested environment's Docker volumes: adele env snapshot|restore (workspace files: snapshot, undo)",
     usage=[
         "adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)",
         "adele grants                  # the grants she applies: limits, spent, live",
@@ -1185,8 +1188,15 @@ def _left(left: Any) -> str:
 
 def env_collect(timeout: float) -> agentio.Result:
     """014 FR-29, plan R19: one collection pass now, the reaper's own; each removal read back by Adele."""
-    t = max(timeout, 120.0)
+    t = max(timeout, COLLECT_HTTP_S)
     reply = call("POST", "/v1/envs/collect", t, _caller())
+    if reply.status == 0 and reply.timed_out:
+        raise agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"Adele at {base_url()} gave no answer to collect within {t:g} s ({VANTAGE}); her pass starts no"
+            f" removal after {COLLECT_PASS_S:g} s, and what it leaves her reaper's next pass collects",
+            "see what is still live with adele env status, or ask the operator whether Adele is running",
+        )
     if reply.status == 0:
         raise unreachable(reply, t)
     if reply.status != 200:
@@ -1198,9 +1208,10 @@ def env_collect(timeout: float) -> agentio.Result:
     if failed:
         verdict += " (" + "; ".join(f"{f.get('name')}: {f.get('cause')}" for f in failed) + ")"
     verdict += " · read back from the daemon"
+    by = " (recorded by another pass)"  # lane 13s2a: another reaper ended it first; the row is that reaper's
     lines = [
         f"collected {c.get('name')}: {c.get('cause')} · {_removed(c.get('removed'))}"
-        f" · ledger #{c.get('ledger_id')}"
+        f" · ledger #{c.get('ledger_id')}" + (by if c.get("already_recorded") else "")
         for c in collected
     ]
     lines += [
