@@ -1448,3 +1448,190 @@ NOTE: <repo>/.specswarm/features/014-nested-dev-env/quality-report.json reports 
 - **`quality-report.json`** is rewritten by the analysis in this feature's folder (`overall_state: unknown`, 11
   unscored) and committed here.
 - **The merge is by hand,** `--no-ff`, of this commit, which is the signed-off `0d298bc` plus these records.
+
+## Cycle 9 — bridge/sends/13-rev17-20261019-034239.md
+
+**Written:** 2026-10-19T04:38:37Z (read from the clock). Attended, not in dispatch mode. A modify cycle of `014-nested-dev-env`
+for prompt 13's slice 2 (hardened), on `modify/014-slice-2` from `master` at `295824e` (v0.23.0). The cycle-report
+path is this file's, as the send and this project's CLAUDE.md both name it.
+- **specswarm:** the session loaded **4.0.1-botbaubble.2.44.0** (lore `specswarm` Q002). `/specswarm:modify 014
+  --from-send …`, `/specswarm:plan`, `/specswarm:tasks` and `/specswarm:implement` ran, attended; never
+  `/specswarm:build`.
+- **Provenance:** modify's row 4. Revision 17 is already in `audited_against` and neither prompt 13 nor discovery moved,
+  so nothing was appended (an `audit-log.md` row says so). Slice 2's criterion was in the prompt from generation: the
+  spec gains it (`slice: 2`, Scenarios 13–15, FR-31–FR-44, D-15–D-20), and `prompt_revision` stays 8.
+- **Commits:** `d40893f` (the operator's README rewording, carried in from `maint/readme-ready` as asked), `aeda718`
+  (design), `2722f0d` (tasks), then T060–T070, ending at this report's commit.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261019-034239.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 2 |
+
+### Group C — written by the code instance
+
+**delegations:** three delegates, each in files of its own, given the plan's sections, the contract and the data
+model; I reviewed and committed their work, and their judgment calls are in `decisions.md` marked `(delegate)`.
+1. **T062, the helper** (`adele/internal/volcopy/`, `adeled volume`): measure, copy, digest and restore of a tree.
+2. **T067, the client** (`tools/bin/adele`, one narrow change to `tools/agentio/agentio.py`, the units, every pin of
+   changed words in units and e2e, the reference).
+3. **T068, the e2e cells** (four files, fixtures, the lane grants, `lane.conf`, `nested.bash`, `SHELLCHECK_FILES`).
+
+Two facts were sent to delegates mid-task: the snapshot id's form (`s-` and 8 hex), and Adele's request bounds and
+her own readiness read. The e2e delegate's restart cell exposed one defect in my code before the lane (below).
+
+**reconcile_mode:** `scoped`. No revision moved; the cycle brings slice 2's criterion into scope.
+
+**What slice 2 builds:**
+- **A snapshot** is a volume on the daemon, `<env>-snap-<hex>` for snapshot `s-<hex>`, labelled with the
+  environment, the snapshot, the volume it was taken from, the session, the grant and the requester. `down`,
+  collection and the reaper remove it with its environment and count it apart (`snapshots`).
+- **Its record** (digest, bytes, files, sockets) is its ledger row, in the row's undo document beside the removal it
+  names, written only once the copy's digest reads back equal to the source's. No schema change.
+- **In order:** the volume is measured, unpaused and read-only; past the cap it is refused with nothing written; its
+  running users are paused, recorded first; the copy runs with the cap left as its budget; they are unpaused whatever
+  happened, read back running; a failed copy removes its partial volume, read back gone.
+- **Restore:** the plan for `--dry-run` and the confirmation; the snapshot's digest checked before anything stops;
+  its users stopped, recorded first; the volume emptied and refilled; its digest read back; the services started
+  whatever happened; then the client waits for readiness as `up` does, probing from the agent's container.
+- **Never left held:** a pause or a stop is a ledger row written before the act and ended once its undo reads back. A
+  pass at Adele's start and on every reaper tick undoes and ends any open one, with the cause. The daemon cannot label
+  a running container, so the send's "labelled when paused" is kept by the ledger, which says the same thing in a
+  place a crash cannot lose.
+- **Nothing outlives its environment:** the same pass ends the record of a snapshot whose volume is gone, removes a
+  snapshot whose environment is gone (orphan), and removes a record-less volume (partial): at a start every one,
+  after first removing the volume helpers a stopped Adele left running, which hold such a volume open; on a tick only
+  one older than a copy's bound and a minute.
+- **The client:** `adele env snapshot [NAME] VOLUME [--note]`, `snapshots`, `restore [--yes] [--dry-run] [--wait]`,
+  `snapshot-rm [--yes]`. The announcement and `--agent-info` say these are a nested environment's volumes, and
+  feature 07's `snapshot` and `undo` now point here for volumes, so an agent that knows either finds the other (P3).
+
+**The send's three statements:**
+- **The helper's capabilities** (ruling 3; plan R25): all dropped, then `CHOWN` (owners and groups), `DAC_READ_SEARCH`
+  (reading a database's files whatever their modes), `DAC_OVERRIDE` (writing into directories the copy already gave
+  to another owner), `FOWNER` (modes and times on entries it does not own) and `FSETID` (setgid and setuid kept
+  after an owner changes). Not `MKNOD`: a device node is refused, naming it. A measure or a digest gets
+  `DAC_READ_SEARCH` only. The helper runs as uid 0, with no network, no socket, no secret, a read-only root,
+  `no-new-privileges`, and the source mounted read-only.
+- **The cap's default** (decision 1): **1 GiB** of snapshots per environment, when the grant sets no `snapshots`;
+  `adeled extend GRANT snapshots SIZE` raises it. The spec (FR-34) and the README give it.
+- **How the disk-full cell stays off the host's disk:** the lane grant `nested-snapfull` sets `snapshot-store = tmpfs`
+  and `snapshots = 1MiB`, so its snapshot volume is a tmpfs of 1 MiB. The cell's volume holds 400 one-byte files:
+  400 bytes, under the cap, but a page each in tmpfs, so the copy meets `ENOSPC` after about 256 files, in memory.
+  The kill cells copy 30000 empty files into `nested-snapmem`'s 256 MiB tmpfs: inodes, no data.
+
+**D22's observations, carried here:**
+- **A:** every `up`, `restore` and `snapshot` verdict fits at a 30-character name. The budget is 191 columns, not 200:
+  text mode prints `verdict: ` before it and cuts that line at 200. A unit builds the longest verdict of each kind
+  and asserts it fits with no cut marker. To fit, `unchanged, ` moves to the front with its meaning on the next
+  line, `local: no cost` moves to the grant line, and the unchecked count reads as the service line does.
+- **B:** "ports probed from the agent container" appears only when a port was probed; an e2e cell asserts its absence
+  when nothing was.
+
+**A defect found before the lane, and fixed:** the e2e delegate's serial cell kills Adele mid-copy and expects her
+start to remove the partial snapshot. Her old copy helper outlives her and holds that volume open, and the daemon
+refuses to remove a volume in use, so the start pass would have left it for six minutes. The start pass now removes a
+stopped Adele's volume helpers first (`engine.RemoveSandboxes`), and the fake daemon's unit covers it.
+
+**criteria_reestablished:** no e2e cell has run on this cycle's code (no Docker here), and this cycle changes the up
+verdict's words, so every Automated criterion is `unconfirmed` for this commit; the lane is the first run.
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| `13 · "Bringing up a fixture project's compose file from inside the agent container starts its services and returns once they are ready"` | **unconfirmed** | `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`; its verdict pins moved with D22's A and B |
+| `13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path"` | **unconfirmed** | `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`, unchanged |
+| `13 · "is refused by Adele with exit 2 and rule 14's structured error, naming the setting and stating that no grant allows it"` | **unconfirmed** | `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`, unchanged |
+| `13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not run"` | **unconfirmed** | `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`, unchanged |
+| `13 · "Bringing the environment up twice is a no-op the second time, and tearing it down removes every container, network and volume it created"` | **unconfirmed** | `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`; the unchanged verdict's words moved (A) |
+| `13 · "A project's devcontainer definition is brought up and a command is executed inside it"` | **unconfirmed** | `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; a new check that "ports probed" is absent when nothing was probed (B) |
+| `13 · "Everything created carries session and grant labels, and a collect command removes environments whose session has ended"` | **unconfirmed** | `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` |
+| `13 · "A named volume of a running nested environment is snapshotted and later restored to its snapshotted content"` | **unconfirmed** | `tests/e2e/a-named-volume-of-a-running-nested-environment-is-snapshotted-and-later-restored-to-its-snapshotted-content.bats` (2 cells: snapshot, corrupt, restore refused without `--yes`, `--dry-run`, restore, owners, modes, times and content read back by manifest, snapshot-rm, down) |
+| `13 · "DEMO: the Agent brings up a compose test environment from inside its container, runs tests against it, and tears it down"` (D9) | **unconfirmed** | observed by the operator on slice 0 (`08df8e2`); not on this cycle's code |
+| `13 · "DEMO: the Agent brings up a project's devcontainer from inside its container and runs a command in it"` (D22) | **unconfirmed** | observed by the operator on slice 1 (`35c325f`); not on this cycle's code |
+| `13 · "DEMO: the Agent snapshots a nested environment's database volume, corrupts the data, and restores it"` (D31) | **unconfirmed** | the mentor's with the operator, after the lane |
+
+Beside them: `tests/e2e/snapshot-and-restore-failures-name-their-cause.bats` (6 cells: the cap, not this
+environment's volume, an unknown snapshot, a full store, a mismatched record, not ready after a restore),
+`tests/e2e/a-paused-service-is-never-left-paused-and-snapshots-go-with-their-environment.bats` (2 cells: a killed
+helper, collection), and the serial `tests/e2e/adele-restarted-mid-snapshot-unpauses-what-she-paused.bats` (1 cell).
+
+**The host lanes, run before this report** (this cycle's code at `faa72be`, the report and `reboot.md` uncommitted):
+- **`make test-host`, serially:** passed, 04:25:11Z–04:35:12Z; 2679 passed, 13 skipped, in 566.31 s; env-layer
+  60/60, hook 57/57, handler 33/33.
+- **The same with `-n 8`:** passed, 04:35:12Z–04:37:32Z; 2663 passed, 13 skipped, in 136.96 s; and the 16 `timed`
+  tests passed, run alone.
+- **Go 1.27.1:** `go test -race -count=1 -cover ./...` passed in every package; `go vet` and `gofmt` are clean.
+  Coverage: volcopy 88.1 % (new), broker 55.8 % (39.4 % at slice 1; the fake daemon of `snapshot_test.go`), engine
+  72.8 %, ledger 91.2 %, grants 97.7 %, adeled 84.0 %.
+- **Every lint stage at its pin, on this host** (slice 1 lost two lanes to stages that had not run):
+  - shellcheck 0.11.0 over `SHELLCHECK_FILES` (117 files): clean;
+  - ruff 0.16.9, `check` and `format --check` over `tools tests scan bench scripts`: clean;
+  - mypy 2.3.1 over `pyproject.toml`'s files: no issues in 39 source files;
+  - gofmt and go vet: clean;
+  - staticcheck v0.8.1 (`CGO_ENABLED=0`, Go 1.27.1, the Go of `GO_LINT_IMAGE`'s tag): clean.
+  - Not the lint's images themselves: the host's toolchains at the same versions.
+- **bats 1.11.0 `--count`:** 2, 6, 2 and 1 cells in the four new files.
+- **The lane grants** parse with Adele's own `grants.Load`: 64 KiB in volumes; 1 MiB tmpfs; 256 MiB tmpfs.
+- **Not run:** the Docker lane, `make scan`, `make lint` in its containers, govulncheck.
+
+**not_verified:**
+- **Every e2e cell**, so criterion 10, D31's path, the hardened cases, and slices 0–1's criteria on this cycle's
+  code: no Docker here.
+- **Pause and unpause on the host's engine** (the cgroup freezer), and what the daemon answers to a pause of a paused
+  container or an unpause of a running one (assumed 409, read back either way).
+- **The helper's capabilities in the real sandbox:** ownership as uid 0 is untested here (`TestOwnership` skips
+  without root), as are setgid surviving a chown and a real device node.
+- **A real `ENOSPC`** from the helper: only injected through a seam. The full-store cell is the first real one.
+- **Real databases** (cross-stack P005): the fixture is timelike's own files on a volume owned by uid 999.
+  PostgreSQL, MySQL and Redis were not tried, so the claim that a paused copy is one a database recovers from rests on
+  their crash recovery, not on a test here. A database that keeps state outside the volume, or a restore into a
+  different engine version, is not covered.
+- **Extended attributes and ACLs** are not kept (plan R24); nothing here uses them. Sparse files are copied dense.
+- **A restore copy that fails partway** is driven against the fake daemon only: the e2e delegate found no way to make
+  it fail deterministically (Adele refuses a tmpfs source volume).
+- **A copy past its 5-minute bound** (exit 124): no cell waits that long on this host.
+- **Two environments' snapshots at once:** serialised by Envs' lock by construction; not run.
+- **The client against Adele:** the client's units run against a fake Adele built from the contract.
+
+**changed_other_features:**
+- **001 (agentio):** `Tool` accepts `grant_envelope=True` with `mutating=True` only when `confirm_protocol=True` is
+  declared, and then describes exit 4 as both. `adele` now declares mutating, confirm_protocol and destructive, lists
+  both envelopes, and refuses `--yes`/`--dry-run` on every verb but `restore` and `snapshot-rm`, so the grant is
+  still the only confirmation elsewhere. A unit in `test_agentio.py`; the conformance check passes.
+- **004 (12, grants and ledger):** two optional grant keys, `snapshots` (extendable) and `snapshot-store`; the
+  ledger's `Kept` and `Ended` writers and three queries; `snapshots` among the extendable limits. No schema change; no
+  new row has an expiry, so live counts and instances are unchanged. `TestLoadValid`'s expected grant gains the
+  defaults.
+- **07 (`snapshot`, `undo`):** their one-line summaries point at `adele env snapshot`/`restore` for a nested
+  environment's volumes. Their behaviour is unchanged.
+- **The engine's sandbox sweep** removes every sandbox kind, not only `resolve` (its unit asserts the label's key).
+- **13 slices 0–1's verdicts:** the up verdict's words moved (A, B); every unit and e2e assertion pinning them was
+  updated in the same commit (`4f1cd9e`).
+- **README:** the status block (24 of 38; row 13 "slices 0–2 of 0–2"; Next left as it is), the `adele env` section's
+  snapshots and restore, their examples, the reference regenerated. `d40893f`'s mark is kept as this update's (it was
+  never published); slice 1's marks were cleared there.
+  - **For the mentor:** the Status paragraph's third sentence still lists 13 among the features with "their first
+    slice or slices" and not with the complete ones. The send changes only the first sentence, so it was not edited.
+
+**process_failures_recorded:**
+- **A start time written by hand** in T061's decision entry (`04:08:00Z`), against the rule to read times from the
+  clock. Replaced with T060's commit time before the next commit.
+- **A watcher that matched itself:** a `Monitor` waiting on the Go tests used `pgrep -f` with a pattern its own
+  command line contained, so it could never end. Stopped at once and replaced.
+- **Scope records:** six of eight Cycle 9 tasks are `out`, each for a file beside the ones `tasks.md` names (a new
+  `slice2.go` or `_test.go`, a delegate's new test file or serial cell).
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the lane has ended. The mentor runs the lane, then D31 with
+the operator. Merge `--no-ff` only after the operator's OK, given in the mentor's session and written into the
+sign-off file; push and tag only when that file says so.

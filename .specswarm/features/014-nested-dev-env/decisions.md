@@ -483,3 +483,11 @@ INHERITED: the send's README status block; T067's regenerated reference; d40893f
 ASSUMED: the status block (row 13 "slices 0–2 of 0–2", "24 of 38") stands on criterion 10 being built; the lane says whether it is met, as at slice 1 (confidence: medium)
 FLAGGED: d40893f's mark is kept as part of this cycle's update rather than cleared: the rewording was never published, so it is this update's, not the previous one's; slice 1's marks were cleared in d40893f (confidence: medium)
 ABSENT: the Status paragraph's third sentence still lists 13 among features with "their first slice or slices" and not among the complete ones: the send changes only the first sentence and says nothing else changes, so it is raised in the cycle report, not edited
+SCOPE: in (1 changed files)
+
+### T070: host lanes, every lint stage at its pin, Cycle 9's report, reboot.md, commit
+**Started:** 2026-10-19T04:25:07Z (T069's commit) | **Completed:** 2026-10-19T04:38:37Z
+
+INHERITED: every task above
+ASSUMED: the README status block stands on criterion 10 being built; the lane shows whether it is met (confidence: medium)
+ABSENT: the Docker lane, scan and lint in their containers; govulncheck; D31
