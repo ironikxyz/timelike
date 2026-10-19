@@ -474,3 +474,12 @@ ABSENT (delegate): nothing here was run against the real Adele or the daemon (no
 ABSENT (delegate): agentio.size rounds 1023.95 MiB up to "1024.0 MiB" (one decimal of a value under 1024); not changed, since it is shared by run and others — a cap's "left" near a unit boundary prints this way
 ABSENT (delegate): the e2e cells for slice 2 (snapshot, failures, recovery) are not written here; the data keys they will assert are the ones the task listed
 FLAGGED: agentio (feature 001) changed: a grant client may be mutating only when it declares confirm_protocol=True, and adele now does, with --yes and --dry-run refused on every verb but restore and snapshot-rm — chose the narrow agentio change over a second tool name because the ruling keeps the commands under adele env, and conformance needs the manifest to declare what --yes confirms (confidence: medium)
+SCOPE: out — tests/unit/test_adele_cli.py, tests/unit/test_agentio.py (2 of 14 changed files) (task has FLAGGED: yes)
+
+### T069: README — the status block, snapshots and restore, the cap and its default
+**Started:** 2026-10-19T04:24:19Z (T067's commit) | **Completed:** 2026-10-19T04:24:58Z
+
+INHERITED: the send's README status block; T067's regenerated reference; d40893f's readiness rewording, carried into this cycle at the operator's word ("wait till next cycle")
+ASSUMED: the status block (row 13 "slices 0–2 of 0–2", "24 of 38") stands on criterion 10 being built; the lane says whether it is met, as at slice 1 (confidence: medium)
+FLAGGED: d40893f's mark is kept as part of this cycle's update rather than cleared: the rewording was never published, so it is this update's, not the previous one's; slice 1's marks were cleared in d40893f (confidence: medium)
+ABSENT: the Status paragraph's third sentence still lists 13 among features with "their first slice or slices" and not among the complete ones: the send changes only the first sentence and says nothing else changes, so it is raised in the cycle report, not edited

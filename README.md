@@ -39,7 +39,7 @@ Whether it works is a measured claim: see Status.
 | 10 | `symbols` | Outlines, definitions, callers and dependents: exact for Python, text-based (and saying so) for others | slice 1 of 1–2 |
 | 11 | `verify` | Failures only, and only for what a change affects: tests, lint and type-check | slice 1 of 1–2 |
 | 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | slices 0–1 of 0–2 |
-| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | slices 0–1 of 0–2 |
+| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | <mark>slices 0–2 of 0–2</mark> |
 | 14 | Provider compute | One request for compute or an endpoint; Adele quotes, provisions within the grant, and tears down | not started |
 | 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | slice 1 of 1–2 |
 | 16 | Model-assisted filters | A grep, or a sed's addresses, chosen by description; off by default, and costed per call | not started |
@@ -47,7 +47,7 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-**23 of 38 planned slices are built.** Each feature is built in slices: 0 is skeletal (one working path end
+<mark>**24 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
 Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–13 and 15 have their first slice or slices.
 Features 14, 16 and 17 are not started.
@@ -616,6 +616,13 @@ adele session end            # this session is done: its environments are collec
 adele env collect            # remove every environment whose session has ended, now
 ```
 
+```bash
+adele env snapshot db-data   # snapshot the environment's volume db-data: its id, size, and what was paused
+adele env snapshots          # its snapshots, with the cap used and left
+adele env restore s-3f2a91c0 --yes   # put db-data back as it was then; waits for readiness as up does
+adele env snapshot-rm s-3f2a91c0 --yes
+```
+
 There is no Docker in the agent's container. `adele env up` asks Adele, who resolves the project with the Compose
 CLI in a throwaway sandbox that sees only the workspace: no network, no socket, no secret and none of the agent's
 environment. She checks the resolved model, after interpolation, `include`, `extends`, profiles and override files,
@@ -673,6 +680,26 @@ container from the daemon, never from the request) or when it was ended with `ad
 collect` removes the environments of every ended session now, and Adele's reaper does the same on its interval;
 each removal is read back and recorded in her ledger with its cause. A grant's `ttl` still removes whatever outlives
 it.
+
+<mark>**Snapshots of an environment's volumes.** `adele env snapshot VOLUME` copies one of the environment's own named
+volumes into a new volume on the daemon, labelled like everything else the environment creates, so `down` and
+collection remove it with the rest. These work on a nested environment's Docker volumes; the workspace's own files
+are `snapshot` and `undo`'s (07). A bind mount, or another environment's volume, exits 3 naming the environment's
+own volumes. The services that mount the volume are paused for the copy and unpaused after it, read back running, and
+the verdict says which were paused and for how long: the copy is one moment in time, the state a power cut would
+leave, which databases are built to recover from. Adele never opens the volume herself. A helper from her own image
+copies it with no network, no socket and no secret, keeping owners, modes, times and links, and records the copy's
+digest, size and file count.</mark>
+
+<mark>**Restore and the cap.** `adele env restore SNAPSHOT` checks the snapshot against its recorded digest before it
+stops anything, then stops the services that mount the volume, replaces its contents, starts them and waits for
+readiness as `up` does; the restored volume's digest is read back. Without `--yes` it exits 4 naming what will be
+replaced and stopped, and `--dry-run` shows the same. A grant caps the bytes of snapshots one environment may hold
+(`snapshots` in the grant file, **1 GiB** when it does not say); a snapshot past the cap exits 4 before anything is
+written, naming the volume, its size and the operator's command to raise it. A grant's `snapshot-store = tmpfs`
+holds its snapshots in memory instead, bounded by the cap and lost when the daemon restarts. A snapshot that cannot
+finish (the store full, the helper killed) exits 1 with nothing partial left and nothing paused, and if Adele herself
+stops mid-snapshot, her next start unpauses what she paused, with a ledger row naming the cause.</mark>
 
 **Variables.** `${VAR}` resolves from the project's own `.env` only: the agent's environment is not read, and a
 variable left unset is named in the verdict.
