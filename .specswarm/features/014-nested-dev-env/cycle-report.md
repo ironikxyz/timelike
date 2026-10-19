@@ -1252,3 +1252,65 @@ and 014's unit and e2e files.
 
 **After this report:** no commits until the mentor says 13s1b has ended. D22 follows a green lane, on the code that
 will be signed off. Merge `--no-ff` only after sign-off.
+
+## Cycle 8 — bridge/sends/13-rev17-20261018-120700.md
+
+**Written:** 2026-10-19T01:11:27Z (read from the clock). Attended, not in dispatch mode. The same send as Cycles 6–7,
+after **lane 13s1b** on `35c325f`. The feedback is
+`../bridge/feedback/13-20261018-194155-lane-13s1b-green-but-staticcheck-st1008.md`. Test and scan were green, with e2e
+755 of 755 including all 52 `13` cells and 196. Lint failed only at staticcheck: ST1008 at
+`internal/devcontainer/devcontainer_test.go:30:53`. This cycle is one commit after `35c325f` on `modify/014-slice-1`,
+and it changes only that test file and this report, per the ruling. tasks.md, decisions.md and `reboot.md` are left
+as they are for the same reason. No `/specswarm` command ran, and no revision moved.
+
+### Group A — cited from `.implement-complete`
+
+Group A: not applicable — no marker on this path
+
+### Group B — copied from the send
+
+| Field | Value |
+|---|---|
+| source_send | bridge/sends/13-rev17-20261018-120700.md |
+| source_prompt | plan/.discover/prompts/13-nested-dev-env.md |
+| prompt_revision | 17 |
+| discovery_revision | 17 |
+| slice | 1 |
+
+### Group C — written by the code instance
+
+**delegations:** `[]`. The helper was Cycle 6's delegate 2's, and this cycle's change is mine.
+
+**reconcile_mode:** `scoped`. No prompt or discovery revision moved since Cycle 7.
+
+**What changed:** the test helper `translate(t, body)` now returns `(*Result, string, string, error)`, with the error
+last. Its four callers in the same file are updated: `ok`, and the three that keep only the error. No assertion
+changed, and no product file changed.
+
+**Checked before the commit, on this host:**
+- **staticcheck at the lint's pin:** `honnef.co/go/tools/cmd/staticcheck@v0.8.1` (`STATICCHECK_VERSION`), under Go
+  1.27.1, the Go in `GO_LINT_IMAGE`'s tag, with `CGO_ENABLED=0`, over `./...` in `adele/`. It passes, exit 0.
+  - **The check bites:** the same command on `35c325f`'s file (stashed) reports this ST1008 at `:30:53`, exit 1.
+  - **Not the image itself:** the host's toolchain is a Go 1.27.1 download, not the pinned image digest.
+- **Go:** `go test -race ./...` passes in every package; `go vet` and `gofmt` are clean.
+- **Not run:** the host Python lanes (no Python file changed), and the Docker lane, scan and `make lint` in their
+  containers. They are the mentor's check.
+
+**criteria_reestablished:** a `_test.go` file is not compiled into `adeled`, so the product bytes are `35c325f`'s.
+Every criterion row of Cycle 7's table is **observed by the mentor** in lane 13s1b on `35c325f`, through the same
+tests, and 196's new verdict too. Both DEMO rows stay **unconfirmed**: D22 is the mentor's with the operator, on
+13s1b's stack.
+
+**not_verified:** staticcheck inside `GO_LINT_IMAGE` itself, and the rest of `make lint` and `run_go_unit` on this
+commit. Both are the mentor's next check.
+
+**changed_other_features:** none.
+
+**process_failures_recorded:**
+- **Cycles 6 and 7 listed staticcheck under "Not run"**, though the pinned version could be fetched and run on this
+  host, as shown here. mypy had the same history in Cycle 7. Every linter in `make lint` runs on this host at its pin
+  before a commit, or the report says why it could not.
+
+**retired_prompts_seen:** none.
+
+**After this report:** no commits until the mentor says the check has ended. Merge `--no-ff` only after sign-off.

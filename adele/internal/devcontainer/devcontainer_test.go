@@ -27,16 +27,16 @@ func project(t *testing.T, body string) (ws, dir, path string) {
 	return ws, dir, path
 }
 
-func translate(t *testing.T, body string) (*Result, error, string, string) {
+func translate(t *testing.T, body string) (*Result, string, string, error) {
 	t.Helper()
 	ws, dir, path := project(t, body)
 	res, err := Translate(path, dir, ws, "tl-proj-abc123", t.TempDir())
-	return res, err, ws, dir
+	return res, ws, dir, err
 }
 
 func ok(t *testing.T, body string) (*Result, map[string]any, string, string) {
 	t.Helper()
-	res, err, ws, dir := translate(t, body)
+	res, ws, dir, err := translate(t, body)
 	if err != nil {
 		t.Fatalf("Translate: %v", err)
 	}
@@ -53,7 +53,7 @@ func ok(t *testing.T, body string) (*Result, map[string]any, string, string) {
 
 func refused(t *testing.T, body, setting string) *compose.Refusal {
 	t.Helper()
-	_, err, _, _ := translate(t, body)
+	_, _, _, err := translate(t, body)
 	var re *RefusalError
 	if !errors.As(err, &re) {
 		t.Fatalf("want a refusal of %s, got %v", setting, err)
@@ -143,7 +143,7 @@ func TestParseJSONCLine(t *testing.T) {
 }
 
 func TestTranslateSyntaxError(t *testing.T) {
-	_, err, _, _ := translate(t, "{\n\"image\": \"a\"\n\"x\": 1}")
+	_, _, _, err := translate(t, "{\n\"image\": \"a\"\n\"x\": 1}")
 	var se *SyntaxError
 	if !errors.As(err, &se) || se.Line != 3 {
 		t.Fatalf("want a syntax error on line 3, got %v", err)
@@ -488,7 +488,7 @@ func TestTypeRefusals(t *testing.T) {
 }
 
 func TestRefusalErrorText(t *testing.T) {
-	_, err, _, _ := translate(t, `{"image": "a", "appPort": 3000}`)
+	_, _, _, err := translate(t, `{"image": "a", "appPort": 3000}`)
 	if err == nil || !strings.HasPrefix(err.Error(), "devcontainer.json: appPort 3000: ") {
 		t.Fatalf("error %v", err)
 	}
