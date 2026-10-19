@@ -11,6 +11,7 @@ import argparse
 import importlib.machinery
 import importlib.util
 import json
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -18,7 +19,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
-from conftest import base_env
+from conftest import REPO, base_env
 from test_adele_cli import (
     ADELE,
     SESSION,
@@ -90,7 +91,7 @@ def test_a_service_with_no_readiness_check_does_not_block_and_is_never_counted_r
     no_traceback(r)
     assert r.returncode == 0, r.stderr
     head = r.stdout.splitlines()[1]
-    assert head.startswith(f"verdict: up {NAME}: 1 ready, 1 running with no readiness check in "), head
+    assert head.startswith(f"verdict: up {NAME}: 1 ready, 1 running, no readiness check in "), head
     assert "worker  running, no readiness check" in r.stdout
     assert not [s for s in adele.received() if s.method == "GET"]  # concluded at once: nothing polled
     doc = doc_of(up(py, scratch, adele, ws, "--json"))
@@ -111,7 +112,7 @@ def test_a_devcontainer_with_no_readiness_check_names_both(
     r = up(py, scratch, adele, ws)
     assert r.returncode == 0, r.stderr
     head = r.stdout.splitlines()[1]
-    assert head.startswith(f"verdict: up {NAME}: devcontainer, 1 running with no readiness check in "), head
+    assert head.startswith(f"verdict: up {NAME}: devcontainer, 1 running, no readiness check in "), head
 
 
 def test_a_one_shot_is_waited_for_until_it_exits_0(
@@ -643,6 +644,42 @@ def test_collect_names_each_environment_and_its_cause(py: str, scratch: Path, ad
     out = r.stdout.splitlines()
     assert out[1] == f"verdict: collect: 1 collected ({NAME}: {cause}) · 0 failed · read back from the daemon"
     assert out[2] == f"collected {NAME}: {cause} · removed 2 containers, 1 networks, 0 volumes · ledger #141"
+
+
+def test_collect_names_a_row_another_pass_recorded(py: str, scratch: Path, adele: FakeAdele) -> None:
+    # lane 13s2a: the reaper ended the row first; Adele reports its row, never #0
+    cause = "ttl reached (the reaper)"
+    adele.answer(
+        "POST",
+        "/v1/envs/collect",
+        200,
+        {
+            "collected": [
+                {"name": NAME, "cause": cause, "removed": {}, "ledger_id": 152, "already_recorded": True}
+            ],
+            "failed": [],
+            "count": 1,
+        },
+    )
+    r = go(py, scratch, adele, None, "env", "collect")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines()[2].endswith(" · ledger #152 (recorded by another pass)")
+
+
+def test_collects_bound_waits_past_adeles_own() -> None:
+    # lane 13s2a: the client's bound is above the answer bound Adele sets; its verdict names her pass bound
+    go_src = (REPO / "adele" / "internal" / "broker" / "collect.go").read_text()
+    m = re.search(
+        r"CollectBound\s+= (\d+) \* time\.Minute\n"
+        r"\s+CollectWriteTimeout = CollectBound \+ (\d+)\*time\.Minute",
+        go_src,
+    )
+    assert m, "collect.go's bounds moved; update this test and tools/bin/adele together"
+    pass_s, write_s = int(m[1]) * 60, (int(m[1]) + int(m[2])) * 60
+    client = (REPO / "tools" / "bin" / "adele").read_text()
+    assert f"COLLECT_PASS_S = {pass_s:.1f}" in client
+    http_s = float(re.search(r"^COLLECT_HTTP_S = ([0-9.]+)$", client, re.M)[1])  # type: ignore[index]
+    assert write_s < http_s <= write_s + 120
 
 
 def test_collect_with_a_failure_is_exit_1_naming_it(py: str, scratch: Path, adele: FakeAdele) -> None:

@@ -5,7 +5,7 @@
 # (spec Scenario 12, FR-11 as corrected in slice 1, D-13; research R20; contracts/adele-env.md § Slice 1, Readiness).
 #
 #   - A service with no healthcheck and no port gives no readiness signal: up exits 0 and reports it as running with
-#     no readiness check, never "ready", and the verdict counts it apart (N ready, M running with no readiness check).
+#     no readiness check, never "ready", and the verdict counts it apart (N ready, M running, no readiness check).
 #   - A service another depends on with condition service_completed_successfully is a one-shot for certain: up waits
 #     for its exit, and an exit 0 is completed. The daemon, read from the runner, has it labelled as a one-shot and
 #     exited 0 (cross-stack P004).
@@ -29,7 +29,7 @@ check_no_readiness_signal() {
   nested_project "oneshot-${style}" oneshot
   env_run "$style" "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 1 ready, 2 running with no readiness check in "* ]] ||
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 1 ready, 2 running, no readiness check in "* ]] ||
     { echo "verdict: ${lines[1]}" >&2; return 1; }
   assert_output_has "idle  running, no readiness check"
   assert_output_has "app  running, no readiness check"

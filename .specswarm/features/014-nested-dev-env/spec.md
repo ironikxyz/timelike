@@ -8,10 +8,10 @@ source_send: bridge/sends/13-rev8-20261017-012727.md
 prompt_revision: 8
 discovery_revision: 16
 audited_against: [8, 17]
-slice: 1
+slice: 2
 ---
 
-# Feature: Nested dev environments (prompt 13, slices 0–1: skeletal, then natural)
+# Feature: Nested dev environments (prompt 13, slices 0–2: skeletal, natural, then hardened)
 
 ## Overview
 
@@ -43,7 +43,13 @@ verdict (P2, feature 003).
 
 Natural intensity means the common failures too, each with a verdict naming its cause (§ Scenarios 9–12).
 
-**Out of scope (slice 2):** volume snapshots and restore (criterion 9, D31).
+**Slice 2 (hardened; send `bridge/sends/13-rev17-20261019-034239.md`)** adds:
+- snapshots of an environment's named volumes, and their restore, the way the operator decided (D-15, D-16);
+- the two D22 observations the operator carried here (D-20).
+
+Hardened intensity means edge cases, scale and recovery. Here that is three promises: a snapshot is never silently
+partial, a paused service is never left paused, and nothing a snapshot creates outlives its environment
+(§ Scenarios 13–15). This is prompt 13's last slice.
 
 **Seams, decided.** Five design points touch compose, other features' contracts, the constitution or the socket. They
 were raised in FOR-MENTOR **Item 27** and answered in `../bridge/feedback/13-20261017-034920-item-27-seams-answered.md` (2026-10-17T03:49:20Z). Each appears below as a decided
@@ -139,6 +145,36 @@ A service with no healthcheck and no port gives no readiness signal. `up` report
 check, never "ready". If it exits while `up` waits, its exit decides: 0 is completed, and non-zero fails `up` with
 exit 1, naming the service and its last lines. A service another depends on with `condition:
 service_completed_successfully` is a one-shot for certain, and `up` waits for its exit.
+
+### Scenario 13: snapshot, corrupt, restore (Agent) — D31 (slice 2)
+
+The agent snapshots its environment's database volume with `adele env snapshot db-data`. Adele pauses the services
+that mount it, copies it, unpauses them, and answers with the snapshot's id, its size, the services paused and for
+how long. The agent then corrupts the data, and restores it with `adele env restore SNAPSHOT --yes`: Adele checks the
+snapshot is whole, stops the services that mount the volume, replaces its contents, starts them again, and the
+answer is the readiness verdict `up` gives. The data is the snapshotted data, read back by its digest.
+
+### Scenario 14: the failures a snapshot or a restore can meet (Agent) (slice 2)
+
+Each concludes with a verdict naming its cause, and nothing is left half-done:
+- **over the grant's snapshot cap:** exit 4 with the grant envelope, and nothing is written;
+- **the store fills, or the copy helper fails, partway:** exit 1 naming the cause; the partial snapshot is removed
+  and read back gone; the paused services are unpaused and read back running;
+- **a snapshot whose content no longer matches its record:** exit 1 before anything is stopped;
+- **a service that does not come back ready after a restore:** exit 1 with the readiness verdict; the restored data
+  stays restored, and the verdict gives `adele env status` and `down`;
+- **an unknown environment, volume or snapshot:** exit 3, naming what does exist (a bind mount, or a volume of
+  another environment, is "no such volume in this environment");
+- **restore without `--yes`:** exit 4 `confirmation_required`, naming what will be replaced and which services will
+  be stopped; nothing is stopped. `--dry-run` shows the same and changes nothing.
+
+### Scenario 15: nothing is left behind (Adele) (slice 2)
+
+If Adele or her helper dies while a service is paused, Adele's next start and her reaper's next pass find what she
+paused and unpause it, with a ledger row naming the cause. An environment taken down or collected (an ended session,
+a gone requester, a ttl) takes its snapshots with it. A snapshot volume whose environment is gone, or that never got a
+record because the copy was cut short, is removed as an orphan, with a ledger row. The lane's start removes leftover
+snapshot volumes, by timelike's labels only.
 
 ## Functional Requirements
 
@@ -280,6 +316,50 @@ service_completed_successfully` is a one-shot for certain, and `up` waits for it
   grant, environment or service by that name, or an image or base image not on the daemon; 4, beyond a grant's
   limits, with the envelope; 1, the capability failed (a build step, a lifecycle command, a one-shot); 124, a bound.
 
+### Slice 2: volume snapshots and restore (D-15–D-20)
+
+- **FR-31** `adele env snapshot [NAME] VOLUME [--note TEXT]` snapshots one named volume of a running environment and
+  prints the snapshot's id, its size, the services paused and the time taken. `adele env snapshots [NAME]` lists them
+  (id, volume, size, time, note) with the cap used and left. `adele env restore [NAME] SNAPSHOT` restores one.
+  `adele env snapshot-rm [NAME] SNAPSHOT` removes one, freeing cap space.
+- **FR-32** Only named volumes the environment created can be snapshotted. A bind mount, a volume the environment did
+  not create, or another environment's volume is exit 3, "no such volume in this environment", naming the
+  environment's own volumes. Restore checks that the snapshot was taken from this volume of this environment.
+- **FR-33** A snapshot is held in a volume on the daemon that Adele creates, labelled with the environment, session,
+  grant and requester. Nothing about it lives in the workspace, on a host path, or past its environment.
+- **FR-34** The grant caps the bytes of snapshots an environment may hold (the grant file's `snapshots`, default
+  **1 GiB** when the grant does not set it). A snapshot that would pass the cap is refused before anything is written:
+  exit 4 with the grant envelope, naming the volume, its size, the cap, and the operator's command to raise it.
+- **FR-35** A volume in use is snapshotted with its users paused: Adele pauses the running services that mount it,
+  copies it, and unpauses them, read back running. The copy is one moment in time, the state a power cut would leave.
+  The verdict says which services were paused and for how long.
+- **FR-36** The copy runs in a throwaway helper container from Adele's own image: no network, no socket, no secret,
+  the source mounted read-only, and only the capabilities keeping ownership needs. Owners, groups, modes, times and
+  symbolic links are kept, and links are never followed. Adele never opens volume contents.
+- **FR-37** A snapshot records its content digest, byte count and file count when it is taken, and "taken" is read
+  back: the copy's digest equals the source's. Restore checks the snapshot's digest against that record before it
+  stops anything; a mismatch is exit 1, and nothing is stopped. "Restored" is read back: the volume's digest after the
+  restore equals the snapshot's.
+- **FR-38** Restore is destructive, so it uses feature 01's confirm protocol: without `--yes` it exits 4
+  `confirmation_required`, naming what will be replaced and which services will be stopped, and `--dry-run` shows the
+  same and changes nothing. With `--yes` it stops the services that mount the volume, replaces its contents, starts
+  them again, and waits for readiness under slice 0's rules and decision C. Its verdict is `up`'s readiness verdict.
+- **FR-39** A snapshot that cannot be finished (the store full, the helper failed or killed) is exit 1 naming the
+  cause. The partial snapshot is removed and read back gone, and the paused services are unpaused, read back running.
+- **FR-40** A paused service is never left paused. Adele records what she pauses before she pauses it; her next start
+  and her reaper's pass unpause whatever a record says is still paused, with a ledger row naming the cause. The same
+  holds for services a restore stopped.
+- **FR-41** `down`, collection and the reaper remove an environment's snapshots with the rest of it, read back, and
+  count them in the verdict. A snapshot volume whose environment is gone, or that has no record, is removed as an
+  orphan with a ledger row.
+- **FR-42** The ledger: a snapshot is a performed row whose undo is its removal; a restore is a performed row naming
+  the snapshot, the services stopped and the readiness Adele read back; a refusal (the cap, an unknown volume) is a
+  refused row.
+- **FR-43** The exit codes stay slice 0's: 2, a setting no grant allows; 3, no such environment, volume or snapshot;
+  4, beyond a grant's limits with its envelope, or confirmation required; 1, the capability failed; 124, a bound.
+- **FR-44** Every `up`, `restore` and `snapshot` verdict fits agentio's 200 columns at a realistic name length, and
+  each clause of a verdict says only what was done: "ports probed" appears only when a port was probed (D-20).
+
 ## Success Criteria
 
 Prompt 13's slice-0 criteria, verbatim (each gets one test named after its distinguishing text):
@@ -309,7 +389,11 @@ Prompt 13's slice-1 criteria, verbatim (slice 1's send):
 9. DEMO (D22, Manual): the Agent brings up a project's devcontainer from inside its container and runs a command in
    it.
 
-Slice 2's criterion (a volume snapshotted and restored) and D31 are out of scope.
+Prompt 13's slice-2 criteria, verbatim (slice 2's send):
+
+10. A named volume of a running nested environment is snapshotted and later restored to its snapshotted content.
+11. DEMO (D31, Manual): the Agent snapshots a nested environment's database volume, corrupts the data, and restores
+    it.
 
 **Measures:**
 - Every addressed service is reachable from the agent's container when `up` returns 0.
@@ -319,6 +403,9 @@ Slice 2's criterion (a volume snapshotted and restored) and D31 are out of scope
 - Slice 1: every container, network, volume and built image of an environment carries its session and grant labels,
   read back; after a collection, the daemon holds 0 objects of an ended session's environments, and the ledger has one
   row per environment collected, with its cause.
+- Slice 2: after a restore, the volume's digest equals the snapshot's; after a failed snapshot, the daemon holds 0
+  partial snapshot volumes and 0 paused services of the environment; after `down` or a collection, 0 snapshot volumes
+  of the environment.
 
 ## Key Entities
 
@@ -370,6 +457,21 @@ Slice 2's criterion (a volume snapshotted and restored) and D31 are out of scope
 - **D-13 (decision C)** The readiness correction in FR-11.
 - **D-14 (the mentor's ruling 2)** `adele env exec` as FR-25.
 
+### Slice 2 (send `bridge/sends/13-rev17-20261019-034239.md`; the operator's decisions of 2026-10-19 and the mentor's rulings in it)
+
+- **D-15 (decision 1)** A snapshot lives with its environment: a volume on the daemon, labelled like everything else
+  the environment creates, removed with it, and capped by the grant (FR-33, FR-34, FR-41).
+- **D-16 (decision 2)** A volume in use is snapshotted with its users paused; restore stops them, replaces the
+  contents, starts them and waits for readiness (FR-35, FR-38).
+- **D-17 (the mentor's rulings 1, 2)** The four commands and their names; only the environment's own named volumes
+  (FR-31, FR-32). They work on a nested environment's **volumes**, where feature 07's `snapshot` and `undo` work on
+  the **workspace**, and the announcement says so.
+- **D-18 (the mentor's rulings 3, 4)** The copy in a helper from Adele's own image; the digest recorded and checked
+  both ways (FR-36, FR-37).
+- **D-19 (the mentor's rulings 5, 6)** The ledger rows and the exit codes (FR-42, FR-43).
+- **D-20 (the operator's D22 observations A and B)** Verdicts fit 200 columns, and a clause says only what was done
+  (FR-44).
+
 ## Assumptions
 
 - The socket's owner, group and mode are as the mentor read them. Nothing in this project verifies that they stay so
@@ -384,3 +486,6 @@ Slice 2's criterion (a volume snapshotted and restored) and D31 are out of scope
   (R15). The lane is the first run of it.
 - Slice 1: the devcontainer fixtures are timelike's own. Real projects' devcontainers are not tried (cross-stack P005;
   named in the cycle report's `not_verified`).
+- Slice 2: the database fixture is timelike's own (SQLite on a named volume, on `DEBIAN_IMAGE` or
+  `timelike-agent:local`). PostgreSQL, MySQL and Redis were not tried, and the claim that a paused copy is one a
+  database recovers from rests on their crash-recovery, not on a test here (cross-stack P005).

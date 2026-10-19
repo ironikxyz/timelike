@@ -157,10 +157,14 @@ class Tool:
         # 004 Cycle 3 (carried from 001's Cycle 7): a grant client is not --yes-confirmed by the agent,
         # because the grant is the confirmation (revision 10). mutating=True would give it --yes and make
         # codes() describe exit 4 as confirmation only, so the pair is refused here, at declaration.
-        if grant_envelope and mutating:
+        # 014 slice 2 (plan R31): a grant client may also confirm, but only when it says so with
+        # confirm_protocol=True: some of its verbs destroy what no grant can give back (a restore, a
+        # snapshot's removal), and rule 9 binds those. It then prints both envelopes, each by its status.
+        if grant_envelope and mutating and confirm_protocol is not True:
             raise ValueError(
                 f"{name}: grant_envelope=True cannot be mutating=True: the grant is the confirmation,"
-                " so a grant client has no --yes (discovery revision 10)"
+                " so a grant client has no --yes (discovery revision 10), unless it declares"
+                " confirm_protocol=True for verbs rule 9 binds"
             )
         self.confirm_protocol = mutating if confirm_protocol is None else confirm_protocol
         # Feature 009 (the session journal): the event's pointer, `ref: {kind: data[key]}`, taken from
@@ -178,6 +182,10 @@ class Tool:
 
     def codes(self) -> dict[int, str]:
         codes = dict(self.exit_codes or {EXIT_OK: "ok", EXIT_FAILURE: "failure", EXIT_USAGE: "usage"})
+        if self.confirm_protocol and self.grant_envelope:  # both envelopes, told apart by status
+            codes.setdefault(
+                EXIT_CONFIRM, "beyond the grant (the operator extends it), or confirmation required (--yes)"
+            )
         if self.confirm_protocol:
             codes.setdefault(EXIT_CONFIRM, "confirmation required: rerun with --yes")
         if self.grant_envelope:

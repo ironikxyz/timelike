@@ -410,13 +410,20 @@ def test_the_envelope_passes_conform_c9_and_its_negative_case_fails(
     assert c.check_envelope("adele", r.stdout, set()) != []  # undeclared in the manifest
 
 
-def test_manifest_declares_the_grant_envelope_and_not_mutating(py: str, scratch: Path) -> None:
+def test_manifest_declares_the_grant_envelope_and_the_confirmation_for_restore(
+    py: str, scratch: Path
+) -> None:
+    """014 slice 2 (plan R31): env restore and env snapshot-rm are rule 9's, so adele declares both envelopes,
+    --yes and --dry-run; every other verb refuses them (test_adele_env_slice2_cli)."""
     info = json.loads(go(py, scratch, "http://127.0.0.1:9", "--agent-info").stdout)
     assert schema.errors(info, schema.load("agent-info.schema.json")) == []
-    assert info["envelopes"] == ["grant_required"]
-    assert info["mutating"] is False and info["destructive"] is False  # rule 8: nothing destructive yet
-    assert "--yes" not in info["flags"]
-    assert info["exit_codes"]["4"] == "beyond the grant, nothing performed"
+    assert info["envelopes"] == ["confirmation_required", "grant_required"]
+    assert info["mutating"] is True and info["confirm_protocol"] is True
+    assert info["destructive"] is True and info["dry_run"] is True
+    assert {"--yes", "--dry-run"} <= set(info["flags"])
+    assert info["exit_codes"]["4"] == (
+        "beyond the grant, nothing performed; or env restore, snapshot-rm without --yes"
+    )
 
 
 @pytest.mark.parametrize(

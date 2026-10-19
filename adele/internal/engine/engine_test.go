@@ -182,7 +182,8 @@ func TestTheSweepRemovesOnlyLeftBehindSandboxes(t *testing.T) {
 	if err != nil || n != 1 || len(gone) != 1 || gone[0] != "old" {
 		t.Fatalf("removed %d %v, %v", n, gone, err)
 	}
-	if !strings.Contains(filter, LabelSandbox+"=resolve") {
+	// Slice 2: every sandbox kind (resolve, and the volume helper), so the filter is the label with no value.
+	if !strings.Contains(filter, `"`+LabelSandbox+`"`) {
 		t.Errorf("filter %q", filter)
 	}
 }

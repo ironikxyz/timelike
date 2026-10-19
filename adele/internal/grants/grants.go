@@ -22,10 +22,26 @@ const (
 	LimitTTL          = "ttl"
 	LimitInstances    = "instances"
 	LimitPorts        = "ports"
+	// Feature 13 slice 2 (014 plan R29): optional keys. A grant without them gets the defaults below.
+	LimitSnapshots   = "snapshots"
+	KeySnapshotStore = "snapshot-store"
 )
 
-// Limits lists every limit name in grant-file order.
+// Limits lists every required limit name in grant-file order.
 var Limits = []string{LimitCapabilities, LimitBudget, LimitTTL, LimitInstances, LimitPorts}
+
+// Optional lists the keys a grant may leave out, each with its default.
+var Optional = []string{LimitSnapshots, KeySnapshotStore}
+
+// The optional keys' defaults: 1 GiB of snapshots per environment, held in volumes on the daemon.
+const (
+	DefaultSnapshotBytes = 1 << 30
+	StoreVolume          = "volume"
+	StoreTmpfs           = "tmpfs" // in memory, the cap's size, lost when the daemon restarts
+)
+
+// keyList names every key, for messages.
+const keyList = "capabilities, budget, ttl, instances and ports, and optionally snapshots and snapshot-store"
 
 // CapStandinBox is the stand-in's capability (feature 004, slice 0).
 const CapStandinBox = "standin.box"
@@ -47,7 +63,10 @@ type Grant struct {
 	TTL          time.Duration
 	Instances    int
 	Ports        PortSet
-	Line         int // the line of the section header
+	// SnapshotBytes caps one environment's snapshots, and SnapshotStore says where they are held (slice 2).
+	SnapshotBytes int64
+	SnapshotStore string
+	Line          int // the line of the section header
 }
 
 // Allows reports whether the grant contains capability c.
@@ -212,7 +231,7 @@ func (p *parser) section(s string) *ParseError {
 			"rename one of the two grants, or merge them")
 	}
 	p.names[name] = p.lineNum
-	p.cur = &Grant{Name: name, Line: p.lineNum}
+	p.cur = &Grant{Name: name, Line: p.lineNum, SnapshotBytes: DefaultSnapshotBytes, SnapshotStore: StoreVolume}
 	p.seen = map[string]int{}
 	return nil
 }
@@ -241,7 +260,7 @@ func (p *parser) pair(key, value string) *ParseError {
 	}
 	if !isLimit(key) {
 		return p.err(fmt.Sprintf("unknown key %q", key),
-			"the keys are capabilities, budget, ttl, instances and ports")
+			"the keys are "+keyList)
 	}
 	if first, dup := p.seen[key]; dup {
 		return p.err(fmt.Sprintf("duplicate key %q in grant %q (first set at line %d)", key, p.cur.Name, first),
@@ -258,7 +277,7 @@ func (p *parser) pair(key, value string) *ParseError {
 }
 
 func isLimit(key string) bool {
-	for _, l := range Limits {
+	for _, l := range append(Limits[:len(Limits):len(Limits)], Optional...) {
 		if l == key {
 			return true
 		}

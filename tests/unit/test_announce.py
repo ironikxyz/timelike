@@ -371,6 +371,24 @@ def test_announce_over_sixty_lines_fails(rig: Rig) -> None:
     assert not out.exists(), "a failed generation writes nothing"
 
 
+def test_announce_line_over_rule_13s_columns_fails(rig: Rig) -> None:
+    # Lane 13s2a: a 209-column tool line was written whole and cut in --json, so the two differed
+    fake_tool(rig.fakebin, "longtool", "x" * 200)
+    out = rig.tmp / "out.md"
+    r = timelike(rig.env(), "announce", "--write", str(out))
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert "longtool" in r.stdout + r.stderr and "200" in r.stdout + r.stderr
+    assert not out.exists(), "a failed generation writes nothing"
+
+
+def test_announce_json_lines_equal_what_write_wrote(rig: Rig) -> None:
+    out = rig.tmp / "written.md"
+    assert timelike(rig.env(), "announce", "--write", str(out)).returncode == 0
+    doc = doc_of(timelike(rig.env(), "announce", "--json"))
+    assert doc["lines"] == out.read_text().splitlines()
+    assert "cut_lines" not in doc
+
+
 def test_announce_failing_agent_info_names_the_tool(rig: Rig) -> None:
     fake_tool(rig.fakebin, "brokentool", "never shown", fail=True)
     out = rig.tmp / "out.md"

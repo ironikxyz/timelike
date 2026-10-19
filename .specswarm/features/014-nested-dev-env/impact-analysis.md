@@ -44,3 +44,25 @@ which do not touch refusals.
 - **The disk-bound host** (cross-stack P006): build fixtures are a few layers.
 
 **Proceed:** yes.
+
+## Cycle 9 — slice 2 (hardened)
+
+| Component | Impact | Note |
+|---|---|---|
+| Adele's engine client | Medium | volume create and remove, pause, unpause, stop, start, mounts on inspect, a sandbox's added capabilities, snapshot counts |
+| Adele's broker | High | four actions; the recovery and orphan pass on the reaper's `After` hook and at start; `down` and collection end snapshot rows |
+| 004's grants and ledger | Medium | two optional grant keys and `extend snapshots`; two writers and action queries; no schema change; `instances` and `live` unaffected (no expiry on any new row) |
+| agentio (001) | Low–Medium | `adele` declares a confirm protocol beside its grant envelope, for restore and snapshot-rm; the narrowest change, named in the cycle report |
+| feature 07's `snapshot`/`undo` | Low | none in code; the announcements say which is which |
+| the lane | Medium | lane grants `nested-snapcap`, `nested-snapfull`; three e2e files; the sweep already covers labelled volumes |
+| README | Medium | snapshots and restore, the cap and its default, pausing, the difference from the workspace's snapshot and undo; the status block if the criterion is met; the reference |
+
+**Risks:**
+- **The helper's capabilities** must be enough for a database's owners and modes and no more. The fixture's volume is
+  owned by a non-root uid to exercise them; real databases are not tried (P005).
+- **Pause on the host's engine** (cgroup freezer): not verifiable here.
+- **A tmpfs store** is only as durable as the daemon's uptime; it is the operator's choice, for bounded stores, and the
+  lane's way of filling a store safely.
+- **The disk-bound host:** fixtures are a few KB, and the full-store cell fills memory, bounded at 1 MiB.
+
+**Proceed:** yes.

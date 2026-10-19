@@ -65,7 +65,8 @@ CHUNK = 1 << 20
 TOOL = agentio.Tool(
     name="snapshot",
     target="workspace",
-    summary="take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it",
+    summary="take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it;"
+    " a nested environment's Docker volumes: adele env snapshot",
     usage=[
         "snapshot [-m TEXT]       # take one: prints its id, file count and size, and what was left out",
         "snapshot list            # this workspace's snapshots, newest first",
@@ -86,7 +87,8 @@ TOOL = agentio.Tool(
 UNDO_TOOL = agentio.Tool(
     name="undo",
     target="workspace",
-    summary="restore the workspace to a snapshot (the newest by default); dry run first, verified after",
+    summary="restore the workspace to a snapshot (the newest by default); dry run first, verified after;"
+    " a nested environment's Docker volumes: adele env restore",
     usage=[
         "undo --dry-run           # list exactly what a restore would change; change nothing",
         "undo --yes               # restore the newest snapshot, verify it, keep the replaced state",

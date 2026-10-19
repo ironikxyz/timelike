@@ -41,6 +41,8 @@ usage:
                                        the resolution sandbox's entrypoint (feature 13): never the operator's
   adeled context --workspace W --context C --dockerfile F
                                        the build sandbox's entrypoint (slice 1): the context archive on stdout
+  adeled volume measure|digest|copy|restore --src DIR [--dst DIR] [--max-bytes N]
+                                       the volume helper's entrypoint (slice 2): one JSON line on stdout
 who runs what: extend, reap, ledger and status are the OPERATOR's, run on the host as
   docker exec timelike-adele adeled <command>. The agent cannot run them: it has no Docker socket.
   A refusal the agent sees names the exact extend command; the record of every request and reap is
@@ -106,6 +108,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return resolve(e, args[1:], stdout, stderr)
 	case "context":
 		return contextArchive(args[1:], stdout, stderr)
+	case "volume":
+		return volume(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprintln(stdout, usage)
 		return exitOK

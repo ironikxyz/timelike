@@ -133,6 +133,33 @@ the fixtures, and run first in the mentor's lane.
 - [X] T058 B: a failed or timed-out build is named by the instruction as the Dockerfile has it and its position there, never the daemon's "Step N/M" (`adele/internal/engine/slice1.go` `BuildError.Where`, `stepLine`, `labelStep`; `adele/internal/broker/env_slice1.go`'s `build` gains `position`, `instruction`, `message`); the step's own output only; the client's verdict (`tools/bin/adele` `build_failed`); units `adele/internal/engine/slice1_test.go`, `tests/unit/test_adele_env_slice1_cli.py`; e2e 196's expectation (`tests/e2e/devcontainer-and-build-failures-name-their-cause.bats`); `contracts/adele-env.md`, `plan.md`
 - [X] T059 Host lanes (serial and `-n 8`), Go with -race and vet, ruff, mypy; Cycle 7's report, with where the six steps came from; `reboot.md`; the deny-list on the staged tree; commit
 
+
+## Phase 19: Slice 2 foundations (`bridge/sends/13-rev17-20261019-034239.md`; plan § Slice 2)
+
+- [X] T060 Ledger: `Kept` (a performed row with an undo and no expiry), `Ended` (a performed row ending a pause or a stop, `ref` set), `OpenHolds` (pause and stop rows with no ending), `Snapshots(env)` and `SnapshotRow(resource)` (live snapshot rows); `snapshots` among the extendable limits (`adele/internal/ledger/ledger.go`, `query.go`); units `adele/internal/ledger/slice2_test.go`
+- [X] T061 Grants: optional `snapshots` (a size, default 1 GiB) and `snapshot-store` (`volume` | `tmpfs`); `extend GRANT snapshots SIZE`; `FormatSize` (`adele/internal/grants/grants.go`, `values.go`, `effective.go`); units `adele/internal/grants/slice2_test.go`
+- [X] T062 [P] `adele/internal/volcopy/` (measure, copy, digest, restore of a tree: owners, modes, times, symbolic and hard links, sockets counted, devices refused) and `adele/cmd/adeled/volume.go` (`adeled volume measure|copy|digest|restore`, exits 0/10/11/12/1), routed in `adele/cmd/adeled/main.go`; units (delegated)
+- [X] T063 Engine: volumes created (labels, driver options), removed and listed with their creation time; pause, unpause, stop, start; mounts on inspect; a sandbox's user, added capabilities and kind label; the sweep covers every sandbox kind; `Counts.Snapshots` in `Count` and `Down` (`adele/internal/engine/engine.go`, `adele/internal/engine/slice2.go`); units `adele/internal/engine/slice2_test.go`
+
+### Phase 20: US9, a named volume snapshotted and restored (criterion 10; D31)
+
+- [X] T064 [US9] Broker: `snapshot`, `snapshots`, `snapshot-rm` (R26, R29): the volume's own-ness, the cap, the measure, pause rows before the pause, the copy, unpause read back, the snapshot row; the refusals (`adele/internal/broker/snapshot.go`, `broker.go`, `env.go`); units `adele/internal/broker/snapshot_test.go`
+- [X] T065 [US9] Broker: `restore` (R27): the plan for a dry run, the digest checked first, stop rows before the stop, the restore helper, start whatever happened, the readiness Adele reads, the restore row (`adele/internal/broker/snapshot.go`); units
+- [X] T066 [US9] The recovery and orphan pass (R28, R30) at Adele's start and on the reaper's tick; `down` and collection count snapshots and end their rows (`adele/internal/broker/snapshot.go`, `collect.go`, `env.go`, `adele/cmd/adeled/serve.go`); units
+- [X] T067 [P] [US9] Client: `adele env snapshot|snapshots|restore|snapshot-rm`; the confirm protocol and `--dry-run`; restore's readiness wait as `up`'s; the announcement and `--agent-info` (volumes, not the workspace's `snapshot`/`undo`); D22 A (widths) and B ("ports probed" only when probed) (`tools/bin/adele`, and `tools/agentio/agentio.py` only if a grant client cannot otherwise declare a confirm protocol); units `tests/unit/test_adele_env_slice2_cli.py` (delegated)
+- [X] T068 [P] [US9] e2e: `tests/e2e/a-named-volume-of-a-running-nested-environment-is-snapshotted-and-later-restored-to-its-snapshotted-content.bats`, `tests/e2e/snapshot-and-restore-failures-name-their-cause.bats`, `tests/e2e/a-paused-service-is-never-left-paused-and-snapshots-go-with-their-environment.bats`; fixtures `tests/e2e/fixtures/nested/snapshot/`; lane grants `nested-snapcap`, `nested-snapfull` (`tests/e2e/fixtures/adele/grants.conf`); `tests/e2e/lane.conf`; `tests/e2e/nested.bash`; `Makefile` `SHELLCHECK_FILES` (delegated)
+
+### Phase 21: Polish (slice 2)
+
+- [X] T069 README: snapshots and restore, the cap and its default, pausing, how they differ from the workspace's `snapshot` and `undo`; the status block if criterion 10 is met; the reference regenerated (`README.md`, `scripts/readme_reference.py --write`)
+- [X] T070 Host lanes (serial and `-n 8`); every lint stage at its pin (shellcheck, ruff, mypy, gofmt, vet, staticcheck); Go `-race`; Cycle 9's report (the helper's capabilities, the cap's default, how the disk-full cell stays off the host's disk); `reboot.md`; the deny-list on the staged tree; commit
+
+### Dependencies (slice 2)
+
+T060, T061, T063 → T064 → T065 → T066. T062 is independent and feeds T064 (the helper's protocol, plan R25, is the
+contract between them). T067 and T068 need only the contract (`contracts/adele-env.md` § Slice 2) and run beside
+T064–T066; the e2e files run first in the mentor's lane.
+
 ## Dependencies
 
 T001–T002 → T003–T007 → US1 (T008–T012) → US2, US3, US5, US4/6 (each independent after US1) → Polish.

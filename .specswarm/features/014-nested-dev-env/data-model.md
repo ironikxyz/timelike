@@ -89,3 +89,50 @@ Grants keep 12's five keys:
 `one_shot` (bool) and, for a container that exited non-zero, `last_lines` (its last 10 log lines). The client's words:
 `ready (healthy)`, `ready (running, ports accept)`, `completed (exit 0)`, `exited N`, `running, no readiness check`, or
 `running (one-shot: waiting for its exit)`.
+
+## Slice 2 (send `bridge/sends/13-rev17-20261019-034239.md`; plan § Slice 2, R23–R33)
+
+### Snapshot volume (on the daemon)
+
+| Field | Rule |
+|---|---|
+| name | `<env>-snap-<hex>`, where the snapshot's id is `s-<hex>` and `hex` is 8 random hex digits; the id is the `…snapshot` label's value and the ledger resource's second half |
+| labels | `xyz.ironik.timelike.env=<env>`, `…snapshot=<id>`, `…snapshot-of=<the source volume's daemon name>`, `…session`, `…grant`, `…requester`, `…created` (RFC 3339) |
+| driver | `local`; with the grant's `snapshot-store = tmpfs`, driver options `type=tmpfs`, `device=tmpfs`, `o=size=<cap bytes>` |
+| contents | the source volume's tree, root included: owners, groups, modes, times, symbolic links (never followed), hard links; sockets not copied (counted); no device nodes |
+| valid | only with a live snapshot row (below). A snapshot volume with none is partial, never listed, and removed by the recovery pass |
+
+### The digest (R24)
+
+One line per entry in lexical path order, root first: `path type mode uid gid mtime_sec.mtime_nsec` and, for a
+regular file, `size sha256`; for a symbolic link, its target; for a hard link to an earlier entry, `link <path>`. The
+digest is `sha256:` and the SHA-256 of the lines. `bytes` is the sum of regular files' sizes, `files` the entries
+other than the root, `sockets` the sockets skipped.
+
+### Grant keys (optional)
+
+| Key | Syntax | Default | Meaning |
+|---|---|---|---|
+| `snapshots` | a size: `0`, or a whole number then `KiB`, `MiB` or `GiB` (also `B`) | `1GiB` | the bytes of snapshots one environment of this grant may hold; `adeled extend GRANT snapshots SIZE` sets it |
+| `snapshot-store` | `volume` or `tmpfs` | `volume` | where a snapshot is held; `tmpfs` is in memory, the cap's size, lost when the daemon restarts |
+
+### Ledger rows (12's ledger, no schema change)
+
+| Event | outcome | capability | action | resource | Notes |
+|---|---|---|---|---|---|
+| snapshot | performed | docker.compose | snapshot | `<env>/<id>` | no `expires_at` (never live, never an instance); `undo` is `{"capability":"docker.compose","action":"snapshot-rm","params":{"name":env,"snapshot":id},"record":{"volume","volume_name","digest","bytes","files","sockets","taken_at","note","store"}}`; `cause` says the same in words, with the services paused and for how long |
+| snapshot removed | reaped | docker.compose | delete | `<env>/<id>` | `ref` the snapshot row; the cause: `snapshot-rm` by a session, the environment's `down`, its collection, or "gone" / "orphan" from the recovery pass |
+| pause | performed | docker.compose | pause | env | written before the pause; `undo` `{"capability":"docker.compose","action":"unpause","params":{"name":env},"containers":[ids]}` |
+| stop (restore) | performed | docker.compose | stop | env | written before the stop; `undo` names `start` and the containers |
+| pause or stop ended | performed | docker.compose | unpause / start | env | `ref` the pause or stop row; no undo, no expiry; the cause says read back running, or what the recovery pass found |
+| restore | performed | docker.compose | restore | env | no undo, no expiry; `cause` names the snapshot and its row, the volume, the services stopped, the digest read back, and the readiness Adele read from the daemon |
+| refused: the cap | refused | docker.compose | snapshot | env | `limit_name` `snapshots`, the grant envelope's allowed and needed, the operator's command |
+| refused: no such volume | refused | docker.compose | snapshot | env | `limit_name` `volume`; allowed: the environment's own named volumes; needed: what was asked for; no operator command |
+| partial removed | performed | docker.compose | snapshot-rm | `<env>/<id>` | no ref (there was no record); the cause: "partial: the copy was cut short" |
+
+An open pause or stop row is one with no row whose `ref` is it. A snapshot is live while its row has no reaped or
+gone row.
+
+### Counts
+
+`engine.Counts` gains `snapshots`: snapshot volumes are counted there, not under `volumes`. `Total` includes them.

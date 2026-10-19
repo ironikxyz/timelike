@@ -64,14 +64,14 @@ func extend(g *Grant, limit, value string) error {
 			g.Ports = append(g.Ports, r)
 		}
 		return nil
-	case LimitBudget, LimitTTL, LimitInstances:
+	case LimitBudget, LimitTTL, LimitInstances, LimitSnapshots:
 		if ve := setLimit(g, limit, value); ve != nil {
 			return ve
 		}
 		return nil
 	}
 	return badValue(fmt.Sprintf("unknown limit %q", limit),
-		"the limits are capabilities, budget, ttl, instances and ports")
+		"the limits are capabilities, budget, ttl, instances, ports and snapshots")
 }
 
 // FormatLimit returns g's value for limit in grant-file syntax, or "" for an
@@ -88,6 +88,8 @@ func FormatLimit(g Grant, limit string) string {
 		return fmt.Sprint(g.Instances)
 	case LimitPorts:
 		return g.Ports.String()
+	case LimitSnapshots:
+		return FormatSize(g.SnapshotBytes)
 	}
 	return ""
 }

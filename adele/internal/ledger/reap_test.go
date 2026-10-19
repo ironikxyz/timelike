@@ -107,6 +107,33 @@ func TestReapCopiesThePerformedRowAndEndsItOnce(t *testing.T) {
 	}
 }
 
+// Lane 13s2a: ReapOf reads back the ending another reaper wrote, never a failed attempt.
+func TestReapOfReadsBackTheEndingNotAFailedAttempt(t *testing.T) {
+	l, _ := tempLedger(t)
+	now := time.Date(2026, 10, 19, 6, 0, 0, 0, time.UTC)
+	ref, err := l.Performed(expiring("box-o", now.Add(-time.Minute)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := l.ReapOf(ref); err != nil || found {
+		t.Fatalf("before any reap: %v %v", found, err)
+	}
+	if _, _, err := l.Reap(ref, OutcomeReapFailed, "the stand-in did not answer", 1, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := l.ReapOf(ref); err != nil || found {
+		t.Fatalf("after a failed attempt: %v %v", found, err)
+	}
+	id, _, err := l.Reap(ref, OutcomeReaped, "deleted", 1, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, found, err := l.ReapOf(ref)
+	if err != nil || !found || r.ID != id || r.Cause != "deleted" || r.Ref == nil || *r.Ref != ref {
+		t.Fatalf("ReapOf = %+v %v %v, want #%d", r, found, err, id)
+	}
+}
+
 func TestReapRefusesWhatIsNotAPerformedRow(t *testing.T) {
 	l, _ := tempLedger(t)
 	rid, err := l.Refused(refused("demo"))

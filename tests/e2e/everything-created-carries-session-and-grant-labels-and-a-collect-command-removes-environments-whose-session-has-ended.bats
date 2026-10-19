@@ -41,7 +41,7 @@ check_labels_then_collect() {
   nested_session "labels-${style}"
   env_run "$style" "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 2 running with no readiness check in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 2 running, no readiness check in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
   assert_output_has "built app: ${NP_NAME}-app:"
   assert_output_has " s (nothing pulled)"
 
@@ -90,7 +90,7 @@ check_labels_then_collect() {
   # The second agent brings the environment up; Adele reads it, by its address, as the requester (R18).
   tw_run "adele --text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 1 running with no readiness check in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 1 running, no readiness check in "* ]] || { echo "verdict: ${lines[1]}" >&2; return 1; }
   [[ "$output" != *"requester: unknown"* ]] || { echo "Adele did not find the throwaway agent: $output" >&2; return 1; }
   [[ "$(docker inspect --format '{{index .Config.Labels "xyz.ironik.timelike.requester"}}' "$(nested_container "$NP_NAME" app)")" == "$NP_TW_ID" ]] ||
     { echo "requester label: $(docker inspect --format '{{json .Config.Labels}}' "$(nested_container "$NP_NAME" app)"); throwaway ${NP_TW_ID}" >&2; return 1; }

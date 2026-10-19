@@ -26,7 +26,18 @@ type Collected struct {
 	Removed  engine.Counts  `json:"removed"`
 	Left     *engine.Counts `json:"left,omitempty"`
 	LedgerID int64          `json:"ledger_id,omitempty"`
+	// Already says another pass ended the row first; LedgerID and Cause are then that pass's (lane 13s2a).
+	Already bool `json:"already_recorded,omitempty"`
 }
+
+// CollectBound bounds one collection pass, from its call, waiting for another pass included: it starts no removal
+// after it, and what it leaves is the next pass's (lane 13s2a: slice 2's removals made a pass of two environments
+// outlast the server's 30 s write timeout). CollectWriteTimeout bounds a collect request's answer: the pass and the
+// one removal it started last, with room. The client's own bound is just above it (tools/bin/adele COLLECT_HTTP_S).
+const (
+	CollectBound        = 5 * time.Minute
+	CollectWriteTimeout = CollectBound + 5*time.Minute
+)
 
 // sessionBody is what session end and collect read from the agent: who asks, nothing else.
 type sessionBody struct {
@@ -92,6 +103,8 @@ func (b *Broker) collect(w http.ResponseWriter, r *http.Request) {
 	if _, ok := readSessionBody(w, r); !ok {
 		return
 	}
+	// Its own bound, as docker.compose requests have theirs: the server's 30 s is for the short answers.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(CollectWriteTimeout))
 	if b.Envs == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "this Adele has no Docker daemon",
 			"remediation": "the operator starts her with the socket: make up"})
@@ -109,12 +122,17 @@ func (b *Broker) collect(w http.ResponseWriter, r *http.Request) {
 
 // Collect is one collection pass (R19): every live environment whose session has ended, by (b) the ledger's end row
 // or (a) its requester label naming an agent container the daemon no longer has, is taken down and read back. 0
-// left is a reaped row with the cause; anything left is a reap-failed row, tried again on the next pass.
+// left is a reaped row with the cause; anything left is a reap-failed row, tried again on the next pass. One pass
+// runs at a time, so the agent's request and the reaper's tick never remove and record the same environment twice;
+// one that another reaper ended meanwhile is reported with that reaper's row.
 func (b *Broker) Collect(ctx context.Context) (collected, failed []Collected, err error) {
 	collected, failed = []Collected{}, []Collected{}
 	if b.Envs == nil {
 		return collected, failed, nil
 	}
+	started := time.Now()
+	b.collectMu.Lock()
+	defer b.collectMu.Unlock()
 	e := b.Envs
 	b.mu.Lock()
 	rows, err := b.Ledger.LiveRows(grants.CapDockerCompose)
@@ -138,12 +156,17 @@ func (b *Broker) Collect(ctx context.Context) (collected, failed []Collected, er
 		if cause == "" {
 			continue
 		}
+		if time.Since(started) > CollectBound {
+			failed = append(failed, Collected{Name: row.Resource, Session: row.Session, Cause: fmt.Sprintf(
+				"not started: %s; this pass reached its %s bound, and the next pass collects it", cause, CollectBound)})
+			continue
+		}
 		e.lock("collect " + row.Resource)
 		removed, left, derr := e.Engine.Down(context.WithoutCancel(ctx), row.Resource)
 		e.unlock()
 		c := Collected{Name: row.Resource, Session: row.Session, Cause: cause, Removed: removed}
-		outcome, words := ledger.OutcomeReaped, fmt.Sprintf("collected: %s; %d containers, %d networks, %d volumes, %d images removed; 0 left, read back from the daemon",
-			cause, removed.Containers, removed.Networks, removed.Volumes, removed.Images)
+		outcome, words := ledger.OutcomeReaped, fmt.Sprintf("collected: %s; %d containers, %d networks, %d volumes, %d images, %d snapshots removed; 0 left, read back from the daemon",
+			cause, removed.Containers, removed.Networks, removed.Volumes, removed.Images, removed.Snapshots)
 		if derr != nil || left.Total() > 0 {
 			l := left
 			c.Left = &l
@@ -153,12 +176,23 @@ func (b *Broker) Collect(ctx context.Context) (collected, failed []Collected, er
 			}
 		}
 		b.mu.Lock()
-		id, _, rerr := b.Ledger.Reap(row.ID, outcome, words, 1, b.now())
+		id, wrote, rerr := b.Ledger.Reap(row.ID, outcome, words, 1, b.now())
+		if rerr == nil && !wrote {
+			var winner ledger.Row
+			var found bool
+			if winner, found, rerr = b.Ledger.ReapOf(row.ID); rerr == nil && !found {
+				rerr = fmt.Errorf("ledger: row %d's reap was not written and no other reap of it reads back", row.ID)
+			}
+			id, c.Cause, c.Already = winner.ID, winner.Cause, true
+		}
 		b.mu.Unlock()
 		if rerr != nil {
 			return collected, failed, rerr
 		}
 		c.LedgerID = id
+		if outcome == ledger.OutcomeReaped && removed.Snapshots > 0 {
+			b.endSnapshots(row.Resource, "removed with its environment, collected: "+cause+"; read back gone")
+		}
 		if outcome == ledger.OutcomeReaped {
 			collected = append(collected, c)
 		} else {

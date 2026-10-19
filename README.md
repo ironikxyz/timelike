@@ -39,7 +39,7 @@ Whether it works is a measured claim: see Status.
 | 10 | `symbols` | Outlines, definitions, callers and dependents: exact for Python, text-based (and saying so) for others | slice 1 of 1–2 |
 | 11 | `verify` | Failures only, and only for what a change affects: tests, lint and type-check | slice 1 of 1–2 |
 | 12 | Adele & `adele` | The one authority outside the agent that holds credentials and performs reaching actions within the operator's grants | slices 0–1 of 0–2 |
-| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | <mark>slices 0–1 of 0–2</mark> |
+| 13 | Nested dev environments | Bring up the project's own compose or devcontainer environment from inside the container, under a grant | <mark>slices 0–2 of 0–2</mark> |
 | 14 | Provider compute | One request for compute or an endpoint; Adele quotes, provisions within the grant, and tears down | not started |
 | 15 | Package guard | Package installs checked first: does the package exist, is it old enough, is it already in the lockfile | slice 1 of 1–2 |
 | 16 | Model-assisted filters | A grep, or a sed's addresses, chosen by description; off by default, and costed per call | not started |
@@ -47,12 +47,12 @@ Whether it works is a measured claim: see Status.
 
 ## Status
 
-<mark>**23 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
+<mark>**24 of 38 planned slices are built.**</mark> Each feature is built in slices: 0 is skeletal (one working path end
 to end), 1 natural (the common failures), and 2 hardened (incident replays, enforcement, publication).
-Features 01, 04, 05 and 06 are complete. Features 02, 03, 07–13 and 15 have their first slice or slices.
+<mark>Features 01, 04, 05, 06 and 13 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.</mark>
 Features 14, 16 and 17 are not started.
 
-**Next:** 13 slice 2.
+**Next:** 14 slice 0.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
@@ -616,15 +616,23 @@ adele session end            # this session is done: its environments are collec
 adele env collect            # remove every environment whose session has ended, now
 ```
 
+```bash
+adele env snapshot db-data   # snapshot the environment's volume db-data: its id, size, and what was paused
+adele env snapshots          # its snapshots, with the cap used and left
+adele env restore s-3f2a91c0 --yes   # put db-data back as it was then; waits for readiness as up does
+adele env snapshot-rm s-3f2a91c0 --yes
+```
+
 There is no Docker in the agent's container. `adele env up` asks Adele, who resolves the project with the Compose
 CLI in a throwaway sandbox that sees only the workspace: no network, no socket, no secret and none of the agent's
 environment. She checks the resolved model, after interpolation, `include`, `extends`, profiles and override files,
-and brings up exactly what she checked, labelled as timelike's, under the operator's `docker.compose` grant. A
-service is ready when its healthcheck passes; without one, when it runs and its ports accept a connection from the
-agent's container. <mark>A service with neither gives no readiness signal, so `up` reports it as running with no
+and brings up exactly what she checked, labelled as timelike's, under the operator's `docker.compose` grant. <mark>A
+service is ready either when its healthcheck passes or, if it has no healthcheck, when it runs and its ports accept a
+connection from the agent's container.</mark>
+A service with neither gives no readiness signal, so `up` reports it as running with no
 readiness check, never as ready; if it exits while `up` waits, 0 is completed and anything else fails `up` with exit 1,
 naming the service and its last lines. A service another one waits on with `condition:
-service_completed_successfully` is a one-shot for certain, and `up` waits for its exit.</mark> The bound is 120 s by
+service_completed_successfully` is a one-shot for certain, and `up` waits for its exit. The bound is 120 s by
 default, `--wait` up to 600 s, and past it the call exits 124 with each service's state and leaves the environment
 up. The agent and the services share
 `timelike-nested`, an internal network, where each service answers as `<service>.<environment>`. A repeat `up` of
@@ -632,23 +640,23 @@ an unchanged project creates nothing. An environment past its grant's `ttl` is r
 
 **What Adele refuses.** A privileged container, host networking, the host's PID, IPC, UTS, user or cgroup namespace,
 an added capability, a device, an unconfining security option, and a mount or a file from outside the workspace (the
-Docker socket included, and a volume whose driver options bind a host path). <mark>In a build, also: build secrets,
+Docker socket included, and a volume whose driver options bind a host path). In a build, also: build secrets,
 SSH forwarding, a network other than the default, entitlements, a privileged build and additional contexts, in the
-compose file or in the Dockerfile's `RUN` flags.</mark> Each exits **2** before anything is created, with one line
+compose file or in the Dockerfile's `RUN` flags. Each exits **2** before anything is created, with one line
 naming the setting:
 `error: privileged is not allowed (code 2) — no grant allows it; run it without privileged (service db: true)`. No
 grant can allow these, so no command is offered. Beyond a grant's limits (instances, ttl, ports) the call exits 4
 with the grant envelope, as any request does. Adele never pulls: a missing image exits 3 and names the operator's
 `docker pull`.
 
-<mark>**Builds.** A service's `build:` is built by the daemon from an archive of its context that a second sandbox
+**Builds.** A service's `build:` is built by the daemon from an archive of its context that a second sandbox
 makes: links are archived as links and never followed, `.dockerignore` is honoured, and Adele copies the bytes to the
 daemon without opening them. A build pulls nothing: every base image (`FROM`, `COPY --from`) must already be on the
 daemon, or it exits 3 naming the operator's `docker pull`. A failed step exits 1 naming the step, with its last
 lines, and a build past its bound (5 minutes) exits 124. The image is labelled with the environment and tagged
-`<environment>-<service>`; an unchanged context, Dockerfile, args and target reuse it, and `down` removes it.</mark>
+`<environment>-<service>`; an unchanged context, Dockerfile, args and target reuse it, and `down` removes it.
 
-<mark>**Devcontainers.** Without a compose file (or with `--devcontainer`), `up` brings up the project's
+**Devcontainers.** Without a compose file (or with `--devcontainer`), `up` brings up the project's
 `.devcontainer/devcontainer.json` or `.devcontainer.json`. The sandbox parses it (comments and trailing commas are
 fine; a file that does not parse exits 2 naming the line) and translates it into a compose model, which Adele checks
 and brings up as any compose project, so every refusal above applies. Translated: `image`, `build`,
@@ -658,20 +666,41 @@ on `timelike-nested`; nothing is published on the host), `overrideCommand`, and 
 setting. Refused: `initializeCommand` (it runs on the host), `features` (not brokered yet), `appPort`, and any
 `runArgs` without a mapping. `onCreateCommand`, `updateContentCommand`, `postCreateCommand` and `postStartCommand` run
 in the container, each named in the verdict and bounded at 2 minutes; one that fails exits 1 and leaves the
-environment up.</mark>
+environment up.
 
-<mark>**Running a command.** `adele env exec [NAME] [--service S] -- CMD` runs CMD in a running container of the
+**Running a command.** `adele env exec [NAME] [--service S] -- CMD` runs CMD in a running container of the
 environment, as the devcontainer's `remoteUser` or the image's own user, never privileged. Its output is bounded,
 its exit status is passed through, and past `--timeout` (100 s by default) it exits 124; the process may then still
 be running, because Docker's API cannot stop it, and `down` removes the container. A name or service that does not
-exist exits 3. Each exec is in Adele's ledger.</mark>
+exist exits 3. Each exec is in Adele's ledger.
 
-<mark>**Sessions and collection.** Everything an environment creates carries timelike's session and grant labels. A
+**Sessions and collection.** Everything an environment creates carries timelike's session and grant labels. A
 session has ended when the agent container that asked for its environments no longer exists (Adele reads that
 container from the daemon, never from the request) or when it was ended with `adele session end`. `adele env
 collect` removes the environments of every ended session now, and Adele's reaper does the same on its interval;
 each removal is read back and recorded in her ledger with its cause. A grant's `ttl` still removes whatever outlives
-it.</mark>
+it.
+
+<mark>**Snapshots of an environment's volumes.** `adele env snapshot VOLUME` copies one of the environment's own named
+volumes into a new volume on the daemon, labelled like everything else the environment creates, so `down` and
+collection remove it with the rest. These work on a nested environment's Docker volumes; the workspace's own files
+are `snapshot` and `undo`'s (07). A bind mount, or another environment's volume, exits 3 naming the environment's
+own volumes. The services that mount the volume are paused for the copy and unpaused after it, read back running, and
+the verdict says which were paused and for how long: the copy is one moment in time, the state a power cut would
+leave, which databases are built to recover from. Adele never opens the volume herself. A helper from her own image
+copies it with no network, no socket and no secret, keeping owners, modes, times and links, and records the copy's
+digest, size and file count. It does not keep extended attributes or ACLs, it copies a sparse file whole, and it
+refuses a device node, naming it.</mark>
+
+<mark>**Restore and the cap.** `adele env restore SNAPSHOT` checks the snapshot against its recorded digest before it
+stops anything, then stops the services that mount the volume, replaces its contents, starts them and waits for
+readiness as `up` does; the restored volume's digest is read back. Without `--yes` it exits 4 naming what will be
+replaced and stopped, and `--dry-run` shows the same. A grant caps the bytes of snapshots one environment may hold
+(`snapshots` in the grant file, **1 GiB** when it does not say); a snapshot past the cap exits 4 before anything is
+written, naming the volume, its size and the operator's command to raise it. A grant's `snapshot-store = tmpfs`
+holds its snapshots in memory instead, bounded by the cap and lost when the daemon restarts. A snapshot that cannot
+finish (the store full, the helper killed) exits 1 with nothing partial left and nothing paused, and if Adele herself
+stops mid-snapshot, her next start unpauses what she paused, with a ledger row naming the cause.</mark>
 
 **Variables.** `${VAR}` resolves from the project's own `.env` only: the agent's environment is not read, and a
 variable left unset is named in the verdict.
@@ -731,7 +760,7 @@ Every tool also answers `--agent-info` with its manifest (JSON), and `timelike t
 
 ```text
 adele: adele [help]
-ask Adele to perform a reaching action within the operator's grant; never see a credential
+ask Adele for a reaching action within the operator's grant; never see a credential; a nested environment's Docker volumes: adele env snapshot|restore (workspace files: snapshot, undo)
 usage:
   adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)
   adele grants                  # the grants she applies: limits, spent, live
@@ -740,7 +769,11 @@ usage:
   adele env status [NAME] | adele env down [NAME|DIR]  # each service, its address; remove it all
   adele env exec [NAME] [--service S] [--timeout 100] -- CMD [ARG]...  # exits with CMD's status
   adele env collect | adele session end  # remove ended sessions' environments; end this session
-  exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)
+  adele env snapshot [NAME] VOLUME [--note T] | adele env snapshots [NAME]  # an env's Docker volumes
+  adele env restore [NAME] SNAPSHOT [--yes|--dry-run] [--wait 120] | adele env snapshot-rm [NAME] S
+    (the workspace's own files are snapshot and undo; these are a nested environment's volumes)
+  exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command);
+    or env restore / snapshot-rm without --yes: stdout is the confirmation envelope (your command)
   extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);
   every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)
 options:
@@ -750,6 +783,8 @@ options:
   --agent-info  machine-readable manifest
   --limit  output cap in lines; 0 = no cap
   --verbose  add timing; warn about event-log failures
+  --dry-run  show the plan, change nothing
+  --yes  confirm the mutation
   --name  the resource's name
   --ttl  its lifetime, e.g. 30m or 1h (default: the grant's ttl)
   --port  a port it exposes
@@ -760,8 +795,9 @@ options:
   --project  env: the environment's name (default: from DIR)
   --devcontainer  env up: the project's devcontainer, not its compose file
   --service  env exec: the service to run in (default: its only one)
-  --wait  env up: ready within S s (at most 600)
-exit codes: 0 ok, 1 unreachable, or the capability failed (env up: a build, lifecycle command or service), 2 usage; or name one with --grant; env: a setting no grant allows, a bad devcontainer.json, 3 no grant, environment or service by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed, 124 own limit fired (env up: not ready within --wait, a build or lifecycle bound; env exec: --timeout)
+  --wait  env up, restore: ready within S s (at most 600)
+  --note  env snapshot: a note kept with it (at most 200)
+exit codes: 0 ok, 1 unreachable, or the capability failed (env up: a build, lifecycle command or service; env restore: a service not ready), 2 usage; or name one with --grant; env: a setting no grant allows, a bad devcontainer.json, 3 no grant, environment, service, volume or snapshot by that name; env: an image not on the daemon, 4 beyond the grant, nothing performed; or env restore, snapshot-rm without --yes, 124 own limit fired (env up: not ready within --wait, a build or lifecycle bound; env exec: --timeout)
 ```
 
 ### `edit`
@@ -944,7 +980,7 @@ exit codes: 0 ok, 1 died, refused, or processes survived a stop, 2 usage, 3 no s
 
 ```text
 snapshot: workspace [help]
-take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it
+take a snapshot of the workspace (every file, git-ignored ones too) so undo can restore it; a nested environment's Docker volumes: adele env snapshot
 usage:
   snapshot [-m TEXT]       # take one: prints its id, file count and size, and what was left out
   snapshot list            # this workspace's snapshots, newest first
@@ -1032,7 +1068,7 @@ exit codes: 0 every tool conforms, 1 a tool fails a check, or none was found, 2 
 
 ```text
 undo: workspace [help]
-restore the workspace to a snapshot (the newest by default); dry run first, verified after
+restore the workspace to a snapshot (the newest by default); dry run first, verified after; a nested environment's Docker volumes: adele env restore
 usage:
   undo --dry-run           # list exactly what a restore would change; change nothing
   undo --yes               # restore the newest snapshot, verify it, keep the replaced state

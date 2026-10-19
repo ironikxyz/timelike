@@ -35,6 +35,10 @@ func example(key string) string {
 		return "1h"
 	case LimitInstances:
 		return "2"
+	case LimitSnapshots:
+		return "1GiB"
+	case KeySnapshotStore:
+		return StoreVolume
 	}
 	return "8080, 9000-9010"
 }
@@ -53,9 +57,12 @@ func setLimit(g *Grant, key, value string) *valueError {
 		g.Instances, ve = parseInstances(value)
 	case LimitPorts:
 		g.Ports, ve = parsePorts(value)
+	case LimitSnapshots:
+		g.SnapshotBytes, ve = parseSize(value)
+	case KeySnapshotStore:
+		g.SnapshotStore, ve = parseStore(value)
 	default:
-		ve = badValue(fmt.Sprintf("unknown limit %q", key),
-			"the limits are capabilities, budget, ttl, instances and ports")
+		ve = badValue(fmt.Sprintf("unknown limit %q", key), "the keys are "+keyList)
 	}
 	return ve
 }
@@ -190,4 +197,69 @@ func parseInstances(s string) (int, *valueError) {
 		return 0, badValue(fmt.Sprintf("unparsable instances %q", s), "write a whole number, 0 or more")
 	}
 	return n, nil
+}
+
+var sizeRE = regexp.MustCompile(`^(\d+)\s*(B|KiB|MiB|GiB)?$`)
+
+var sizeUnits = map[string]int64{"": 1, "B": 1, "KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30}
+
+// ParseSize parses a size in grant-file syntax ("1GiB", "64KiB", "0") into bytes.
+func ParseSize(s string) (int64, error) {
+	n, ve := parseSize(s)
+	if ve != nil {
+		return 0, ve
+	}
+	return n, nil
+}
+
+func parseSize(s string) (int64, *valueError) {
+	m := sizeRE.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return 0, badValue(fmt.Sprintf("unparsable size %q", s), "write a whole number then B, KiB, MiB or GiB, e.g. 1GiB, or 0")
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	unit := sizeUnits[m[2]]
+	if err != nil || n > math.MaxInt64/unit {
+		return 0, badValue(fmt.Sprintf("size %q is too large", s), "write a smaller size")
+	}
+	if n > 0 && m[2] == "" {
+		return 0, badValue(fmt.Sprintf("size %q has no unit", s), "write its unit: B, KiB, MiB or GiB, e.g. 64KiB")
+	}
+	return n * unit, nil
+}
+
+// FormatSize formats bytes in grant-file syntax, in the largest unit that divides it: 1073741824 → "1GiB".
+func FormatSize(n int64) string {
+	if n == 0 {
+		return "0"
+	}
+	for _, u := range []string{"GiB", "MiB", "KiB"} {
+		if n%sizeUnits[u] == 0 {
+			return fmt.Sprintf("%d%s", n/sizeUnits[u], u)
+		}
+	}
+	return fmt.Sprintf("%dB", n)
+}
+
+// HumanSize formats bytes for a verdict: "48.0 KiB", "1 GiB", "512 B".
+func HumanSize(n int64) string {
+	for _, u := range []string{"GiB", "MiB", "KiB"} {
+		v := sizeUnits[u]
+		if n >= v {
+			if n%v == 0 {
+				return fmt.Sprintf("%d %s", n/v, u)
+			}
+			return fmt.Sprintf("%.1f %s", float64(n)/float64(v), u)
+		}
+	}
+	return fmt.Sprintf("%d B", n)
+}
+
+func parseStore(s string) (string, *valueError) {
+	switch strings.TrimSpace(s) {
+	case StoreVolume, StoreTmpfs:
+		return strings.TrimSpace(s), nil
+	}
+	return "", badValue(fmt.Sprintf("unknown snapshot-store %q", s),
+		"write volume (a volume on the daemon) or tmpfs (in memory, the cap's size, lost when the daemon restarts)")
 }

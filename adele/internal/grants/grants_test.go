@@ -142,7 +142,8 @@ func TestLoadValid(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Grant{Name: "demo", Capabilities: []string{CapStandinBox}, BudgetCents: 200, TTL: time.Hour,
-		Instances: 2, Ports: PortSet{{8080, 8080}, {9000, 9010}}, Line: 1}
+		Instances: 2, Ports: PortSet{{8080, 8080}, {9000, 9010}}, Line: 1,
+		SnapshotBytes: DefaultSnapshotBytes, SnapshotStore: StoreVolume} // slice 2's optional keys, defaulted
 	if f.Name != path || len(f.Grants) != 1 || !reflect.DeepEqual(f.Grants[0], want) {
 		t.Errorf("got %+v, want %+v", f, want)
 	}

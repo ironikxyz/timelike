@@ -8,8 +8,12 @@ the grant envelope on stdout: the grant, the limit and the operator's command to
 grant-envelope.schema.json, discovery revision 10). That command is the operator's: the agent cannot
 run it, and it is never offered where the agent's habit runs commands (`confirm`).
 
-`mutating: false`: the grant is the confirmation (P4), so the agent's `--yes` would confirm nothing.
-Rule 8 still binds: slice 0 exposes no destructive request, so there is no `--dry-run` yet.
+The grant is the confirmation (P4) for every request a grant limits, so `--yes` confirms none of them.
+Feature 13 slice 2 adds two verbs rule 9 binds whatever the grant says: `adele env restore` replaces a
+volume's contents and `adele env snapshot-rm` deletes the only copy of a past state. Only those two take
+`--yes` (and `--dry-run`); without it they exit 4 with the confirmation envelope, whose `confirm` is the
+agent's own command. Any other exit 4 is the grant envelope, whose command is the operator's. The status
+says which (plan R31).
 
 Slice 1: Adele reaps what expires, in her own container, whatever the agent does; `adele status [HOST]`
 explains recent denials by host, read-only from her ledger; each request carries the agent's name
@@ -27,6 +31,11 @@ readiness check", never ready (decision C). `adele env exec [NAME] -- CMD` runs 
 and passes its exit status through, as 03's `run` does; `adele env collect` removes the environments of
 ended sessions now; `adele session end` ends this session (014 contracts/adele-env.md § Slice 1, plan
 R12-R20).
+
+Feature 13 slice 2: `adele env snapshot|snapshots|restore|snapshot-rm` take, list, restore and remove
+snapshots of a nested environment's named Docker volumes, through Adele and under the grant's cap; a
+restore waits for readiness as `up` does. The workspace's own files are feature 07's `snapshot` and `undo`
+(014 contracts/adele-env.md § Slice 2, plan R27, R31, R32).
 
 Design: .specswarm/features/004-adele-grants/ (spec, research R6-R8, contracts/adele-cli.md and
 adele-http.md).
@@ -52,6 +61,9 @@ EXEC_TIMEOUT_S = 100.0  # env exec's bound by default: feature 03's run default 
 EXEC_HTTP_SLACK_S = 30.0  # Adele's answer may follow the command's bound by this much
 STATUS_TIMEOUT_S = 3.0  # the conformance probe must conclude well inside conform's 10 s (R8)
 VANTAGE = "from the agent container"  # H3: a reachability claim names where it was made
+# 014 plan R32 A: a text verdict is printed as "verdict: …" and rule 13 cuts that line at 200 columns, so the
+# verdict itself has the rest. Each up, restore and snapshot verdict is built to fit at a 30-character name.
+VERDICT_MAX = agentio.DEFAULT_COLUMNS - len("verdict: ")
 # Where the record lives, named in status's verdict (Item 26 Q2, the mentor: the D8 interview found the
 # operator did not know). The agent cannot run the command; it is named so a person reading it can. The
 # verdict keeps it short, so that with the stand-in's host and both of status's figures it fits rule 13's
@@ -67,7 +79,18 @@ ENV_POLL_S = 0.5
 ENV_PROBE_S = 1.0
 WORKSPACE_ENV = "TIMELIKE_WORKSPACE"
 _ENV_NAME_RE = re.compile(r"^tl-[a-z0-9][a-z0-9-]{0,59}$")
-ENV_VERBS = ("up", "status", "down", "exec", "collect")
+ENV_VERBS = ("up", "status", "down", "exec", "collect", "snapshot", "snapshots", "restore", "snapshot-rm")
+SNAPSHOT_VERBS = ("snapshot", "restore", "snapshot-rm")  # each takes [NAME] and one more operand
+CONFIRMED_VERBS = ("restore", "snapshot-rm")  # rule 9 binds these two: --yes, --dry-run (plan R31)
+# A snapshot's or a restore's answer: Adele's copy (5 min), measure and digest (2 min each), the stops (10 s
+# each) and her own bounded wait for healthchecks (014 plan, Technical Context: Bounds), with room.
+SNAPSHOT_HTTP_S = 900.0
+SNAPSHOT_RM_HTTP_S = 120.0  # a volume's removal, read back gone
+# A collect's answer (lane 13s2a): Adele's pass starts no removal after 5 min, and answers within 10 min
+# (broker.CollectBound, CollectWriteTimeout); this waits a minute past that.
+COLLECT_PASS_S = 300.0
+COLLECT_HTTP_S = 660.0
+NOTE_MAX = 200  # a snapshot's note, in characters (contract § Slice 2)
 # 014 plan R12: a project whose root holds one of these is a compose project, unless --devcontainer.
 COMPOSE_FILES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 DEVCONTAINER_FILES = (".devcontainer/devcontainer.json", ".devcontainer.json")
@@ -76,7 +99,8 @@ LAST_LINES_MAX = 300  # the characters of a failure's last lines a one-line erro
 TOOL = agentio.Tool(
     name="adele",
     target="adele",
-    summary="ask Adele to perform a reaching action within the operator's grant; never see a credential",
+    summary="ask Adele for a reaching action within the operator's grant; never see a credential;"
+    " a nested environment's Docker volumes: adele env snapshot|restore (workspace files: snapshot, undo)",
     usage=[
         "adele status [HOST]           # reachable from here; her revision; recent denials (of HOST)",
         "adele grants                  # the grants she applies: limits, spent, live",
@@ -85,12 +109,22 @@ TOOL = agentio.Tool(
         "adele env status [NAME] | adele env down [NAME|DIR]  # each service, its address; remove it all",
         "adele env exec [NAME] [--service S] [--timeout 100] -- CMD [ARG]...  # exits with CMD's status",
         "adele env collect | adele session end  # remove ended sessions' environments; end this session",
-        "exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command)",
+        "adele env snapshot [NAME] VOLUME [--note T] | adele env snapshots [NAME]  # an env's Docker volumes",
+        "adele env restore [NAME] SNAPSHOT [--yes|--dry-run] [--wait 120] | adele env snapshot-rm [NAME] S",
+        "  (the workspace's own files are snapshot and undo; these are a nested environment's volumes)",
+        "exit 4: beyond the grant; nothing performed; stdout is the grant envelope (operator's command);",
+        "  or env restore / snapshot-rm without --yes: stdout is the confirmation envelope (your command)",
         "extend is the OPERATOR's command, run on the host (docker exec timelike-adele adeled extend ...);",
         "every request, refusal and reap is in Adele's ledger (the operator's: adeled ledger)",
     ],
     probe=("status",),
     grant_envelope=True,  # exit 4 is the grant envelope; not --yes-confirmed (discovery revision 10)
+    # 014 plan R31: env restore and env snapshot-rm cannot be undone from what the tool shows, so rule 9 binds
+    # them (and rule 8: --dry-run). agentio admits a grant client that confirms only when confirm_protocol is
+    # declared; every other verb refuses --yes and --dry-run (see main), so the grant stays its confirmation.
+    mutating=True,
+    confirm_protocol=True,
+    destructive=True,
     # `env exec`'s command follows `--` (feature 010's split, before argparse). Its exit is passed through
     # by that verb alone: see env_exec. passes_exit is not declared Tool-wide: it would split every verb's
     # argv at its first plain word, and have conform wrap a local command adele does not run.
@@ -98,12 +132,13 @@ TOOL = agentio.Tool(
     exit_codes={
         agentio.EXIT_OK: "ok",
         agentio.EXIT_FAILURE: "unreachable, or the capability failed (env up: a build, lifecycle command"
-        " or service)",
+        " or service; env restore: a service not ready)",
         agentio.EXIT_USAGE: "usage; or name one with --grant; env: a setting no grant allows, a bad"
         " devcontainer.json",
-        agentio.EXIT_NOT_FOUND: "no grant, environment or service by that name; env: an image not on the"
-        " daemon",
-        agentio.EXIT_CONFIRM: "beyond the grant, nothing performed",
+        agentio.EXIT_NOT_FOUND: "no grant, environment, service, volume or snapshot by that name; env: an"
+        " image not on the daemon",
+        agentio.EXIT_CONFIRM: "beyond the grant, nothing performed; or env restore, snapshot-rm without"
+        " --yes",
         agentio.EXIT_TIMEOUT: "own limit fired (env up: not ready within --wait, a build or lifecycle bound;"
         " env exec: --timeout)",
     },
@@ -129,10 +164,13 @@ def configure(p: argparse.ArgumentParser) -> None:
         "capability",
         nargs="?",
         metavar="CAPABILITY",
-        help="request's capability; status: a HOST; env: up|status|down|exec|collect; session: end",
+        help="request's capability; status: a HOST; env: a verb (see usage); session: end",
     )
     p.add_argument(
         "action", nargs="?", metavar="ACTION", help="request's action; env: a DIR or an environment NAME"
+    )
+    p.add_argument(
+        "operand", nargs="?", metavar="ARG", help="env snapshot: VOLUME; restore, snapshot-rm: SNAPSHOT"
     )
     p.add_argument("--name", metavar="NAME", help="the resource's name")
     p.add_argument("--ttl", metavar="D", help="its lifetime, e.g. 30m or 1h (default: the grant's ttl)")
@@ -159,8 +197,9 @@ def configure(p: argparse.ArgumentParser) -> None:
         type=float,
         default=ENV_WAIT_S,
         metavar="S",
-        help=f"env up: ready within S s (at most {ENV_WAIT_MAX_S:g})",
+        help=f"env up, restore: ready within S s (at most {ENV_WAIT_MAX_S:g})",
     )
+    p.add_argument("--note", metavar="TEXT", help=f"env snapshot: a note kept with it (at most {NOTE_MAX})")
 
 
 class Reply:
@@ -413,6 +452,22 @@ def main(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         raise agentio.UsageError("--timeout must be more than 0", "e.g. --timeout 30")
     if args.verb is None:
         raise agentio.UsageError("no verb given", "use one of: adele status, adele grants, adele request …")
+    env_verb = args.capability if args.verb == "env" else None
+    if (args.yes or args.dry_run) and env_verb not in CONFIRMED_VERBS:
+        # The grant is the confirmation for every other request (discovery revision 10): --yes would confirm
+        # nothing, and nothing else here has a plan to show.
+        raise agentio.UsageError(
+            f"{'--yes' if args.yes else '--dry-run'} belongs to adele env restore and adele env snapshot-rm",
+            "every other request is confirmed by the operator's grant; drop the flag",
+        )
+    if args.note is not None and env_verb != "snapshot":
+        raise agentio.UsageError(
+            "--note belongs to adele env snapshot", "e.g. adele env snapshot db-data --note x"
+        )
+    if args.operand is not None and env_verb not in SNAPSHOT_VERBS:
+        raise agentio.UsageError(
+            f"unexpected argument {args.operand!r}", f"see {TOOL.name} --help for each verb's arguments"
+        )
     if args.verb == "status":
         if args.action is not None:
             raise agentio.UsageError("status takes at most one HOST", "e.g. adele status adele-standin:8481")
@@ -479,7 +534,8 @@ def env(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
     if sub not in ENV_VERBS:
         raise agentio.UsageError(
             f"env has no verb {sub!r}",
-            "use adele env up, adele env status, adele env down, adele env exec or adele env collect",
+            "use adele env up, adele env status, adele env down, adele env exec, adele env collect,"
+            " adele env snapshot, adele env snapshots, adele env restore or adele env snapshot-rm",
         )
     if sub == "status":
         return env_status(args.action, args.timeout)
@@ -489,6 +545,14 @@ def env(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
         return env_collect(args.timeout)
     if sub == "exec":
         return env_exec(args, ctx)
+    if sub == "snapshot":
+        return env_snapshot(args, ctx)
+    if sub == "snapshots":
+        return env_snapshots(args, ctx)
+    if sub == "restore":
+        return env_restore(args, ctx)
+    if sub == "snapshot-rm":
+        return env_snapshot_rm(args, ctx)
     ws = workspace()
     if sub == "down":
         if args.action and _ENV_NAME_RE.match(args.action):
@@ -675,39 +739,29 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
     lifecycle_failed(name, body)
     outcome = str(body.get("outcome"))
     services: list[dict[str, Any]] = [s for s in body.get("services") or [] if isinstance(s, dict)]
-    states: list[tuple[dict[str, Any], str, str]] = []
-    while True:
-        states = [(s, *readiness(s)) for s in services]
-        failed = [st for st in states if st[1] == "failed"]
-        if failed:
-            s, _, words = failed[0]
-            last = _last(s.get("last_lines"))
-            raise agentio.ToolError(
-                agentio.EXIT_FAILURE,
-                f"{name}: service {s.get('service')} {words}, read back from the daemon; it will not become"
-                " ready" + (f" (last lines: {last})" if last else ""),
-                f"look at the project's service; the environment is still up: {down}",
-            )
-        if services and all(st[1] in ("ready", "completed", "unchecked") for st in states):
-            break
-        left = deadline - time.monotonic()
-        if left <= 0:
-            lines = [_service_line(s, words) for s, _, words in states]
-            data = env_data(body, name, states, args.wait, time.monotonic() - start, ready=False)
-            n_ready = sum(st[1] in ("ready", "completed") for st in states)
-            return agentio.Result(
-                "adele",
-                "env up",
-                f"up {name}: not ready within {args.wait:g} s ({n_ready} of {len(states)} ready, read back"
-                f" from the daemon) — it stays up; remove it with {down}",
-                lines=lines,
-                data=data,
-                exit=agentio.EXIT_TIMEOUT,
-            )
-        time.sleep(min(ENV_POLL_S, max(left, 0.0)))
-        got = call("GET", f"/v1/envs/{name}", min(5.0, max(left, 0.5)))
-        if got.status == 200 and isinstance(got.body.get("services"), list):
-            services = [s for s in got.body["services"] if isinstance(s, dict)]
+    states, how = await_ready(name, services, deadline)
+    if how == "failed":
+        s, _, words = next(st for st in states if st[1] == "failed")
+        last = _last(s.get("last_lines"))
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{name}: service {s.get('service')} {words}, read back from the daemon; it will not become"
+            " ready" + (f" (last lines: {last})" if last else ""),
+            f"look at the project's service; the environment is still up: {down}",
+        )
+    if how == "late":
+        lines = [_service_line(s, words) for s, _, words in states]
+        data = env_data(body, name, states, args.wait, time.monotonic() - start, ready=False)
+        n_ready = sum(st[1] in ("ready", "completed") for st in states)
+        return agentio.Result(
+            "adele",
+            "env up",
+            f"up {name}: not ready within {args.wait:g} s ({n_ready} of {len(states)} ready, read back"
+            f" from the daemon) — it stays up; remove it with {down}",
+            lines=lines,
+            data=data,
+            exit=agentio.EXIT_TIMEOUT,
+        )
     took = time.monotonic() - start
     lines = [_service_line(s, words) for s, _, words in states]
     lines += _up_extra_lines(body)
@@ -717,24 +771,91 @@ def env_up(args: argparse.Namespace, ctx: agentio.Context, ws: str) -> agentio.R
             "unset in the workspace: " + ", ".join(unset) + " — put them in the project's .env (the agent's"
             " environment is not read)"
         )
-    # Rule 13: the verdict fits 200 columns with a lane's names; the grant and expiry go on the first line.
-    said = ", unchanged (nothing created or recorded)" if outcome == "unchanged" else ""
+    lines.insert(
+        0,
+        f"grant {body.get('grant')} · expires {body.get('expires_at')} · local: no cost"
+        f" · down: adele env down {name}",
+    )
+    if outcome == "unchanged":
+        lines.insert(1, "unchanged: it was already up as asked; nothing created or recorded")
+    return agentio.Result(
+        "adele",
+        "env up",
+        up_verdict(name, body, states, took, args.wait),
+        lines=lines,
+        data=env_data(body, name, states, args.wait, took),
+    )
+
+
+State = tuple[dict[str, Any], str, str]  # a service, its readiness word, its words (readiness())
+
+
+def await_ready(name: str, services: list[dict[str, Any]], deadline: float) -> tuple[list[State], str]:
+    """Poll Adele's read-back of NAME until every service is ready, completed or unchecked ("ready"), one
+    has failed ("failed"), or the deadline passes ("late"). `env up` and `env restore` both wait here, so a
+    restore's readiness is up's exactly (014 FR-38, plan R27 step 7): read back, ports probed from here."""
+    while True:
+        states: list[State] = [(s, *readiness(s)) for s in services]
+        if any(st[1] == "failed" for st in states):
+            return states, "failed"
+        if services and all(st[1] in ("ready", "completed", "unchecked") for st in states):
+            return states, "ready"
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return states, "late"
+        time.sleep(min(ENV_POLL_S, max(left, 0.0)))
+        got = call("GET", f"/v1/envs/{name}", min(5.0, max(left, 0.5)))
+        if got.status == 200 and isinstance(got.body.get("services"), list):
+            services = [s for s in got.body["services"] if isinstance(s, dict)]
+
+
+def probed(svc: dict[str, Any]) -> bool:
+    """readiness() probed this service's ports: running, no healthcheck, ports named (014 plan R32 B)."""
+    return str(svc.get("state", "")) == "running" and not svc.get("health") and bool(svc.get("ports"))
+
+
+def _counts(states: list[State]) -> tuple[str, str]:
+    """(long, short) readiness counts for a verdict. A service with no readiness signal is counted apart,
+    never ready (decision C); its short form is the data's own word for it."""
     n_ready = sum(st[1] in ("ready", "completed") for st in states)
     n_unchecked = sum(st[1] == "unchecked" for st in states)
-    counts = [f"{n_ready} ready"] if n_ready or not n_unchecked else []
+    long = [f"{n_ready} ready"] if n_ready or not n_unchecked else []
+    short = list(long)
     if n_unchecked:
-        counts.append(f"{n_unchecked} running with no readiness check")  # never counted ready (decision C)
+        long.append(f"{n_unchecked} running, no readiness check")
+        short.append(f"{n_unchecked} unchecked")
+    return ", ".join(long), ", ".join(short)
+
+
+def _probe_clause(states: list[State]) -> str:
+    """ ", ports probed from the agent container" when a port was probed, else nothing (014 FR-44, D22 B)."""
+    return f", ports probed {VANTAGE}" if any(probed(s) for s, _, _ in states) else ""
+
+
+def fit(parts: list[tuple[str, str]], order: list[int]) -> str:
+    """A verdict of (long, short) parts, each long until the whole passes VERDICT_MAX; then the parts in
+    `order` take their short form, one by one, until it fits (014 plan R32 A). What a short form leaves out
+    is in the result's lines and data."""
+    chosen = [long for long, _ in parts]
+    for i in order:
+        if len("".join(chosen)) <= VERDICT_MAX:
+            break
+        chosen[i] = parts[i][1]
+    return "".join(chosen)
+
+
+def up_verdict(name: str, body: dict[str, Any], states: list[State], took: float, wait: float) -> str:
+    """up's verdict (014 plan R32): it fits rule 13's line at a 30-character name. "unchanged" leads, its
+    meaning on the next line; "local: no cost" is on the grant's line; "ports probed" only when one was."""
+    said = "unchanged, " if body.get("outcome") == "unchanged" else ""
     kind = "devcontainer, " if body.get("kind") == "devcontainer" else ""
-    verdict = (
-        f"up {name}: {kind}{', '.join(counts)}{said} in {took:.1f} s of {args.wait:g} s · read back, ports"
-        f" probed {VANTAGE} · local: no cost · host git {body.get('host_git') or 'unknown'}"
+    long, short = _counts(states)
+    head = f"up {name}: {said}{kind}"
+    tail = (
+        f" in {took:.1f} s of {wait:g} s · read back{_probe_clause(states)}"
+        f" · host git {body.get('host_git') or 'unknown'}"
     )
-    lines.insert(
-        0, f"grant {body.get('grant')} · expires {body.get('expires_at')} · down: adele env down {name}"
-    )
-    return agentio.Result(
-        "adele", "env up", verdict, lines=lines, data=env_data(body, name, states, args.wait, took)
-    )
+    return fit([(head, head), (long, short), (tail, tail)], [1])
 
 
 def _entries(body: dict[str, Any], key: str) -> list[dict[str, Any]]:
@@ -814,7 +935,7 @@ def _up_extra_lines(body: dict[str, Any]) -> list[str]:
 def env_data(
     body: dict[str, Any],
     name: str,
-    states: list[tuple[dict[str, Any], str, str]],
+    states: list[State],
     wait: float,
     took: float,
     ready: bool = True,
@@ -839,17 +960,22 @@ def env_data(
         # Adele's own share, measured by her: the sandbox's phases, the lock, compose (lane 13s0a, item A).
         "adele_timings": body.get("timings"),
         "vantage": VANTAGE,
-        "services": [
-            {
-                **{k: s.get(k) for k in ("service", "state", "health", "exit_code", "alias", "ports")},
-                "one_shot": s.get("one_shot") is True,
-                "last_lines": [str(x) for x in s.get("last_lines") or []],
-                "ready": st,
-                "addresses": _addresses(s),
-            }
-            for s, st, _ in states
-        ],
+        "services": services_data(states),
     }
+
+
+def services_data(states: list[State]) -> list[dict[str, Any]]:
+    """Each service as `env up`'s data has it, its readiness word read back (and `env restore`'s)."""
+    return [
+        {
+            **{k: s.get(k) for k in ("service", "state", "health", "exit_code", "alias", "ports")},
+            "one_shot": s.get("one_shot") is True,
+            "last_lines": [str(x) for x in s.get("last_lines") or []],
+            "ready": st,
+            "addresses": _addresses(s),
+        }
+        for s, st, _ in states
+    ]
 
 
 def env_down(name: str, timeout: float) -> agentio.Result:
@@ -1062,8 +1188,15 @@ def _left(left: Any) -> str:
 
 def env_collect(timeout: float) -> agentio.Result:
     """014 FR-29, plan R19: one collection pass now, the reaper's own; each removal read back by Adele."""
-    t = max(timeout, 120.0)
+    t = max(timeout, COLLECT_HTTP_S)
     reply = call("POST", "/v1/envs/collect", t, _caller())
+    if reply.status == 0 and reply.timed_out:
+        raise agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"Adele at {base_url()} gave no answer to collect within {t:g} s ({VANTAGE}); her pass starts no"
+            f" removal after {COLLECT_PASS_S:g} s, and what it leaves her reaper's next pass collects",
+            "see what is still live with adele env status, or ask the operator whether Adele is running",
+        )
     if reply.status == 0:
         raise unreachable(reply, t)
     if reply.status != 200:
@@ -1075,9 +1208,10 @@ def env_collect(timeout: float) -> agentio.Result:
     if failed:
         verdict += " (" + "; ".join(f"{f.get('name')}: {f.get('cause')}" for f in failed) + ")"
     verdict += " · read back from the daemon"
+    by = " (recorded by another pass)"  # lane 13s2a: another reaper ended it first; the row is that reaper's
     lines = [
         f"collected {c.get('name')}: {c.get('cause')} · {_removed(c.get('removed'))}"
-        f" · ledger #{c.get('ledger_id')}"
+        f" · ledger #{c.get('ledger_id')}" + (by if c.get("already_recorded") else "")
         for c in collected
     ]
     lines += [
@@ -1123,6 +1257,483 @@ def session(args: argparse.Namespace) -> agentio.Result:
         )
     data = {"session": sid, "outcome": outcome, "ended_at": at, "ledger_id": row}
     return agentio.Result("adele", "session end", verdict, data=data)
+
+
+# ── adele env snapshot, snapshots, restore, snapshot-rm (feature 13, slice 2) ───────────────────
+
+
+def _int(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _size(value: Any) -> str:
+    """A measured size in binary units, as `run` prints it (`48.0 KiB`); `?` when Adele did not say."""
+    n = _int(value)
+    return agentio.size(n) if n is not None and n >= 0 else "?"
+
+
+def _cap_size(value: Any) -> str:
+    """A configured size: whole units when it is one (`1 GiB`, `64 KiB`), else as measured."""
+    n = _int(value)
+    if n is None or n < 0:
+        return "?"
+    for unit, k in (("GiB", 1 << 30), ("MiB", 1 << 20), ("KiB", 1 << 10)):
+        if n >= k and n % k == 0:
+            return f"{n // k} {unit}"
+    return agentio.size(n)
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def _seconds(ms: Any) -> float | None:
+    n = _int(ms)
+    return None if n is None or n < 0 else n / 1000
+
+
+def _named(value: Any) -> list[str]:
+    """Service names from a list of names, or of {"service": …} entries (snapshot's `paused`)."""
+    out: list[str] = []
+    for v in value if isinstance(value, list) else []:
+        name = v.get("service") if isinstance(v, dict) else v
+        if isinstance(name, str) and name:
+            out.append(name)
+    return out
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _cap_data(body: dict[str, Any]) -> dict[str, Any] | None:
+    raw = body.get("cap")
+    if not isinstance(raw, dict):
+        return None
+    return {k: raw.get(k) for k in ("bytes", "used", "left", "store")}
+
+
+def _snapshot_record(snap: dict[str, Any], *keys: str) -> dict[str, Any]:
+    return {k: snap.get(k) for k in keys}
+
+
+SNAPSHOT_KEYS = ("id", "volume", "bytes", "files", "sockets", "digest", "taken_at", "note")
+LISTED_KEYS = ("id", "volume", "bytes", "files", "digest", "taken_at", "note")
+
+
+def _target_and(args: argparse.Namespace, verb: str, what: str) -> tuple[str, str]:
+    """`adele env VERB [NAME] OPERAND`: (the environment, the operand). NAME is an environment's name, or
+    a project DIR as for `down`; absent, it is the project directory's environment (or --project's)."""
+    first, second = (args.action, args.operand) if args.operand is not None else (None, args.action)
+    if not second:
+        raise agentio.UsageError(f"env {verb} needs a {what}", f"e.g. adele env {verb} [NAME] {what}")
+    if first and _ENV_NAME_RE.match(first):
+        return first, second
+    return env_name(args, project_dir(first, workspace())), second
+
+
+def _snapshot_payload(args: argparse.Namespace, action: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Under the environment's own grant unless --grant names one (contract § Slice 2)."""
+    who = _caller()
+    return {
+        **who,
+        "grant": args.grant or "",
+        "capability": "docker.compose",
+        "action": action,
+        "params": params,
+    }
+
+
+def _not_found(body: dict[str, Any], name: str) -> agentio.ToolError:
+    """Exit 3 naming what does exist: the live environments, this one's volumes, or its snapshots (FR-32)."""
+    what = str(body.get("error") or f"no environment named {name}")
+    said = [str(body["remediation"])] if body.get("remediation") else []
+    for key, label, none in (
+        ("envs", "live environments", "no environment is live"),
+        ("volumes", f"{name}'s volumes", f"{name} has no named volume"),
+        ("snapshots", f"{name}'s snapshots", f"{name} has no snapshot"),
+    ):
+        listed = body.get(key)
+        if isinstance(listed, list):
+            names = [str(e.get("name") if isinstance(e, dict) else e) for e in listed]
+            said.append(f"{label}: {', '.join(names)}" if names else none)
+    return agentio.ToolError(agentio.EXIT_NOT_FOUND, what, "; ".join(said) or "adele env status lists them")
+
+
+def _snapshot_failed(
+    ctx: agentio.Context, payload: dict[str, Any], reply: Reply, name: str, bound: float
+) -> agentio.Result:
+    """Every answer but a 200, for the four slice-2 verbs (contract § Slice 2: 3, 4, 1, 124). A 403 is the
+    grant envelope (the cap); everything else is raised."""
+    action = str(payload.get("action"))
+    body = reply.body
+    if reply.timed_out:
+        raise agentio.ToolError(
+            agentio.EXIT_TIMEOUT,
+            f"Adele did not answer env {action} of {name} within {bound:g} s ({VANTAGE})",
+            f"she finishes and records what she started, and never leaves a service paused or stopped:"
+            f" adele env snapshots {name}; adele env status {name}",
+        )
+    if reply.status == 0:
+        raise unreachable(reply, bound)
+    if reply.status == 403:
+        return env_refused(ctx, payload, reply, scope=action)
+    if reply.status == 404:
+        raise _not_found(body, name)
+    if reply.status in (502, 504):
+        raise _snapshot_error(action, name, payload, reply)
+    raise answered_error(reply)
+
+
+def _snapshot_error(action: str, name: str, payload: dict[str, Any], reply: Reply) -> agentio.ToolError:
+    """502 and 504: the cause, then what Adele says she undid and what is left (FR-39, R27, R28)."""
+    body = reply.body
+    params = _dict(payload.get("params"))
+    cause = str(body.get("error") or f"Adele answered HTTP {reply.status}")
+    late = reply.status == 504 or body.get("timed_out") is True
+    said: list[str] = []
+    if action == "snapshot":
+        if body.get("partial_removed") is True:
+            said.append("the partial snapshot was removed, read back gone")
+        elif body.get("partial_removed") is False:
+            said.append("the partial snapshot is still there (Adele's next pass removes it)")
+        if _named(body.get("unpaused")):
+            said.append(f"unpaused {', '.join(_named(body.get('unpaused')))}, read back running")
+        if _named(body.get("still_paused")):
+            said.append(f"still paused: {', '.join(_named(body.get('still_paused')))}")
+        what = f"env snapshot of {params.get('volume')} in {name} failed: {cause}"
+        remedy = f"nothing was kept; adele env snapshots {name} lists what there is"
+        if _named(body.get("still_paused")):
+            remedy = f"Adele unpauses them on her next pass; adele env status {name} shows them"
+    elif action == "restore":
+        snap = params.get("snapshot")
+        if body.get("partial") is True:
+            said.append("the volume's contents are partial")
+            if _named(body.get("started")):
+                said.append(f"started again: {', '.join(_named(body.get('started')))}")
+            remedy = f"run adele env restore {name} {snap} --yes again, or adele env down {name}"
+        else:
+            if body.get("stopped") == []:
+                said.append("nothing was stopped or changed")
+            remedy = f"adele env snapshots {name} lists its snapshots; adele env status {name} its services"
+        what = f"env restore of {name} from {snap} failed: {cause}"
+    else:
+        what = f"env {action} of {name} failed: {cause}"
+        remedy = f"adele env snapshots {name} lists what there is"
+    if said:
+        what += " (" + "; ".join(said) + ")"
+    remedy = str(body.get("remediation") or remedy)
+    return agentio.ToolError(agentio.EXIT_TIMEOUT if late else agentio.EXIT_FAILURE, what, remedy)
+
+
+def env_snapshot(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    """014 FR-31, FR-35, plan R26: one named volume, copied with its users paused, the copy's digest read
+    back equal to the source's. Over the grant's cap: the grant envelope, nothing written (FR-34)."""
+    name, volume = _target_and(args, "snapshot", "VOLUME")
+    note = args.note or ""
+    if len(note) > NOTE_MAX:
+        raise agentio.UsageError(f"--note is {len(note)} characters; at most {NOTE_MAX}", "shorten it")
+    payload = _snapshot_payload(args, "snapshot", {"name": name, "volume": volume, "note": note})
+    bound = max(args.timeout, SNAPSHOT_HTTP_S)
+    reply = call("POST", "/v1/requests", bound, payload)
+    if reply.status != 200:
+        return _snapshot_failed(ctx, payload, reply, name, bound)
+    body = reply.body
+    snap = _dict(body.get("snapshot"))
+    if body.get("outcome") != "performed" or not snap.get("id"):
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele answered the snapshot of {volume} in {name} with outcome {body.get('outcome')!r} and no"
+            " snapshot id",
+            f"adele env snapshots {name} lists what was kept",
+        )
+    sid, vol = str(snap["id"]), str(snap.get("volume") or volume)
+    files, sockets = _int(snap.get("files")), _int(snap.get("sockets")) or 0
+    head = f"snapshot {name} {vol}: {sid}, {_size(snap.get('bytes'))}"
+    head += f", {_plural(files, 'file')}" if files is not None else ""
+    head += f", {_plural(sockets, 'socket')} not copied" if sockets else ""
+    paused, paused_s = _named(body.get("paused")), _seconds(body.get("paused_ms"))
+    took = f" for {paused_s:.1f} s" if paused_s is not None else ""
+    parts = [(head, head)]
+    if paused:  # said only when something was paused (each clause says what was done)
+        parts.append((f" · paused {', '.join(paused)}{took}", f" · paused {len(paused)}{took}"))
+    cap = _cap_data(body)
+    if cap is not None and _int(cap.get("bytes")) is not None and _int(cap.get("left")) is not None:
+        said = f" · cap {_cap_size(cap['bytes'])}, {_size(cap['left'])} left"
+        parts.append((said, said))
+    verdict = fit(parts, [1] if paused else [])
+    lines = []
+    if paused:
+        lines.append(f"paused {', '.join(paused)}{took}, then unpaused, read back running")
+    lines.append(f"digest {snap.get('digest')}: the copy's, read back equal to the source's")
+    if note:
+        lines.append(f"note: {note}")
+    lines.append(
+        f"restore it: adele env restore {name} {sid} --yes · remove it: adele env snapshot-rm {name} {sid}"
+    )
+    data = {
+        "name": name,
+        "snapshot": _snapshot_record(snap, *SNAPSHOT_KEYS),
+        "paused": paused,
+        "paused_s": paused_s,
+        "cap": cap,
+        "ledger_id": body.get("ledger_id"),
+    }
+    return agentio.Result("adele", "env snapshot", verdict, lines=lines, data=data)
+
+
+def _list_snapshots(
+    args: argparse.Namespace, ctx: agentio.Context, name: str
+) -> tuple[agentio.Result | None, dict[str, Any]]:
+    """(a 403's envelope, or None; the snapshots answer). Raises on every other failure."""
+    payload = _snapshot_payload(args, "snapshots", {"name": name})
+    reply = call("POST", "/v1/requests", args.timeout, payload)
+    if reply.status != 200:
+        return _snapshot_failed(ctx, payload, reply, name, args.timeout), {}
+    return None, reply.body
+
+
+def env_snapshots(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    """014 FR-31: this environment's snapshots, newest first, with the cap used and left. Nothing written."""
+    if args.action and _ENV_NAME_RE.match(args.action):
+        name = args.action
+    else:
+        name = env_name(args, project_dir(args.action, workspace()))
+    refused_, body = _list_snapshots(args, ctx, name)
+    if refused_ is not None:
+        return refused_
+    items = _entries(body, "snapshots")
+    volumes = [str(v) for v in body.get("volumes") or []]
+    cap = _cap_data(body)
+    lines = [
+        f"{e.get('id')}  {e.get('volume')}  {_size(e.get('bytes'))}"
+        f"  {_plural(_int(e.get('files')) or 0, 'file')}  {e.get('taken_at')}"
+        + (f"  {e.get('note')}" if e.get("note") else "")
+        for e in items
+    ]
+    lines.append(f"volumes: {', '.join(volumes)}" if volumes else f"volumes: {name} has no named volume")
+    verdict = f"snapshots {name}: {len(items)}"
+    if cap is not None and _int(cap.get("bytes")) is not None and _int(cap.get("used")) is not None:
+        verdict += f" · {_size(cap['used'])} of {_cap_size(cap['bytes'])} used"
+        if _int(cap.get("left")) is not None:
+            store = f" (store: {cap.get('store')})" if cap.get("store") else ""
+            lines.append(f"cap {_cap_size(cap['bytes'])}: {_size(cap['left'])} left{store}")
+    data = {
+        "name": name,
+        "snapshots": [_snapshot_record(e, *LISTED_KEYS) for e in items],
+        "cap": cap,
+        "volumes": volumes,
+    }
+    return agentio.Result("adele", "env snapshots", verdict, lines=lines, data=data)
+
+
+def env_restore(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    """014 FR-38, plan R27: rule 9's confirm protocol, then Adele's restore, then up's readiness wait."""
+    if not math.isfinite(args.wait) or not 0 < args.wait <= ENV_WAIT_MAX_S:
+        raise agentio.UsageError(
+            f"--wait must be more than 0 and at most {ENV_WAIT_MAX_S:g}", "e.g. --wait 120"
+        )
+    name, sid = _target_and(args, "restore", "SNAPSHOT")
+    if args.dry_run or not args.yes:
+        return _restore_plan(args, ctx, name, sid)
+    payload = _snapshot_payload(args, "restore", {"name": name, "snapshot": sid, "dry_run": False})
+    bound = max(args.timeout, SNAPSHOT_HTTP_S)
+    reply = call("POST", "/v1/requests", bound, payload)
+    if reply.status != 200:
+        return _snapshot_failed(ctx, payload, reply, name, bound)
+    body = reply.body
+    snap = _dict(body.get("snapshot"))
+    vol = str(body.get("volume") or snap.get("volume") or "?")
+    if body.get("outcome") != "performed":
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele answered the restore of {name} from {sid} with outcome {body.get('outcome')!r}",
+            f"adele env status {name} shows its services; adele env snapshots {name} its snapshots",
+        )
+    digest, recorded = body.get("digest"), snap.get("digest")
+    if not digest or (recorded and digest != recorded):
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{name}: Adele answered restored from {sid}, but the digest she read back ({digest!r}) is not"
+            f" the snapshot's record ({recorded!r})",
+            f"the volume's contents are not known to be the snapshot's: run adele env restore {name} {sid}"
+            f" --yes again, or adele env down {name}",
+        )
+    stopped, stopped_s = _named(body.get("stopped")), _seconds(body.get("stopped_ms"))
+    services = [s for s in body.get("services") or [] if isinstance(s, dict)]
+    start = time.monotonic()
+    states, how = await_ready(name, services, start + args.wait)
+    took = time.monotonic() - start
+    after = f"the data stays restored; adele env status {name} shows it, adele env down {name} removes it"
+    lines = [_service_line(s, words) for s, _, words in states]
+    if stopped:
+        secs = f" for {stopped_s:.1f} s" if stopped_s is not None else ""
+        lines.append(f"stopped {', '.join(stopped)}{secs}, then started again (read back by Adele)")
+    lines.append(
+        f"digest {digest}: the volume's, read back equal to {sid}'s record · ledger #{body.get('ledger_id')}"
+    )
+    data = {
+        "name": name,
+        "snapshot": sid,
+        "volume": vol,
+        "stopped": stopped,
+        "stopped_s": stopped_s,
+        "digest": digest,
+        "services": services_data(states),
+        "ready": how == "ready",
+        "wait_s": args.wait,
+        "seconds": round(took, 3),
+        "adele_readiness": body.get("adele_readiness"),
+        "ledger_id": body.get("ledger_id"),
+        "vantage": VANTAGE,
+        "dry_run": False,
+    }
+    head = f"restore {name} {vol} from {sid}: digest read back"
+    if how == "failed":
+        s, _, words = next(st for st in states if st[1] == "failed")
+        last = _last(s.get("last_lines"))
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"{head}; service {s.get('service')} {words}, read back from the daemon; it will not become ready"
+            + (f" (last lines: {last})" if last else ""),
+            after,
+        )
+    if how == "late":
+        n_ready = sum(st[1] in ("ready", "completed") for st in states)
+        return agentio.Result(
+            "adele",
+            "env restore",
+            f"{head} · not ready within {args.wait:g} s ({n_ready} of {len(states)} ready, read back);"
+            " the data stays restored",
+            lines=[*lines, f"next: adele env status {name} shows it · adele env down {name} removes it"],
+            data={**data, "ready": False},
+            exit=agentio.EXIT_FAILURE,
+            footer=1,  # the commands, never cut
+        )
+    long, short = _counts(states)
+    parts = [(head, head)]
+    if stopped:  # said only when something was stopped
+        secs = f" for {stopped_s:.1f} s" if stopped_s is not None else ""
+        parts.append((f" · stopped {', '.join(stopped)}{secs}", f" · stopped {len(stopped)}"))
+    parts.append((f" · {long}", f" · {short}"))
+    tail = f" in {took:.1f} s of {args.wait:g} s" + (
+        f" · ports probed {VANTAGE}" if _probe_clause(states) else ""
+    )
+    parts.append((tail, tail))
+    order = [1, 2] if stopped else [1]
+    return agentio.Result("adele", "env restore", fit(parts, order), lines=lines, data=data)
+
+
+def _restore_plan(args: argparse.Namespace, ctx: agentio.Context, name: str, sid: str) -> agentio.Result:
+    """Rule 8 and rule 9 (FR-38): Adele's plan, `dry_run: true`, which stops and writes nothing. With
+    --dry-run it is printed (exit 0); without --yes it is the confirmation envelope's plan (exit 4)."""
+    payload = _snapshot_payload(args, "restore", {"name": name, "snapshot": sid, "dry_run": True})
+    reply = call("POST", "/v1/requests", args.timeout, payload)
+    if reply.status != 200:
+        return _snapshot_failed(ctx, payload, reply, name, args.timeout)
+    body = reply.body
+    if body.get("outcome") != "plan":
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele answered a restore's plan with outcome {body.get('outcome')!r}, not a plan",
+            f"nothing is confirmed on her word; adele env status {name} shows the environment",
+        )
+    snap = _dict(body.get("snapshot"))
+    vol = str(body.get("volume") or snap.get("volume") or "?")
+    stop = _named(body.get("stop"))
+    stopping = f"stop {', '.join(stop)}" if stop else "stop nothing (no running service mounts it)"
+    files = _int(snap.get("files"))
+    plan = [
+        f"replace volume {vol} of {name} with {sid}; {stopping}",  # rule 14's line quotes it whole
+        f"snapshot {sid}: {_size(snap.get('bytes'))}"
+        + (f", {_plural(files, 'file')}" if files is not None else "")
+        + f", taken {snap.get('taken_at')}"
+        + (f", note: {snap.get('note')}" if snap.get("note") else ""),
+    ]
+    if stop:
+        plan.append(
+            f"then start {', '.join(stop)} again and wait for readiness (within --wait {args.wait:g} s)"
+        )
+    plan.append(
+        f"the volume's present contents are not kept: adele env snapshot {name} {vol} first, if they matter"
+    )
+    if not args.dry_run:
+        return agentio.confirm_required(ctx, target="docker.compose", scope="env restore", plan=plan)
+    would = f"would stop {', '.join(stop)}" if stop else "would stop nothing"
+    head = f"restore {name} {vol} from {sid}: dry run, nothing changed"
+    return agentio.Result(
+        "adele",
+        "env restore",
+        fit([(head, head), (f" · {would}", f" · would stop {len(stop)}")], [1]),
+        lines=plan,
+        data={"name": name, "snapshot": sid, "volume": vol, "stop": stop, "dry_run": True},
+    )
+
+
+def env_snapshot_rm(args: argparse.Namespace, ctx: agentio.Context) -> agentio.Result:
+    """014 FR-31: remove one snapshot, freeing cap space. It deletes the only copy of a past state, rule 9's
+    own case (plan R31): without --yes, exit 4 naming the snapshot and its size (read from `snapshots`)."""
+    name, sid = _target_and(args, "snapshot-rm", "SNAPSHOT")
+    if args.dry_run or not args.yes:
+        refused_, body = _list_snapshots(args, ctx, name)
+        if refused_ is not None:
+            return refused_
+        items = _entries(body, "snapshots")
+        found = next((e for e in items if e.get("id") == sid), None)
+        if found is None:
+            raise _not_found(
+                {"error": f"no snapshot {sid} in {name}", "snapshots": [e.get("id") for e in items]}, name
+            )
+        plan = [
+            f"remove snapshot {sid} of {found.get('volume')} ({_size(found.get('bytes'))}, taken"
+            f" {found.get('taken_at')}): the only copy of that state",
+        ]
+        if found.get("note"):
+            plan.append(f"its note: {found.get('note')}")
+        if not args.dry_run:
+            return agentio.confirm_required(ctx, target="docker.compose", scope="env snapshot-rm", plan=plan)
+        return agentio.Result(
+            "adele",
+            "env snapshot-rm",
+            f"snapshot-rm {name} {sid}: dry run, nothing removed · would free {_size(found.get('bytes'))}",
+            lines=plan,
+            data={
+                "name": name,
+                "snapshot": sid,
+                "volume": found.get("volume"),
+                "bytes": found.get("bytes"),
+                "dry_run": True,
+            },
+        )
+    payload = _snapshot_payload(args, "snapshot-rm", {"name": name, "snapshot": sid})
+    bound = max(args.timeout, SNAPSHOT_RM_HTTP_S)
+    reply = call("POST", "/v1/requests", bound, payload)
+    if reply.status != 200:
+        return _snapshot_failed(ctx, payload, reply, name, bound)
+    body = reply.body
+    if body.get("outcome") != "removed":
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"Adele answered the removal of {sid} in {name} with outcome {body.get('outcome')!r}",
+            f"adele env snapshots {name} lists what is there",
+        )
+    cap = _cap_data(body)
+    lines = [f"ledger #{body.get('ledger_id')}"]
+    if cap is not None and _int(cap.get("left")) is not None:
+        lines.insert(0, f"cap {_cap_size(cap.get('bytes'))}: {_size(cap.get('left'))} left")
+    return agentio.Result(
+        "adele",
+        "env snapshot-rm",
+        f"snapshot-rm {name} {sid}: removed, read back · {_size(body.get('bytes'))} freed",
+        lines=lines,
+        data={
+            "name": name,
+            "snapshot": sid,
+            "freed_bytes": body.get("bytes"),
+            "cap": cap,
+            "ledger_id": body.get("ledger_id"),
+        },
+    )
 
 
 if __name__ == "__main__":

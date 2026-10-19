@@ -350,3 +350,156 @@ FLAGGED: the lines kept are the failing step's own, with the daemon's `--->` and
 ASSUMED: 196's cell asserts the instruction and its position, the daemon's message with the command left as a wildcard, and that no `Step ` or `--->` is in the line (confidence: high)
 ABSENT: no Docker here, so 196 has not run against a daemon; no broker unit drives a failed build (the engine units and 196 cover the mapping); C (002's bench probe) not touched, as ruled; the spec's FR-24 ("naming the step") left as it stands, since it is still true
 SCOPE: in (6 changed files) (task has FLAGGED: yes)
+
+## Cycle 9 — slice 2 (`bridge/sends/13-rev17-20261019-034239.md`; branch `modify/014-slice-2`)
+
+### T060: the ledger's Kept and Ended writers, open holds, snapshot queries
+**Started:** 2026-10-19T03:57:25Z | **Completed:** 2026-10-19T04:00:30Z
+
+INHERITED: Cycle 6's Recorded writer and the live queries' expiry rule (slice 1, T039)
+FLAGGED: the snapshot's record (digest, bytes, files) lives in its row's undo document beside the removal it names, with no schema change — chose that over a schema-3 column because the ledger's readers (`adeled ledger`, the reaper) take rows as they are and a migration on the operator's file is a risk this slice does not need; the record must be outside the volume it vouches for, and the ledger is Adele's only durable record (confidence: medium)
+ASSUMED: an ending is any row whose ref is the hold or snapshot (an unpause, a start, or a reaped/gone removal), checked in one transaction so a request and the recovery pass end a hold once (confidence: high)
+ASSUMED: snapshot rows' resource is `ENV/ID`, matched by prefix length, so tl-a-1 never lists tl-a-10's (confidence: high)
+ABSENT: no schema change, and no reader of the undo's record yet (T064 is the first)
+SCOPE: out — adele/internal/ledger/slice2.go (1 of 3 changed files) (task has FLAGGED: yes) — the new writers went in a file of their own beside ledger.go and query.go, which tasks.md named
+
+### T061: grants' optional snapshots and snapshot-store keys
+**Started:** 2026-10-19T04:00:39Z (T060's commit) | **Completed:** 2026-10-19T04:02:06Z
+
+INHERITED: T060's `snapshots` among the ledger's extendable limits
+FLAGGED: the default cap is 1 GiB per environment — chose 1 GiB over 256 MiB because a development database's volume is commonly hundreds of MiB, and over unlimited because T2 asks for a capped scope; the README and the spec give it (confidence: medium)
+FLAGGED: `snapshot-store = tmpfs` is a grant key (the operator's), not an Adele setting — chose a grant key over an environment variable on Adele because the lane needs one bounded store for the disk-full cell without making every other cell's snapshots tmpfs, and over simulating ENOSPC because a simulated full store tests a branch, not a store; it is also a real choice for an operator who wants snapshots bounded in memory (confidence: medium)
+ASSUMED: a size needs a unit unless it is 0 (`64` alone is refused), so a cap is never misread by a factor of 1024 (confidence: high)
+ASSUMED: TestLoadValid's expected grant gains the two defaults: a grant that leaves the keys out gets them, which is the change, so the expectation moved and no assertion was loosened (confidence: high)
+ABSENT: snapshot-store is not extendable (it is where, not how much); no KB/MB (decimal) units
+SCOPE: out — adele/internal/grants/grants_test.go (1 of 5 changed files) (task has FLAGGED: yes)
+
+### T063: the engine's snapshot volumes, pause/unpause/stop/start, mounts, the helper's capabilities, snapshot counts
+**Started:** 2026-10-19T04:02:15Z (T061's commit) | **Completed:** 2026-10-19T04:04:22Z
+
+INHERITED: slice 0's Down and Count, slice 1's sandbox (Run) and its sweep
+ASSUMED: a container's mounts come from the inspect Containers already makes, so finding a volume's users costs no extra call (confidence: high)
+ASSUMED: a pause of a paused container, an unpause of a running one, a stop of a stopped one and a start of a running one answer 409 or 304 and are not errors; the caller reads the state back either way (cross-stack P004) (confidence: medium — the 409 for unpause is the daemon's documented answer, not seen here)
+FLAGGED: the sandbox sweep now matches the sandbox label with any value, so a volume helper Adele left behind is swept too; the sweep's unit asserted the filter's old value and now asserts the label's key (confidence: high)
+ABSENT: no unit drives Containers' mounts through the fake daemon here (the broker's units do); no Docker, so the daemon's own answers to pause, unpause and volume create are not seen
+SCOPE: out — adele/internal/engine/engine_test.go (1 of 5 changed files) (task has FLAGGED: yes)
+
+### T062: `adele/internal/volcopy/` and `adeled volume` (delegated)
+**Started:** 2026-10-19T03:57:25Z (delegated at the start of implement) | **Completed:** 2026-10-19T04:15:25Z (reviewed and committed)
+
+INHERITED: plan R24 (the digest) and R25 (the helper's exits); data-model § Slice 2
+FLAGGED (delegate): device exit code — chose exit 12 (R25, the task) over R24's "exit 1 naming it" because R25 is the helper's exit table and the task restates 12; plan R24 and R25 disagree and the plan should be reconciled by whoever owns it (confidence: high)
+FLAGGED (delegate): bad flags / unknown operation exit — chose exit 2 (exitUsage, as resolve and context do) over 1 (R25's "1 anything else") because the task said to follow the other subcommands; Adele will see 2 only from her own malformed invocation, and must treat any exit outside 0/10/11/12 as a failure (confidence: medium)
+FLAGGED (delegate): exit 10 still prints the JSON line (bytes/files/sockets, no digest) over printing nothing, because R26 step 5's refusal needs the measured bytes ("needed"); every other non-zero exit prints nothing on stdout (confidence: medium)
+FLAGGED (delegate): lexical order is full-path byte order (sort.Strings over slash paths, root "." pinned first) over filepath.WalkDir's per-directory order, because data-model says "lexical path order"; the two differ ("a-b" before "a/x"), and the hard-link "earlier" uses the same order, so the copy creates the first name before linking (confidence: high)
+FLAGGED (delegate): reading files uses O_NOATIME (falling back without it on EPERM) and directory atimes are re-applied after the copy digest, over leaving the read-back to move the copy's atimes, because the copy is meant to keep atime and reading it back otherwise moves it under relatime (confidence: medium)
+ASSUMED (delegate): Files counts entries other than the root that have a digest line, so sockets are not in Files (they are in Sockets); this keeps source and copy Files equal (confidence: medium)
+ASSUMED (delegate): Bytes counts a hard-linked regular file's size once (it is copied once), so the --max-bytes budget is the bytes actually written (confidence: medium)
+ASSUMED (delegate): hard links are detected for regular files only (as the data-model line says); a hard-linked FIFO is copied as separate FIFOs, and its source and copy digests still agree (confidence: medium)
+ASSUMED (delegate): digest line encoding: path and symlink target via strconv.Quote; type one of dir/file/symlink/fifo; mode `%04o` of st_mode&07777; mtime `sec.%09d`; a hard link line is `"path" file mode uid gid mtime link "earlier"` (no size/sha) (confidence: high)
+ASSUMED (delegate): the source digest during a copy uses the size from the walk's Lstat with the hash of the bytes actually copied, so a file that changes between the walk and the copy makes source and copy digests differ rather than agree on the new bytes (confidence: medium)
+ASSUMED (delegate): --max-bytes defaults to -1 (no limit), 0 means zero bytes allowed, and it is a usage error on any operation but copy (confidence: medium)
+ASSUMED (delegate): the package is Linux-only (Stat_t.Atim/Mtim, utimensat via syscall.Syscall6 with AT_FDCWD/AT_SYMLINK_NOFOLLOW defined locally since package syscall does not export them); other.go stubs every call with errors.ErrUnsupported so adeled still builds on other platforms (confidence: high)
+ABSENT (delegate): TestOwnership did not run — it needs uid 0 (CHOWN), and this host runs tests as an unprivileged uid; it skips with the uid; ownership is exercised only for same-owner Lchown here, so the root path of chown/chmod ordering (setgid surviving a chown) is unverified until a lane runs it as root
+ABSENT (delegate): TestDevice's tree part did not run — mknod needs MKNOD; kindOf's refusal of char/block/unknown types is tested directly, and the exit-12 mapping through a seam; a real device node in a walked tree is unverified here
+ABSENT (delegate): no real ENOSPC was produced — the copyContent seam (volcopy) and volCopy seam (adeled) inject it; an ENOSPC from mkdir/symlink/link rather than a file write is mapped by the same `written` helper but not tested
+ABSENT (delegate): extended attributes and ACLs are not copied (R24 says so); nothing in this task records that in a verdict
+ABSENT (delegate): no run inside the helper's real sandbox (no Docker on this host): the capability set, read-only /src and the tmpfs store are untested by this task
+FLAGGED: the review kept every delegate choice; plan R24's "exit 1" for a device was corrected to the helper's exit 12 (the snapshot itself is exit 1), so the plan agrees with R25 and the code (confidence: high)
+SCOPE: out — adele/cmd/adeled/volume_test.go (1 of 8 changed files) (task has FLAGGED: yes)
+
+### T064–T066: the broker's snapshot, snapshots, restore, snapshot-rm; the recovery and orphan pass; down and collection end snapshot rows
+**Started:** 2026-10-19T04:04:32Z (T063's commit) | **Completed:** 2026-10-19T04:15:51Z
+
+INHERITED: T060's Kept and Ended, T061's cap and store, T062's helper protocol, T063's engine calls
+FLAGGED: every snapshot, restore and removal holds Envs' lock for its whole length, the copy included — chose one lock over a per-environment one because slice 0's lock already serialises every up across environments and a second locking scheme beside it is a new way to deadlock; the cost is that an up waits behind a long copy, and the lock's holder is named in its timings (confidence: medium)
+FLAGGED: the snapshot is measured before anything is paused (the cap refuses with nothing written), and the copy is given the cap left as --max-bytes, so a volume that grew between the two fails rather than passing the cap (confidence: high)
+FLAGGED: a restore starts its services again even when the copy failed partway, and says the contents are partial — chose starting over leaving them stopped because R28's rule is that nothing Adele holds is left held, and a stopped service with no verdict naming it is worse than a running one on data the verdict calls partial (confidence: medium)
+FLAGGED: the recovery pass at Adele's start first removes every volume helper still running — they are a stopped Adele's, and the partial snapshot one holds open cannot be removed while it runs; on a tick it removes nothing running, and a record-less volume is partial only once older than a copy's bound and a minute (found from the e2e delegate's restart cell; confidence: high)
+FLAGGED: the recovery pass takes Envs' lock, so it can never undo the hold of a snapshot in progress (confidence: high)
+ASSUMED: a pause that does not read back paused unpauses every user and writes nothing; a container the agent paused itself is not a user (only running ones are paused), so Adele never unpauses what she did not pause (confidence: high)
+ASSUMED: restore's users include paused and restarting containers, thawed before the stop, so a restore never writes under a running process (confidence: medium)
+ASSUMED: Adele's own readiness read for a restore is the daemon's state and healthcheck, at most 60 s; the client then probes ports from the agent's container as up does (cross-stack P001) (confidence: high)
+ABSENT: no run against a daemon (the fake daemon here checks the order of acts, not the daemon's answers); the restore of a volume while another environment's service mounts it is impossible by construction (only own volumes) and not tested
+SCOPE: in (7 changed files)
+FLAGGED: Adele's own readiness read after a restore waits only until each started service is running again (10 s at most) and records the health it then reads; waiting for readiness is the client's alone, as up's is — chose that over Adele waiting up to 60 s for healthchecks, which put a second wait in front of the client's --wait (confidence: high)
+
+### T068: the slice-2 e2e cells, fixtures, lane grants and lane wiring (delegated)
+**Started:** 2026-10-19T03:57:25Z (delegated at the start of implement) | **Completed:** 2026-10-19T04:17:25Z (reviewed and committed)
+
+INHERITED: contracts/adele-env.md § Slice 2, data-model § Slice 2, plan R33; the snapshot id form s-<8 hex> (sent to the delegate mid-task)
+FLAGGED (delegate): snapshot id form — chose the coordinator's ruling (id `s-` + 8 hex in data, the `xyz.ironik.timelike.snapshot` label and the ledger resource `<env>/s-…`; volume `<env>-snap-<8 hex>`) over reading the data-model's "`id` is 8 random hex" literally, because the coordinator settled it mid-task and the plan's R23 already says "`<env>-snap-<hex>` for the snapshot `s-<hex>`"; the cells assert the label equals the data's id and the volume name is built from the id minus `s-` (confidence: high)
+FLAGGED (delegate): the Adele-death case is included, in its own serial file adele-restarted-mid-snapshot-unpauses-what-she-paused.bats, listed `serial` in lane.conf — chose a new serial file over putting the cell in the existing reap-serial file, because that file's setup_file is a 70 s ttl timeline of its own and plan R33's "existing serial group" means lane.conf's serial class (confidence: high)
+FLAGGED (delegate): kill determinism — chose 30000 empty files in the source volume (inodes only, no data blocks, on the host's volume store) plus a tmpfs snapshot store (nested-snapmem, 256 MiB) over a large data fixture, because P006 forbids big fixtures and empty files make the copy metadata-bound; whether 30000 entries keep the copy open long enough for a docker-ps poll on the operator's host is unknown until the lane runs, and the cells FAIL (never retry) if the snapshot finished first (confidence: medium)
+FLAGGED (delegate): the runner's corruption of a snapshot volume — chose a --rm throwaway of DEBIAN_IMAGE carrying helpers.bash's THROWAWAY_LABEL (swept by tests/run.sh) and refusing any volume without the xyz.ironik.timelike.env label, over labelling it xyz.ironik.timelike.sandbox, because Adele's own sandbox sweep could remove it mid-write and nested_teardown counts env-labelled containers as leaks (confidence: medium)
+FLAGGED (delegate): the copy helper is told from the measure and digest helpers (same name prefix and label, R25) by `"copy"` in its Config.Entrypoint/Cmd JSON — chose that over killing the first helper seen, because killing the measure helper tests a different failure; it assumes Adele runs the helper as `adeled volume copy …` with `copy` as its own argv element (confidence: medium)
+FLAGGED (delegate): the not-ready-after-restore cell relies on start_period 30s keeping a failing healthcheck "starting" past `--wait 5` — chose that over waiting for "unhealthy" (retries), because it does not depend on how fast the daemon counts failures; it assumes the client reads "starting" at the bound as not ready, exit 1 (spec FR-38/contract), not 124 (confidence: medium)
+ASSUMED (delegate): the client's --json data is at the top level of the agentio document (as `env up`'s is), with the field names the task gave: snapshot {name, snapshot{id, volume, bytes, files, sockets, digest, taken_at, note}, paused [service names], paused_s, cap{bytes, used, left, store}, ledger_id}; snapshots {name, snapshots[…], cap, volumes}; restore --yes {name, snapshot (id or object; both accepted), volume, stopped, digest, services[{service, ready}], dry_run}; --dry-run {dry_run: true, stop}; snapshot-rm {name, snapshot (the id string), freed_bytes}
+ASSUMED (delegate): `cap.bytes` is 1073741824 and `cap.store` is "volume" under `nested` (the default), and `cap.used` counts only this environment's snapshots (4100 for the criterion fixture)
+ASSUMED (delegate): `bytes` is the sum of regular files' sizes (4100) and `files` the entries other than the root (13: .init, conf, conf/settings, latest, rows, rows/r1-r8), per data-model's digest section; a symbolic link counts as a file entry, not bytes
+ASSUMED (delegate): restore keeps db's container (the same id) and restarts it, so StartedAt changes; a restore that recreated the container fails the cell
+ASSUMED (delegate): the snapshot volume's session, grant and requester labels equal those on the environment's own containers (compared against db's session label and the agent container's id), and its `created` label starts with an RFC 3339 date
+ASSUMED (delegate): every exit-3 snapshot refusal (unknown key, a bind mount's path, another environment's daemon volume name) writes one refused row with limit_name `volume` (the cell counts exactly 3), and the exit-3 output (text, stderr merged) names the environment's own key `db-data`; an unknown snapshot's exit 3 names the existing id
+ASSUMED (delegate): prose matched only loosely where the contract gives a cause, not a phrase: a full store by /full|no space/i, a killed helper by /helper/i, readiness by /ready/i; "does not match its record" is the contract's own 502 text; `adele env status` and `adele env down` must appear in a not-ready restore's output
+ASSUMED (delegate): a refused (cap) snapshot writes no pause row; a failed snapshot (store full, helper killed) writes no performed `snapshot` row, but a pause row and an unpause row; a digest mismatch writes no stop or restore row
+ASSUMED (delegate): removal of a snapshot (snapshot-rm, down, collection) is a `reaped` row with action `delete` on `<env>/<id>`; the recovery pass's partial removal is `performed` `snapshot-rm` on `<env>/<id>` with "partial" in its cause; the pass's unpause is a `performed` `unpause` row on the environment
+ASSUMED (delegate): Adele's start pass removes the record-less snapshot volume even though the killed Adele's copy helper may still hold it (the cell polls up to PLUMBING_TIMEOUT for 0 snapshot volumes; a removal deferred to the tick's "older than the copy's bound and a minute" rule would fail it)
+ASSUMED (delegate): the agent's `adele env snapshot`, run while Adele is killed, ends non-zero within PLUMBING_TIMEOUT (it runs in the background, bounded by exec_in; its exit is reported on fd 3 and asserted only as not 0)
+ASSUMED (delegate): compose labels the environment's volume `com.docker.compose.volume=db-data` and the snapshot volume does not carry that label (nested_volume also skips any volume with the snapshot label)
+ASSUMED (delegate): Adele accepts `start_period` in a healthcheck and a bind of the project directory at its own path (slice 0's basic fixture binds it), and the db container runs as root with compose's default capabilities (CHOWN for init.sh's chown 999)
+ASSUMED (delegate): tests/run.sh's nested_sweep already removes every volume labelled xyz.ironik.timelike.env (snapshot volumes are) and every container labelled …sandbox (left helpers), so run.sh was not changed
+ABSENT (delegate): no Go toolchain or Docker here — the lane grants were checked against adele/internal/grants by reading the parser (snapshots and snapshot-store are optional keys there; sizes 64KiB, 1MiB, 256MiB match its size syntax), not by running it; no cell has been run
+ABSENT (delegate): no cell for a restore copy that fails partway (502 partial: true, the verdict naming restore again and down): nothing on the runner can make the restore helper fail deterministically without a tmpfs source volume, which Adele refuses (driver_opts)
+ABSENT (delegate): no cell for a copy past its 5 min bound (124), a device node (helper exit 12) or a socket count above 0 — said in the failures file's header for the bound; the others are left to the Go units
+ABSENT (delegate): no cell that a reaper tick (rather than Adele's start) unpauses a service left paused; the serial cell cannot tell the start pass from the first tick, and does not try
+ASSUMED: the three lane grants were parsed with Adele's own grants.Load before the commit (64 KiB volume; 1 MiB tmpfs; 256 MiB tmpfs) (confidence: high)
+FLAGGED: the delegate's restart cell exposed that a stopped Adele's copy helper holds its partial volume open; Adele's start pass now removes running volume helpers first (T064–T066) rather than the cell waiting for a tick (confidence: high)
+SCOPE: out — tests/e2e/adele-restarted-mid-snapshot-unpauses-what-she-paused.bats (1 of 15 changed files) (task has FLAGGED: yes)
+
+### T067: the client's snapshot, snapshots, restore, snapshot-rm; the confirm protocol; D22 A and B (delegated)
+**Started:** 2026-10-19T03:57:25Z (delegated at the start of implement) | **Completed:** 2026-10-19T04:24:10Z (reviewed and committed)
+
+INHERITED: contracts/adele-env.md § Slice 2; plan R27, R31, R32; Adele's request bounds and adele_readiness (sent to the delegate mid-task)
+FLAGGED (delegate): the confirm protocol for env restore/snapshot-rm — chose a narrow agentio change (Tool admits grant_envelope=True with mutating=True only when confirm_protocol=True is declared explicitly; codes() gains a combined exit-4 default) over a run-time switch like exec's passes_exit, because --yes and --dry-run must be in the parser before parsing, and conform C2 refuses --yes in flags unless the manifest confirms, and requires envelopes to list confirmation_required exactly when it does: a run-time switch would leave the manifest declaring envelopes it does not print. adele now declares mutating, confirm_protocol and destructive true; main() refuses --yes/--dry-run on every verb but restore and snapshot-rm, so the grant stays the confirmation everywhere else. Unit: test_agentio::test_a_grant_client_that_declares_confirm_protocol_prints_both_envelopes (confidence: medium)
+FLAGGED (delegate): D22 A — the budget is 191 columns (rule 13 cuts the printed line "verdict: …" at 200), not 200. To fit up's longest at a 30-character name: "unchanged, " leads the verdict and its meaning moves to the next line; "local: no cost" moves to the grant line; "N running with no readiness check" becomes "N running, no readiness check" (the service line's own words). That changes text pinned by 5 e2e files and 4 units, all updated (confidence: medium)
+FLAGGED (delegate): verdicts past 191 use short forms through fit(): up's unchecked count becomes "N unchecked" (the data's word); restore's and snapshot's service lists become a count (names and times stay in the lines) — chose degrading wording over letting agentio cut, because a cut hides the end of the verdict (confidence: medium)
+FLAGGED (delegate): restore's verdict has no "read back," before "ports probed from the agent container" (up's has it), because at a 30-character name and a 13-character volume it does not fit; "digest read back" opens the verdict (confidence: medium)
+FLAGGED (delegate): snapshot-rm also accepts --dry-run (the contract lists only --yes), because destructive=True gives the tool --dry-run and rule 8 binds a destructive verb; it prints the same plan and exits 0 (confidence: high)
+ASSUMED (delegate): restore's "in T s of W s" counts from Adele's 200, so --wait bounds only the readiness wait that follows her answer (the coordinator's fact 1); her request has its own bound, SNAPSHOT_HTTP_S = 900 s, for snapshot and restore alike (confidence: high)
+ASSUMED (delegate): Adele's 200 for restore that carries a digest unequal to the snapshot's recorded digest is exit 1, never "restored" (H3), although the contract defines no such answer (confidence: medium)
+ASSUMED (delegate): a restore not ready within --wait is a Result (exit 1) carrying the service lines, with "next: adele env status NAME … adele env down NAME" as a footer line, not a one-line error, so the readiness words show as up's 124 does (confidence: medium)
+ASSUMED (delegate): request params are sent exactly as the contract names them ({name, volume, note}; {name}; {name, snapshot, dry_run}; {name, snapshot}), without slice 0's ttl/ports, because Adele's decoder disallows unknown fields and the Go Params side is another delegate's (confidence: medium)
+ASSUMED (delegate): the confirmation plan's first line is short ("replace volume V of NAME with S; stop db"), so rule 14's text line can still quote the agent's whole command at short names; at a 30-character name agentio's own fallback points at "confirm" on stdout (confidence: high)
+ABSENT (delegate): nothing here was run against the real Adele or the daemon (no Docker on this host): the slice-2 HTTP shapes are from the contract and the coordinator's two messages, through the fake
+ABSENT (delegate): agentio.size rounds 1023.95 MiB up to "1024.0 MiB" (one decimal of a value under 1024); not changed, since it is shared by run and others — a cap's "left" near a unit boundary prints this way
+ABSENT (delegate): the e2e cells for slice 2 (snapshot, failures, recovery) are not written here; the data keys they will assert are the ones the task listed
+FLAGGED: agentio (feature 001) changed: a grant client may be mutating only when it declares confirm_protocol=True, and adele now does, with --yes and --dry-run refused on every verb but restore and snapshot-rm — chose the narrow agentio change over a second tool name because the ruling keeps the commands under adele env, and conformance needs the manifest to declare what --yes confirms (confidence: medium)
+SCOPE: out — tests/unit/test_adele_cli.py, tests/unit/test_agentio.py (2 of 14 changed files) (task has FLAGGED: yes)
+
+### T069: README — the status block, snapshots and restore, the cap and its default
+**Started:** 2026-10-19T04:24:19Z (T067's commit) | **Completed:** 2026-10-19T04:24:58Z
+
+INHERITED: the send's README status block; T067's regenerated reference; d40893f's readiness rewording, carried into this cycle at the operator's word ("wait till next cycle")
+ASSUMED: the status block (row 13 "slices 0–2 of 0–2", "24 of 38") stands on criterion 10 being built; the lane says whether it is met, as at slice 1 (confidence: medium)
+FLAGGED: d40893f's mark is kept as part of this cycle's update rather than cleared: the rewording was never published, so it is this update's, not the previous one's; slice 1's marks were cleared in d40893f (confidence: medium)
+ABSENT: the Status paragraph's third sentence still lists 13 among features with "their first slice or slices" and not among the complete ones: the send changes only the first sentence and says nothing else changes, so it is raised in the cycle report, not edited
+SCOPE: in (1 changed files)
+
+### T070: host lanes, every lint stage at its pin, Cycle 9's report, reboot.md, commit
+**Started:** 2026-10-19T04:25:07Z (T069's commit) | **Completed:** 2026-10-19T04:38:37Z
+
+INHERITED: every task above
+ASSUMED: the README status block stands on criterion 10 being built; the lane shows whether it is met (confidence: medium)
+ABSENT: the Docker lane, scan and lint in their containers; govulncheck; D31
+
+### Lane 13s2a: defects A and B (`../bridge/feedback/13-20261019-062941-lane-13s2a-two-defects.md`)
+**Started:** 2026-10-19T08:00:53Z (read from the clock, after the cause of A was found) | **Completed:** in the commit that carries this entry
+
+INHERITED: T067's `adele` summary (`4f1cd9e`); slice 1's collection pass (R19) and slice 2's tick (R28, R30)
+FLAGGED: A — `adele`'s new summary made its announcement line 209 columns; `--write` writes a line whole and `--json` cuts content lines at rule 13's 200 (with `cut_lines`), so the installed file and `timelike announce --json` differed at line 6. Chose to shorten the summary (to 196 columns as a line: "ask Adele for …", and "workspace files"; it keeps the two phrases the slice-2 unit pins, P3's "snapshot, undo" among them) and make generation refuse any line past 200 (so the image build names it, as it does the 60-line bound) over exempting the announcement from rule 13's cut in `--json`, because the cut is the contract's and an exemption would let a long line reach a harness uncut (confidence: high)
+FLAGGED: B — `#0` is `Ledger.Reap`'s `wrote=false`: the row had already been ended by another pass. Her log's `collected` lines are the tick's (`logCollected`; the request logs nothing), so the request wrote the rows and the tick, having read the same live rows, waited on Envs' lock, removed nothing and reported a row it did not write. Chose one pass at a time (`collectMu`) plus reporting the winner's row (`ReapOf`, `already_recorded`) for the one reaper outside the mutex (the ttl reaper), over making the tick skip collection while a request runs, because a skipped tick is a pass that silently did not happen (confidence: high)
+FLAGGED: B — the collect request gets its own write deadline, `CollectWriteTimeout` = 10 min, and the pass starts no removal after `CollectBound` = 5 min from its call (waiting for another pass included); what it leaves is a `failed` entry naming the bound, collected by the next pass. Chose a bound below compose's 30 min because a collect has no build or bring-up in it; the client waits 660 s, with a timeout verdict naming her pass bound (confidence: medium)
+ASSUMED: the units scale the server's 30 s write timeout to 200 ms and each removal to 300 ms; the control (the deadline line removed) fails the same unit, so the scaled run tests the same path (confidence: high)
+ABSENT: the lane's own ledger was not read back (no Docker here); that a reaped row was written is established from the code (`wrote=false` returns only when a reaped or gone row of that ref exists) and by the units against a fake daemon
+ABSENT: no `make test-partial` loops of the two e2e files: this host has no Docker
+ABSENT: item 5 of `13-20261019-044841-cycle-9-report-read.md` (the restore row's description) is not in this commit; the user named items 1 and 2

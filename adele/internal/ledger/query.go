@@ -132,6 +132,20 @@ func (l *Ledger) LiveResource(capability, name string) (Row, bool, error) {
 	return rows[0], true, nil
 }
 
+// ReapOf returns the reaped or gone row that ended row ref, and whether there is one. A collection pass that finds
+// ref already ended by another pass reports that pass's row, never a row of its own it did not write (lane 13s2a).
+func (l *Ledger) ReapOf(ref int64) (Row, bool, error) {
+	rows, err := l.query(`SELECT `+prefixed("r")+` FROM ledger r WHERE r.ref = ? AND r.outcome IN (?, ?) ORDER BY r.id LIMIT 1`,
+		ref, OutcomeReaped, OutcomeGone)
+	if err != nil {
+		return Row{}, false, err
+	}
+	if len(rows) == 0 {
+		return Row{}, false, nil
+	}
+	return rows[0], true, nil
+}
+
 // LiveRows returns every performed row of capability that has not ended, oldest first.
 func (l *Ledger) LiveRows(capability string) ([]Row, error) {
 	return l.query(`SELECT `+prefixed("p")+` FROM ledger p WHERE p.capability = ? AND p.outcome = ? AND `+unended+

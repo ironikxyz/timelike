@@ -239,6 +239,16 @@ def generate() -> tuple[list[str], dict[str, str]]:
             "- In bash, a command that is not installed says what to use instead, or who can install it."
         )
     lines += ["", "These tools work the same whether or not this file is read."]
+    # Lane 13s2a: --write writes a line whole and --json cuts it at rule 13's columns, so a line past them
+    # makes the file and `announce --json` differ. Refused here, so the image build names the line.
+    long = next((x for x in lines if len(x) > agentio.DEFAULT_COLUMNS), None)
+    if long is not None:
+        raise agentio.ToolError(
+            agentio.EXIT_FAILURE,
+            f"an announcement line is {len(long)} columns; the bound is {agentio.DEFAULT_COLUMNS}:"
+            f" {long[:60]}…",
+            "shorten that tool's --agent-info summary, or the rule",
+        )
     if len(lines) > ANNOUNCEMENT_MAX_LINES:
         raise agentio.ToolError(
             agentio.EXIT_FAILURE,

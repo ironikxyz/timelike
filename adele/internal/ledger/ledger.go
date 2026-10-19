@@ -51,7 +51,7 @@ const (
 )
 
 // Limits names the limits an extension may change (contracts/adele-http.md).
-var Limits = []string{"capabilities", "ttl", "ports", "instances", "budget"}
+var Limits = []string{"capabilities", "ttl", "ports", "instances", "budget", "snapshots"}
 
 // ErrInvalid wraps every input-validation error; nothing is written.
 var ErrInvalid = errors.New("ledger: invalid row")

@@ -32,8 +32,9 @@ check_twice_then_down() {
   before="$(ids_of "$NP_NAME")"
   env_run "$style" "--text env up --project ${NP_NAME} --grant nested"
   assert_status 0
-  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: 3 ready, unchanged (nothing created or recorded) in "* ]] ||
+  [[ "${lines[1]}" == "verdict: up ${NP_NAME}: unchanged, 3 ready in "* ]] ||
     { echo "second verdict: ${lines[1]}" >&2; return 1; }
+  assert_output_has "unchanged: it was already up as asked; nothing created or recorded"
   after="$(ids_of "$NP_NAME")"
   [[ -n "$before" && "$before" == "$after" ]] || { echo "containers before: $before; after: $after" >&2; return 1; }
   run ledger_rows_for "$NP_NAME"
