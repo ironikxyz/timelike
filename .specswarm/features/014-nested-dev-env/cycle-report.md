@@ -1709,3 +1709,126 @@ on `661016a`; the fixes are in the commit that carries this addendum.
 
 **process_failures_recorded:** the first shortening of the summary dropped two pinned phrases. The host lane caught
 it before the commit. The summary's pins should have been grepped first, as for verdict text.
+
+### Cycle 9 — sign-off addendum
+
+**Written:** 2026-10-19T17:19:43Z (read from the clock), from the mentor's
+`../bridge/feedback/13-20261019-171315-slice-2-signed-off.md`. **Feature 13 slice 2 is signed off at `7a75b0e`**
+(Cycle 9 and its lane 13s2a addendum), built from `bridge/sends/13-rev17-20261019-034239.md`. This is prompt 13's last
+slice, so **feature 13 is complete**. Append-only: nothing above is changed.
+
+**The lanes:**
+- **13s2c on `7a75b0e`** (09:43:11Z–11:11:40Z, clean tree, HEAD unchanged after each step):
+  - test exit 0: e2e 766 of 766; unit 2670 passed, 0 failed, 10 skipped; gounit ok;
+  - scan exit 0: every image PASS, gitleaks 0, deny-list PASS over 673 tracked files;
+  - lint exit 0 through every stage;
+  - logs `bridge/.make-test-13s2c.log`, `bridge/.make-scan-13s2c.log`, `bridge/.make-lint-13s2c.log`. Read here: the
+    test log's plan is `1..766`, no line is `not ok`, and cells 143, 144 (defect A) and 280 (defect B) are `ok`.
+- **13s2a on `661016a`** found defects A and B (the addendum above); both are fixed in `7a75b0e`.
+- **13s2b** (partial) showed that 13s2a's unit failures, 311 and 454 were host load.
+
+**criteria_reestablished, at sign-off** (these supersede Cycle 9's modes for the same criteria):
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| `13 · "Bringing up a fixture project's compose file from inside the agent container starts its services and returns once they are ready"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats`; its verdict pins moved with D22's A and B |
+| `13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats`, unchanged |
+| `13 · "is refused by Adele with exit 2 and rule 14's structured error, naming the setting and stating that no grant allows it"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats`, unchanged |
+| `13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not run"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats`, unchanged |
+| `13 · "Bringing the environment up twice is a no-op the second time, and tearing it down removes every container, network and volume it created"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats`; the unchanged verdict's words moved (A) |
+| `13 · "A project's devcontainer definition is brought up and a command is executed inside it"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats`; a new check that "ports probed" is absent when nothing was probed (B) |
+| `13 · "Everything created carries session and grant labels, and a collect command removes environments whose session has ended"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` |
+| `13 · "A named volume of a running nested environment is snapshotted and later restored to its snapshotted content"` | **executed [lane 13s2c]** on `7a75b0e` | `tests/e2e/a-named-volume-of-a-running-nested-environment-is-snapshotted-and-later-restored-to-its-snapshotted-content.bats` (2 cells: snapshot, corrupt, restore refused without `--yes`, `--dry-run`, restore, owners, modes, times and content read back by manifest, snapshot-rm, down) |
+| `13 · "DEMO: the Agent snapshots a nested environment's database volume, corrupts the data, and restores it"` (D31) | **observed by the operator** | transcript `bridge/.d31-demo-20261019T112411Z.txt`, on 13s2c's stack (`7a75b0e`), session `d31-demo-2`; run 1, `bridge/.d31-demo-20261019T111724Z-run1-io-stall.txt`, hit a host disk stall and is kept as evidence |
+| `13 · "DEMO: the Agent brings up a project's devcontainer from inside its container and runs a command in it"` (D22) | **observed by the operator** on slice 1 (`35c325f`), not again | transcript `bridge/.d22-demo-20261019T011238Z.txt`. Its observations A and B (send ruling 7) are met: D31's up verdict fits the 200 columns and names no probe it did not make, and T067's e2e pins hold on 13s2c |
+| `13 · "DEMO: the Agent brings up a compose test environment from inside its container, runs tests against it, and tears it down"` (D9) | **observed by the operator** on slice 0 (`08df8e2`), not again | transcript `bridge/.d9-demo-20261018T110127Z.txt` |
+
+**D31, as demonstrated** (from the feedback):
+- A SQLite database in WAL mode on the named volume `notes-db`, owned by uid 999, on `timelike-agent:local`.
+- **Snapshot:** db paused 0.3 s, the digest read back.
+- **The bad migration** drops rows and overwrites the database's first page: `malformed`, the service unhealthy.
+- **Restore:** refused without `--yes` (exit 4), then run with `--dry-run`, then with `--yes`: db stopped 0.8 s,
+  ready in 2.5 s, the digest read back.
+- **Read back:** all 202 notes, including the two that were only in the WAL; integrity ok; the file digests equal the
+  pre-migration ones.
+- **down** leaves 0 containers, networks and volumes. Ledger #268 onwards, session `d31-demo-2`.
+
+**not_verified, carried as a watch item:** real databases other than SQLite (PostgreSQL, MySQL) under a pause and a
+copy. D31 and the e2e cells use SQLite; whether the others recover from a paused copy is not shown by anything here.
+
+**Item 5 of `13-20261019-044841-cycle-9-report-read.md`, done in this commit, in the contract:**
+`contracts/adele-env.md`, under `restore`, now says that the ledger's restore row records Adele's own readiness read
+(its cause ends `Adele read: <service> <state>, …`, the same values as `adele_readiness`), and that the port probe and
+the wait behind the verdict's `N ready in T s` run afterwards in the agent's container (decision C), where Adele
+cannot see their result. Wording only; no code changes.
+
+**The operator's decisions:**
+- **D31 accepted.**
+- **D31 observations A, B and C are carried forward, not fixed now** (`bridge/feedback/13-20261019-170731-d31-observations-carried.md`,
+  the mentor's `carry_forward` `13-post-slice-2`):
+  - **A.** The confirmation line's `(+N more)`, and the JSON printed under `--text`.
+  - **B.** `exec` says "as the image's user" when the service sets its own user.
+  - **C.** No bound on a snapshot's pause.
+- **README's Next line** is now `**Next:** 14 slice 0.` Nothing else in the README's What or Status changed in this
+  commit; the Status sentence and the copy's limits are already in `7a75b0e`.
+- **Push OK** given in the mentor's session at 2026-10-19T17:13:15Z, for `master` to `public/main` with the annotated
+  tag `v0.24.0`, once the mentor has written `DISCHARGED <merge>` into the sign-off file. Nothing is pushed before that.
+
+**Still carried, not this feature's:** open item 1 (002's bench unit under load), with the categoriser's precedence
+when a process is killed for memory but also ran past its time limit, for a maintenance send.
+
+**Next:** the merge `--no-ff` into `master`, no push and no tag until the discharge.
+
+**The ship, `/specswarm:ship` under specswarm 4.0.1-botbaubble.2.44.0, at `7a75b0e` with README's Next line and the
+contract changed and before this text was added.** Its blocks were extracted from the installed `analyze-quality.md`
+and `ship.md` and run, as at slices 0 and 1. They are byte-identical to the ones run at slice 1's sign-off. The modules
+are the 10 that slice 2 changed. The output, verbatim, with the checkout path written `<repo>/`:
+
+```
+== analyze-quality (2.44.0 blocks) ==
+🔤 Language: Python
+AQ_TESTS_LINE=tests|25|?|measured:pytest
+AQ_TESTS_SCORE=unavailable:pytest is declared but could not be run on this machine
+adele/cmd/adeled|unknown
+adele/internal/broker|unknown
+adele/internal/engine|unknown
+adele/internal/grants|unknown
+adele/internal/ledger|unknown
+adele/internal/volcopy|unknown
+tests/e2e|unknown
+tests/unit|unknown
+tools/agentio|unknown
+tools/bin|unknown
+Overall Quality: unknown (no module could be scored (10 unscored))
+📄 Wrote <repo>/.specswarm/features/014-nested-dev-env/quality-report.json (overall_state: unknown, coverage_state: unknown, written by 4.0.1-botbaubble.2.44.0)
+== ship (2.44.0 blocks) ==
+📍 Current branch: modify/014-slice-2 @ 7a75b0e
+NOTE: <repo>/.specswarm/features/014-nested-dev-env/quality-report.json reports overall_state='unknown' - the score is not a measurement
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/014-nested-dev-env/quality-report.json says overall_state='unknown'
+   (no module could be scored (10 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+== QUALITY_STATE=unknown ==
+```
+
+- **The gate is UNKNOWN, and it warns because `enforce_gates: false`.** Nothing was measured: it is neither a pass
+  nor a 0% failure.
+- **`quality-report.json`** is rewritten by the analysis in this feature's folder (`overall_state: unknown`, 10
+  unscored) and committed here.
+- **The merge is by hand,** `--no-ff`, of this commit, which is the signed-off `7a75b0e` plus these records.

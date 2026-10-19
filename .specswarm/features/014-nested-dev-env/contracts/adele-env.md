@@ -165,6 +165,11 @@ row names) unless `grant` is given. Validation is slice 0's: `name` is the envir
 - **200:** `{"outcome": "performed", "snapshot": {...}, "volume": key, "stopped": [services], "stopped_ms", "digest",
   "services": [Service], "adele_readiness": {service: "healthy" | "running" | "exited N" | "starting"}, "ledger_id",
   "took_ms"}`. The client then waits for readiness as `up` does.
+- **The ledger's restore row records Adele's own readiness read, not the client's probe.** Its cause ends `Adele
+  read: <service> <state>, …`: each service's state as Adele reads it from the daemon once the volume is restored,
+  the same values as `adele_readiness`. The port probe and the wait that decide the verdict's `N ready in T s` run
+  afterwards in the agent's container (decision C), where Adele cannot see their result, so a reader of the ledger
+  must not take that row's readiness for the probe's.
 - **404:** no environment, or `{"error": "no snapshot S in NAME", "snapshots": [ids]}`.
 - **502, before anything is stopped:** `{"error": "snapshot S does not match its record: …", "stopped": []}`.
 - **502, after:** `{"error", "partial": true, "started": [services], "remediation"}`.

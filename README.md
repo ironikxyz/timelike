@@ -52,7 +52,7 @@ to end), 1 natural (the common failures), and 2 hardened (incident replays, enfo
 <mark>Features 01, 04, 05, 06 and 13 are complete. Features 02, 03, 07–12 and 15 have their first slice or slices.</mark>
 Features 14, 16 and 17 are not started.
 
-**Next:** 13 slice 2.
+**Next:** 14 slice 0.
 
 **Measured results:** none are claimed yet. The speedup bench (02) runs today; published comparisons
 wait for its catalog and its losing-cases-first report (P6).
