@@ -260,7 +260,7 @@ func (c *Client) RunStream(ctx context.Context, s Sandbox, w io.Writer) (stderr 
 	spec := map[string]any{
 		"Image": s.Image, "Entrypoint": s.Entrypoint, "Cmd": s.Cmd, "User": s.User, "Env": s.Env,
 		"WorkingDir": s.WorkingDir, "NetworkDisabled": true, "AttachStdout": true, "AttachStderr": true,
-		"Labels": sandboxLabels(),
+		"Labels": sandboxLabels(s.Kind),
 		"HostConfig": map[string]any{
 			"NetworkMode": "none", "Binds": s.Binds, "ReadonlyRootfs": true, "CapDrop": []string{"ALL"},
 			"SecurityOpt": []string{"no-new-privileges"}, "Tmpfs": map[string]string{"/tmp": "rw,size=64m"},

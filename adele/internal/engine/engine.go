@@ -167,6 +167,15 @@ type Container struct {
 	Status   string            `json:"Status"`
 	Health   string            `json:"-"`
 	ExitCode int               `json:"-"`
+	Mounts   []Mount           `json:"-"` // slice 2: what it mounts, from its inspect
+}
+
+// Mount is one of a container's mounts as its inspect reports it: a named volume's Name, or a bind's Source.
+type Mount struct {
+	Type        string `json:"Type"`
+	Name        string `json:"Name"`
+	Source      string `json:"Source"`
+	Destination string `json:"Destination"`
 }
 
 // Containers lists every container carrying all of labels (key=value), running or not, and inspects each one
@@ -186,6 +195,7 @@ func (c *Client) Containers(ctx context.Context, labels ...string) ([]Container,
 					Status string `json:"Status"`
 				} `json:"Health"`
 			} `json:"State"`
+			Mounts []Mount `json:"Mounts"`
 		}
 		err := c.do(ctx, http.MethodGet, "/containers/"+out[i].ID+"/json", nil, &in, http.StatusOK)
 		if IsNotFound(err) {
@@ -195,7 +205,7 @@ func (c *Client) Containers(ctx context.Context, labels ...string) ([]Container,
 		if err != nil {
 			return nil, err
 		}
-		out[i].State, out[i].ExitCode = in.State.Status, in.State.ExitCode
+		out[i].State, out[i].ExitCode, out[i].Mounts = in.State.Status, in.State.ExitCode, in.Mounts
 		if in.State.Health != nil {
 			out[i].Health = in.State.Health.Status
 		}
@@ -205,9 +215,10 @@ func (c *Client) Containers(ctx context.Context, labels ...string) ([]Container,
 
 // Object is a network or a volume found by label.
 type Object struct {
-	ID     string            `json:"Id"`
-	Name   string            `json:"Name"`
-	Labels map[string]string `json:"Labels"`
+	ID        string            `json:"Id"`
+	Name      string            `json:"Name"`
+	Labels    map[string]string `json:"Labels"`
+	CreatedAt string            `json:"CreatedAt"` // a volume's, RFC 3339 (slice 2)
 }
 
 // Networks lists the networks carrying all of labels.
@@ -226,16 +237,18 @@ func (c *Client) Volumes(ctx context.Context, labels ...string) ([]Object, error
 	return out.Volumes, err
 }
 
-// Counts is how many of each kind of object. Images are the ones an environment built (slice 1).
+// Counts is how many of each kind of object. Images are the ones an environment built (slice 1); snapshots are its
+// snapshot volumes, counted apart from its other volumes (slice 2).
 type Counts struct {
 	Containers int `json:"containers"`
 	Networks   int `json:"networks"`
 	Volumes    int `json:"volumes"`
 	Images     int `json:"images"`
+	Snapshots  int `json:"snapshots"`
 }
 
-// Total is the sum of the four.
-func (n Counts) Total() int { return n.Containers + n.Networks + n.Volumes + n.Images }
+// Total is the sum of the five.
+func (n Counts) Total() int { return n.Containers + n.Networks + n.Volumes + n.Images + n.Snapshots }
 
 // Count reads back how many containers, networks, volumes and built images carry env=name.
 func (c *Client) Count(ctx context.Context, name string) (Counts, error) {
@@ -257,7 +270,15 @@ func (c *Client) Count(ctx context.Context, name string) (Counts, error) {
 	if err != nil {
 		return n, err
 	}
-	return Counts{Containers: len(cs), Networks: len(ns), Volumes: len(vs), Images: len(is)}, nil
+	n = Counts{Containers: len(cs), Networks: len(ns), Images: len(is)}
+	for _, v := range vs {
+		if v.Labels[LabelSnapshot] != "" {
+			n.Snapshots++
+		} else {
+			n.Volumes++
+		}
+	}
+	return n, nil
 }
 
 // Down removes everything labelled env=name: containers (stopped, then removed with their anonymous volumes),
@@ -304,6 +325,8 @@ func (c *Client) Down(ctx context.Context, name string) (removed, left Counts, e
 		if e := c.do(ctx, http.MethodDelete, "/volumes/"+url.PathEscape(v.Name), nil, nil, http.StatusNoContent,
 			http.StatusNotFound); e != nil {
 			errs = append(errs, e)
+		} else if v.Labels[LabelSnapshot] != "" {
+			removed.Snapshots++
 		} else {
 			removed.Volumes++
 		}
@@ -339,6 +362,10 @@ type Sandbox struct {
 	Binds      []string // "src:dst:ro"
 	Name       string
 	Timeout    time.Duration
+	// CapAdd is what the sandbox gets back after every capability is dropped, and Kind its sandbox label's value
+	// ("resolve" when empty). Slice 2's volume helper is the one sandbox with either (014 plan R25).
+	CapAdd []string
+	Kind   string
 	// Took, when set, receives how long each phase took, whether or not Run succeeded (lane 13s0a, item A:
 	// which part of a slow sandbox was slow).
 	Took *Phases
@@ -404,11 +431,11 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 	spec := map[string]any{
 		"Image": s.Image, "Entrypoint": s.Entrypoint, "Cmd": s.Cmd, "User": s.User, "Env": s.Env,
 		"WorkingDir": s.WorkingDir, "NetworkDisabled": true,
-		"Labels": sandboxLabels(),
+		"Labels": sandboxLabels(s.Kind),
 		"HostConfig": map[string]any{
 			"NetworkMode": "none", "Binds": s.Binds, "ReadonlyRootfs": true, "CapDrop": []string{"ALL"},
-			"SecurityOpt": []string{"no-new-privileges"}, "Tmpfs": map[string]string{"/tmp": "rw,size=64m"},
-			"Memory": 512 << 20, "PidsLimit": 256, "AutoRemove": false,
+			"CapAdd": nonNilList(s.CapAdd), "SecurityOpt": []string{"no-new-privileges"},
+			"Tmpfs": map[string]string{"/tmp": "rw,size=64m"}, "Memory": 512 << 20, "PidsLimit": 256, "AutoRemove": false,
 		},
 	}
 	var made struct {
@@ -457,8 +484,11 @@ func (c *Client) Run(ctx context.Context, s Sandbox) (stdout, stderr []byte, exi
 	return stdout, stderr, waited.StatusCode, nil
 }
 
-func sandboxLabels() map[string]string {
-	l := map[string]string{LabelSandbox: "resolve"}
+func sandboxLabels(kind string) map[string]string {
+	if kind == "" {
+		kind = "resolve"
+	}
+	l := map[string]string{LabelSandbox: kind}
 	for _, k := range composeImageLabels {
 		l[k] = ""
 	}
@@ -488,7 +518,7 @@ func (c *Client) removeLate(ref string, keep time.Duration) {
 	}
 }
 
-// SweepSandboxes removes every sandbox the daemon has that was created more than age ago. A sandbox lives at most
+// SweepSandboxes removes every sandbox the daemon has, of any kind, that was created more than age ago. A sandbox lives at most
 // its bound, so an older one was left behind: by an Adele that stopped while one ran, or a create that outlived
 // LateRemoval. Each one carries timelike's sandbox label, so removing it is acting on our own.
 func (c *Client) SweepSandboxes(ctx context.Context, age time.Duration) (removed int, err error) {
@@ -496,7 +526,7 @@ func (c *Client) SweepSandboxes(ctx context.Context, age time.Duration) (removed
 		ID      string `json:"Id"`
 		Created int64  `json:"Created"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/containers/json?all=1&filters="+labelFilter(LabelSandbox+"=resolve"), nil,
+	if err := c.do(ctx, http.MethodGet, "/containers/json?all=1&filters="+labelFilter(LabelSandbox), nil,
 		&out, http.StatusOK); err != nil {
 		return 0, err
 	}

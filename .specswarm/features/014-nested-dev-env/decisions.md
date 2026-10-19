@@ -364,7 +364,7 @@ ABSENT: no schema change, and no reader of the undo's record yet (T064 is the fi
 SCOPE: out — adele/internal/ledger/slice2.go (1 of 3 changed files) (task has FLAGGED: yes) — the new writers went in a file of their own beside ledger.go and query.go, which tasks.md named
 
 ### T061: grants' optional snapshots and snapshot-store keys
-**Started:** 2026-10-19T04:08:00Z | **Completed:** 2026-10-19T04:02:06Z
+**Started:** 2026-10-19T04:00:39Z (T060's commit) | **Completed:** 2026-10-19T04:02:06Z
 
 INHERITED: T060's `snapshots` among the ledger's extendable limits
 FLAGGED: the default cap is 1 GiB per environment — chose 1 GiB over 256 MiB because a development database's volume is commonly hundreds of MiB, and over unlimited because T2 asks for a capped scope; the README and the spec give it (confidence: medium)
@@ -372,3 +372,13 @@ FLAGGED: `snapshot-store = tmpfs` is a grant key (the operator's), not an Adele 
 ASSUMED: a size needs a unit unless it is 0 (`64` alone is refused), so a cap is never misread by a factor of 1024 (confidence: high)
 ASSUMED: TestLoadValid's expected grant gains the two defaults: a grant that leaves the keys out gets them, which is the change, so the expectation moved and no assertion was loosened (confidence: high)
 ABSENT: snapshot-store is not extendable (it is where, not how much); no KB/MB (decimal) units
+SCOPE: out — adele/internal/grants/grants_test.go (1 of 5 changed files) (task has FLAGGED: yes)
+
+### T063: the engine's snapshot volumes, pause/unpause/stop/start, mounts, the helper's capabilities, snapshot counts
+**Started:** 2026-10-19T04:02:15Z (T061's commit) | **Completed:** 2026-10-19T04:04:22Z
+
+INHERITED: slice 0's Down and Count, slice 1's sandbox (Run) and its sweep
+ASSUMED: a container's mounts come from the inspect Containers already makes, so finding a volume's users costs no extra call (confidence: high)
+ASSUMED: a pause of a paused container, an unpause of a running one, a stop of a stopped one and a start of a running one answer 409 or 304 and are not errors; the caller reads the state back either way (cross-stack P004) (confidence: medium — the 409 for unpause is the daemon's documented answer, not seen here)
+FLAGGED: the sandbox sweep now matches the sandbox label with any value, so a volume helper Adele left behind is swept too; the sweep's unit asserted the filter's old value and now asserts the label's key (confidence: high)
+ABSENT: no unit drives Containers' mounts through the fake daemon here (the broker's units do); no Docker, so the daemon's own answers to pause, unpause and volume create are not seen
