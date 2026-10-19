@@ -1314,3 +1314,137 @@ commit. Both are the mentor's next check.
 **retired_prompts_seen:** none.
 
 **After this report:** no commits until the mentor says the check has ended. Merge `--no-ff` only after sign-off.
+
+### Cycle 8 — sign-off addendum
+
+**Written:** 2026-10-19T03:17:09Z (read from the clock), from the mentor's
+`../bridge/feedback/13-20261019-030914-slice-1-signed-off.md`. **Feature 13 slice 1 is signed off at `0d298bc`**
+(Cycles 6 to 8), built from `bridge/sends/13-rev17-20261018-120700.md`. Append-only: nothing above is changed.
+
+**The lanes:**
+- **13s1b on `35c325f`** (Cycle 7):
+  - test exit 0: e2e 755 of 755, all 52 cells named `13`; unit 2624 passed, 10 skipped; gounit ok;
+  - scan exit 0, all five images PASS;
+  - lint failed only at staticcheck (ST1008, in a Go test helper).
+- **13s1c on `0d298bc`** (Cycle 8, which changes only `adele/internal/devcontainer/devcontainer_test.go` and this
+  report): `make lint` exit 0 through every stage, staticcheck included; Go unit tests ok in every package. Logs:
+  `bridge/.make-lint-13s1c.log`, `bridge/.gounit-13s1c.log`.
+- **Why 13s1b stands for `0d298bc`:** `_test.go` files are not compiled into `adeled`, so the product and the
+  images are unchanged.
+- **13s1a on `b209824`** (Cycle 6) found the build-step verdict (196) and the mypy error, which Cycle 7 fixed.
+
+**criteria_reestablished, at sign-off** (these supersede Cycles 6–8's modes for the same criteria):
+
+| Criterion | Mode | Evidence |
+|---|---|---|
+| `13 · "Bringing up a fixture project's compose file from inside the agent container starts its services and returns once they are ready"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/bringing-up-a-fixture-projects-compose-file-starts-its-services-and-returns-once-ready-listing-each-service-and-address.bats` |
+| `13 · "runs the nested environment's containers with the agent's workspace mounted at the same absolute path"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/nested-containers-run-with-the-agents-workspace-mounted-at-the-same-absolute-path.bats` |
+| `13 · "is refused by Adele with exit 2 and rule 14's structured error, naming the setting and stating that no grant allows it"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats` |
+| `13 · "A pre-commit hook and a `core.hooksPath` or `core.fsmonitor` setting written by the Agent in its workspace do not run"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats` |
+| `13 · "Bringing the environment up twice is a no-op the second time, and tearing it down removes every container, network and volume it created"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats` |
+| `13 · "A project's devcontainer definition is brought up and a command is executed inside it"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats` |
+| `13 · "Everything created carries session and grant labels, and a collect command removes environments whose session has ended"` | **executed [lane 13s1b]** on `35c325f`, standing for `0d298bc` per 13s1c | `tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats` |
+| `13 · "DEMO: the Agent brings up a project's devcontainer from inside its container and runs a command in it"` (D22) | **observed by the operator** | transcript `bridge/.d22-demo-20261019T011238Z.txt`, on 13s1b's stack (`35c325f`); run 1, which failed on the mentor's own test command, is kept beside it |
+| `13 · "DEMO: the Agent brings up a compose test environment from inside its container, runs tests against it, and tears it down"` (D9) | **observed by the operator** on slice 0 (`08df8e2`), not again on slice 1's code | transcript `bridge/.d9-demo-20261018T110127Z.txt`. Decision C changed how up reports a one-shot; that behaviour is the Automated cells 70–72, which 13s1b passed |
+
+**D22, as demonstrated** (from the feedback):
+- The agent's own project, `wordfreq`: a devcontainer built from a Dockerfile.
+- **Its pinned base was missing.** `up` exited 3 and named the operator's `docker pull`. Nothing was pulled or
+  created.
+- **With a base the daemon has:**
+  - the image was built through Adele in 1.6 s, with nothing pulled, and postCreateCommand exited 0;
+  - in the devcontainer, 3 tests ran OK, as remoteUser `agent`, at the project's own absolute path, with remoteEnv
+    set;
+  - exit 5 passed through.
+- **Labels read on the host:** devcontainer, remote-user, session, grant, and requester, which is the agent's
+  container id.
+- **A second up** was unchanged and reused the image.
+- **down** left 0 containers, networks, volumes and images.
+- Ledger rows #172–#178, session d22-demo.
+- **The operator's answers**, quoted in the feedback:
+  1. "exit 3, it instructed: the operator pulls it on the host: docker pull debian:trixie-slim@sha256:a99c…, no, it
+     was not".
+  2. "tl-wordfreq-8b185f: devcontainer, 2.4s, nothing pulled, user=agent, /srv/…/20261018T183513Z-d0219a/wordfreq, 3
+     tests, the".
+     - `WORDFREQ_TOP` is 3 in the transcript. "the" is wordfreq's top word, two commands later.
+     - 2.4 s is the whole up; the build itself took 1.6 s.
+     - Neither changes what D22 asks for.
+  3. "removed tl-wordfreq-8b185f, noting left, 172-178".
+
+**The operator's decisions:**
+- **The libcurl re-review: all three statements accepted.**
+  1. Nothing that holds or reaches the Docker socket links libcurl. Adele's image is unchanged in its binaries, and
+     the resolve and context sandboxes run her image with no socket, no network and no secret.
+  2. `adele env exec` gives the agent no new route out, only a route to its nested environment's own networks.
+  3. A build's `RUN` steps reach outside addresses over the daemon's default network, like any `docker build` on
+     the host. They have no socket and no secret, and other networks are refused.
+- **Carried to the 13 slice 2 send, not fixed now** (the mentor's `carry_forward` `13-slice-2`):
+  - **A.** The unchanged up's verdict is longer than agentio's 200 columns, so it is cut ("…[cut 27 bytes]"). Cycle 6's
+    `not_verified` named this width.
+  - **B.** The up verdict says "ports probed from the agent container" when there are no ports and nothing was probed.
+- **README's Next line** is now `**Next:** 13 slice 2.` Nothing else in the README changed.
+- **Carried earlier, still open:** a never-pull override is a research item for after a working v1 (`carry_forward`
+  `post-v1-research`). Nothing is asked of code/.
+
+**Still carried, not this feature's:** open item 1 (002's bench unit under load), with the categoriser's precedence
+when a process is killed for memory (exit 137, `oom_kill` rose) but also ran past its time limit. Both are for a
+maintenance send after 13 slice 2.
+
+**Next:** the merge `--no-ff` into `master`, no push and no tag. The push with tag `v0.23.0` waits for the mentor's
+discharge and the operator's OK.
+
+**The ship, `/specswarm:ship` under specswarm 4.0.1-botbaubble.2.44.0, at `0d298bc` with README's Next line changed
+and before this text was added.** Its blocks were extracted from the installed `analyze-quality.md` and `ship.md`
+and run, as at slice 0's sign-off. They are byte-identical to the ones run then. The modules are the 11 that slice 1
+changed. The output, verbatim, with the checkout path written `<repo>/`:
+
+```
+== analyze-quality (2.44.0 blocks) ==
+🔤 Language: Python
+AQ_TESTS_LINE=tests|25|?|measured:pytest
+AQ_TESTS_SCORE=unavailable:pytest is declared but could not be run on this machine
+adele/cmd/adeled|unknown
+adele/internal/broker|unknown
+adele/internal/buildctx|unknown
+adele/internal/compose|unknown
+adele/internal/devcontainer|unknown
+adele/internal/engine|unknown
+adele/internal/ledger|unknown
+adele/internal/reaper|unknown
+tests/e2e|unknown
+tests/unit|unknown
+tools/bin|unknown
+Overall Quality: unknown (no module could be scored (11 unscored))
+📄 Wrote <repo>/.specswarm/features/014-nested-dev-env/quality-report.json (overall_state: unknown, coverage_state: unknown, written by 4.0.1-botbaubble.2.44.0)
+== ship (2.44.0 blocks) ==
+📍 Current branch: modify/014-slice-1 @ 0d298bc
+NOTE: <repo>/.specswarm/features/014-nested-dev-env/quality-report.json reports overall_state='unknown' - the score is not a measurement
+📋 Using project quality threshold: 0% (from min_quality_score)
+ℹ️  enforce_gates: false — a failing gate will WARN, not block
+
+🎯 Quality Threshold: 0%
+📊 Actual Quality Score: unknown — nothing was measured
+
+❔ Quality gate UNKNOWN — the analysis reported no number
+   <repo>/.specswarm/features/014-nested-dev-env/quality-report.json says overall_state='unknown'
+   (no module could be scored (11 unscored))
+
+   Nothing was measured. This is NOT a 0% failure and NOT a pass.
+
+
+🔧 What would change this:
+  - no component of this Python project could be measured: pytest is declared but could not be run on this machine
+  - re-running /specswarm:analyze-quality will NOT change this result
+
+⚠️  enforce_gates: false — this gate WARNS and does not block the merge.
+   Shipping with quality state 'unknown' is the project's recorded choice, not an oversight.
+
+== QUALITY_STATE=unknown ==
+```
+
+- **The gate is UNKNOWN, and it warns because `enforce_gates: false`.** Nothing was measured: it is neither a pass
+  nor a 0% failure. pytest is not beside the interpreter the analysis finds on this host, and the Go modules have no
+  detector in it.
+- **`quality-report.json`** is rewritten by the analysis in this feature's folder (`overall_state: unknown`, 11
+  unscored) and committed here.
+- **The merge is by hand,** `--no-ff`, of this commit, which is the signed-off `0d298bc` plus these records.
