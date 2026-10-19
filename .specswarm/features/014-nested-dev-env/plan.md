@@ -492,7 +492,8 @@ The two D22 observations (A: verdicts past 200 columns; B: "ports probed" when n
 
 ### R23 · Where a snapshot lives
 
-A snapshot is one volume on the daemon, named `<env>-snap-<id>` (`id` is 8 hex, random), created by Adele:
+A snapshot is one volume on the daemon, named `<env>-snap-<hex>` for the snapshot `s-<hex>` (8 random hex), created by
+Adele:
 - **labels:** `…env=<env>` (so slice 0's `down` and every collection remove it with the environment), `…snapshot=<id>`,
   `…snapshot-of=<the source volume's daemon name>`, `…session`, `…grant`, `…requester`, `…created`, and the compose
   project label left empty so compose never counts it as its own;
@@ -599,8 +600,9 @@ db-data: 900 MiB", and the operator's command with the size that would allow it.
   apart (`snapshots` in the counts), and end each snapshot's row with the cause.
 - The pass of R28 also: ends the row of every snapshot whose volume the daemon no longer has ("gone"); removes a
   snapshot volume whose environment has no live row and no containers, ending its row ("orphan: its environment is
-  gone"); removes a snapshot volume with no record that is older than its bound, with a row ("partial: the copy was
-  cut short").
+  gone"); removes a snapshot volume with no record, with a row ("partial: the copy was cut short"): at Adele's start
+  every such volume, since no copy of hers can be running then; on a tick, only one older than the copy's bound and
+  a minute.
 - The lane-start sweep removes every volume labelled `…env`, which snapshot volumes are.
 
 ### R31 · The client

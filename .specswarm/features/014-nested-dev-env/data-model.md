@@ -96,7 +96,7 @@ Grants keep 12's five keys:
 
 | Field | Rule |
 |---|---|
-| name | `<env>-snap-<id>`; `id` is 8 random hex |
+| name | `<env>-snap-<hex>`, where the snapshot's id is `s-<hex>` and `hex` is 8 random hex digits; the id is the `…snapshot` label's value and the ledger resource's second half |
 | labels | `xyz.ironik.timelike.env=<env>`, `…snapshot=<id>`, `…snapshot-of=<the source volume's daemon name>`, `…session`, `…grant`, `…requester`, `…created` (RFC 3339) |
 | driver | `local`; with the grant's `snapshot-store = tmpfs`, driver options `type=tmpfs`, `device=tmpfs`, `o=size=<cap bytes>` |
 | contents | the source volume's tree, root included: owners, groups, modes, times, symbolic links (never followed), hard links; sockets not copied (counted); no device nodes |

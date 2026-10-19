@@ -350,3 +350,14 @@ FLAGGED: the lines kept are the failing step's own, with the daemon's `--->` and
 ASSUMED: 196's cell asserts the instruction and its position, the daemon's message with the command left as a wildcard, and that no `Step ` or `--->` is in the line (confidence: high)
 ABSENT: no Docker here, so 196 has not run against a daemon; no broker unit drives a failed build (the engine units and 196 cover the mapping); C (002's bench probe) not touched, as ruled; the spec's FR-24 ("naming the step") left as it stands, since it is still true
 SCOPE: in (6 changed files) (task has FLAGGED: yes)
+
+## Cycle 9 — slice 2 (`bridge/sends/13-rev17-20261019-034239.md`; branch `modify/014-slice-2`)
+
+### T060: the ledger's Kept and Ended writers, open holds, snapshot queries
+**Started:** 2026-10-19T03:57:25Z | **Completed:** 2026-10-19T04:00:30Z
+
+INHERITED: Cycle 6's Recorded writer and the live queries' expiry rule (slice 1, T039)
+FLAGGED: the snapshot's record (digest, bytes, files) lives in its row's undo document beside the removal it names, with no schema change — chose that over a schema-3 column because the ledger's readers (`adeled ledger`, the reaper) take rows as they are and a migration on the operator's file is a risk this slice does not need; the record must be outside the volume it vouches for, and the ledger is Adele's only durable record (confidence: medium)
+ASSUMED: an ending is any row whose ref is the hold or snapshot (an unpause, a start, or a reaped/gone removal), checked in one transaction so a request and the recovery pass end a hold once (confidence: high)
+ASSUMED: snapshot rows' resource is `ENV/ID`, matched by prefix length, so tl-a-1 never lists tl-a-10's (confidence: high)
+ABSENT: no schema change, and no reader of the undo's record yet (T064 is the first)
