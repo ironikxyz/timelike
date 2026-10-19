@@ -173,6 +173,13 @@ SHELLCHECK_FILES := image/rootfs/etc/profile.d/00-timelike-path.sh image/rootfs/
   tests/e2e/privileged-host-network-or-namespace-added-capabilities-or-mount-outside-the-workspace-refused-by-adele-with-exit-2-naming-the-setting.bats \
   tests/e2e/bringing-up-twice-is-a-no-op-and-tearing-down-removes-every-container-network-and-volume-it-created.bats \
   tests/e2e/agent-written-hooks-and-executing-git-config-do-not-run-in-the-operators-own-checkout-unless-lifted.bats \
+  tests/e2e/a-named-volume-of-a-running-nested-environment-is-snapshotted-and-later-restored-to-its-snapshotted-content.bats \
+  tests/e2e/snapshot-and-restore-failures-name-their-cause.bats \
+  tests/e2e/a-paused-service-is-never-left-paused-and-snapshots-go-with-their-environment.bats \
+  tests/e2e/adele-restarted-mid-snapshot-unpauses-what-she-paused.bats \
+  tests/e2e/fixtures/nested/snapshot/init.sh tests/e2e/fixtures/nested/snapshot/manifest.sh \
+  tests/e2e/fixtures/nested/snapshot/corrupt.sh tests/e2e/fixtures/nested/snapshot-plain/serve.sh \
+  tests/e2e/fixtures/nested/snapshot-plain/fill.sh \
   tests/e2e/nested-environment-beyond-the-grant-refused-never-ready-exits-124-and-expired-reaped.bats \
   tests/e2e/a-projects-devcontainer-definition-is-brought-up-and-a-command-is-executed-inside-it.bats \
   tests/e2e/everything-created-carries-session-and-grant-labels-and-a-collect-command-removes-environments-whose-session-has-ended.bats \

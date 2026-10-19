@@ -1,0 +1,19 @@
+# Feature 13 slice 2's criterion fixture (014 plan R33): one service, `db`, on the lane's Debian image, keeping a few
+# KB of rows on the named volume `db-data`, owned by uid 999 as a database's own user would own them, so a snapshot
+# and a restore must keep owners, modes, times and a symbolic link. Its command (init.sh) writes the rows on the
+# first start only, and its healthcheck passes once they are written. The project directory is bound at its own
+# path (slice 0's rule) so the cell's scripts run in the container through `adele env exec`; nothing is pulled.
+services:
+  db:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "${PROJECT_DIR:?}/init.sh"]
+    healthcheck:
+      test: ["CMD", "test", "-e", "/data/.init"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    volumes:
+      - db-data:/data
+      - ${PROJECT_DIR:?}:${PROJECT_DIR:?}
+volumes:
+  db-data:

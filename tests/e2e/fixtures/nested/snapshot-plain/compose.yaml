@@ -1,0 +1,20 @@
+# Feature 13 slice 2's failure and recovery fixture (014 plan R33): one service, `db`, on the lane's Debian image,
+# with the named volume `db-data` and the project directory bound at its own path (a bind mount the cells name, and
+# the scripts the cells run through `adele env exec`). serve.sh writes one row on the first start; fill.sh adds what
+# a cell needs. The healthcheck fails while /data/unready exists, so a restore can bring back a state that is not
+# ready; start_period keeps a failing check "starting" rather than counted, so up is never refused by a slow start.
+services:
+  db:
+    image: ${FIXTURE_IMAGE:?}
+    command: ["sh", "${PROJECT_DIR:?}/serve.sh"]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -e /data/.init && test ! -e /data/unready"]
+      interval: 1s
+      timeout: 2s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - db-data:/data
+      - ${PROJECT_DIR:?}:${PROJECT_DIR:?}
+volumes:
+  db-data:

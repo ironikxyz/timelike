@@ -246,3 +246,89 @@ nested_collected() {
     { printf 'no reaped row for %s with the cause %s; its ledger rows:\n%s\ncollect said:\n%s\n' "$name" "$cause" "$rows" "$output" >&2; return 1; }
   nested_gone "$name"
 }
+
+# ── Slice 2: snapshots of an environment's volumes (014 plan R23-R33; data-model § Slice 2) ─────────────────────
+# A snapshot is one volume on the daemon, `<env>-snap-<hex>` for the snapshot `s-<hex>`, labelled with the
+# environment (so down, collection and the lane's sweep remove it with the rest), the snapshot's id, the volume it
+# was taken from, and the session, grant and requester. Read here by the runner, by those labels only.
+NESTED_SNAPSHOT_LABEL=xyz.ironik.timelike.snapshot
+
+# nested_snapshot_volumes NAME — the environment's snapshot volumes on the daemon, one name per line, sorted.
+nested_snapshot_volumes() {
+  local v
+  v="$(docker volume ls -q --filter "label=${NESTED_LABEL}=$1" --filter "label=${NESTED_SNAPSHOT_LABEL}")" || return 1
+  printf '%s\n' "$v" | sed '/^$/d' | sort
+}
+
+# nested_snapshot_count NAME — how many snapshot volumes the environment has on the daemon.
+nested_snapshot_count() {
+  local v
+  v="$(nested_snapshot_volumes "$1")" || return 1
+  printf '%s\n' "$v" | sed '/^$/d' | wc -l | tr -d ' '
+}
+
+# nested_volume NAME KEY — the daemon's name for the environment's compose volume KEY (never a snapshot volume).
+nested_volume() {
+  local v
+  for v in $(docker volume ls -q --filter "label=${NESTED_LABEL}=$1" --filter "label=com.docker.compose.volume=$2"); do
+    [[ -n "$(docker volume inspect --format "{{index .Labels \"${NESTED_SNAPSHOT_LABEL}\"}}" "$v")" ]] || { printf '%s\n' "$v"; return 0; }
+  done
+  echo "nested_volume: no volume ${2} labelled ${1} on the daemon" >&2
+  return 1
+}
+
+# nested_snapshot_labels VOLUME — the snapshot volume's labels, tab-separated:
+# env<TAB>snapshot<TAB>snapshot-of<TAB>session<TAB>grant<TAB>requester<TAB>created
+nested_snapshot_labels() {
+  local p=xyz.ironik.timelike t=$'\t' k f=""
+  for k in env snapshot snapshot-of session grant requester created; do
+    f+="{{index .Labels \"${p}.${k}\"}}${t}"
+  done
+  docker volume inspect --format "${f%"${t}"}" "$1"
+}
+
+# nested_state CONTAINER — "STATUS PAUSED STARTED_AT" from the daemon: running false 2026-…
+nested_state() {
+  docker inspect --format '{{.State.Status}} {{.State.Paused}} {{.State.StartedAt}}' "$1"
+}
+
+# nested_running_unpaused CONTAINER — the container is running and not paused, read from the daemon.
+nested_running_unpaused() {
+  local s
+  s="$(nested_state "$1")" || return 1
+  [[ "$s" == "running false "* ]] || { echo "container $1 is not running unpaused: ${s}" >&2; return 1; }
+}
+
+# nested_volume_throwaway VOLUME USER CMD — CMD under sh -c in a throwaway container on the runner with VOLUME at /v:
+# the lane's Debian image, no network, every capability dropped, as USER. A cell uses it to change what only the
+# daemon holds (a snapshot's own content), which the agent cannot reach. It carries the throwaway label
+# (helpers.bash THROWAWAY_LABEL), so tests/run.sh's sweep removes one a killed run left behind; it is --rm, and
+# removed by name afterwards whatever happened. It never mounts a volume that carries no timelike label.
+nested_volume_throwaway() {
+  local vol="$1" user="$2" cmd="$3" name rc
+  [[ -n "$(docker volume inspect --format "{{index .Labels \"${NESTED_LABEL}\"}}" "$vol")" ]] ||
+    { echo "nested_volume_throwaway: ${vol} carries no ${NESTED_LABEL} label; the runner touches only timelike's" >&2; return 1; }
+  name="tl-e2e-vol-${NESTED_ID}-$$-${RANDOM}"
+  timeout "$PLUMBING_TIMEOUT" docker run --rm --name "$name" --label "${THROWAWAY_LABEL}=1" --network none \
+    --cap-drop ALL --security-opt no-new-privileges:true --user "$user" -v "${vol}:/v" "$DEBIAN_IMAGE" \
+    sh -c "$cmd" </dev/null && rc=0 || rc=$?
+  remove_throwaway "$name"
+  return "$rc"
+}
+
+# nested_copy_helpers NAME — the ids of the environment's running volume helpers that are copying (014 plan R25:
+# named tl-sandbox-<env>-vol-<hex>, labelled …sandbox=volume, running `adeled volume copy`), read from the daemon.
+# The measure and digest helpers carry the same name and label, so the command tells the copy apart.
+nested_copy_helpers() {
+  local id
+  for id in $(docker ps -q --filter label=xyz.ironik.timelike.sandbox=volume --filter "name=tl-sandbox-$1-vol-" 2>/dev/null); do
+    docker inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}' "$id" 2>/dev/null | grep -qF '"copy"' &&
+      printf '%s\n' "$id"
+  done
+  return 0
+}
+
+# nested_paused CONTAINER — the daemon says the container is paused.
+nested_paused() {
+  [[ "$(docker inspect --format '{{.State.Paused}}' "$1" 2>/dev/null)" == true ]]
+}
